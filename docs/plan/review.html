@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Review · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review" class="on">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Review</h1>
+    <p class="lede">This page records a pass over the whole plan. For each feature I checked three things: where it is <em>stored</em>,
+    which <em>command</em> changes it, and which <em>screen</em> shows it and how you get there. Each gap below has a recommendation.
+    <b>Fixed</b> means the recommendation is already in the App and Platform tabs.
+    <b>Decided</b> means you made a call that removed the gap. <b>Open</b> means it still needs a choice or is deliberately deferred.</p>
+
+    <h2>Navigation</h2>
+    <p>Rule: <strong>everything is reachable from the <a href="/app/screens#components-sidebar">sidebar</a>, at most two clicks deep</strong>.
+    A toolbar may repeat a shortcut, but it is never the only way to reach a screen.</p>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>Account was reachable from no wireframe</td><td>Your name and picture at the top of the sidebar open the <a href="/app/screens#components-account-menu">Account menu</a> with every Account section. Notifications, tokens and Sign out are also in the sidebar footer.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Board settings and People could only be found by guessing an address</td><td>A board in the sidebar expands to its saved views, <b>People</b> and <b>Settings</b> (Settings for admins only). The board toolbar keeps only what acts on the current view.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Saved views existed with no list of them</td><td>The same list appears in two places: tabs on the board, and entries under the board in the sidebar. <a href="/app/backend#services-viewdelete">viewDelete</a> added.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Invitations could only be reached from an email link</td><td>A sidebar item, <b>Invitations</b>, appears while one is pending. Invitations are also a tab in the Inbox and a panel on the Boards page, each with Accept and Decline.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Archived boards disappeared</td><td><b>All boards &amp; archived</b> in the sidebar. Archived boards open read-only with a banner and a Restore button for admins.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>The OAuth consent page was referred to by the MCP flow but did not exist</td><td><a href="/app/screens#screens-authorize-an-app">Authorize an app</a> at <code>/oauth/consent</code>. The grant then shows in Account › Connected apps.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Bulk editing had no UI</td><td>The table gets a bulk bar when rows are selected. (Ticket transfer was built here and later removed — see decision D13.)</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Phone layout</td><td>Decided: the sidebar becomes a drawer behind ☰. Board and table views collapse to one column, and the ticket drawer goes full screen. I recommend a PWA before any native app.</td><td><span class="st st--decided">decided</span></td></tr>
+    </table>
+
+    <h2>Relating tickets</h2>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>Subtasks were modelled, but the UI had no way to show a parent from a child</td><td><b>Subtasks removed.</b> Tickets relate through <code>#references</code> and links. Splitting work means creating tickets that reference the original, or that it <em>blocks</em>.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>A <code>#reference</code> was only visible from the ticket that wrote it</td><td><code>referencedBy</code> is written in the same transaction, so both ends show it. The drawer has a <b>Related</b> panel, plus a system line &ldquo;referenced from ENG-40&rdquo;.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td><code>blocks</code> was stored on one ticket only</td><td>Links are written on both tickets (<code>blocks</code> ↔ <code>blockedBy</code>). The card shows a ⛔ blocked badge, and the timeline draws an arrow.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>A reference from a board you cannot read would leak its title</td><td>Show it as &ldquo;1 ticket you can’t see&rdquo;: its key is resolved, its title and board are not.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Deleting a ticket left dangling links</td><td><a href="/app/backend#services-ticketdelete">ticketDelete</a> removes it from the other tickets’ <code>links</code> and <code>referencedBy</code>. <code>keys/</code> keeps a tombstone, so old <code>#ENG-42</code> links say &ldquo;deleted&rdquo;.</td><td><span class="st st--fixed">fixed</span></td></tr>
+    </table>
+
+    <h2>Stored nowhere, or shown nowhere</h2>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>Files attached to a description were stored nowhere, and the Files tab had nothing to read</td><td><a href="/app/db#schema-files">tickets/{t}/files</a>: one document per file, with its source and message.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>An invitation could not be an inbox item, because every row required a ticket</td><td>Inbox rows allow <code>ticketId: null</code> and carry an <code>inviteId</code>.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Commitment dates were stored with no editor</td><td>The Field panel shows a commitment date next to each assignee. My work has a Commitment column.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>&ldquo;Remind me before a due date&rdquo; was on a screen but had no field</td><td><code>users.notify.dueSoonLeadMinutes</code>, from 15 minutes to 3 days</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>The <code>list</code> and <code>gallery</code> view types had no component</td><td>Dropped. The four view types are kanban, table, calendar and timeline.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>&ldquo;Mentioned me&rdquo; on My work could not be queried</td><td>Removed from My work. Mentions live on messages, so the Inbox’s Mentions tab is where they belong.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>&ldquo;Created by me&rdquo; was refused by the security rules</td><td>The collection-group rule also allows <code>createdBy == auth.uid</code>.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Quick add on a board with required fields would fail</td><td>On such a board, Quick add opens the full form.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>A move refused by a stage’s required fields snapped the card back with no explanation</td><td>The server returns <code>422 { missing }</code>, and the UI asks for exactly those fields.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Editors could not create a tag from the picker</td><td><a href="/app/backend#services-tagcreate">tagCreate</a> for editors. Admins still rename and delete tags.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>An email change never reached the data</td><td><a href="/app/backend#services-onusersignedin">onUserSignedIn</a> (a blocking function) copies a verified new address to users/ and every board’s members/.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>No way to revoke an invite, an API token, or an OAuth grant</td><td><a href="/app/backend#services-inviterevoke">inviteRevoke</a> (also resends), <a href="/platform/backend#services-apikeyrevoke">apiKeyRevoke</a>, <a href="/platform/backend#services-grantrevoke">grantRevoke</a></td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>No way to archive or delete a board</td><td><a href="/app/backend#services-boardarchive">boardArchive</a> (archive, restore, delete), in Settings › Danger zone, along with Leave board.</td><td><span class="st st--fixed">fixed</span></td></tr>
+    </table>
+
+    <h2>Correctness</h2>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>One person’s due reminder silenced everyone else’s: the &ldquo;already reminded&rdquo; flag was per ticket, but each person chooses their own reminder time</td><td><code>dueNotified</code> is keyed per uid.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>The board’s overdue count went stale: time makes a ticket overdue, and no write notices</td><td><a href="/app/backend#services-deadlinesweep">deadlineSweep</a> recomputes it every 15 minutes.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Search could not find a ticket by something said in its thread</td><td><a href="/app/backend#services-onmessagewritten">onMessageWritten</a> copies the last 20 messages into the search index.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Open sign-up means anyone can send invite email through the app</td><td>Up to 50 invites and 10 new boards per person per day. The email names the inviter’s verified address. Needs a Resend domain with SPF and DKIM.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Board keys are claimed app-wide, so strangers can collide</td><td>Accepted: the second person picks another key. Keys cannot be renamed once created. That keeps every old <code>#ENG-42</code> valid.</td><td><span class="st st--decided">decided</span></td></tr>
+    </table>
+
+    <h2>Notifications</h2>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>A board owner could decide what other people receive (TeamTrack’s owner-managed mode)</td><td>Removed. Every channel choice is on the person: Account › Notifications (event × channel, quiet hours, digest, reminder lead time) and Account › Channels (push devices, WhatsApp link). A person’s 🔔 on each board is also their own.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>&ldquo;Why didn’t I get the email?&rdquo; had no answer</td><td>A <b>Recent deliveries</b> list in Account › Notifications, read from <code>deliveries/</code>.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>WhatsApp costs money per message outside Meta’s 24-hour window</td><td>Off for every event until the person ticks it. Templates are submitted in phase 3 so approval doesn’t block phase 5.</td><td><span class="st st--decided">decided</span></td></tr>
+    </table>
+
+    <h2>Phase 2: agents</h2>
+    <p>The same three questions, asked of <a href="/plan/agents">the agents spec</a>.</p>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>An agent needs an identity that fits every field a person already sits in</td><td>A <a href="/app/db#types-principalid">principal id</a>: a uid or <code>ag_</code> + 16. The prefix tells them apart, so no field grew a second shape and no phase-1 document migrates. <code>members/{id}.kind</code> says which for display.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Agents in <code>readerUids</code> would reach the security rules, which only know Firebase users</td><td>Agents never sign in; they act only through a token, and the door checks access. <code>readerUids</code> / <code>editorUids</code> stay people-only.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Where an agent profile lives and who can read its system prompt</td><td><a href="/app/db#schema-agents">agents/{agentId}</a>, readable by its owner only. Boards see the copy in <code>members/</code>; the prompt goes only to the agent's own tokens (GET /v1/me, whoami).</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Adding an agent by invite has nobody to accept</td><td><a href="/app/backend#services-boardagentset">boardAgentSet</a>: an admin who owns the agent adds it directly, never as admin. Any admin may re-role or remove it.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Agents cannot receive push, email or WhatsApp</td><td><a href="/app/backend#proxyFunctions-notify">notify</a> writes <a href="/app/db#schema-agentinbox">agentInbox</a> instead, not collapsed, never for the agent's own actions. Read through a cursor, an SSE stream or MCP, and acked with <a href="/app/backend#services-agentinboxack">agentInboxAck</a>.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>A token spanning several boards is too much to hand an orchestrator</td><td><a href="/platform/db#schema-apikeys">apiKeys</a> v2: one board each, <code>actsAs</code> you or an agent, fine-grained scopes with presets. Phase-1 keys read as revoked.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>A token outliving its agent or its board membership</td><td>agentArchive, boardAgentSet role:null and leaving a board revoke the tokens, with a reason the Tokens list shows.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>An agent's HTML report could run script against the app</td><td>The <a href="/app/screens#components-file-viewer">File viewer</a> uses a <code>srcdoc</code> iframe with <code>allow-scripts</code> and never <code>allow-same-origin</code>. The preview card uses the same frame, scaled down.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>A file opened in a new tab had no address</td><td><a href="/app/screens#screens-file">/f/{boardKey}/{ticketKey}/{fileId}</a>: the viewer as a full page.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Rich text cannot hold what agents write (tables, highlighted code)</td><td><code>Message.markdown</code> keeps the source and the thread renders GFM; <code>body</code> stays the derived document for mentions, refs and search.</td><td><span class="st st--fixed">fixed</span></td></tr>
+      <tr><td>Agent-to-agent handoff (one agent assigning another)</td><td>Works already: an agent token with <code>tickets:assign</code> can assign any principal on the board, and the other agent's inbox gets the event. Loop protection is the orchestrator's job for now.</td><td><span class="st st--open">open</span></td></tr>
+    </table>
+
+    <h2>Decided from my recommendations</h2>
+    <table>
+      <tr><th>Gap</th><th>Recommendation</th><th>Status</th></tr>
+      <tr><td>Offline writes</td><td>No offline writes. Reads work offline from the cache. A write while offline shows &ldquo;you’re offline&rdquo;. Queued commands conflict too easily for a personal tool.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Typesense is a paid, separate service</td><td>Keep Typesense. The <code>#</code> picker and ⌘K are core. If cost matters, self-host Typesense on a small VM. Firestore alone cannot do prefix search on any word.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Backups</td><td>A daily scheduled Firestore export to a bucket with 30-day retention, plus a restore rehearsal before real data goes in.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Board templates</td><td>Blank, Kanban and Bug tracker first. Copying an existing board covers the rest.</td><td><span class="st st--decided">decided</span></td></tr>
+      <tr><td>Automations (&ldquo;when moved to QA, assign X&rdquo;)</td><td>Phase 6. The command layer is where they would run, so nothing now blocks them.</td><td><span class="st st--decided">decided</span></td></tr>
+    </table>
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

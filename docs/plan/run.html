@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Run · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+  <style>
+    /* shared.css keeps a last column on one line (a status badge on the other
+       pages); here the last column is the prose, so let it wrap. */
+    .mg td:last-child { white-space: normal; }
+    .mg .cmds td:first-child, .mg .vars td:first-child code { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run" class="on">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Run</h1>
+    <p class="lede">The whole app runs on one machine with no accounts anywhere: the project is
+    <code>demo-taskmanager</code>, and the <code>demo-</code> prefix keeps every Firebase SDK on the local
+    emulators. Every outside service — Resend, Meta WhatsApp, FCM, Typesense, GitHub, Slack — sits behind an
+    adapter with a dev fake, and switches to the real thing only when its environment variables are set.</p>
+
+    <h2>Install</h2>
+    <table>
+      <tr><th>Needs</th><th>Why</th></tr>
+      <tr><td>Node 22.12+ and pnpm 9 (<code>corepack enable</code>)</td><td>the workspace: <code>shared</code>, <code>backend</code>, <code>frontend</code>, <code>qaqc</code></td></tr>
+      <tr><td>Java 21</td><td>firebase-tools 15 runs the Firestore, Database and Storage emulators on it. On a Mac, <code>brew install openjdk@21</code>; the scripts put Homebrew's keg on <code>PATH</code> themselves.</td></tr>
+      <tr><td>firebase-tools 15 (<code>npm i -g firebase-tools</code>)</td><td>the emulator suite. No login: a <code>demo-</code> project never talks to Google.</td></tr>
+      <tr><td>Playwright's Chromium (once)</td><td>only for the end-to-end suites</td></tr>
+    </table>
+<pre>pnpm install
+pnpm --filter @tm/qaqc playwright:install     # once, for e2e</pre>
+
+    <h2>Run it</h2>
+<pre>pnpm dev</pre>
+    <p>One command, in this order (<code>scripts/dev.mjs</code>):</p>
+    <ol>
+      <li>builds <code>@tm/shared</code> and <code>@tm/backend</code> once — the Functions emulator loads <code>backend/lib</code>;</li>
+      <li>starts <code>tsc --watch</code> for both, so saving a backend or shared file hot-reloads the functions;</li>
+      <li>starts the emulators: Auth, Firestore, Realtime Database, Storage, Functions (the <code>api</code> function, every trigger, queue and schedule) and Cloud Tasks, with the Emulator UI;</li>
+      <li>waits for the <code>api</code> function, then seeds demo data;</li>
+      <li>starts the SvelteKit dev server, which proxies <code>/api</code>, <code>/v1</code>, <code>/mcp</code>, <code>/oauth</code>, <code>/hooks</code>, <code>/ics</code>, <code>/integrations</code> and <code>/.well-known</code> to the <code>api</code> function — the same paths <code>firebase.json</code> rewrites in production.</li>
+    </ol>
+    <p>Ctrl-C stops all of it. Flags: <code>--no-seed</code> (start empty), <code>--no-web</code> (everything but Vite),
+    <code>--persist</code> (keep emulator data in <code>.emulator-data</code> between runs; seeding is skipped when data was imported).</p>
+
+    <h3>Where things are</h3>
+    <p>This project has its own port block, so it runs beside other Firebase projects' emulators on their default ports.
+    The emulator ports live in <code>firebase.json</code>; <code>scripts/ports.mjs</code> reads them for the scripts, and
+    the frontend's <code>PUBLIC_EMULATOR_*_PORT</code> defaults and the backend test harness carry the same numbers.</p>
+    <div class="scroller"><table>
+      <tr><th>What</th><th>Address</th></tr>
+      <tr><td>The app</td><td><code>http://127.0.0.1:5190</code></td></tr>
+      <tr><td>Emulator UI (data, auth users, logs)</td><td><code>http://127.0.0.1:4410</code></td></tr>
+      <tr><td>The <code>api</code> function</td><td><code>http://127.0.0.1:5101/demo-taskmanager/us-central1/api</code></td></tr>
+      <tr><td>Auth · Firestore · Database · Storage</td><td><code>9209</code> · <code>8380</code> (websocket <code>9350</code>) · <code>9300</code> · <code>9309</code></td></tr>
+      <tr><td>Cloud Tasks · Eventarc · Hosting</td><td><code>9599</code> · <code>9699</code> · <code>5050</code> (hosting serves <code>frontend/build</code>; not started by <code>pnpm dev</code>)</td></tr>
+      <tr><td>Hub · Logging</td><td><code>4411</code> · <code>4412</code></td></tr>
+      <tr><td>Dev webhook receiver (yours, if you run one)</td><td><code>http://127.0.0.1:5199</code> — see <code>TM_DEV_WEBHOOK_SINK</code></td></tr>
+    </table></div>
+
+    <h2>Seed</h2>
+    <p><code>pnpm dev</code> seeds on start; against emulators that are already running, <code>pnpm seed</code> does it by hand.
+    The seed goes through the real commands (<code>POST /api/*</code>), so every derived document — members, counts, keys,
+    activity, the search index, inbox rows — is what the app itself would have written. A second run sees the
+    <code>ENG</code> key claimed and stops.</p>
+    <table>
+      <tr><th>What</th><th>Seeded</th></tr>
+      <tr><td>People</td><td>Ada Lovelace <code>ada@demo.test</code> and Grace Hopper <code>grace@demo.test</code>, verified, with time zones</td></tr>
+      <tr><td>Boards</td><td><code>ENG</code> Engineering (Kanban; Ada admin, Grace editor, through a real invite + accept) · <code>OPS</code> Operations (Support desk; Grace admin, Ada editor) · <code>MKT</code> Marketing (Blank; Ada only)</td></tr>
+      <tr><td>Tickets</td><td>13 across the three boards, in several stages, with priorities, assignees and due dates (one overdue); <code>ENG-1</code> is blocked by <code>ENG-2</code></td></tr>
+      <tr><td>Threads</td><td>messages with <code>@</code>mentions and <code>#</code>refs, a pinned decision; Grace's and Ada's inboxes have the notifications they caused</td></tr>
+      <tr><td>Views</td><td>a shared table view on <code>ENG</code>, "Urgent &amp; high"</td></tr>
+    </table>
+    <p><strong>Signing in</strong> is the product's own: "Email me a sign-in link" with <code>ada@demo.test</code>. The Auth emulator does
+    not send mail — it prints the link in the <code>pnpm dev</code> output ("To sign in as ada@demo.test, follow this link"), and serves every
+    link it made at <code>http://127.0.0.1:9209/emulator/v1/projects/demo-taskmanager/oobCodes</code> (the e2e suites sign in that way). Any other address signs up. "Continue with Google" opens the emulator's fake account picker.
+    Mail the app sends (invites, notifications) lands in Firestore under <code>_dev/mail/items</code>; push and WhatsApp in
+    <code>_dev/push/items</code> and <code>_dev/whatsapp/items</code>.</p>
+
+    <h2>Test</h2>
+    <div class="scroller"><table class="cmds">
+      <tr><th>Command</th><th>What it runs</th><th>Emulators</th></tr>
+      <tr><td><code>pnpm typecheck</code></td><td><code>tsc</code> everywhere, <code>svelte-check</code> for the frontend</td><td>no</td></tr>
+      <tr><td><code>pnpm test</code></td><td>unit tests: <code>can()</code>, rank, the view engine, rich text, quick add, adapters, the frontend's stores and helpers</td><td>no</td></tr>
+      <tr><td><code>pnpm test:emu</code></td><td>the backend's command, trigger, notify, search and platform suites (in-process <code>api</code> against real emulators), then the security-rules suites — one after the other, because the rules suites wipe the database</td><td>starts them</td></tr>
+      <tr><td><code>pnpm --filter @tm/qaqc test:rules</code></td><td>only the Firestore / Storage / Database rules and the index checks</td><td>starts its own (<code>qaqc/rules/firebase.rules.json</code>)</td></tr>
+      <tr><td><code>pnpm e2e</code></td><td>Playwright: <code>qaqc/e2e/ui</code> drives the browser through the documented flows; <code>qaqc/e2e/api</code> does REST, webhooks, MCP, the intake widget and inbound mail over HTTP</td><td>boots <code>pnpm dev --no-seed</code> unless it is already up, and stops what it started</td></tr>
+      <tr><td><code>pnpm build</code></td><td>shared → backend <code>lib/</code> → the static SPA in <code>frontend/build</code></td><td>no</td></tr>
+      <tr><td><code>pnpm lint</code></td><td>ESLint over the workspace</td><td>no</td></tr>
+    </table></div>
+    <p>The end-to-end tests make their own people and boards (unique addresses and keys), so they run against a fresh stack or
+    alongside a <code>pnpm dev</code> you are using. What they cover:</p>
+    <ul>
+      <li><strong>Browser</strong> — sign up → Welcome → first board; invite by email → the invitee opens the link and joins;
+      quick add with <code>@</code> and <code>!</code> tokens; dragging a card between two others (and seeing it move in a second browser);
+      a conversation with <code>@</code> and <code>#</code> suggestions, the mention in the other person's inbox, a pin, "Seen by";
+      custom fields added in settings, grouped and filtered on, saved as a shared view; relating tickets (<code>#refs</code> in a description,
+      a <em>blocked by</em> link and its inverse, the ⛔ card).</li>
+      <li><strong>HTTP</strong> — REST with a personal token (idempotency key, scopes); a signed webhook delivered to a real local
+      receiver through the queue; MCP through dynamic client registration, PKCE and the consent screen, then <code>create_ticket</code>
+      from an MCP client; the intake widget; e-mail replies landing in the thread; email-to-board.</li>
+    </ul>
+
+    <h2>What each environment variable switches on</h2>
+    <p>Unset is always the local default. Backend variables are read by the functions (the emulator passes the shell's
+    environment through, so <code>FOO=bar pnpm dev</code> works); <code>PUBLIC_*</code> ones by the SPA (a
+    <code>frontend/.env</code> file, or the environment of <code>vite</code>).</p>
+
+    <h3>Outside services</h3>
+    <div class="scroller"><table class="vars">
+      <tr><th>Variable</th><th>Set</th><th>Unset</th></tr>
+      <tr><td><code>RESEND_API_KEY</code></td><td>e-mail goes out through Resend</td><td>e-mail is written to <code>_dev/mail/items</code> under the emulators; <strong>off</strong> in production (each attempt is logged in <code>deliveries/</code> as <code>suppressed: not configured</code>)</td></tr>
+      <tr><td><code>EMAIL_FROM</code></td><td>the From header</td><td><code>TaskManager &lt;notify@taskmanager.app&gt;</code></td></tr>
+      <tr><td><code>MAIL_DOMAIN</code> · <code>INBOUND_EMAIL_DOMAIN</code></td><td>the domain of links in mail · the domain replies and email-to-board addresses use</td><td><code>taskmanager.app</code> · <code>in.taskmanager.app</code></td></tr>
+      <tr><td><code>RESEND_WEBHOOK_SECRET</code></td><td><code>/hooks/email</code> verifies the Svix signature of inbound mail</td><td>unsigned inbound mail is accepted under the emulators only (production answers 401)</td></tr>
+      <tr><td><code>TM_PUSH</code></td><td><code>fcm</code> = real FCM; <code>dev</code> = the fake even outside the emulators</td><td>fake push (<code>_dev/push/items</code>) under the emulators, FCM otherwise</td></tr>
+      <tr><td><code>PUBLIC_FCM_VAPID_KEY</code></td><td>the browser mints real FCM tokens (not on the emulators)</td><td>a dev token the fake push sender accepts</td></tr>
+      <tr><td><code>WHATSAPP_TOKEN</code> + <code>WHATSAPP_PHONE_ID</code></td><td>WhatsApp through the Meta Cloud API</td><td>WhatsApp is written to <code>_dev/whatsapp/items</code> under the emulators; <strong>off</strong> in production (linking answers 503, deliveries are <code>suppressed: not configured</code>)</td></tr>
+      <tr><td><code>WHATSAPP_APP_SECRET</code> · <code>WHATSAPP_VERIFY_TOKEN</code></td><td>inbound signature check · the subscription handshake</td><td>unsigned under the emulators · <code>dev-verify-token</code></td></tr>
+      <tr><td><code>TYPESENSE_HOST</code> + <code>TYPESENSE_API_KEY</code></td><td>search uses Typesense (collection schema created on first use); also <code>TYPESENSE_PORT</code>, <code>TYPESENSE_PROTOCOL</code>, <code>TYPESENSE_SEARCH_KEY</code> (parent of the browser's scoped keys), <code>TYPESENSE_PUBLIC_HOST</code></td><td>under the emulators an in-memory index; in production a stateless Firestore search (exact key via <code>keys/</code>, title prefix, recent tickets) — ⌘K and the <code>#</code> picker search Firestore from the browser</td></tr>
+      <tr><td><code>GITHUB_APP_SLUG</code> · <code>GITHUB_WEBHOOK_SECRET</code></td><td>Connect GitHub goes to the real app install · pull-request hooks are verified with it</td><td>Connect points straight at our own callback with a dev code · a fixed dev secret under the emulators</td></tr>
+      <tr><td><code>SLACK_CLIENT_ID</code></td><td>Connect Slack goes to Slack's OAuth</td><td>the same dev round trip as GitHub</td></tr>
+    </table></div>
+
+    <h3>Secrets and addresses</h3>
+    <div class="scroller"><table class="vars">
+      <tr><th>Variable</th><th>Set</th><th>Unset</th></tr>
+      <tr><td><code>TM_SIGNING_KEY</code></td><td>the server key behind webhook signing secrets, install <code>state</code> and ICS feed tokens</td><td>a fixed dev key under the emulators; in production, generated once and kept in <code>_config/serverSecrets</code> (server-only)</td></tr>
+      <tr><td><code>NOTIFY_SIGNING_SECRET</code></td><td>the HMAC key for reply-by-email addresses and one-click unsubscribe</td><td>a fixed dev key under the emulators; in production, generated once and kept in <code>_config/serverSecrets</code> (server-only)</td></tr>
+      <tr><td><code>APP_URL</code></td><td>where links in mail, push and WhatsApp and the public ticket <code>url</code> point</td><td><code>pnpm dev</code> sets <code>http://127.0.0.1:5190</code>; production default <code>https://taskmanager.app</code></td></tr>
+      <tr><td><code>API_URL</code></td><td>the public origin REST / MCP / OAuth discovery documents and ICS URLs advertise</td><td><code>pnpm dev</code> sets the SPA origin (Vite proxies those paths); otherwise the request's own host</td></tr>
+    </table></div>
+
+    <h3>Local development only</h3>
+    <div class="scroller"><table class="vars">
+      <tr><th>Variable</th><th>What it does</th></tr>
+      <tr><td><code>TM_DEV_WEBHOOK_SINK</code></td><td>Under the emulators, a webhook saved as <code>https://&lt;anything&gt;.webhook.test/&lt;path&gt;</code> is delivered to this URL (same path, headers, signature and body) — so a receiver on your machine gets real deliveries while the SSRF guard still refuses private addresses. <code>pnpm dev</code> sets <code>http://127.0.0.1:5199</code>.</td></tr>
+      <tr><td><code>TM_QUEUE</code></td><td><code>memory</code> holds tasks in-process for tests (<code>drain()</code>); <code>cloud</code> uses Cloud Tasks. Unset: Cloud Tasks in production and wherever <code>CLOUD_TASKS_EMULATOR_HOST</code> is set (the Functions emulator with the Tasks emulator dispatches them); memory in any other process pointed at the emulators.</td></tr>
+      <tr><td><code>TM_WEB_PORT</code></td><td>moves the SPA off <code>5190</code> (<code>pnpm dev</code>, its <code>APP_URL</code> and the e2e suites follow it)</td></tr>
+      <tr><td><code>TM_API_URL</code> · <code>TM_WEB_URL</code></td><td>point the seed script and e2e helpers at another <code>api</code> / app origin</td></tr>
+      <tr><td><code>PUBLIC_USE_EMULATORS</code></td><td>the SPA's switch; unset means on for a <code>demo-</code> project</td></tr>
+      <tr><td><code>PUBLIC_EMULATOR_HOST</code>, <code>PUBLIC_EMULATOR_{AUTH,FIRESTORE,DATABASE,STORAGE,FUNCTIONS}_PORT</code></td><td>move the SPA's emulator connections (defaults are the port block above)</td></tr>
+      <tr><td><code>PUBLIC_FIREBASE_*</code></td><td>a real project's web config (<code>PROJECT_ID</code>, <code>API_KEY</code>, <code>AUTH_DOMAIN</code>, <code>STORAGE_BUCKET</code>, <code>DATABASE_URL</code>, <code>MESSAGING_SENDER_ID</code>, <code>APP_ID</code>); unset = <code>demo-taskmanager</code></td></tr>
+    </table></div>
+
+    <h2 id="deploy">Deploy</h2>
+    <p>Production is the Firebase project behind the <code>prod</code> alias in <code>.firebaserc</code> (<code>&lt;your-project-id&gt;</code> below), every
+    function, task queue and schedule in <code>asia-south1</code>. It deploys with <strong>no third-party credentials</strong>: e-mail,
+    WhatsApp, Typesense and GitHub stay off until their variables exist (table above).</p>
+    <div class="scroller"><table class="cmds">
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>pnpm deploy:prod</code></td><td>checks <code>frontend/.env.production</code>, builds the SPA with it, packages the functions and simulates Cloud Build on them, then
+        <code>firebase deploy --config firebase.deploy.json --project &lt;your-project-id&gt;</code>: hosting, functions, Firestore rules + indexes, Storage and Database rules</td></tr>
+      <tr><td><code>pnpm deploy:prod --only functions,hosting</code></td><td>the same with any <code>--only</code> list; other flags (<code>--force</code>, <code>--debug</code>) pass through to <code>firebase deploy</code></td></tr>
+      <tr><td><code>pnpm deploy:prod --dry-run</code></td><td>everything except the deploy itself</td></tr>
+      <tr><td><code>pnpm deploy:functions:build</code></td><td>only the functions package + its Cloud Build simulation (<code>scripts/deploy-functions.mjs --verify</code>)</td></tr>
+    </table></div>
+
+    <h3>How the functions are packaged</h3>
+    <p><code>backend/package.json</code> depends on <code>"@tm/shared": "workspace:*"</code>, which Cloud Build cannot install, so the deploy never
+    uploads <code>backend/</code>. <code>scripts/deploy-functions.mjs</code> writes <code>backend/deploy/</code> (generated, gitignored):</p>
+    <ul>
+      <li><code>lib/index.js</code> — one esbuild bundle of <code>backend/lib</code> with <code>@tm/shared</code> inlined and every npm package left as an import.
+      The handler modules <code>runtime/autoload.ts</code> would discover by listing directories are imported statically ahead of <code>index.js</code>.</li>
+      <li><code>package.json</code> — only the packages the bundle imports, pinned to the versions installed here; no workspace or dev dependencies.</li>
+      <li><code>.env.&lt;your-project-id&gt;</code> — copied from <code>backend/</code>: <code>TM_REGION=asia-south1</code>, <code>APP_URL</code>, <code>API_URL</code>, <code>TM_SECRETS</code>. Non-secret values only.</li>
+    </ul>
+    <p>It also writes <code>firebase.deploy.json</code>: <code>firebase.json</code> with the functions source set to <code>backend/deploy</code> and the hosting
+    rewrites pointed at the <code>api</code> function in <code>asia-south1</code>. <code>--verify</code> runs <code>npm install --omit=dev</code> in <code>backend/deploy</code>
+    and loads the bundle in a clean Node, failing unless it exports exactly the functions <code>backend/lib</code> does.
+    <code>firebase.json</code> stays the emulator config (source <code>backend/</code>, <code>us-central1</code>); a predeploy guard stops a plain
+    <code>firebase deploy</code> with it.</p>
+
+    <h3>Configuration</h3>
+    <div class="scroller"><table class="vars">
+      <tr><th>Where</th><th>What</th></tr>
+      <tr><td><code>frontend/.env.production</code></td><td>the web app's <code>PUBLIC_FIREBASE_*</code> config and <code>PUBLIC_USE_EMULATORS=false</code> — copy <code>frontend/.env.production.example</code>.
+        Optional: <code>PUBLIC_FCM_VAPID_KEY</code> (web push), <code>PUBLIC_WHATSAPP_ENABLED=true</code> (without it WhatsApp is greyed out in Account › Channels)</td></tr>
+      <tr><td><code>backend/.env.&lt;your-project-id&gt;</code></td><td><code>TM_REGION</code> (region of every function; unset = <code>us-central1</code>, what the emulators use), <code>APP_URL</code>, <code>API_URL</code>, <code>TM_SECRETS</code></td></tr>
+      <tr><td>Secret Manager</td><td>a provider credential: <code>firebase functions:secrets:set RESEND_API_KEY --project &lt;your-project-id&gt;</code>, add the name to <code>TM_SECRETS</code>
+        (comma-separated) and redeploy. Binding is opt-in on purpose — a missing secret never fails a deploy.
+        Non-secret provider settings (<code>TYPESENSE_HOST</code>, <code>EMAIL_FROM</code>, <code>GITHUB_APP_SLUG</code> …) go in the <code>.env</code> file.</td></tr>
+      <tr><td><code>TM_SIGNING_KEY</code> · <code>NOTIFY_SIGNING_SECRET</code></td><td>not needed: created once in <code>_config/serverSecrets</code> on the first invocation. Set them as secrets only to pin your own values.</td></tr>
+    </table></div>
+
+    <h3>Once per project (console / API)</h3>
+    <ul>
+      <li>Blaze plan; Firestore (default database) and the default Storage bucket in <code>asia-south1</code> — Firestore and Storage triggers must share the functions' region;
+      a Realtime Database (default instance; <code>asia-southeast1</code> is the nearest location) before the database rules deploy.</li>
+      <li>Identity Platform enabled (the <code>beforeSignIn</code> blocking function), with the sign-in providers the app uses; <code>&lt;your-project-id&gt;.web.app</code> is an authorised domain by default.</li>
+      <li>The functions' runtime service account (default compute, <code>&lt;number&gt;-compute@developer.gserviceaccount.com</code>) needs
+      <em>Service Account Token Creator</em> on itself (signed attachment upload/download URLs; IAM Service Account Credentials API enabled),
+      <em>Cloud Tasks Enqueuer</em> and <em>Service Account User</em> (enqueueing the <code>queue*</code> functions), and <em>Cloud Run Viewer</em>
+      (the Admin SDK looks up a queue function's URL).</li>
+      <li>A web app registered in the project; its config goes in <code>frontend/.env.production</code>.</li>
+    </ul>
+
+    <p class="warn"><strong>Nothing leaves the machine</strong> unless one of the variables above is set. There are no real credentials in this
+    repository, and none are needed to run, seed or test anything on this page.</p>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

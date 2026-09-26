@@ -1,0 +1,8 @@
+{
+  // Typechecks the phase-2 agent tests and their helpers (vitest does not):
+  // npx tsc -p test/agents
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../.." },
+  "include": ["../../src", "../harness", ".", "../tickets", "../notify"],
+  "exclude": []
+}

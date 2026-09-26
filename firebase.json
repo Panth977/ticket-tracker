@@ -1,0 +1,348 @@
+{
+  "hosting": {
+    "public": "frontend/build",
+    "$comment_ignore": "The dotfile glob is spelled out rather than '**/.*': the Claude Code plugin (§R3) keeps its manifest in /lib/claude-plugin/.claude-plugin/, and a blanket '**/.*' would silently drop it from the deploy. frontend/build is generated, so the only dot-entries that can appear there are the ones listed here.",
+    "ignore": [
+      "firebase.json",
+      "**/.DS_Store",
+      "**/.git/**",
+      "**/.gitignore",
+      "**/.firebase/**",
+      "**/.env*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/oauth/consent",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/api/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/v1/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/mcp",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/mcp/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/oauth/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/hooks/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/ics/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/integrations/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/.well-known/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "$comment_headers": "The hosted SDK, /lib/** (docs/plan/agents.html §M). Hosting applies EVERY matching block, later ones winning a header the earlier ones also set — so the wide rules come first and the specific ones last. scripts/deploy-lib.mjs stages the files; scripts/deploy-lib-check.mjs asserts these headers against a running hosting emulator.",
+    "headers": [
+      {
+        "comment": "Anything under /lib is meant to be fetched cross-origin: a browser <script type=module>, a Deno URL import, an npm tarball URL.",
+        "source": "/lib/**",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
+          { "key": "Access-Control-Allow-Headers", "value": "*" },
+          { "key": "Access-Control-Expose-Headers", "value": "X-TypeScript-Types, Content-Length, Content-Type" },
+          { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" }
+        ]
+      },
+      {
+        "comment": "Content types hosting would otherwise guess wrong: .ts is NOT video/mp2t here, and a .tgz served as octet-stream makes npm's download path fussy. .d.ts ends in .ts, so one rule covers both.",
+        "source": "/lib/**/*.ts",
+        "headers": [{ "key": "Content-Type", "value": "application/typescript; charset=utf-8" }]
+      },
+      {
+        "source": "/lib/**/*.js",
+        "headers": [{ "key": "Content-Type", "value": "text/javascript; charset=utf-8" }]
+      },
+      {
+        "source": "/lib/**/*.tgz",
+        "headers": [{ "key": "Content-Type", "value": "application/gzip" }]
+      },
+      {
+        "source": "/lib/**/*.json",
+        "headers": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }]
+      },
+      {
+        "comment": "The Claude plugin (§R3) is served as a browsable folder as well as a zip: hosting guesses nothing useful for .md, and a plugin bundle downloaded as octet-stream confuses the browser's Save dialog.",
+        "source": "/lib/**/*.md",
+        "headers": [{ "key": "Content-Type", "value": "text/markdown; charset=utf-8" }]
+      },
+      {
+        "source": "/lib/**/*.zip",
+        "headers": [{ "key": "Content-Type", "value": "application/zip" }]
+      },
+      {
+        "comment": "Pinned: the files under /lib/v1 are what a consumer's lockfile and an editor's cache point at, so they are immutable for a year.",
+        "source": "/lib/v1/**",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      },
+      {
+        "comment": "The moving name: always the newest build, so nothing may keep a copy.",
+        "source": "/lib/latest/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      },
+      {
+        "comment": "The install page changes with the docs; revalidate it every time. A header rule is matched against the REQUEST PATH, not the file hosting resolves it to, and a trailing slash is normalised away — so /lib/ needs the '/lib' spelling and only a direct hit needs '/lib/index.html'.",
+        "source": "/lib",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/lib/",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/lib/index.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "comment": "The plugin moves with every release and carries the whole integration context inside it, so a cached copy is a copy that describes an older API. Revalidate, never store.",
+        "source": "/lib/claude-plugin.zip",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/lib/claude-plugin/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "comment": "A URL import only carries types if the server says where they are. Deno reads this header (and the triple-slash reference the bundle starts with); an absolute path so it resolves the same from any importing module. sdk*.js is sdk.js and sdk.min.js.",
+        "source": "/lib/v1/sdk*.js",
+        "headers": [{ "key": "X-TypeScript-Types", "value": "/lib/v1/sdk.d.ts" }]
+      },
+      {
+        "source": "/lib/latest/sdk*.js",
+        "headers": [{ "key": "X-TypeScript-Types", "value": "/lib/latest/sdk.d.ts" }]
+      },
+      {
+        "comment": "The integration context an orchestrator is pointed at (docs/plan/agents.html §O). Generated by scripts/gen-integration.mjs; scripts/deploy-lib-check.mjs asserts these headers against a running hosting emulator. An agent fetches these from anywhere, so CORS is open, and they are NEVER cached: an agent that re-reads the page is asking whether its knowledge is current, and a cached answer would defeat the question. The charset is explicit so a fetch cannot guess latin-1 on the em dashes.",
+        "source": "/llms*.txt",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
+          { "key": "Access-Control-Allow-Headers", "value": "*" },
+          { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Cache-Control", "value": "no-store" },
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "/integrate.json",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
+          { "key": "Access-Control-Allow-Headers", "value": "*" },
+          { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Cache-Control", "value": "no-store" },
+          { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+        ]
+      },
+      {
+        "comment": "The readable page. Three spellings because a header rule matches the REQUEST path: what people type, the normalised directory, and the file itself.",
+        "source": "/integrate",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/integrate/",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/integrate/index.html",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "comment": "The Claude setup guide (§R3) — the same three spellings, for the same reason.",
+        "source": "/integrate/claude",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/integrate/claude/",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/integrate/claude/index.html",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "comment": "THE PWA (docs/plan/agents.html \u00a7S). None of these carry a content hash, so hosting's default hour of caching would decide how long a phone keeps the old app: a service worker that is not revalidated is a deploy nobody receives. 'no-cache' means revalidate, not 'do not store' \u2014 a 304 is still cheap. Service-Worker-Allowed is belt and braces for the '/' scope.",
+        "source": "/service-worker.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Service-Worker-Allowed", "value": "/" },
+          { "key": "Content-Type", "value": "text/javascript; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "/firebase-messaging-sw.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Service-Worker-Allowed", "value": "/" },
+          { "key": "Content-Type", "value": "text/javascript; charset=utf-8" }
+        ]
+      },
+      {
+        "comment": "Hosting would otherwise guess .webmanifest wrong; a browser that does not see a manifest type will not offer to install.",
+        "source": "/manifest.webmanifest",
+        "headers": [
+          { "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/offline.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ],
+    "predeploy": [
+      "node \"$PROJECT_DIR/scripts/deploy-guard.mjs\""
+    ]
+  },
+  "functions": [
+    {
+      "source": "backend",
+      "codebase": "default",
+      "runtime": "nodejs22",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "test",
+        "src",
+        "*.log",
+        "firebase-debug.log"
+      ],
+      "predeploy": [
+        "node \"$PROJECT_DIR/scripts/deploy-guard.mjs\""
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "backend/firestore.rules",
+    "indexes": "backend/firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "backend/storage.rules"
+  },
+  "database": {
+    "rules": "backend/database.rules.json"
+  },
+  "emulators": {
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9209
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8380,
+      "websocketPort": 9350
+    },
+    "database": {
+      "host": "127.0.0.1",
+      "port": 9300
+    },
+    "storage": {
+      "host": "127.0.0.1",
+      "port": 9309
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5101
+    },
+    "hosting": {
+      "host": "127.0.0.1",
+      "port": 5050
+    },
+    "tasks": {
+      "host": "127.0.0.1",
+      "port": 9599
+    },
+    "eventarc": {
+      "host": "127.0.0.1",
+      "port": 9699
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4411
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4412
+    },
+    "ui": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 4410
+    },
+    "singleProjectMode": true
+  }
+}

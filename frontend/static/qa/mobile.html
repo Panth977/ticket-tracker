@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>TaskManager · phone preview</title>
+    <!--
+      A QA harness, not part of the app. It shows the real app in <iframe>s
+      sized to phone viewports, so a layout can be checked at 360–430 px
+      without touching the browser window (resizing a window changes the
+      screenshot, the devtools toolbar and the zoom all at once; this changes
+      only the viewport, which is what a phone actually differs by).
+
+      It lives on the APP'S OWN ORIGIN on purpose: a same-origin iframe shares
+      the signed-in session, while a frame served from localhost would get
+      partitioned storage and show the login page instead of the app.
+
+      Nothing here is imported by the app; deleting this file breaks nothing.
+    -->
+    <style>
+      :root {
+        --bg: #0e0e10;
+        --panel: #17171a;
+        --line: #2a2a30;
+        --text: #e8e8ea;
+        --muted: #9a9aa4;
+        --accent: #7c9cff;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        background: rgba(14, 14, 16, 0.94);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--line);
+      }
+      h1 {
+        margin: 0 6px 0 0;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      h1 span {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      input[type='text'] {
+        flex: 1 1 240px;
+        min-width: 180px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+      }
+      input[type='text']:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      button {
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: #3b3b45;
+      }
+      button.on {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .routes,
+      .devices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 5px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      details.more > summary {
+        cursor: pointer;
+        padding: 5px 14px;
+        color: var(--muted);
+        font-size: 12.5px;
+        border-bottom: 1px solid var(--line);
+      }
+      details.more[open] > summary {
+        border-bottom: 0;
+      }
+      .routes button,
+      .devices button {
+        padding: 4px 9px;
+        font-size: 12.5px;
+      }
+      .devices {
+        color: var(--muted);
+      }
+      .devices label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+      }
+      main {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 18px;
+        padding: 8px 14px 60px;
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      figcaption {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      figcaption b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      figcaption a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .frame {
+        /* The phone's own size, scaled only for fitting several side by side. */
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #000;
+        transform-origin: top left;
+      }
+      iframe {
+        display: block;
+        border: 0;
+        background: #000;
+      }
+      .hint {
+        padding: 0 14px 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      code {
+        color: var(--text);
+        background: var(--panel);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Phone preview <span>· the live app in phone-sized viewports</span></h1>
+      <input
+        id="path"
+        type="text"
+        value="/"
+        spellcheck="false"
+        aria-label="Path to load in every frame"
+      />
+      <button id="go">Load</button>
+      <button id="reload" title="Reload every frame">Reload all</button>
+      <label style="color: var(--muted); font-size: 12.5px">
+        scale
+        <input id="scale" type="range" min="40" max="100" step="5" value="80" />
+        <span id="scaleOut">100%</span>
+      </label>
+    </header>
+
+    <nav class="routes" id="routes" aria-label="Routes"></nav>
+    <details class="more">
+      <summary>Devices and what this can and cannot show</summary>
+      <nav class="devices" id="devices" aria-label="Devices"></nav>
+      <p class="hint">
+        Same origin as the app, so these frames are signed in as you. Each frame is a real viewport
+        —
+        <code>100dvh</code>, media queries and sticky bars behave as they do on the phone. What it
+        cannot show: touch-only behaviour, the iOS/Android URL bar collapsing, and the on-screen
+        keyboard.
+      </p>
+    </details>
+
+    <main id="stage"></main>
+
+    <script>
+      const DEVICES = [
+        { id: '320x568', name: 'iPhone SE (1st)', w: 320, h: 568, on: false },
+        { id: '360x800', name: 'Android small', w: 360, h: 800, on: true },
+        { id: '375x667', name: 'iPhone SE (2/3)', w: 375, h: 667, on: true },
+        { id: '390x844', name: 'iPhone 14/15', w: 390, h: 844, on: true },
+        { id: '412x915', name: 'Pixel 7', w: 412, h: 915, on: false },
+        { id: '430x932', name: 'iPhone Pro Max', w: 430, h: 932, on: true },
+        { id: '344x882', name: 'Fold, shut', w: 344, h: 882, on: false },
+        { id: '768x1024', name: 'iPad portrait', w: 768, h: 1024, on: false },
+      ];
+
+      const ROUTES = [
+        ['Boards', '/'],
+        ['My work', '/me'],
+        ['Inbox', '/inbox'],
+        ['Agents', '/agents'],
+        ['New board', '/new-board'],
+        ['Account', '/account/profile'],
+        ['Tokens', '/account/tokens'],
+        ['Notifications', '/account/notifications'],
+        ['Integrate', '/integrate'],
+        ['Login', '/login'],
+      ];
+
+      const $ = (id) => document.getElementById(id);
+      const stage = $('stage');
+      const pathInput = $('path');
+      const params = new URLSearchParams(location.search);
+
+      let path = params.get('path') || '/';
+      let scale = Number(params.get('scale') || 80);
+      const picked = new Set(
+        (
+          params.get('devices') ||
+          DEVICES.filter((d) => d.on)
+            .map((d) => d.id)
+            .join(',')
+        ).split(','),
+      );
+
+      pathInput.value = path;
+      $('scale').value = String(scale);
+      $('scaleOut').textContent = scale + '%';
+
+      function remember() {
+        const q = new URLSearchParams({
+          path,
+          scale: String(scale),
+          devices: [...picked].join(','),
+        });
+        history.replaceState(null, '', location.pathname + '?' + q);
+      }
+
+      function src(d) {
+        // A distinct fragment per frame keeps one frame's reload from reusing another's bfcache entry.
+        return path + (path.includes('#') ? '' : '#' + d.id);
+      }
+
+      function render() {
+        stage.replaceChildren();
+        for (const d of DEVICES) {
+          if (!picked.has(d.id)) continue;
+          const fig = document.createElement('figure');
+          const cap = document.createElement('figcaption');
+          cap.innerHTML =
+            `<b>${d.name}</b> ${d.w}×${d.h}` +
+            ` · <a href="${src(d)}" target="_blank" rel="noreferrer">open</a>`;
+          const box = document.createElement('div');
+          box.className = 'frame';
+          box.style.width = d.w + 'px';
+          box.style.height = d.h + 'px';
+          box.style.transform = `scale(${scale / 100})`;
+          // The scaled frame still reserves its unscaled box, so shrink the figure to match.
+          fig.style.width = Math.round((d.w * scale) / 100) + 'px';
+          fig.style.height = Math.round((d.h * scale) / 100 + 24) + 'px';
+          const f = document.createElement('iframe');
+          f.width = d.w;
+          f.height = d.h;
+          f.src = src(d);
+          f.title = `${d.name} ${d.w}×${d.h}`;
+          box.append(f);
+          fig.append(cap, box);
+          stage.append(fig);
+        }
+        remember();
+      }
+
+      function routeButtons() {
+        const nav = $('routes');
+        for (const [label, p] of ROUTES) {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.onclick = () => {
+            path = p;
+            pathInput.value = p;
+            render();
+          };
+          nav.append(b);
+        }
+      }
+
+      function deviceButtons() {
+        const nav = $('devices');
+        for (const d of DEVICES) {
+          const b = document.createElement('button');
+          b.textContent = `${d.name} · ${d.w}×${d.h}`;
+          const paint = () => b.classList.toggle('on', picked.has(d.id));
+          b.onclick = () => {
+            picked.has(d.id) ? picked.delete(d.id) : picked.add(d.id);
+            paint();
+            render();
+          };
+          paint();
+          nav.append(b);
+        }
+      }
+
+      $('go').onclick = () => {
+        path = pathInput.value.trim() || '/';
+        render();
+      };
+      pathInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') $('go').click();
+      });
+      $('reload').onclick = () => render();
+      $('scale').oninput = (e) => {
+        scale = Number(e.target.value);
+        $('scaleOut').textContent = scale + '%';
+        render();
+      };
+
+      routeButtons();
+      deviceButtons();
+      render();
+    </script>
+  </body>
+</html>

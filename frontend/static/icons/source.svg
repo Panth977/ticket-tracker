@@ -1,0 +1,16 @@
+<!--
+  THE source mark. Every PWA icon is generated from this one file by
+  scripts/gen-icons.mjs — never hand-draw a PNG.
+
+    data-bg      the tile colour behind the mark (the brand indigo)
+    data-fg      the mark's own colour
+    <g id="mark"> the glyph, drawn in this 512×512 box with NO background;
+                  the generator supplies the tile and the padding each
+                  variant needs (round for Android/desktop, full-bleed with a
+                  safe zone for maskable, opaque square for the Apple touch icon).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" data-bg="#4f46e5" data-fg="#ffffff">
+  <g id="mark" fill="none" stroke="#ffffff" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112 268 L208 364 L400 148" />
+  </g>
+</svg>

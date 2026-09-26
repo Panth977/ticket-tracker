@@ -1,0 +1,39 @@
+{
+  "name": "@tm/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Firebase Functions v2: the `api` HTTPS function (hono), triggers, task queues, schedules; plus security rules.",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc -b ../shared && tsc -p tsconfig.json",
+    "typecheck": "tsc -b ../shared && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests --project unit",
+    "test:emu": "vitest run --passWithNoTests --project emu",
+    "test:watch": "vitest",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@google-cloud/tasks": "^7.1.1",
+    "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@tm/shared": "workspace:*",
+    "firebase-admin": "^14.4.0",
+    "firebase-functions": "^7.4.0",
+    "hono": "^4.13.8",
+    "nanoid": "^6.0.1",
+    "resend": "^6.28.1",
+    "sharp": "^0.35.4",
+    "typesense": "^3.0.6",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,44 @@
+/* The migration pages, on the same paper as the rest of the document.
+   `docs.css` styles a page built out of entity cards; these are prose with
+   tables, so they borrow its colours and type and bring their own layout. */
+/* THE SAME OUTER METRICS AS `.sheet`, so the chrome lands in the same place on
+   these pages as on the specification's — same width, same gutters, same rule
+   under it. The prose then sits in a column of its own beneath, where the
+   specification has three. */
+.mg-page { max-width: 78rem; margin: 0 auto; padding: 0 2rem 8rem; }
+.mg { max-width: 46rem; }
+.mg h1 { font-family: var(--display); font-size: 2.4rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
+.mg h2 { font-family: var(--display); font-size: 1.35rem; margin: 3rem 0 .75rem;
+  padding-top: 1.25rem; border-top: 1px solid var(--rule); }
+.mg h3 { font-family: var(--display); font-size: 1rem; margin: 2rem 0 .5rem; letter-spacing: .02em; }
+.mg .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 2rem; }
+.mg p, .mg li { line-height: 1.65; }
+.mg code { font-family: var(--mono); font-size: .87em; background: #f2ece0;
+  padding: .1em .35em; border-radius: 3px; }
+.mg pre { font-family: var(--mono); font-size: .82rem; background: #f7f3ea;
+  border: 1px solid var(--rule); border-radius: 4px; padding: 1rem; overflow-x: auto; line-height: 1.55; }
+.mg table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+.mg th, .mg td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.mg th { font-family: var(--display); text-transform: uppercase; letter-spacing: .06em;
+  font-size: .72rem; color: var(--muted); }
+.mg td code { background: none; padding: 0; }
+.mg .warn { border-left: 3px solid var(--kesar); background: #fdf6ea;
+  padding: .9rem 1.1rem; margin: 1.5rem 0; }
+.mg .warn strong { font-family: var(--display); letter-spacing: .03em; }
+.mg .run { background: var(--ink); color: var(--paper); border-radius: 4px;
+  padding: 1rem 1.2rem; font-family: var(--mono); font-size: .84rem; line-height: 1.7; }
+.mg .run b { color: #e8b96a; font-weight: 400; }
+.mg .lost { color: var(--muted); }
+.mg .arrow { color: var(--kesar); }
+.mg a { color: inherit; text-decoration: underline; text-decoration-color: var(--kesar);
+  text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.mg a:hover { text-decoration-thickness: 2px; }
+.mg ol li, .mg ul li { margin-bottom: .35rem; }
+.mg .scroller { overflow-x: auto; margin: 1rem 0; }
+.mg table th[scope], .mg table tr > th:first-child:not(:only-child) { white-space: nowrap; }
+.mg .st { font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+  padding: .15em .5em; border-radius: 3px; white-space: nowrap; }
+.mg .st--fixed { color: #1f7a45; background: #e6f4ec; }
+.mg .st--decided { color: #2f5fbf; background: #e9effb; }
+.mg .st--open { color: #a15c07; background: #fdf1e2; }
+.mg td:last-child { white-space: nowrap; }

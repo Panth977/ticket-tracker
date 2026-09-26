@@ -1,0 +1,1252 @@
+{
+  "services": [
+    {
+      "name": "firestore",
+      "logo": "firestore"
+    },
+    {
+      "name": "cloud storage",
+      "logo": "cloud storage"
+    },
+    {
+      "name": "realtime database",
+      "logo": "realtime database"
+    },
+    {
+      "name": "typesense",
+      "logo": "typesense"
+    }
+  ],
+  "types": [
+    {
+      "name": "Uid",
+      "code": [
+        "type Uid = string",
+        "",
+        "// THE FIREBASE AUTH UID — the ONLY way a person is stored, anywhere:",
+        "// assignees, access, mentions, authors, read pointers, prefs.",
+        "",
+        "// ON SCREEN A PERSON IS TWO THINGS AND A PICTURE: their display name and",
+        "// their email, with their profile picture. There are no handles and",
+        "// no usernames — nothing a person has to invent, reserve, or remember.",
+        "// Both are looked up from the uid at render time, so changing either",
+        "// changes it everywhere at once.",
+        "",
+        "// The reference tracker stored EMAILS as the key ('Team > a@b.com'),",
+        "// so a changed address broke every assignment. Email is shown, never stored as a key."
+      ]
+    },
+    {
+      "name": "PrincipalId",
+      "code": [
+        "type AgentId     = string   // 'ag_' + 16 [A-Za-z0-9] — newAgentId()",
+        "type PrincipalId = Uid | AgentId",
+        "type PrincipalKind = 'user' | 'agent'",
+        "type PrincipalRef  = { kind: 'user', id: Uid } | { kind: 'agent', id: AgentId }",
+        "",
+        "// PHASE 2: ANYONE WHO CAN APPEAR ON A TICKET IS A PRINCIPAL — a person",
+        "// (their Firebase uid) or an agent. Both live in the SAME fields:",
+        "// board.access keys, members/{id}, assigneeUids, watcherUids, mention",
+        "// nodes, message.authorUid, activity.actor. The 'ag_' prefix is how",
+        "// they are told apart (isAgentId / principalKind), so no field grew a",
+        "// second shape and no phase-1 document needed migrating.",
+        "",
+        "// AGENTS NEVER SIGN IN TO FIREBASE. They act only through a token that",
+        "// actsAs them (platform/apiKeys), so an agent id is never in readerUids,",
+        "// never in auth.uid, and the security rules never see one.",
+        "",
+        "// ONE COMPONENT DRAWS EVERY PRINCIPAL: an agent shows its picture and an",
+        "// Agent badge wherever a person would appear."
+      ]
+    },
+    {
+      "name": "BoardId",
+      "code": [
+        "type BoardId = string   // generated, never shown"
+      ]
+    },
+    {
+      "name": "TicketId",
+      "code": [
+        "type TicketId = string    // generated, IMMUTABLE",
+        "",
+        "// NOT THE TICKET KEY. Everything that has to survive is keyed by the",
+        "// id — the thread, the activity, every #link — so nothing anywhere",
+        "// depends on 'ENG-42' being the name it was filed under."
+      ]
+    },
+    {
+      "name": "TicketKey",
+      "code": [
+        "type TicketKey = `${BoardKey}-${number}`   // 'ENG-42'",
+        "type BoardKey  = string                    // /^[A-Z][A-Z0-9]{1,5}$/",
+        "",
+        "// A BOARD KEY IS CLAIMED LIKE A USERNAME: unique across the whole app,",
+        "// first come first served (boardKeys/{key}). That is what lets",
+        "// '#ENG-42' and /t/ENG-42 mean one ticket without saying whose board."
+      ]
+    },
+    {
+      "name": "Millis",
+      "code": [
+        "type Millis = number   // epoch milliseconds, UTC",
+        "",
+        "// Dates the USER picks (due, start, custom date fields) are Millis",
+        "// plus an allDay flag, so a due date of '24 Sep' does not become",
+        "// '23 Sep 18:30' for somebody in another time zone."
+      ]
+    },
+    {
+      "name": "RichText",
+      "code": [
+        "interface RichText {",
+        "  // A ProseMirror / TipTap JSON document — what the editor edits.",
+        "  doc: { type: 'doc', content: Node[] }",
+        "  // Derived on the server, never trusted from the client:",
+        "  text: string          // plain text — email, WhatsApp, search, previews",
+        "  mentions: Uid[]        // every mention node in doc",
+        "  refs: TicketId[]       // every #ticket node in doc",
+        "}",
+        "",
+        "// A MENTION IS { type: 'mention', attrs: { uid } } — it stores the uid",
+        "// and RENDERS the person's current display name. Rename yourself and",
+        "// every '@Priya' you were ever mentioned in now reads '@Priya Shah'.",
+        "// Hover shows the email and the picture."
+      ]
+    },
+    {
+      "name": "BoardRole",
+      "code": [
+        "type BoardRole = 'admin' | 'editor' | 'commenter' | 'viewer'",
+        "",
+        "// admin      settings, invite and remove people, change roles, delete",
+        "// editor     create + edit every field, move anywhere",
+        "// commenter  read + post in threads + move within their StageGrant",
+        "// viewer     read only",
+        "",
+        "// THE ONLY ROLE THERE IS. There is no app-level role, no workspace and",
+        "// no team: the board is everything. Whoever creates a board is its",
+        "// admin; everyone else is on it because they accepted an invite to it,",
+        "// with the role that invite carried.",
+        "",
+        "// AGENTS: editor | commenter | viewer, NEVER admin. boardAgentSet",
+        "// refuses 'admin'; can() reads an 'admin' entry on an agent id as editor."
+      ]
+    },
+    {
+      "name": "StageCategory",
+      "code": [
+        "type StageCategory = 'backlog' | 'todo' | 'active' | 'done' | 'cancelled'",
+        "",
+        "// Stages are the board's own words ('QA', 'Waiting on client'); the",
+        "// category is what the SYSTEM reads — a ticket in any 'done' stage is",
+        "// done for My Work, for deadlines, for the board's counts."
+      ]
+    },
+    {
+      "name": "Stage",
+      "code": [
+        "interface Stage {",
+        "  id: string          // 7-char base36, board-local",
+        "  name: string",
+        "  color: string",
+        "  category: StageCategory",
+        "  position: number",
+        "  wipLimit?: number    // kanban column warns above this",
+        "  requires?: string[]  // field ids that must be set to ENTER this stage",
+        "}",
+        "",
+        "// requires IS THE REFERENCE'S ISSUE-LOGGER RULE, made general and moved",
+        "// to the server: 'cannot close without a Solution' was checked only in",
+        "// the browser there, so any other client skipped it."
+      ]
+    },
+    {
+      "name": "StageGrant",
+      "code": [
+        "interface StageGrant {",
+        "  // Kept from the reference tracker, but PER PERSON: a commenter may",
+        "  // move tickets between THESE stages only (e.g. QA: In review → Done).",
+        "  stages: string[]",
+        "  assignedOnly?: boolean   // only tickets assigned to them",
+        "}"
+      ]
+    },
+    {
+      "name": "Option",
+      "code": [
+        "interface Option {           // a priority, a tag, a select choice",
+        "  id: string",
+        "  name: string",
+        "  color?: string",
+        "  position: number",
+        "}"
+      ]
+    },
+    {
+      "name": "FieldType",
+      "code": [
+        "type FieldType =",
+        "  | 'text' | 'longText' | 'number' | 'currency' | 'percent'",
+        "  | 'select' | 'multiSelect' | 'checkbox' | 'rating'",
+        "  | 'date' | 'dateRange' | 'person' | 'people'",
+        "  | 'url' | 'email' | 'phone' | 'ticketRelation'",
+        "  | 'formula'     // phase 3 — computed on the server, read-only"
+      ]
+    },
+    {
+      "name": "FieldDef",
+      "code": [
+        "interface FieldDef {",
+        "  id: string              // 'f_' + 6 chars; the key in Ticket.fields",
+        "  name: string",
+        "  type: FieldType",
+        "  options?: Option[]       // select, multiSelect",
+        "  config?: {",
+        "    currency?: string       // 'INR'",
+        "    precision?: number",
+        "    max?: number            // rating",
+        "    relationBoardId?: BoardId",
+        "    formula?: string",
+        "  }",
+        "  required?: boolean        // enforced by ticketCreate / ticketUpdate",
+        "  showOnCard?: boolean",
+        "  position: number",
+        "  archived?: boolean        // hidden, values kept — never destructive",
+        "}"
+      ]
+    },
+    {
+      "name": "FieldValue",
+      "code": [
+        "type FieldValue =",
+        "  | string | number | boolean | null",
+        "  | string[]                        // multiSelect option ids, people uids",
+        "  | { start: Millis, end: Millis }  // dateRange",
+        "  | TicketId[]                        // ticketRelation",
+        "",
+        "// STORED UNDER THE FIELD'S ID, never its name, so renaming 'Client'",
+        "// to 'Customer' rewrites one FieldDef and zero tickets."
+      ]
+    },
+    {
+      "name": "FilterNode",
+      "code": [
+        "type FilterNode =",
+        "  | { op: 'and' | 'or', children: FilterNode[] }",
+        "  | { field: string, cmp: Cmp, value?: unknown }",
+        "",
+        "// field: 'stage' | 'priority' | 'assignee' | 'tag' | 'due' | 'state'",
+        "//        | 'createdBy' | 'text' | 'linked' | `fields.${fieldId}`",
+        "type Cmp = 'is' | 'isNot' | 'in' | 'notIn' | 'contains' | 'empty'",
+        "         | 'notEmpty' | 'lt' | 'gt' | 'between' | 'before' | 'after'",
+        "",
+        "// value may be a token: 'me', 'today', 'thisWeek', 'overdue' — so a",
+        "// saved view 'Mine, due this week' means the same thing to everyone."
+      ]
+    },
+    {
+      "name": "ViewType",
+      "code": [
+        "type ViewType = 'kanban' | 'table' | 'calendar' | 'timeline'",
+        "",
+        "// FOUR, EACH WITH A COMPONENT THAT DRAWS IT. 'list' and 'gallery' were",
+        "// named here with nothing on the Screens page to render them."
+      ]
+    },
+    {
+      "name": "TicketState",
+      "code": [
+        "type TicketState = 'active' | 'archived'",
+        "",
+        "// A lifecycle ORTHOGONAL to the stage. Archived tickets are read-only",
+        "// and leave every default view; restoring is admin-only. Stage says",
+        "// where the work is, state says whether it still counts as work.",
+        "//",
+        "// PHASE 6: 'cancelled' is gone. Archive already means 'keep it but out",
+        "// of the way', so a third read-only state earned nothing — 'Cancel",
+        "// ticket' became 'Delete ticket' (permanent, one confirm, NO reason).",
+        "// StageCategory 'cancelled' is untouched: that is a COLUMN (a board",
+        "// may keep a \"Won't do\" stage), not the ticket's state."
+      ]
+    },
+    {
+      "name": "Attachment",
+      "code": [
+        "interface Attachment {",
+        "  id: string",
+        "  path: string        // Storage path — NEVER a download URL",
+        "  name: string",
+        "  mime: string",
+        "  size: number",
+        "  width?: number      // images, for layout before load",
+        "  height?: number",
+        "  thumbPath?: string  // written by onAttachmentFinalized",
+        "  uploadedBy: PrincipalId   // a person, or an agent through its token",
+        "}"
+      ]
+    },
+    {
+      "name": "FileKind",
+      "code": [
+        "type FileKind = 'image' | 'video' | 'audio' | 'markdown' | 'html' | 'pdf'",
+        "              | 'text' | 'csv' | 'json' | 'code' | 'other'",
+        "",
+        "// fileInfo(mime, name) → { kind, language, textual } in @tm/shared —",
+        "// ONE ANSWER to 'how do we open this', used by the preview card, the",
+        "// viewer, read_file and GET /v1/files/{id}?content=1.",
+        "",
+        "// EXTENSION FIRST for the documents agents write (.md, .html): their",
+        "// mime is often text/plain or application/octet-stream.",
+        "// textual kinds (markdown, html, text, csv, json, code) are returned",
+        "// inline as text to a token; the rest as a 15-minute signed URL.",
+        "",
+        "// Never stored: derived from mime + name wherever it is needed."
+      ]
+    },
+    {
+      "name": "Via",
+      "code": [
+        "type Via = 'app' | 'api' | 'mcp' | 'email' | 'whatsapp' | 'intake' | 'integration' | 'system'",
+        "",
+        "// WHERE A CHANGE CAME FROM, stamped on every message and activity",
+        "// row. 'Claude moved this via MCP' and 'replied by email' are facts",
+        "// the thread shows, not guesses."
+      ]
+    },
+    {
+      "name": "NotifyEvent",
+      "code": [
+        "type NotifyEvent =",
+        "  | 'assigned' | 'mentioned' | 'comment' | 'stage' | 'updated'",
+        "  | 'created' | 'dueSoon' | 'overdue' | 'state' | 'invited'",
+        "  // PHASE 3 (§L):",
+        "  | 'question'        // someone asked a blocking question (§N: an agent, or a",
+        "                      // person from the composer) — to the `to` people, or the\n                      // assignees and watchers; loud by default",
+        "  | 'agentSilence'    // YOUR agent said it was working and stopped beating (§L3)",
+        "",
+        "// Events added after phase 1 are OPTIONAL on the way into",
+        "// ChannelMatrix, so a matrix stored before them still parses and gets",
+        "// their default channels."
+      ]
+    },
+    {
+      "name": "AgentEventType",
+      "code": [
+        "type AgentEventType =",
+        "  | 'assigned' | 'unassigned' | 'mentioned' | 'comment'",
+        "  | 'stage' | 'updated' | 'created'",
+        "  // PHASE 3 (§L1) — the outcome of a question THIS agent asked:",
+        "  | 'question_answered'    // carries the answer values",
+        "  | 'question_cancelled'   // cancelled or expired: stop waiting",
+        "",
+        "// What an orchestrator needs to react to. No dueSoon / overdue /",
+        "// invited: agents have no deadlines of their own and are never",
+        "// invited — they are added (boardAgentSet)."
+      ]
+    },
+    {
+      "name": "Question",
+      "code": [
+        "interface Question {            // PHASE 3 (§L1) — Message.question, on a 'question' message",
+        "  title: string                 // 'Which database should the report use?'",
+        "  body: RichText | null         // optional context, rendered like a message body",
+        "  fields: QuestionField[]       // 1–10",
+        "  allowComment: boolean         // adds the 'Anything else?' box",
+        "  to: PrincipalId[] | null      // who should answer; null = anyone on the board who may comment",
+        "  blocking: boolean             // the ticket shows '❓ Waiting for your answer'",
+        "  status: 'open' | 'answered' | 'cancelled' | 'expired'",
+        "  expiresAt: Millis | null      // after this the card locks as Expired",
+        "  answer: {                     // null until somebody submits",
+        "    values: Record<fieldId, QuestionValue>   // string | number | boolean | optionId[]",
+        "    comment?: string",
+        "    by: Uid                     // a PERSON: agents ask, people answer",
+        "    at: Millis",
+        "  } | null",
+        "  cancelledAt?: Millis | null",
+        "}",
+        "",
+        "// THE QUESTION IS THE MESSAGE. Who asked, on which ticket and when all",
+        "// come from the message it hangs on, so answering rewrites one field and",
+        "// the card locks exactly where it already sits in the thread.",
+        "",
+        "// Its API id is '{ticketId}.{messageId}' (GET /v1/questions/{id}); the",
+        "// board comes from the credential, so no collection-group scan is needed."
+      ]
+    },
+    {
+      "name": "QuestionField",
+      "code": [
+        "interface QuestionField {",
+        "  id: string                    // stable: the answer is keyed by it",
+        "  label: string",
+        "  type: 'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date'",
+        "  options?: { id, label, description? }[]   // single / multi only, 1–20",
+        "  required?: boolean",
+        "  default?: QuestionValue       // must itself be a legal answer",
+        "  placeholder?: string          // text / longText / number",
+        "}",
+        "",
+        "// One shape for the card's form, the REST/MCP argument and the answer",
+        "// validator — a field type nobody can render is impossible to ask."
+      ]
+    },
+    {
+      "name": "TaskItem",
+      "code": [
+        "interface TaskItem {            // PHASE 3 (§L2) — one row of a tasklist",
+        "  id: string",
+        "  title: string",
+        "  status: 'todo' | 'doing' | 'done' | 'skipped' | 'failed'",
+        "  note?: string                 // why it failed, what was skipped, where the output went",
+        "  updatedAt: Millis             // kept when a replace leaves the row untouched",
+        "}",
+        "",
+        "// 'doing' is the one with the spinner; 'failed' is red and shows its note.",
+        "// done + skipped are what the progress bar has behind it."
+      ]
+    },
+    {
+      "name": "AgentState",
+      "code": [
+        "type AgentState = 'working' | 'idle' | 'done' | 'error'",
+        "",
+        "// PHASE 3 (§L3): what the ORCHESTRATOR says it is doing, in its beat."
+      ]
+    },
+    {
+      "name": "AgentHealth",
+      "code": [
+        "type AgentHealth = 'working' | 'stale' | 'idle' | 'done' | 'error' | 'none'",
+        "",
+        "// PHASE 3 (§L3): what the UI SHOWS, derived from the state and the age of",
+        "// the last beat — never stored. deriveAgentHealth(status, now):",
+        "//   working, beat ≤ 75 s   🟢 'Working · Running tests (3/12)' (pulsing)",
+        "//   working, beat > 75 s   🔴 'No signal for 3 min'  — it may have died",
+        "//   idle                   🟡 'Idle · waiting for an answer'",
+        "//   done                   ⚪ 'Finished · 10:42'",
+        "//   error                  🔴 'Stopped with an error' + the message",
+        "//   no document            nothing at all",
+        "",
+        "// 75 s = one missed beat plus slack, so a dot goes red by itself. The",
+        "// screen recomputes every 15 s; nobody writes 'stale' anywhere."
+      ]
+    },
+    {
+      "name": "Channel",
+      "code": [
+        "type Channel = 'inApp' | 'push' | 'email' | 'whatsapp'"
+      ]
+    },
+    {
+      "name": "BoardNotifyPref",
+      "code": [
+        "interface BoardNotifyPref {",
+        "  // The reference tracker's NOTIFY_PREF, minus its 'teams' mode:",
+        "  //   all    — everything on the board",
+        "  //   mine   — tickets I'm assigned to, created, or watch",
+        "  //   muted  — only tickets I explicitly watch, and mentions",
+        "  mode: 'all' | 'mine' | 'muted'",
+        "  events?: NotifyEvent[]     // absent = every event",
+        "  stageIds?: string[]        // 'stage' events: only into these stages",
+        "}",
+        "",
+        "// Set by the person themselves — from the bell on the board's bar, or",
+        "// the per-board list in Account › Notifications. Nobody sets it for you."
+      ]
+    },
+    {
+      "name": "ChannelMatrix",
+      "code": [
+        "type ChannelMatrix = Record<NotifyEvent, Channel[]>",
+        "",
+        "// WHICH CHANNELS AN EVENT USES — chosen by EACH PERSON in Account ›",
+        "// Notifications, and by nobody else. No board and no admin can turn a",
+        "// channel on for you or off for you.",
+        "",
+        "// Defaults for a new account:",
+        "//   mentioned, assigned, invited  → inApp, push, email",
+        "//   dueSoon, overdue              → inApp, push, email",
+        "//   everything else               → inApp",
+        "// 'whatsapp' is offered only once a number is linked and opted in,",
+        "// and is off for every event until the person ticks it."
+      ]
+    }
+  ],
+  "schema": [
+    {
+      "name": "users",
+      "service": "firestore",
+      "location": "users/{uid}",
+      "rules": [
+        "allow get:    signedIn()",
+        "allow list:   never",
+        "allow write:  never   // profileUpdate — a name or picture change fans out to every board",
+        "",
+        "// ANY SIGNED-IN PERSON MAY GET A PROFILE BY UID, because a card showing",
+        "// an avatar needs one — but not LIST them. Listing people is what a",
+        "// board's members/ is for, and only for that board."
+      ],
+      "schema": [
+        "interface User {",
+        "  name: string              // DISPLAY NAME — shown everywhere, editable, not unique",
+        "  email: string             // from Auth, verified — shown beside the name, changed only via Auth",
+        "  avatarPath: string | null // PROFILE PICTURE: users/{uid}/avatar/{millis}.webp, 256px",
+        "  timezone: string          // 'Asia/Kolkata' — digests, quiet hours, due dates",
+        "  locale: string",
+        "  theme: 'system' | 'light' | 'dark'",
+        "",
+        "  whatsapp: { number: string, verifiedAt: Millis, optIn: boolean } | null",
+        "",
+        "  // EVERY NOTIFICATION CHOICE LIVES HERE, on the person — see ChannelMatrix.",
+        "  notify: {",
+        "    channels: ChannelMatrix",
+        "    quietHours: { start: '22:00', end: '08:00' } | null",
+        "    digest: 'off' | 'hourly' | 'daily'",
+        "    dueSoonLeadMinutes: number   // 'remind me this long before a due date' — default 1440",
+        "    commitmentReminders: boolean",
+        "  }",
+        "",
+        "  createdAt: Millis",
+        "  deletedAt: Millis | null     // soft delete, see accountDelete",
+        "}"
+      ]
+    },
+    {
+      "name": "agents",
+      "service": "firestore",
+      "location": "agents/{agentId}",
+      "rules": [
+        "allow read:  auth.uid == resource.data.ownerUid",
+        "allow write: never   // agentCreate, agentUpdate, agentArchive",
+        "",
+        "// AN AGENT PROFILE IS PRIVATE TO THE PERSON WHO MADE IT. Nobody else",
+        "// reads it — not even an admin of a board it is on. What a board sees",
+        "// is the copy in members/{agentId}: name, picture, description, role.",
+        "// The system prompt never leaves this document except to the agent's",
+        "// OWN tokens (GET /v1/me, MCP whoami).",
+        "",
+        "// Top-level, not under users/{uid}, because the id alone must resolve",
+        "// it: a token, a member row and the inbox all carry just the agentId."
+      ],
+      "schema": [
+        "interface Agent {",
+        "  ownerUid: Uid                 // the person who made it; only they see or change it",
+        "  name: string                  // 1–60",
+        "  avatarPath: string | null     // users/{ownerUid}/agents/{agentId}/avatar/{millis}.webp",
+        "  icon?: string | null          // a prebuilt icon id (shared AGENT_ICON_IDS: 'claude', 'gemini', 'bot', …);",
+        "                                // shown on the agent's colour when there is no picture: avatarPath > icon > initials",
+        "  systemPrompt: string          // Markdown, ≤ 50 000 chars",
+        "  description: string | null    // one line (≤ 200), shown in pickers",
+        "  createdAt: Millis",
+        "  updatedAt: Millis",
+        "  archivedAt: Millis | null     // archived: off every board, its tokens revoked",
+        "}",
+        "",
+        "// AN AGENT PROFILE IS { name, picture, system prompt } AND NOTHING",
+        "// ELSE. Which model runs it, where, and with which tools is the",
+        "// orchestrator's business; this app only needs to know who is",
+        "// speaking and what to hand the orchestrator when it asks.",
+        "",
+        "// QUERY: where(ownerUid == me).orderBy(updatedAt, desc) — the Agents page.",
+        "// 50 agents per person."
+      ]
+    },
+    {
+      "name": "devices",
+      "service": "firestore",
+      "location": "users/{uid}/devices/{deviceId}",
+      "rules": [
+        "allow read, delete: auth.uid == uid",
+        "allow create, update: auth.uid == uid && validDevice()",
+        "",
+        "// The one collection a client writes directly: registering this",
+        "// browser for push is a fact about the browser, holds no invariant",
+        "// across documents, and must work on the first page load."
+      ],
+      "schema": [
+        "interface Device {",
+        "  fcmToken: string",
+        "  kind: 'web' | 'ios' | 'android'",
+        "  userAgent: string",
+        "  lastSeenAt: Millis",
+        "}",
+        "",
+        "// Tokens FCM reports as unregistered are deleted by the push sender."
+      ]
+    },
+    {
+      "name": "inbox",
+      "service": "firestore",
+      "location": "users/{uid}/inbox/{notificationId}",
+      "rules": [
+        "allow read:   auth.uid == uid",
+        "allow update: auth.uid == uid && onlyChanges(['readAt', 'archivedAt', 'snoozedUntil'])",
+        "allow create, delete: never",
+        "",
+        "// THE IN-APP CHANNEL. The bell is a realtime listener on",
+        "// where(archivedAt == null).orderBy(createdAt, desc).limit(50)."
+      ],
+      "schema": [
+        "interface InboxItem {",
+        "  event: NotifyEvent",
+        "  boardId: BoardId",
+        "  ticketId: TicketId | null      // null for 'invited'",
+        "  ticketKey: TicketKey | null     // denormalised for rendering",
+        "  ticketTitle: string | null",
+        "  inviteId: string | null         // 'invited': Accept / Decline right in the row",
+        "  actor: Uid | null     // null for dueSoon / overdue",
+        "  via: Via",
+        "  summary: string       // 'moved to QA', 'mentioned you: …'",
+        "  messageId?: string    // deep link into the thread",
+        "  groupKey: string      // `${ticketId}:${event}` — collapses 5 comments into one row",
+        "  count: number         // how many were collapsed",
+        "  createdAt: Millis",
+        "  readAt: Millis | null",
+        "  archivedAt: Millis | null",
+        "  snoozedUntil: Millis | null",
+        "}"
+      ]
+    },
+    {
+      "name": "agentInbox",
+      "service": "firestore",
+      "location": "agentInbox/{agentId}/events/{eventId}",
+      "rules": [
+        "allow read:  auth.uid == get(/agents/$(agentId)).data.ownerUid",
+        "allow write: never   // notify() writes; agentInboxAck acks",
+        "",
+        "// THE AGENT'S EVENT FEED — what users/{uid}/inbox is for a person.",
+        "// Agents get no push, email or WhatsApp; an orchestrator polls this",
+        "// (GET /v1/events), streams it (GET /v1/events/stream, SSE) or asks",
+        "// for it over MCP (get_events), and acks what it handled.",
+        "",
+        "// eventId = agentEventId(createdAt, suffix): base36 millis padded to",
+        "// 9 chars + '_' + suffix, so ids SORT BY TIME and the id IS the",
+        "// cursor. 'Everything after X' is one orderBy(__name__) query, and",
+        "// ack { upTo } is one range."
+      ],
+      "schema": [
+        "interface AgentInboxEvent {",
+        "  type: AgentEventType",
+        "  boardId: BoardId",
+        "  ticketId: TicketId",
+        "  ticketKey: TicketKey          // denormalised: 'ENG-42' at the time of the event",
+        "  messageId?: string | null     // comment / mentioned: the message to read",
+        "  actor: PrincipalId | null     // a person or ANOTHER agent; null = the system",
+        "  summary: string               // 'Priya assigned you ENG-42', 'moved to QA'",
+        "  createdAt: Millis",
+        "  question?: {                  // PHASE 3: question_answered / _cancelled",
+        "    id, title, status, values?, comment?, answeredBy?",
+        "  }                             // the values are IN the event — no second call",
+        "  ackedAt: Millis | null        // REST POST /v1/events/ack, MCP ack_events",
+        "}",
+        "",
+        "// WHO GETS ONE: an agent assigned to or watching the ticket, and any",
+        "// agent a message mentions. THE AGENT'S OWN ACTIONS NEVER CREATE AN",
+        "// EVENT FOR ITSELF — an orchestrator that posts a comment must not",
+        "// wake up to its own comment.",
+        "",
+        "// NOT COLLAPSED, unlike a person's inbox. A person reads a row; a",
+        "// program handles each event, and two comments are two things to do.",
+        "",
+        "// Unacked events are kept; acked ones are TTL-deleted 30 days after",
+        "// ackedAt (Firestore TTL policy on a derived expireAt)."
+      ]
+    },
+    {
+      "name": "reads",
+      "service": "firestore",
+      "location": "users/{uid}/reads/{ticketId}",
+      "rules": [
+        "allow read: auth.uid == uid",
+        "allow write: auth.uid == uid && onlyChanges(['readAt', 'boardId'])",
+        "",
+        "// UNREAD = ticket.lastMessageAt > reads/{ticketId}.readAt. The reference",
+        "// tracker kept a conv_log array ON the ticket and a pointer per email",
+        "// inside it — every read was a write to the most contended document",
+        "// on the board. A per-user doc makes 'mark read' touch nothing shared."
+      ],
+      "schema": [
+        "interface Read { boardId: BoardId, readAt: Millis }"
+      ]
+    },
+    {
+      "name": "invites",
+      "service": "firestore",
+      "location": "invites/{inviteId}",
+      "rules": [
+        "allow get, list: resource.data.email == auth.token.email && auth.token.email_verified",
+        "              || boardRole(resource.data.boardId) == 'admin'",
+        "allow write: never",
+        "",
+        "// TOP-LEVEL, NOT UNDER THE BOARD, because the question it answers is",
+        "// 'what have I been invited to' — where(email == mine), across boards —",
+        "// and the invitee cannot read the board until they accept.",
+        "",
+        "// The token in the email link is never stored, only its SHA-256."
+      ],
+      "schema": [
+        "interface Invite {",
+        "  boardId: BoardId",
+        "  boardName: string         // the invitee can't read the board yet",
+        "  boardKey: BoardKey",
+        "  email: string             // lower-cased",
+        "  role: BoardRole",
+        "  invitedBy: Uid",
+        "  invitedByName: string",
+        "  message: string | null",
+        "  tokenHash: string",
+        "  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired'",
+        "  expiresAt: Millis          // 14 days",
+        "  createdAt: Millis",
+        "}"
+      ]
+    },
+    {
+      "name": "boardKeys",
+      "service": "firestore",
+      "location": "boardKeys/{key}",
+      "rules": [
+        "allow get: signedIn()   // 'is ENG free?' while typing a new board's key",
+        "allow list, write: never",
+        "",
+        "// Created by boardCreate in the same transaction as the board; a second",
+        "// create of the same id fails, which is the uniqueness."
+      ],
+      "schema": [
+        "interface BoardKeyClaim { boardId: BoardId, claimedAt: Millis }"
+      ]
+    },
+    {
+      "name": "boards",
+      "service": "firestore",
+      "location": "boards/{boardId}",
+      "rules": [
+        "allow get:  canRead(boardId)",
+        "allow list: signedIn()   // query MUST be where(readerUids array-contains auth.uid)",
+        "allow write: never",
+        "",
+        "function canRead(b)   { auth.uid in get(/boards/$(b)).data.readerUids }",
+        "function boardRole(b) { get(/boards/$(b)).data.access[auth.uid] }",
+        "",
+        "// A BOARD IS PRIVATE TO ITS PEOPLE. There is nothing above it: no",
+        "// workspace, no directory, no 'visible to everyone'. You see a board",
+        "// because you created it or accepted an invite to it.",
+        "",
+        "// readerUids is the keys of access, derived — a list QUERY can only be",
+        "// proven with array-contains, never with 'is a key of this map'."
+      ],
+      "schema": [
+        "interface Board {",
+        "  name: string",
+        "  key: BoardKey              // 'ENG' — claimed in boardKeys/{key}, app-wide",
+        "  nextNumber: number         // allocateKey increments in a transaction",
+        "  color: string",
+        "  icon: string",
+        "  description: RichText | null",
+        "",
+        "  access:     Record<PrincipalId, BoardRole>   // THE authority; mirrored in members/ — people AND agents",
+        "  stageGrants: Record<PrincipalId, StageGrant>   // per principal, commenters only",
+        "  readerUids: Uid[]          // derived: every PERSON with any role — never an agent",
+        "  editorUids: Uid[]          // derived: editor + admin people — never an agent",
+        "",
+        "  stages: Stage[]",
+        "  priorities: Option[]",
+        "  tags: Option[]",
+        "  fields: FieldDef[]",
+        "  defaultViewId: string",
+        "",
+        "  settings: {",
+        "    allowDelete: boolean            // hard delete opt-in (reference)",
+        "    emailReplies: boolean           // replying to a mail posts a comment",
+        "    autoArchiveDoneAfterDays: number | null",
+        "  }",
+        "  counts: { active: number, done: number, overdue: number }   // overdue kept true by deadlineSweep, not by writes",
+        "  archivedAt: Millis | null    // boardArchive: read-only, hidden from the sidebar, restorable",
+        "  createdBy: Uid",
+        "  createdAt: Millis",
+        "}",
+        "",
+        "// NOTIFICATION PREFS ARE NOT HERE. The reference kept everyone's prefs in",
+        "// one column on the board and stripped it in the route; a Firestore",
+        "// rule cannot hide one key of a map, so they live in prefs/{uid}."
+      ]
+    },
+    {
+      "name": "members",
+      "service": "firestore",
+      "location": "boards/{boardId}/members/{principalId}",
+      "rules": [
+        "allow read:  canRead(boardId)",
+        "allow write: never   // inviteAccept, boardAccessSet, boardAgentSet",
+        "",
+        "// THE BOARD'S PEOPLE AND AGENTS: who is on it, with what role, and",
+        "// how to show them. It is the @mention directory for this board's",
+        "// composer and the assignee picker — you can only assign someone",
+        "// (or some agent) that is here.",
+        "",
+        "// board.access (below) is the AUTHORITY the rules read; this is the",
+        "// same fact denormalised for display, written in the same transaction."
+      ],
+      "schema": [
+        "interface BoardMember {",
+        "  kind: PrincipalKind         // 'user' | 'agent' — absent on phase-1 docs, read as 'user'",
+        "  uid: PrincipalId            // also the doc id; a field so collectionGroup can find it",
+        "  role: BoardRole             // agents: never 'admin'",
+        "  stageGrant: StageGrant | null   // commenters only",
+        "",
+        "  // copied so the pickers are one query; kept in step by profileUpdate",
+        "  // (people) and agentUpdate (agents):",
+        "  name: string",
+        "  email: string               // '' for agents",
+        "  avatarPath: string | null   // users/{uid}/avatar/… or users/{ownerUid}/agents/{agentId}/avatar/…",
+        "  icon?: string | null        // agents: the prebuilt icon id, copied like avatarPath",
+        "",
+        "  invitedBy: Uid | null       // null for the board's creator, and for agents",
+        "  joinedAt: Millis",
+        "",
+        "  // agents only:",
+        "  ownerUid?: Uid              // the person who owns the agent profile",
+        "  addedBy?: Uid               // the board admin (always the owner) who added it",
+        "  description?: string | null // its one line, shown under the name in pickers",
+        "}",
+        "",
+        "// THE PICKER MATCHES NAME OR EMAIL. Two 'Priya's are told apart by the",
+        "// email under each name and by the picture — which is what a handle",
+        "// was for, without anyone having to choose one. An agent is told apart",
+        "// by its badge and its description.",
+        "",
+        "// AN AGENT IS ADDED, NOT INVITED. It has no inbox to accept from, and",
+        "// its owner already decided — boardAgentSet writes this row directly."
+      ]
+    },
+    {
+      "name": "prefs",
+      "service": "firestore",
+      "location": "boards/{boardId}/prefs/{uid}",
+      "rules": [
+        "allow read:  auth.uid == uid",
+        "allow write: never   // boardPrefSet — your own, only",
+        "",
+        "// ONE DOCUMENT PER PERSON PER BOARD, because Firestore cannot hide",
+        "// one key of a map. The reference kept everyone's prefs in one column",
+        "// and let the board owner set them for everybody; here nobody can set",
+        "// anyone else's."
+      ],
+      "schema": [
+        "interface BoardPref extends BoardNotifyPref {",
+        "  watching: TicketId[]     // 'subscribed' in the reference — always notify",
+        "  starred: boolean       // pinned in the sidebar",
+        "  lastViewId: string",
+        "}"
+      ]
+    },
+    {
+      "name": "views",
+      "service": "firestore",
+      "location": "boards/{boardId}/views/{viewId}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "          && (resource.data.scope == 'shared' || resource.data.ownerUid == auth.uid)",
+        "allow write: never   // viewSave",
+        "",
+        "// PERSONAL AND SHARED VIEWS in one collection. A personal view is a",
+        "// saved filter nobody else sees; promoting it to shared needs editor."
+      ],
+      "schema": [
+        "interface View {",
+        "  name: string",
+        "  type: ViewType",
+        "  scope: 'shared' | 'personal'",
+        "  ownerUid: Uid",
+        "  position: number",
+        "  filter: FilterNode | null",
+        "  sort: { field: string, dir: 'asc' | 'desc' }[]",
+        "  groupBy: string | null       // 'stage' | 'priority' | 'assignee' | `fields.${id}`",
+        "  subGroupBy: string | null    // swimlanes",
+        "  columns: { field: string, width: number, hidden?: boolean }[]  // table",
+        "  dateField: string | null     // calendar / timeline: 'due' | `fields.${id}`",
+        "  endDateField: string | null  // timeline bar end",
+        "  cardFields: string[]         // what a kanban card shows",
+        "  includeStates: TicketState[]   // default ['active']",
+        "}"
+      ]
+    },
+    {
+      "name": "tickets",
+      "service": "firestore",
+      "location": "boards/{boardId}/tickets/{ticketId}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "allow write: never",
+        "",
+        "// match /{path=**}/tickets/{ticketId}  — the collection-group rule",
+        "allow read: auth.uid in resource.data.assigneeUids",
+        "        || auth.uid in resource.data.watcherUids\n        || auth.uid == resource.data.createdBy",
+        "",
+        "// TWO READ PATHS, ONE PER SCREEN. The board screen queries one",
+        "// board's subcollection, where canRead needs one get(). My Work is a",
+        "// collection-group query where(assigneeUids array-contains me), and",
+        "// its rule is provable from the query itself — no get() at all.",
+        "",
+        "// ALL WRITES GO THROUGH THE COMMAND LAYER, because nearly every one",
+        "// has a second document to keep true: the key counter, the activity",
+        "// row, the other ticket's link, the notification fan-out, the search",
+        "// index. See the architecture page, 'One command layer'."
+      ],
+      "schema": [
+        "interface Ticket {",
+        "  key: TicketKey               // 'ENG-42' — allocated once, never reissued",
+        "  number: number",
+        "  title: string",
+        "  description: RichText | null",
+        "",
+        "  stageId: string",
+        "  stageCategory: StageCategory // denormalised so My Work can query 'not done'",
+        "  priorityId: string | null",
+        "  tagIds: string[]",
+        "  state: TicketState",
+        "  rank: string                 // fractional index — order inside a column",
+        "",
+        "  assigneeUids: PrincipalId[]  // people AND agents, directly — any member with a role on this board",
+        "  watcherUids: PrincipalId[]   // creator + assignees + anyone who opted in",
+        "  reporter: { uid: Uid | null, name: string, email?: string }  // intake has no uid",
+        "",
+        "  startAt: Millis | null",
+        "  dueAt: Millis | null",
+        "  dueAllDay: boolean",
+        "  commitments: Record<Uid, Millis>   // reference 'pickup dates': per person",
+        "  estimate: number | null            // points or hours, board decides",
+        "",
+        "  fields: Record<string, FieldValue> // FieldDef.id → value",
+        "",
+        "  // HOW TICKETS RELATE — there are no subtasks. A big piece of work is a",
+        "  // ticket whose description or thread #references the smaller ones, or",
+        "  // that 'relates' / 'blocks' them. References and links are enough.",
+        "  refs: TicketId[]             // #tickets this one mentions (description + messages)",
+        "  referencedBy: TicketId[]     // tickets that #mention THIS one — the backlink, written by the",
+        "                               // same transaction, so a reference is visible from both ends",
+        "  links: { type: 'blocks' | 'blockedBy' | 'relates' | 'duplicates', ticketId: TicketId }[]",
+        "                               // written on BOTH tickets by ticketUpdate (blocks ↔ blockedBy)",
+        "",
+        "  counts: { messages: number, files: number, pinned: number }",
+        "  lastMessageAt: Millis | null",
+        "  lastActivityAt: Millis",
+        "",
+        "  // PHASE 3 (§L1 · §L2) — the two CARD SUMMARIES, rolled up by the commands",
+        "  // that change a question or a task list, so a board of 300 cards reads both",
+        "  // from the snapshot it already has instead of a second query per card.",
+        "  waitingOn?: {                   // the oldest OPEN BLOCKING question, or null",
+        "    count, messageId, title, to: PrincipalId[] | null, askedBy, askedAt, expiresAt",
+        "  } | null",
+        "  tasklistProgress?: { done: number, total: number } | null   // the '4/7' chip",
+        "  dueNotified: Record<Uid, { soon?: Millis, overdue?: Millis }>",
+        "                               // PER PERSON: each has their own lead time, so one",
+        "                               // person's reminder must not silence another's",
+        "",
+        "  createdBy: PrincipalId       // an agent's token creates tickets as the agent",
+        "  createdVia: Via",
+        "  createdAt: Millis",
+        "  updatedAt: Millis",
+        "  completedAt: Millis | null   // set when stageCategory becomes 'done'",
+        "}",
+        "",
+        "// INDEXES (firestore.indexes.json):",
+        "//   tickets: state ASC, stageId ASC, rank ASC              — kanban columns",
+        "//   tickets: state ASC, dueAt ASC                          — calendar",
+        "//   group tickets: assigneeUids CONTAINS, stageCategory, dueAt  — My Work",
+        "//   group tickets: state, dueAt                            — deadlineSweep"
+      ]
+    },
+    {
+      "name": "messages",
+      "service": "firestore",
+      "location": "…/tickets/{ticketId}/messages/{messageId}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "allow write: never",
+        "",
+        "// THE THREAD. A realtime listener, newest 50, older on scroll.",
+        "// Pinned messages are a second listener: where(pinnedAt != null)."
+      ],
+      "schema": [
+        "interface Message {",
+        "  kind: 'comment' | 'system' | 'question'   // system: 'Priya moved this to QA'\n                                 // question: PHASE 3 — a form card; the payload is in `question`",
+        "  body: RichText",
+        "  markdown?: string | null       // PHASE 2: the Markdown SOURCE when posted as Markdown (REST",
+        "                                 // body_markdown, MCP post_message). The thread renders it as",
+        "                                 // GitHub-flavoured Markdown — tables, images, highlighted code,",
+        "                                 // more than RichText holds. body stays the derived doc for text,",
+        "                                 // mentions, refs and search. Cleared by an edit in the app editor.",
+        "  authorUid: PrincipalId | null   // a person or an agent; null when via email/intake from an outsider",
+        "  authorName: string",
+        "  via: Via",
+        "  viaToken?: string | null        // PHASE 2: the token's name — 'Builder (agent) via token orch-eng-builder'",
+        "  replyTo: string | null          // quoted message id — one level, not nested threads",
+        "  attachments: Attachment[]",
+        "  reactions: Record<string, PrincipalId[]>   // '👍' → principals",
+        "",
+        "  pinnedAt: Millis | null",
+        "  pinnedBy: PrincipalId | null",
+        "",
+        "  editedAt: Millis | null",
+        "  deletedAt: Millis | null        // tombstone: 'This message was deleted'",
+        "  createdAt: Millis",
+        "  question?: Question | null      // PHASE 3 (§L1): present exactly when kind is 'question'.",
+        "                                  // questionAnswer / questionCancel rewrite this ONE field, so",
+        "                                  // the card locks where it already sits in the thread.",
+        "}",
+        "",
+        "// WHY NOT NESTED REPLIES: a ticket thread is already the reply to",
+        "// one thing. Quote-reply keeps context without a second tree to",
+        "// paginate, and the reference tracker never needed one."
+      ]
+    },
+    {
+      "name": "activity",
+      "service": "firestore",
+      "location": "…/tickets/{ticketId}/activity/{activityId}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "allow write: never"
+      ],
+      "schema": [
+        "interface Activity {",
+        "  action: 'create' | 'update' | 'state' | 'link' | 'referenced'",
+        "  changes: Record<string, { from: unknown, to: unknown }>  // raw ids, UI resolves names",
+        "  actor: PrincipalId | null   // a person or an agent",
+        "  via: Via",
+        "  viaToken?: string | null    // PHASE 2: the token's name when a token made the change",
+        "  viaGrant?: string[]     // reference: which StageGrant authorised a limited move",
+        "  createdAt: Millis",
+        "}",
+        "",
+        "// Written in the SAME transaction as the change it describes — the",
+        "// reference logged best-effort after the fact, so a failed log was",
+        "// a change with no history."
+      ]
+    },
+    {
+      "name": "files",
+      "service": "firestore",
+      "location": "…/tickets/{ticketId}/files/{fileId}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "allow write: never",
+        "",
+        "// EVERY FILE ON A TICKET, IN ONE PLACE — the drawer's Files tab. Files",
+        "// arrive with a message, with the description, or with ticketCreate;",
+        "// without this list the tab would have to page through the whole",
+        "// thread to find them, and the description's files were stored nowhere.",
+        "",
+        "// AGENTS UPLOAD FIRST, POST SECOND. An orchestrator writes plan.md or",
+        "// report.html with upload_file, gets a fileId, and names it in",
+        "// post_message — so a file can exist here before any message does.",
+        "// The card, the viewer and /f/{boardKey}/{ticketKey}/{fileId} all",
+        "// start from this row (see FileKind)."
+      ],
+      "schema": [
+        "interface TicketFile extends Attachment {",
+        "  source: 'description' | 'message' | 'upload'",
+        "                              // 'upload' (phase 2): put on the ticket by POST /v1/tickets/{KEY}/files",
+        "                              // or MCP upload_file and not yet posted; messagePost's fileIds then",
+        "                              // attaches it (source → 'message', messageId set)",
+        "  messageId: string | null    // jump to where it was posted",
+        "  createdAt: Millis",
+        "  deletedAt: Millis | null    // its message was deleted",
+        "}"
+      ]
+    },
+    {
+      "name": "tasklists",
+      "service": "firestore",
+      "location": "…/tickets/{ticketId}/tasklists/{listId}",
+      "rules": [
+        "allow read:  canRead(boardId)",
+        "allow write: never   // tasklistSet / tasklistItemUpdate / tasklistDelete",
+        "",
+        "// PHASE 3 (§L2) / PHASE 5 (§N2) — A PLAN, ticked off as the work happens:",
+        "// an agent's, or a person's, on the same ticket and in the same pane.\n// Its OWN document, not a field on the ticket: ticking an item must",
+        "// not rewrite the ticket, or every beat of progress would retrigger",
+        "// search indexing, the activity feed and every open listener."
+      ],
+      "schema": [
+        "interface Tasklist {",
+        "  title: string                  // 'Plan: add CSV export'",
+        "  owner: PrincipalId             // usually the agent; a person's list is theirs",
+        "  items: TaskItem[]              // ≤ 100",
+        "  position: number               // order among the lists on a ticket",
+        "  createdAt: Millis",
+        "  updatedAt: Millis",
+        "  closedAt: Millis | null        // the plan was declared finished",
+        "}",
+        "",
+        "// WHO MAY CHANGE ONE: the owner (an agent through its token, a person",
+        "// signed in), and board editors and admins. Commenters and viewers\n// read it. The browser and an agent call the same three commands.",
+        "",
+        "// THE THREAD ONLY HEARS TWICE: a system line when the list is created",
+        "// and one when it is finished. Ticking says nothing, or the thread",
+        "// would be unreadable.",
+        "",
+        "// The ticket carries the roll-up (tickets.tasklistProgress) so a board",
+        "// card shows '4/7' without reading this collection."
+      ]
+    },
+    {
+      "name": "agentStatus",
+      "service": "firestore",
+      "location": "boards/{boardId}/agentStatus/{agentId}__{ticketId | '_'}",
+      "rules": [
+        "allow read:  canRead(boardId)",
+        "allow write: never   // agentHeartbeat writes; agentSilenceSweep stamps",
+        "",
+        "// PHASE 3 (§L3) — IS THE AGENT ALIVE?",
+        "// The doc id is the beat STREAM: one agent on one ticket, or",
+        "// '{agentId}___' for an agent-level beat about no ticket.",
+        "",
+        "// THE BOARD LISTENS HERE ONCE and every card, the drawer header,",
+        "// People & roles and the Agents page read from that one snapshot."
+      ],
+      "schema": [
+        "interface AgentStatus {",
+        "  agentId: AgentId",
+        "  ticketId: TicketId | null      // null = an agent-level beat",
+        "  state: AgentState              // what the orchestrator says it is doing",
+        "  message: string | null         // 'Running tests (3/12)' — ≤ 200 chars",
+        "  progress: number | null        // 0–1",
+        "  lastBeatAt: Millis             // every minute while it works",
+        "  startedAt: Millis              // the first beat of this run",
+        "  endedAt: Millis | null         // a 'done' / 'error' beat; cleared when work restarts",
+        "  silenceNotifiedAt?: Millis | null   // the owner has been told about THIS silence",
+        "}",
+        "",
+        "// WHY NOT ON THE TICKET: a beat a minute per agent would rewrite the",
+        "// ticket a minute, retriggering indexing and every listener on it.",
+        "// These documents are small, and nothing but the dot reads them.",
+        "",
+        "// What is SHOWN is AgentHealth, derived from state + age of lastBeatAt."
+      ]
+    },
+    {
+      "name": "keys",
+      "service": "firestore",
+      "location": "keys/{ticketKey}",
+      "rules": [
+        "allow get: signedIn()",
+        "allow list, write: never",
+        "",
+        "// '#ENG-42' → the ticket it names. Reading this reveals only ids;",
+        "// reading the ticket itself still needs a role on its board.",
+        "",
+        "// A DELETED ticket's key is KEPT (deleted: true) and never reissued, so",
+        "// an old link or an old email says 'this is gone' rather than landing",
+        "// on somebody else's work."
+      ],
+      "schema": [
+        "interface KeyIndex {",
+        "  ticketId: TicketId",
+        "  boardId: BoardId",
+        "  current: TicketKey    // the key itself — equal to the doc id",
+        "  deleted?: boolean     // the ticket was deleted; the key stays taken",
+        "}"
+      ]
+    },
+    {
+      "name": "attachments",
+      "service": "cloud storage",
+      "location": "boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName}",
+      "rules": [
+        "allow read:   canReadBoard(boardId)  // firestore.get() from storage rules",
+        "allow create: canWriteBoard(boardId)",
+        "           && request.resource.size < 50 * 1024 * 1024",
+        "allow update, delete: never",
+        "",
+        "// UPLOAD DIRECT, ATTACH THROUGH A COMMAND. The browser uploads to",
+        "// Storage with progress; then messagePost / ticketUpdate names the",
+        "// path, and the command checks the object exists and is under this",
+        "// ticket's prefix. An uploaded file nobody attached is swept after 24h.",
+        "",
+        "// match /users/{uid}/avatar/{file}",
+        "//   allow read:  signedIn()",
+        "//   allow write: auth.uid == uid && image/* && size < 5 MB",
+        "",
+        "// match /users/{uid}/agents/{agentId}/avatar/{file}   (phase 2)",
+        "//   allow read:  signedIn()",
+        "//   allow write: auth.uid == uid && image/* && size < 5 MB",
+        "",
+        "// Files a TOKEN uploads (REST / MCP, ≤ 25 MB) are written by the server",
+        "// under the same ticket prefix. Browsers read every file through a",
+        "// short-lived download URL the rules only issue to people on the board."
+      ],
+      "schema": [
+        "// thumbnails: …/{attachmentId}/thumb_400.webp  (onAttachmentFinalized)",
+        "// avatars:    users/{uid}/avatar/{millis}.webp  (profile picture; owner-only write, 5 MB, image/*)",
+        "// exports:    exports/{uid}/{jobId}.zip  (accountExport, signed URL, 7 days)",
+        "// agent pictures: users/{ownerUid}/agents/{agentId}/avatar/{millis}.webp  (agentCreate / agentUpdate)"
+      ]
+    },
+    {
+      "name": "presence",
+      "service": "realtime database",
+      "location": "presence/{boardId}/{uid}",
+      "rules": [
+        ".read:  root.child('boardReaders').child($boardId).child(auth.uid).exists()",
+        ".write: auth.uid == $uid",
+        "",
+        "// boardReaders/{boardId}/{uid} is a mirror of readerUids, written by",
+        "// the same functions — RTDB rules cannot read Firestore.",
+        "",
+        "// RTDB, NOT FIRESTORE, because onDisconnect() exists here."
+      ],
+      "schema": [
+        "interface Presence {",
+        "  state: 'online' | 'away'",
+        "  viewing: TicketId | null   // 'Priya is looking at this' avatars in the drawer",
+        "  lastChanged: ServerValue.TIMESTAMP",
+        "}"
+      ]
+    },
+    {
+      "name": "typing",
+      "service": "realtime database",
+      "location": "typing/{boardId}/{ticketId}/{uid}",
+      "rules": [
+        ".read:  boardReaders/{boardId} mirror, as presence",
+        ".write: auth.uid == $uid"
+      ],
+      "schema": [
+        "// { at: TIMESTAMP } — shown for 5s, removed onDisconnect"
+      ]
+    },
+    {
+      "name": "tickets index",
+      "service": "typesense",
+      "location": "collection tickets",
+      "rules": [
+        "// NO DIRECT ACCESS WITHOUT A SCOPED KEY. searchKey mints a",
+        "// Typesense scoped key embedding filter_by: boardId:[…readable…],",
+        "// valid for 1h; the browser searches with it directly.",
+        "",
+        "// WHY A SEARCH ENGINE AT ALL: Firestore has no full-text and no",
+        "// prefix-on-any-word. The '#' picker ('#login' → ENG-42 Fix login",
+        "// redirect) and the ⌘K palette both need exactly that."
+      ],
+      "schema": [
+        "interface TicketDoc {",
+        "  id: TicketId",
+        "  boardId: BoardId",
+        "  key: TicketKey        // infix-searchable: '42' finds ENG-42",
+        "  title: string",
+        "  text: string          // description + last 20 messages, plain",
+        "  stageCategory: StageCategory",
+        "  assigneeUids: Uid[]",
+        "  state: TicketState",
+        "  updatedAt: number",
+        "}",
+        "",
+        "// Synced by onTicketWritten. Messages' text folded in by onMessageWritten."
+      ]
+    }
+  ]
+}

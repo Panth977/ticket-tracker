@@ -1,0 +1,25 @@
+[
+  {
+    "origin": [
+      "https://taskmanager-example.web.app",
+      "https://taskmanager-example.firebaseapp.com",
+      "http://localhost:5190",
+      "http://127.0.0.1:5190",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Content-Disposition",
+      "Accept-Ranges",
+      "ETag",
+      "Cache-Control",
+      "X-Goog-Meta-Width",
+      "X-Goog-Meta-Height"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

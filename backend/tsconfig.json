@@ -1,0 +1,14 @@
+{
+  // Emits src/ → lib/ for the Functions runtime (Node 22, ESM, NodeNext).
+  // @tm/shared resolves to its built dist/ (the build/typecheck scripts run
+  // `tsc -b ../shared` first); vitest resolves it to source instead.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "declaration": false,
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

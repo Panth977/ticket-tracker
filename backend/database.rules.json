@@ -1,0 +1,95 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "presence": {
+      "$boardId": {
+        ".read": "auth != null && root.child('boardReaders').child($boardId).child(auth.uid).val() === true",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || root.child('boardReaders').child($boardId).child(auth.uid).val() === true)",
+          ".validate": "newData.hasChildren(['state', 'lastChanged'])",
+          "state": {
+            ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'away')"
+          },
+          "viewing": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+          },
+          "lastChanged": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "typing": {
+      "$boardId": {
+        ".read": "auth != null && root.child('boardReaders').child($boardId).child(auth.uid).val() === true",
+        "$ticketId": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && (!newData.exists() || root.child('boardReaders').child($boardId).child(auth.uid).val() === true)",
+            ".validate": "newData.hasChildren(['at'])",
+            "at": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
+    "status": {
+      "$boardId": {
+        ".read": "auth != null && (root.child('boardReaders').child($boardId).child(auth.uid).val() === true || auth.token.board === $boardId)",
+        "$agentId": {
+          ".write": "auth != null && auth.uid === $agentId && auth.token.board === $boardId",
+          "$ticketId": {
+            ".validate": "newData.hasChildren(['state', 'at', 'startedAt'])",
+            "state": {
+              ".validate": "newData.isString() && (newData.val() === 'working' || newData.val() === 'idle' || newData.val() === 'done' || newData.val() === 'error')"
+            },
+            "message": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "progress": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+            },
+            "at": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "startedAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "endedAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "ticketId": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+            },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
+    "rev": {
+      "$boardId": {
+        ".read": "auth != null && (root.child('boardReaders').child($boardId).child(auth.uid).val() === true || auth.token.board === $boardId)",
+        ".write": false
+      }
+    },
+
+    "agents": {
+      "$agentId": {
+        "wake": {
+          ".read": "auth != null && auth.uid === $agentId",
+          ".write": false
+        }
+      }
+    },
+
+    "silence": {
+      ".read": false,
+      ".write": false
+    },
+
+    "boardReaders": {
+      ".read": false,
+      ".write": false
+    },
+
+    "rate": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

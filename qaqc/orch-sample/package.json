@@ -1,0 +1,19 @@
+{
+  "name": "tm-orch-sample",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A sample TaskManager orchestrator: a consumer project that installs the SDK tarball and drives a ticket end to end (docs/plan/agents.html §M).",
+  "scripts": {
+    "check": "node check.mjs",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/orchestrator.js"
+  },
+  "dependencies": {
+    "@tm/sdk": "file:../../sdk/dist/tm-sdk.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "~6.0.3"
+  }
+}

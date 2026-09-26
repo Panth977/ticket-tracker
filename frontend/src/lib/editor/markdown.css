@@ -1,0 +1,197 @@
+/*
+ * GitHub-flavoured Markdown on top of .tm-prose (prose.css): tables, task
+ * lists, images, code blocks with a Copy button, and a token-based
+ * highlight.js palette so light / dark follow the theme.
+ */
+.tm-md h4,
+.tm-md h5,
+.tm-md h6 {
+  font-size: 1em;
+  font-weight: 650;
+  margin-top: 0.6em;
+}
+.tm-md img {
+  max-width: 100%;
+  max-height: 32rem;
+  border-radius: 6px;
+  border: 1px solid var(--tm-line);
+}
+.tm-md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.93em;
+}
+.tm-md th,
+.tm-md td {
+  border: 1px solid var(--tm-line);
+  padding: 0.3em 0.65em;
+  text-align: left;
+  vertical-align: top;
+}
+.tm-md th {
+  background: var(--tm-surface-2);
+  font-weight: 600;
+}
+.tm-md tr:nth-child(2n) td {
+  background: color-mix(in srgb, var(--tm-surface-2) 45%, transparent);
+}
+.tm-md .md-align-center {
+  text-align: center;
+}
+.tm-md .md-align-right {
+  text-align: right;
+}
+.tm-md ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.tm-md li.task-list-item > p {
+  display: inline;
+}
+.tm-md li.task-list-item input {
+  margin: 0 0.45em 0 0;
+  vertical-align: -0.1em;
+}
+.tm-md li.task-list-item[data-checked='true'] {
+  color: var(--tm-muted);
+}
+.tm-md del,
+.tm-md s {
+  color: var(--tm-muted);
+}
+.tm-md details {
+  border: 1px solid var(--tm-line);
+  border-radius: 6px;
+  padding: 0.4em 0.7em;
+}
+.tm-md summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* ——— code blocks: Copy button, and blocks over ~30 lines scroll */
+.tm-md .md-code,
+.tm-prose .md-code {
+  position: relative;
+}
+.tm-md .md-code pre,
+.tm-prose .md-code pre {
+  max-height: calc(30 * 1.45em + 1.2em);
+  overflow: auto;
+  line-height: 1.45;
+}
+.md-copy {
+  position: absolute;
+  top: 0.35em;
+  right: 0.35em;
+  z-index: 1;
+  border: 1px solid var(--tm-line);
+  border-radius: 5px;
+  background: var(--tm-surface);
+  color: var(--tm-muted);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0.35em 0.55em;
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: pointer;
+}
+.md-code:hover .md-copy,
+.md-copy:focus-visible,
+.md-copy[data-copied] {
+  opacity: 1;
+}
+.md-copy:hover {
+  color: var(--tm-text);
+}
+@media (hover: none) {
+  .md-copy {
+    opacity: 1;
+  }
+}
+
+/* ——— highlight.js palette from theme tokens */
+.hljs-comment,
+.hljs-quote {
+  color: var(--tm-subtle);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+  color: #a3469d;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--tm-success);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link {
+  color: var(--tm-warning);
+}
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--tm-accent);
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-params,
+.hljs-attr,
+.hljs-property {
+  color: #b55b12;
+}
+.hljs-deletion {
+  color: var(--tm-danger);
+}
+.hljs-meta {
+  color: var(--tm-muted);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 650;
+}
+:root[data-theme='dark'] .hljs-keyword,
+:root[data-theme='dark'] .hljs-selector-tag,
+:root[data-theme='dark'] .hljs-literal {
+  color: #d58be0;
+}
+:root[data-theme='dark'] .hljs-type,
+:root[data-theme='dark'] .hljs-built_in,
+:root[data-theme='dark'] .hljs-params,
+:root[data-theme='dark'] .hljs-attr,
+:root[data-theme='dark'] .hljs-property {
+  color: #e6a26b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .hljs-keyword,
+  :root:not([data-theme]) .hljs-selector-tag,
+  :root:not([data-theme]) .hljs-literal {
+    color: #d58be0;
+  }
+  :root:not([data-theme]) .hljs-type,
+  :root:not([data-theme]) .hljs-built_in,
+  :root:not([data-theme]) .hljs-params,
+  :root:not([data-theme]) .hljs-attr,
+  :root:not([data-theme]) .hljs-property {
+    color: #e6a26b;
+  }
+}

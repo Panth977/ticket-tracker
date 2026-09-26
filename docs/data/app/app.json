@@ -1,0 +1,2176 @@
+{
+  "platforms": [
+    {
+      "name": "svelte",
+      "color": "#FF3E00"
+    },
+    {
+      "name": "shared",
+      "color": "#6b6259"
+    }
+  ],
+  "wireBlocks": [
+    {
+      "name": "bar",
+      "note": "a row of controls above the content"
+    },
+    {
+      "name": "chips",
+      "note": "one of a small set, chosen"
+    },
+    {
+      "name": "table",
+      "note": "columns, and rows the screen fills"
+    },
+    {
+      "name": "form",
+      "note": "labelled inputs"
+    },
+    {
+      "name": "panel",
+      "note": "a titled box with some lines"
+    },
+    {
+      "name": "split",
+      "note": "columns side by side"
+    },
+    {
+      "name": "tiles",
+      "note": "cards in a grid"
+    },
+    {
+      "name": "list",
+      "note": "N plain rows"
+    },
+    {
+      "name": "timeline",
+      "note": "an ordered sequence"
+    },
+    {
+      "name": "actions",
+      "note": "buttons"
+    },
+    {
+      "name": "menu",
+      "note": "a vertical list of choices"
+    },
+    {
+      "name": "note",
+      "note": "a sentence about the screen"
+    }
+  ],
+  "screens": [
+    {
+      "name": "Sign in",
+      "platform": "svelte",
+      "route": "/login",
+      "reads": [],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/services/onUserCreated"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "TaskManager",
+            "lines": 1
+          },
+          {
+            "actions": [
+              "Continue with Google",
+              "Continue with Microsoft"
+            ]
+          },
+          {
+            "form": [
+              "Email"
+            ]
+          },
+          {
+            "actions": [
+              "Email me a sign-in link"
+            ]
+          },
+          {
+            "note": "password is optional, set later in Account › Security; passkeys in phase 3"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Accept an invite",
+      "platform": "svelte",
+      "route": "/invite/[id].[token]",
+      "reads": [],
+      "calls": [
+        "app/services/inviteAccept"
+      ],
+      "components": [],
+      "uses": [
+        "app/services/inviteAccept"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "Priya invited you to Panth & co as a member",
+            "lines": 2
+          },
+          {
+            "note": "signed in as the wrong address → 'this invite is for a***@acme.com', switch account"
+          },
+          {
+            "actions": [
+              "Join",
+              "Not now"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Welcome",
+      "platform": "svelte",
+      "route": "/welcome",
+      "reads": [
+        "app/schema/invites"
+      ],
+      "calls": [
+        "app/services/profileUpdate",
+        "app/services/inviteAccept",
+        "app/services/boardCreate"
+      ],
+      "components": [],
+      "uses": [
+        "app/services/profileUpdate",
+        "app/services/inviteAccept"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Profile picture (from Google, or upload)",
+              "Display name",
+              "Time zone"
+            ]
+          },
+          {
+            "panel": "You've been invited — Engineering (editor), by Priya",
+            "lines": 1
+          },
+          {
+            "actions": [
+              "Accept",
+              "Decline"
+            ]
+          },
+          {
+            "actions": [
+              "Create your first board"
+            ]
+          },
+          {
+            "note": "right after sign-up; invites waiting for your address come first — joining beats starting from nothing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Boards",
+      "platform": "svelte",
+      "route": "/",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/invites",
+        "app/schema/prefs"
+      ],
+      "calls": [
+        "app/services/inviteAccept"
+      ],
+      "components": [
+        "Shell"
+      ],
+      "uses": [
+        "app/schema/boards",
+        "app/schema/invites",
+        "app/components/Shell"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "panel": "Invitations — Priya invited you to OPS · Operations as commenter",
+            "lines": 1
+          },
+          {
+            "actions": [
+              "Accept",
+              "Decline"
+            ]
+          },
+          {
+            "tiles": [
+              "★ ENG Engineering",
+              "OPS Operations",
+              "HOME Home repairs",
+              "+ New board"
+            ]
+          },
+          {
+            "panel": "Archived boards",
+            "lines": 1
+          },
+          {
+            "note": "where(readerUids array-contains me) — every board you created or accepted, and nothing else"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Inbox",
+      "platform": "svelte",
+      "route": "/inbox",
+      "reads": [
+        "app/schema/inbox"
+      ],
+      "calls": [
+        "app/services/inviteAccept"
+      ],
+      "components": [
+        "Shell",
+        "Notification row"
+      ],
+      "uses": [
+        "app/schema/inbox",
+        "app/components/Shell"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "chips": [
+              "Unread",
+              "Mentions",
+              "Assigned",
+              "Invitations",
+              "All",
+              "Snoozed"
+            ]
+          },
+          {
+            "list": 6
+          },
+          {
+            "note": "j/k to move, e to archive, s to snooze, Enter opens the ticket drawer beside the list"
+          }
+        ]
+      }
+    },
+    {
+      "name": "My work",
+      "platform": "svelte",
+      "route": "/me",
+      "reads": [
+        "app/schema/tickets"
+      ],
+      "calls": [
+        "app/services/ticketUpdate"
+      ],
+      "components": [
+        "Shell",
+        "Table",
+        "Ticket drawer"
+      ],
+      "uses": [
+        "app/schema/tickets",
+        "app/components/Shell"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "tiles": [
+              "Overdue",
+              "Due today",
+              "This week",
+              "Committed"
+            ]
+          },
+          {
+            "chips": [
+              "Assigned to me",
+              "Created by me",
+              "Watching"
+            ]
+          },
+          {
+            "table": [
+              "Key",
+              "Title",
+              "Board",
+              "Stage",
+              "Due",
+              "Commitment"
+            ]
+          },
+          {
+            "note": "a collection-group query across every board — the reference's Overview 'My tickets', without the per-browser clocks and notes"
+          },
+          {
+            "note": "'mentioned me' is the Inbox's Mentions tab — mentions live on messages, not on tickets, so there is nothing here to query"
+          },
+          {
+            "note": "PHASE 3 (§L1): a row whose ticket has a blocking question waiting for YOU carries the ❓ badge, from the same ticket.waitingOn the board cards read"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Board",
+      "platform": "svelte",
+      "route": "/b/[boardKey]/[viewId]?ticket=ENG-42",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/views",
+        "app/schema/tickets",
+        "app/schema/reads",
+        "app/schema/prefs",
+        "app/schema/presence"
+      ],
+      "calls": [
+        "app/services/ticketCreate",
+        "app/services/ticketUpdate",
+        "app/services/ticketBulk",
+        "app/services/viewSave",
+        "app/services/boardPrefSet",
+        "app/services/viewDelete",
+        "app/services/tagCreate"
+      ],
+      "components": [
+        "Shell",
+        "Board bar",
+        "Filter builder",
+        "Kanban",
+        "Table",
+        "Calendar",
+        "Timeline",
+        "Ticket card",
+        "Ticket drawer",
+        "Quick add"
+      ],
+      "uses": [
+        "app/schema/boards",
+        "app/schema/views",
+        "app/schema/tickets",
+        "app/components/Ticket drawer",
+        "app/screens/Board settings"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "bar": [
+              "● ENG Engineering ☆",
+              "Board",
+              "Table",
+              "Calendar",
+              "Mine",
+              "+",
+              "🔎 Search /",
+              "Filter 2",
+              "Sort",
+              "Group: Stage",
+              "🔔 Mine ▾",
+              "⚙",
+              "+ New  C"
+            ]
+          },
+          {
+            "split": [
+              [
+                {
+                  "panel": "Backlog 12",
+                  "lines": 3
+                }
+              ],
+              [
+                {
+                  "panel": "In progress 5 / 6",
+                  "lines": 3
+                }
+              ],
+              [
+                {
+                  "panel": "Review 3",
+                  "lines": 2
+                }
+              ],
+              [
+                {
+                  "panel": "Done 40",
+                  "lines": 1
+                }
+              ]
+            ]
+          },
+          {
+            "note": "LIVE: one onSnapshot per open board over state == 'active'; everything else in the view is computed in the browser"
+          },
+          {
+            "note": "ONE toolbar (§Q2): the tabs are the board's saved views, 🔔 is YOUR notification mode here, and ⚙ Settings is the only door to board configuration (People & roles is a section inside it). §Q4: nothing renders until the board, its views and its members are loaded — every component takes a non-null board as a prop — and a board that is gone or forbidden shows a stated empty state. §Q3: '+ New' with no column starts the ticket in the board's FIRST stage by position"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ticket page",
+      "platform": "svelte",
+      "route": "/t/[ticketKey]",
+      "reads": [
+        "app/schema/keys",
+        "app/schema/tickets",
+        "app/schema/messages",
+        "app/schema/activity",
+        "app/schema/typing",
+        "app/schema/presence",
+        "app/schema/files"
+      ],
+      "calls": [
+        "app/services/ticketUpdate",
+        "app/services/messagePost",
+        "app/services/messagePin",
+        "app/services/messageEdit",
+        "app/services/messageReact",
+        "app/services/ticketWatch",
+        "app/services/ticketState"
+      ],
+      "components": [
+        "Ticket drawer"
+      ],
+      "uses": [
+        "app/schema/keys",
+        "app/components/Ticket drawer"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "note": "the same Ticket drawer, full width — what a link in an email or a WhatsApp message opens. '#ENG-42' resolves through keys/, so a moved ticket redirects"
+          }
+        ]
+      }
+    },
+    {
+      "name": "File",
+      "platform": "svelte",
+      "route": "/f/[boardKey]/[ticketKey]/[fileId]",
+      "reads": [
+        "app/schema/keys",
+        "app/schema/tickets",
+        "app/schema/files",
+        "app/schema/attachments"
+      ],
+      "calls": [],
+      "components": [
+        "File viewer"
+      ],
+      "uses": [
+        "app/schema/files",
+        "app/components/File viewer"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "bar": [
+              "ENG-42 › report.html",
+              "‹ 3 of 6 ›",
+              "Source",
+              "Download",
+              "Back to ENG-42"
+            ]
+          },
+          {
+            "panel": "The file, full window — an HTML report in its sandboxed frame, a Markdown plan rendered with its contents list, a video in its player",
+            "lines": 6
+          },
+          {
+            "note": "THE VIEWER'S OWN ADDRESS. 'Open in new tab' from any card or the overlay lands here, so an HTML report or a Markdown plan gets a whole window, a URL to paste, and the browser's back button. The ticket key resolves through keys/, so a moved ticket still opens; the download URL is short-lived and only issued to people on the board"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Board settings",
+      "platform": "svelte",
+      "route": "/b/[boardKey]/settings/[section]  (/b/[boardKey]/people redirects to …/settings/people)",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/members",
+        "app/schema/invites",
+        "platform/schema/webhooks",
+        "platform/schema/intakes",
+        "platform/schema/installs",
+        "platform/schema/webhookDeliveries"
+      ],
+      "calls": [
+        "app/services/boardUpdate",
+        "app/services/boardAccessSet",
+        "app/services/boardPrefSet",
+        "platform/services/webhookUpsert",
+        "platform/services/installConnect",
+        "app/services/boardArchive",
+        "app/services/inviteRevoke"
+      ],
+      "components": [
+        "Shell",
+        "Field editor",
+        "Option list editor",
+        "People & roles"
+      ],
+      "uses": [
+        "app/services/boardUpdate",
+        "app/services/boardAccessSet",
+        "app/components/People & roles"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "split": [
+              [
+                {
+                  "menu": [
+                    "General",
+                    "Stages",
+                    "Priorities",
+                    "Tags",
+                    "Custom fields",
+                    "Templates",
+                    "People & roles",
+                    "Stage grants",
+                    "Intake",
+                    "Integrations",
+                    "Danger zone"
+                  ]
+                }
+              ],
+              [
+                {
+                  "form": [
+                    "Name",
+                    "Key (ENG) — fixed once created",
+                    "Colour",
+                    "Allow permanent delete",
+                    "Auto-archive done after",
+                    "Editors can invite"
+                  ]
+                },
+                {
+                  "actions": [
+                    "Save section"
+                  ]
+                }
+              ]
+            ]
+          },
+          {
+            "note": "EACH SECTION SAVES ITSELF. The reference saved every section with one button and one wholesale PATCH — two admins saving at once lost a section"
+          },
+          {
+            "note": "no Notifications section: what you hear about is yours to choose (the 🔔 on the board, or Account › Notifications). Danger zone: archive, delete, leave board"
+          },
+          {
+            "note": "§Q2: this is the ONLY door to board configuration — People & roles is a section here, not a destination of its own, and the old /b/KEY/people URL redirects to it so links people already have keep working"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Create board",
+      "platform": "svelte",
+      "route": "/new-board",
+      "reads": [
+        "app/schema/boardKeys",
+        "app/schema/boards"
+      ],
+      "calls": [
+        "app/services/boardCreate",
+        "app/services/inviteCreate"
+      ],
+      "components": [],
+      "uses": [
+        "app/services/boardCreate"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "chips": [
+              "Blank",
+              "Kanban",
+              "Bug tracker",
+              "Support desk",
+              "Sprint",
+              "Copy a board"
+            ]
+          },
+          {
+            "form": [
+              "Name",
+              "Key (ENG) — checked live against boardKeys",
+              "Invite people (email + role)"
+            ]
+          },
+          {
+            "actions": [
+              "Create board"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Authorize an app",
+      "platform": "svelte",
+      "route": "/oauth/consent",
+      "reads": [
+        "platform/schema/oauthClients"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "platform/services/oauth",
+        "platform/schema/oauthGrants"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "Claude wants to use your TaskManager account",
+            "lines": 1
+          },
+          {
+            "form": [
+              "Boards: all I'm on / only these…",
+              "Can read tickets",
+              "Can create and edit tickets",
+              "Can comment"
+            ]
+          },
+          {
+            "actions": [
+              "Allow",
+              "Cancel"
+            ]
+          },
+          {
+            "note": "where /oauth/authorize lands; the grant then appears in Account › Connected apps, revocable"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Account",
+      "platform": "svelte",
+      "route": "/account/[section]",
+      "reads": [
+        "app/schema/users",
+        "app/schema/devices",
+        "platform/schema/oauthGrants",
+        "platform/schema/apiKeys",
+        "app/schema/attachments",
+        "platform/schema/deliveries",
+        "app/schema/agents",
+        "app/schema/boards"
+      ],
+      "calls": [
+        "app/services/profileUpdate",
+        "app/services/whatsappLink",
+        "app/services/accountDelete",
+        "app/services/accountExport",
+        "platform/services/apiKeyCreate",
+        "platform/services/grantRevoke",
+        "platform/services/apiKeyRevoke"
+      ],
+      "components": [
+        "Shell",
+        "Token form"
+      ],
+      "uses": [
+        "app/schema/users",
+        "app/services/whatsappLink",
+        "app/services/accountDelete",
+        "platform/schema/apiKeys",
+        "app/components/Token form"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "split": [
+              [
+                {
+                  "menu": [
+                    "Profile",
+                    "Notifications",
+                    "Channels",
+                    "Security",
+                    "Connected apps",
+                    "Tokens",
+                    "Data & deletion"
+                  ]
+                }
+              ],
+              [
+                {
+                  "form": [
+                    "Profile picture — upload, crop",
+                    "Display name",
+                    "Email (your sign-in; change needs verification)",
+                    "Time zone",
+                    "Theme"
+                  ]
+                }
+              ]
+            ]
+          },
+          {
+            "note": "Channels: your sign-in email (where mail goes), 'Enable push on this browser' + the list of your devices, and Link WhatsApp (OTP). A channel you haven't set up is greyed out in Notifications"
+          },
+          {
+            "note": "Tokens: every token you made — name, board, acts as (you, or an agent with its picture and badge), scopes preset, last used, expires, and why a revoked one stopped (you revoked it, agent archived, agent removed from the board, you left the board). + New token opens the Token form; Revoke asks once"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Agents",
+      "platform": "svelte",
+      "route": "/agents",
+      "reads": [
+        "app/schema/agents",
+        "app/schema/members",
+        "app/schema/agentStatus"
+      ],
+      "calls": [
+        "app/services/agentCreate",
+        "app/services/agentArchive"
+      ],
+      "components": [
+        "Shell",
+        "Principal",
+        "Agent health"
+      ],
+      "uses": [
+        "app/schema/agents",
+        "app/services/agentCreate",
+        "app/components/Principal",
+        "app/components/Agent health"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "bar": [
+              "Agents",
+              "Show archived",
+              "+ New agent"
+            ]
+          },
+          {
+            "tiles": [
+              "(picture) Builder — writes the code · ENG, OPS",
+              "(picture) Reviewer — reads every PR · ENG",
+              "(picture) Planner — turns a brief into tickets",
+              "+ New agent"
+            ]
+          },
+          {
+            "note": "YOUR agents, and nobody else's: where(ownerUid == me). An agent profile is a name, a picture and a system prompt — which model runs it, and where, is your orchestrator's business. + New agent asks for a name and opens its page. PHASE 3 (§L3): each tile carries the agent's own dot and the tickets it is working on right now"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Agent",
+      "platform": "svelte",
+      "route": "/agents/[agentId]",
+      "reads": [
+        "app/schema/agents",
+        "app/schema/members",
+        "platform/schema/apiKeys",
+        "app/schema/agentStatus"
+      ],
+      "calls": [
+        "app/services/agentUpdate",
+        "app/services/agentArchive",
+        "app/services/boardAgentSet",
+        "platform/services/apiKeyCreate",
+        "platform/services/apiKeyRevoke"
+      ],
+      "components": [
+        "Shell",
+        "Markdown view",
+        "Token form",
+        "Agent health"
+      ],
+      "uses": [
+        "app/schema/agents",
+        "app/services/agentUpdate",
+        "app/services/agentArchive",
+        "app/components/Markdown view",
+        "app/components/Token form",
+        "app/components/Agent health"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "split": [
+              [
+                {
+                  "form": [
+                    "Picture — upload, crop (like your own)",
+                    "Name",
+                    "Description — one line, shown in pickers"
+                  ]
+                },
+                {
+                  "chips": [
+                    "Write",
+                    "Preview"
+                  ]
+                },
+                {
+                  "form": [
+                    "System prompt — Markdown, up to 50 000 characters"
+                  ]
+                },
+                {
+                  "actions": [
+                    "Save",
+                    "Archive"
+                  ]
+                }
+              ],
+              [
+                {
+                  "panel": "On boards — ENG as editor · OPS as commenter (Build, Review)",
+                  "lines": 2
+                },
+                {
+                  "panel": "Tokens acting as Builder — orch-eng-builder · ENG · Worker · used 3 min ago",
+                  "lines": 2
+                },
+                {
+                  "actions": [
+                    "+ New token as Builder"
+                  ]
+                }
+              ]
+            ]
+          },
+          {
+            "note": "Only the owner reaches this page (anyone else gets 404). Saving a new name or picture is copied to every board it is on; a new prompt reaches the orchestrator the next time it calls GET /v1/me or whoami. Archive takes it off every board and revokes its tokens — its messages stay, still showing its name and picture"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Notification settings",
+      "platform": "svelte",
+      "route": "/account/notifications",
+      "reads": [
+        "app/schema/users",
+        "app/schema/prefs",
+        "app/schema/devices",
+        "platform/schema/deliveries"
+      ],
+      "calls": [
+        "app/services/profileUpdate",
+        "app/services/boardPrefSet"
+      ],
+      "components": [],
+      "uses": [
+        "app/schema/users",
+        "app/schema/prefs"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "note": "Account › Notifications — everything here is YOUR choice; no board or admin can change it"
+          },
+          {
+            "table": [
+              "Event",
+              "In app",
+              "Push",
+              "Email",
+              "WhatsApp"
+            ]
+          },
+          {
+            "form": [
+              "Quiet hours",
+              "Email digest (off / hourly / daily)",
+              "Remind me before a due date (15 min … 3 days)",
+              "Commitment reminders"
+            ]
+          },
+          {
+            "panel": "Per board — Everything / Mine / Muted, + which events and stages",
+            "lines": 4
+          },
+          {
+            "panel": "Recent deliveries — what was sent where, and why something wasn't",
+            "lines": 3
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "name": "Shell",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/users",
+        "app/schema/boards",
+        "app/schema/inbox",
+        "app/schema/presence"
+      ],
+      "calls": [],
+      "components": [
+        "Sidebar",
+        "Command palette",
+        "Notification bell",
+        "Account menu"
+      ],
+      "uses": [
+        "app/schema/users",
+        "app/components/Sidebar",
+        "app/components/Command palette",
+        "app/components/Notification bell",
+        "app/components/Account menu"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "note": "every signed-in screen is drawn inside this"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Sidebar",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/prefs",
+        "app/schema/reads",
+        "app/schema/invites",
+        "app/schema/inbox"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/schema/boards",
+        "app/components/Account menu",
+        "app/components/Command palette"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "nav": [
+              "(picture) Panth Patel ▾",
+              "⌘K Search",
+              "Inbox 3",
+              "My work",
+              "Invitations 1"
+            ]
+          },
+          {
+            "nav": [
+              "— Boards",
+              "● ENG Engineering •2",
+              "● OPS Operations",
+              "● HOME Home repairs",
+              "All boards & archived",
+              "+ New board"
+            ]
+          },
+          {
+            "nav": [
+              "— You",
+              "Agents",
+              "Tokens",
+              "Notifications",
+              "Sign out"
+            ]
+          },
+          {
+            "note": "THE ONE NAVIGATION (agents.html §Q1). A FLAT list: no accordions. A board is one row — colour dot, key, name, unread count — and clicking it opens that board's default view (prefs.lastViewId, else board.defaultViewId). Views, People and Settings are not here: they are on the board page, behind the view tabs and ⚙ Settings. 'Invitations' appears only while one is pending. On a phone it is a drawer behind ☰"
+          }
+        ]
+      },
+      "opens": [
+        "app/screens/Account",
+        "app/screens/Inbox",
+        "app/screens/My work",
+        "app/screens/Boards",
+        "app/screens/Board",
+        "app/screens/Create board",
+        "app/screens/Notification settings",
+        "app/screens/Agents"
+      ]
+    },
+    {
+      "name": "Account menu",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/users"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "(picture) Panth Patel · panth@x.com",
+            "lines": 0
+          },
+          {
+            "nav": [
+              "Profile",
+              "Notifications",
+              "Channels",
+              "Security",
+              "Connected apps",
+              "Personal tokens",
+              "Data & deletion",
+              "Sign out"
+            ]
+          },
+          {
+            "note": "opens from your name at the top of the sidebar — every Account section, one click"
+          }
+        ]
+      },
+      "opens": [
+        "app/screens/Account",
+        "app/screens/Notification settings"
+      ]
+    },
+    {
+      "name": "Command palette",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/tickets index",
+        "app/schema/boards"
+      ],
+      "calls": [
+        "app/services/searchKey"
+      ],
+      "components": [],
+      "uses": [
+        "app/services/searchKey",
+        "app/schema/tickets index"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "⌘K  Search tickets, boards, people, commands"
+            ]
+          },
+          {
+            "list": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "Notification bell",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/inbox"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/schema/inbox"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "list": 4
+          },
+          {
+            "actions": [
+              "Mark all read",
+              "Open inbox"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Board bar",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/views",
+        "app/schema/prefs"
+      ],
+      "calls": [
+        "app/services/viewSave",
+        "app/services/viewDelete",
+        "app/services/boardUpdate",
+        "app/services/boardPrefSet"
+      ],
+      "components": [
+        "Filter builder"
+      ],
+      "uses": [
+        "app/schema/views",
+        "app/screens/Board settings"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "bar": [
+              "● ENG Engineering ☆",
+              "Board",
+              "Table",
+              "Calendar",
+              "Mine ●",
+              "+",
+              "🔎 Search /",
+              "Filter 2",
+              "Sort",
+              "Group: Stage",
+              "🔔 Mine ▾",
+              "⚙",
+              "+ New  C"
+            ]
+          },
+          {
+            "note": "ONE ROW (agents.html §Q2). The board is the page title (colour dot, key, name, ☆); its saved views are the tabs; everything that acts on what you are looking at is on the right. The OPEN tab is also its own menu — save, discard, save as, rename, make default, delete, and which layout the view uses — so there is no separate 'View ▾' button and no second bar. ● = the view has unsaved changes. ⚙ is the only door to board configuration, and People & roles is a section inside it"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Filter builder",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/boards"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Where Assignee is me",
+              "and Due before end of week",
+              "and Client (field) is Acme"
+            ]
+          },
+          {
+            "actions": [
+              "+ Condition",
+              "+ Group"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Kanban",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/ticketUpdate"
+      ],
+      "components": [
+        "Ticket card",
+        "Quick add"
+      ],
+      "uses": [
+        "app/components/Ticket card"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "note": "columns = groupBy (stage by default, or any select / person field); optional swimlanes = subGroupBy; drag writes { stageId, rank } — one document"
+          },
+          {
+            "note": "on a phone (§U) each column is the width of the screen and the scroller snaps, so a swipe moves exactly one stage; from sm up the columns are 18rem as before"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Table",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/ticketUpdate",
+        "app/services/ticketBulk"
+      ],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "table": [
+              "☐",
+              "Key",
+              "Title",
+              "Stage",
+              "Assignee",
+              "Due",
+              "Client",
+              "Estimate"
+            ]
+          },
+          {
+            "note": "virtualised rows; inline cell editors; column layout lives in the View, not localStorage"
+          },
+          {
+            "bar": [
+              "14 selected",
+              "Stage",
+              "Priority",
+              "+Tag",
+              "+Assignee",
+              "Due",
+              "Archive"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Calendar",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/ticketUpdate"
+      ],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "tiles": [
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat",
+              "Sun"
+            ]
+          },
+          {
+            "note": "drag a chip to another day → dueAt; unscheduled tickets in a side tray"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Timeline",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/ticketUpdate"
+      ],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "timeline": [
+              "ENG-40  ▇▇▇▇▇▇",
+              "ENG-41      ▇▇▇▇▇▇▇▇▇",
+              "ENG-42   ▇▇▇ → blocked by 41"
+            ]
+          },
+          {
+            "note": "a real bar: startAt → dueAt, drag either end; 'blocks' links drawn as arrows"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ticket card",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/reads",
+        "app/schema/tickets",
+        "app/schema/agentStatus"
+      ],
+      "calls": [],
+      "components": [
+        "Agent health"
+      ],
+      "uses": [
+        "app/schema/reads",
+        "app/components/Agent health",
+        "app/schema/agentStatus"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "ENG-42 · Fix login redirect",
+            "lines": 2
+          },
+          {
+            "chips": [
+              "High",
+              "bug",
+              "Sep 24",
+              "⛔ blocked",
+              "💬 3",
+              "🟢",
+              "☑ 4/7",
+              "❓ Waiting for you"
+            ]
+          },
+          {
+            "note": "PHASE 3: the dot comes from the board's one agentStatus listener; the '4/7' chip and the ❓ badge are read off the ticket itself (tasklistProgress and waitingOn, rolled up by the commands), so a board of 300 cards opens no extra query"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Quick add",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/ticketCreate"
+      ],
+      "components": [],
+      "uses": [
+        "app/services/ticketCreate"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Fix login redirect @priya !high due:fri #ENG-40"
+            ]
+          },
+          {
+            "note": "inline tokens parsed into fields as you type ('@pri' → people on this board whose name or email starts so); Enter creates, ⇧Enter opens the full form; a board with required fields always opens the full form"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ticket drawer",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/tickets",
+        "app/schema/messages",
+        "app/schema/activity",
+        "app/schema/typing",
+        "app/schema/presence",
+        "app/schema/files",
+        "app/schema/tasklists",
+        "app/schema/agentStatus"
+      ],
+      "calls": [
+        "app/services/ticketUpdate",
+        "app/services/ticketState",
+        "app/services/ticketWatch",
+        "app/services/ticketCreate",
+        "app/services/ticketDelete"
+      ],
+      "components": [
+        "Thread",
+        "Field panel",
+        "Attachment card",
+        "File viewer",
+        "Principal",
+        "Task lists",
+        "Question card",
+        "Agent health"
+      ],
+      "uses": [
+        "app/schema/tickets",
+        "app/components/Thread",
+        "app/components/Field panel",
+        "app/components/File viewer",
+        "app/components/Task lists",
+        "app/components/Question card",
+        "app/components/Agent health"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "bar": [
+              "ENG › ENG-42",
+              "● Priya viewing",
+              "🟢 Builder · Working · Running tests (3/12)",
+              "❓ Waiting for you",
+              "Watch",
+              "⋯ Copy link · Archive · Delete ticket",
+              "⤢",
+              "✕"
+            ]
+          },
+          {
+            "split": [
+              [
+                {
+                  "panel": "Fix login redirect",
+                  "lines": 1
+                },
+                {
+                  "panel": "Description",
+                  "lines": 3
+                },
+                {
+                  "panel": "Related — blocks ENG-44 · blocked by ENG-39 · referenced by ENG-40, OPS-7",
+                  "lines": 2
+                },
+                {
+                  "chips": [
+                    "Thread 14",
+                    "Activity",
+                    "Files 6"
+                  ]
+                },
+                {
+                  "panel": "📌 Pinned 2",
+                  "lines": 1
+                },
+                {
+                  "list": 4
+                },
+                {
+                  "form": [
+                    "Write a reply — @ to mention, # to link, / for commands"
+                  ]
+                }
+              ],
+              [
+                {
+                  "form": [
+                    "Plan: add CSV export — 4 / 7 (the task lists, above the fields)",
+                    "Stage",
+                    "Priority",
+                    "Assignees — each with a commitment date",
+                    "Start",
+                    "Due",
+                    "Estimate",
+                    "Tags (+ create)",
+                    "Links (blocks / blocked by / relates)",
+                    "Client",
+                    "Contract value"
+                  ]
+                }
+              ]
+            ]
+          },
+          {
+            "note": "Related is links (both ends) + referencedBy; '+ Link' opens the same # search the composer uses. A referencing ticket on a board you can't read shows as '1 ticket you can't see'"
+          },
+          {
+            "note": "The Files tab is the same Attachment cards in a grid, every file on the ticket (files/), including ones an agent uploaded and has not posted yet. The Assignees picker lists people and agents, agents with their badge"
+          },
+          {
+            "note": "on a phone (§U) the drawer IS the screen: full width, the two panes stack (Details is a button that slides the right pane over), the composer sits above the home indicator, and the entrance is a CSS animation whose resting state is the final one — a frozen JS transition used to leave it parked off-screen"
+          },
+          {
+            "note": "opening a ticket also READS its notifications (§V): every unread users/{uid}/inbox row with this ticketId is marked read, from the bell's own listener — other tickets and invitations are left alone"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Thread",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/messages",
+        "app/schema/typing",
+        "app/schema/reads",
+        "app/schema/files"
+      ],
+      "calls": [
+        "app/services/messagePost",
+        "app/services/messageEdit",
+        "app/services/messagePin",
+        "app/services/messageReact"
+      ],
+      "components": [
+        "Composer",
+        "Message",
+        "Attachment card",
+        "File viewer",
+        "Question card"
+      ],
+      "uses": [
+        "app/schema/messages",
+        "app/components/Composer",
+        "app/components/Message",
+        "app/components/File viewer",
+        "app/schema/files",
+        "app/components/Question card"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "📌 Pinned — 'Decision: we ship behind a flag'",
+            "lines": 1
+          },
+          {
+            "list": 5
+          },
+          {
+            "note": "grouped by author and day; 'Seen by' avatars from reads/; marked read when the bottom is visible. An agent's messages look like anyone's, with its picture, an Agent badge and 'via token orch-eng-builder'. Clicking any attachment opens the File viewer over the thread, stepping through every file on the ticket"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Message",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/messagePin",
+        "app/services/messageReact",
+        "app/services/messageEdit"
+      ],
+      "components": [
+        "Principal",
+        "Markdown view",
+        "Attachment card"
+      ],
+      "uses": [
+        "app/components/Principal",
+        "app/components/Markdown view",
+        "app/components/Attachment card"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "(picture) Builder  AGENT · 10:42 · via token orch-eng-builder",
+            "lines": 4
+          },
+          {
+            "tiles": [
+              "plan.md — title + first lines",
+              "report.html — live preview",
+              "screen.png",
+              "demo.mp4 · 0:42"
+            ]
+          },
+          {
+            "chips": [
+              "👍 3",
+              "Reply",
+              "React",
+              "Pin",
+              "Edit",
+              "Delete",
+              "Copy as Markdown",
+              "Copy link"
+            ]
+          },
+          {
+            "note": "THE BODY IS GITHUB-FLAVOURED MARKDOWN: headings, lists, task lists, tables, quotes, links, inline images, and code blocks with highlighting and a copy button — the same for an agent's Markdown (Message.markdown) and a person's editor text. Over ~40 lines it collapses behind 'Show more'; a code block over 30 lines scrolls. Attachments sit under it as a grid of Attachment cards"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Question card",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/messages"
+      ],
+      "calls": [
+        "app/services/questionAnswer",
+        "app/services/questionCancel"
+      ],
+      "components": [],
+      "uses": [
+        "app/schema/messages",
+        "app/services/questionAnswer"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "❓ Which database should the report use?          OPEN",
+            "lines": 1
+          },
+          {
+            "form": [
+              "( ) Postgres",
+              "( ) BigQuery — costs per query",
+              "Why? ______",
+              "Anything else? ______",
+              "[ Submit ]  Cancel question"
+            ]
+          },
+          {
+            "note": "PHASE 3 (§L1) — an agent's question, in the thread, AS A FORM: radio buttons for single choice, checkboxes for multiple, inputs for the rest. A person with commenter rights or above can answer; when `to` is set the card says whom it is waiting for and only they may submit"
+          },
+          {
+            "note": "Submit goes through the outbox like every other write, so the card locks at once (an optimistic patch on the message) and nothing waits for the server. Answered, cancelled and expired all lock in place: the chosen values, 'Answered by Panth · 10:42', and the answer also arrives as your own reply bubble"
+          },
+          {
+            "note": "PHASE 5 (§N): the card does not care WHO asked. A person's question (from the composer's builder) notifies, badges and locks exactly like an agent's; the asker — person or agent — and board admins can take an open one back, which locks it as Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Question builder",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/members"
+      ],
+      "calls": [
+        "app/services/questionAsk"
+      ],
+      "components": [
+        "Question card"
+      ],
+      "uses": [
+        "app/schema/messages",
+        "app/services/questionAsk",
+        "app/components/Question card"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "chips": [
+              "Yes / No",
+              "Pick one",
+              "Pick several",
+              "Free text"
+            ]
+          },
+          {
+            "form": [
+              "Question",
+              "Context (optional, rich text)",
+              "Field 1  ·  Label  ·  Type [Single choice ▾]  ↑ ↓ ✕",
+              "Options  • Postgres ↑ ↓ ✕  • BigQuery ↑ ↓ ✕  + Add option",
+              "☐ Required          + Add field",
+              "☐ Add an “Anything else?” box",
+              "Who should answer  ·  ☑ Blocking  ·  Expires [Never ▾]"
+            ]
+          },
+          {
+            "panel": "Preview — ❓ Which database?  ( ) Postgres  ( ) BigQuery  [ Submit ]",
+            "lines": 1
+          },
+          {
+            "actions": [
+              "Cancel",
+              "Ask"
+            ]
+          },
+          {
+            "note": "PHASE 5 (§N1) — the composer's dialog for asking a question. Four starting points fill the fields in; up to 10 fields (single / multi / text / long text / number / yes-no / date), each with a label, an options editor (add, reorder, remove) and Required. Who should answer picks people AND agents (empty = anyone on the board); Blocking puts ❓ Waiting on the ticket; Expires is never / an hour / a day / a week"
+          },
+          {
+            "note": "The preview IS the Question card, rendered inert — what is on the right is exactly what the thread will show. Ask goes through the outbox like any message (the entry id is the message id), so the card appears at once and rolls back if the server refuses. A draft that passes the dialog is a question questionAsk accepts: the validation is the shared one"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Task lists",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/tasklists"
+      ],
+      "calls": [
+        "app/services/tasklistItemUpdate",
+        "app/services/tasklistSet",
+        "app/services/tasklistDelete"
+      ],
+      "components": [],
+      "uses": [
+        "app/schema/tasklists",
+        "app/services/tasklistItemUpdate",
+        "app/services/tasklistSet",
+        "app/services/tasklistDelete"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "Plan: add CSV export                              4 / 7",
+            "lines": 1
+          },
+          {
+            "actions": [
+              "+ New list"
+            ]
+          },
+          {
+            "list": 4
+          },
+          {
+            "note": "PHASE 3 (§L2) — at the top of the right pane, above the fields. A progress bar per list; the item being worked on (doing) is highlighted with a spinner, failed items are red with their note. Editors and the list's owner can tick an item by hand — the same command the agent calls, and it leaves no thread line"
+          },
+          {
+            "note": "PHASE 5 (§N2): + New list takes a title and the items — paste a plan and each line becomes one. Per list: rename, add an item, edit it in place, drag (or ↑ ↓) to reorder, delete an item, delete the list. Per item: click the status to walk todo → doing → done, or use its ⋯ menu for skipped and failed (failed asks for a note first)"
+          },
+          {
+            "note": "Who may (§N2): editors and admins, and the list's OWNER — which is how an agent keeps its plan while a person still ticks an item off, and how a person's own list works with no agent anywhere. Commenters and viewers get the same pane, read-only: what you may not do is not drawn rather than failing on click. Every change goes through the outbox; one item's status is tasklistItemUpdate (no thread line), anything structural is a whole-list tasklistSet"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Agent health",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/agentStatus"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/schema/agentStatus"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "chips": [
+              "🟢 Working · Running tests (3/12)",
+              "🔴 No signal for 3 min",
+              "🟡 Idle · waiting for an answer",
+              "⚪ Finished · 10:42"
+            ]
+          },
+          {
+            "note": "PHASE 3 (§L3) — ONE component and one derivation (AgentHealth) behind every dot in the app: the drawer header, board cards, agent avatars, People & roles and the Agents page. A card asks for a dot; it never computes one"
+          },
+          {
+            "note": "ONE LISTENER PER BOARD on agentStatus feeds all of them, and the clock is recomputed every 15 s — a quarter of the beat interval — so a 'working' agent that stopped beating goes red by itself, with nothing written anywhere"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Composer",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/members",
+        "app/schema/tickets index"
+      ],
+      "calls": [
+        "app/services/messagePost",
+        "app/services/questionAsk"
+      ],
+      "components": [
+        "Question builder"
+      ],
+      "uses": [
+        "app/schema/members",
+        "app/schema/tickets index",
+        "app/schema/attachments",
+        "app/schema/files",
+        "app/services/questionAsk"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "bar": [
+              "B",
+              "I",
+              "S",
+              "</>",
+              "Link",
+              "• List",
+              "1. List",
+              "☐ Checklist",
+              "❝",
+              "📎",
+              "❓"
+            ]
+          },
+          {
+            "form": [
+              "TipTap editor"
+            ]
+          },
+          {
+            "tiles": [
+              "plan.md ▓▓▓▓░ 80% ✕",
+              "screen.png ✓ ✕"
+            ]
+          },
+          {
+            "actions": [
+              "Send ⌘↵"
+            ]
+          },
+          {
+            "note": "@ → people AND agents on this board, matched by name or email, agents with their badge and description; # → Typesense prefix search on key and title; / → slash commands (/assign, /due, /stage, /ask). Drag, drop or paste many files at once, each with its own progress bar and ✕ to remove before sending; a message can be files only. Draft kept per ticket in IndexedDB"
+          },
+          {
+            "note": "PHASE 5 (§N1): ❓ opens the QUESTION BUILDER — the same card an agent posts, built by hand. It is shown to anyone who may comment (not just editors), and /ask is the same door from the keyboard: the slash line runs when you send it"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Field panel",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/boards"
+      ],
+      "calls": [
+        "app/services/ticketUpdate",
+        "app/services/tagCreate"
+      ],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Stage",
+              "Priority",
+              "Assignees",
+              "Due",
+              "…one editor per FieldType"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Field editor",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [
+        "app/services/boardUpdate"
+      ],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Name",
+              "Type",
+              "Options",
+              "Required",
+              "Show on card"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Option list editor",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "list": 4
+          },
+          {
+            "note": "drag to reorder, colour swatch, category (stages); removing one in use asks where its tickets go"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Notification row",
+      "platform": "svelte",
+      "reads": [],
+      "calls": [],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "Priya mentioned you on ENG-42 · 3 more",
+            "lines": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "People & roles",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/members",
+        "app/schema/invites",
+        "app/schema/agents",
+        "app/schema/agentStatus"
+      ],
+      "calls": [
+        "app/services/inviteCreate",
+        "app/services/boardAccessSet",
+        "app/services/boardAgentSet"
+      ],
+      "components": [
+        "Principal",
+        "Agent health"
+      ],
+      "uses": [
+        "app/services/inviteCreate",
+        "app/services/boardAccessSet",
+        "app/schema/members",
+        "app/services/boardAgentSet",
+        "app/components/Principal",
+        "app/components/Agent health"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Invite by email",
+              "Role ▾",
+              "Message"
+            ]
+          },
+          {
+            "actions": [
+              "+ Add agent"
+            ]
+          },
+          {
+            "table": [
+              "Picture",
+              "Name",
+              "Email · or Agent badge + owner",
+              "Role on this board",
+              "Stage grant",
+              "⋯ Remove"
+            ]
+          },
+          {
+            "panel": "Pending invites — revoke or resend",
+            "lines": 2
+          },
+          {
+            "note": "the board is everything: people get onto it by an invite from here, with a role per person. AGENTS ARE ADDED, NOT INVITED: '+ Add agent' lists the agents YOU own that are not on the board yet, with a role of editor, commenter or viewer (never admin) and an optional stage grant. Any admin may change an agent's role or remove it; removing one takes it off assignees and watchers, revokes its tokens for this board, and keeps its messages"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Principal",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/members",
+        "app/schema/users"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/schema/members"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "(picture) Priya Shah · priya@acme.com",
+            "lines": 0
+          },
+          {
+            "panel": "(picture) Builder  AGENT · writes the code",
+            "lines": 0
+          },
+          {
+            "note": "ONE COMPONENT FOR EVERYONE WHO CAN APPEAR ON A TICKET — avatar, name, and either the email or the Agent badge. Used by assignees, mentions, message authors, the pickers, People & roles and the activity list, so an agent can never be drawn as a stranger in one place and a teammate in another. Tells them apart by the id's 'ag_' prefix; reads the board's members/ row, falling back to users/{uid} for people"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Token form",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/boards",
+        "app/schema/members",
+        "app/schema/agents"
+      ],
+      "calls": [
+        "platform/services/apiKeyCreate"
+      ],
+      "components": [
+        "Principal"
+      ],
+      "uses": [
+        "platform/services/apiKeyCreate",
+        "platform/schema/apiKeys"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "form": [
+              "Name — e.g. orch-eng-builder",
+              "Board — exactly one board you are on",
+              "Acts as — ● Me  ○ An agent ▾ (your agents on that board)"
+            ]
+          },
+          {
+            "chips": [
+              "Read only",
+              "Worker",
+              "Everything"
+            ]
+          },
+          {
+            "form": [
+              "☑ board:read ☑ members:read ☑ tickets:read ☐ tickets:create ☑ tickets:update ☑ tickets:move ☐ tickets:assign ☐ tickets:state ☑ comments:read ☑ comments:write ☑ files:read ☑ files:write ☑ events:read",
+              "Expires — never / 30 / 90 / 365 days"
+            ]
+          },
+          {
+            "actions": [
+              "Create token"
+            ]
+          },
+          {
+            "panel": "Shown once — tm_live_… [Copy] · MCP config [Copy] · curl examples [Copy]",
+            "lines": 4
+          },
+          {
+            "note": "A TOKEN IS FOR ONE BOARD. Pick 'An agent' and the token carries that agent's identity: its changes are authored by the agent, it reads the agent's inbox and system prompt. What it may do is its scopes ∩ what that principal's role allows, and the form says so beside the checkboxes. The MCP config and curl lines come from @tm/shared (mcpClientConfig, curlExamples)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Markdown view",
+      "platform": "shared",
+      "reads": [],
+      "calls": [],
+      "components": [],
+      "uses": [],
+      "wire": {
+        "blocks": [
+          {
+            "panel": "# Plan — ENG-42",
+            "lines": 1
+          },
+          {
+            "split": [
+              [
+                {
+                  "menu": [
+                    "Contents",
+                    "1. Goal",
+                    "2. Steps",
+                    "3. Risks"
+                  ]
+                }
+              ],
+              [
+                {
+                  "panel": "Rendered GFM — tables, task lists, highlighted code with Copy",
+                  "lines": 5
+                }
+              ]
+            ]
+          },
+          {
+            "chips": [
+              "Rendered",
+              "Source"
+            ]
+          },
+          {
+            "note": "THE ONE MARKDOWN RENDERER, for a message body and for a .md file. GitHub-flavoured, sanitised (no raw HTML runs), code highlighted by language, links open in a new tab. A long document gets a table of contents from its headings; a file gets a Source toggle"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Attachment card",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/files",
+        "app/schema/attachments"
+      ],
+      "calls": [],
+      "components": [],
+      "uses": [
+        "app/schema/attachments"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "tiles": [
+              "image — thumbnail",
+              "video — poster + 0:42",
+              "audio — ▶ mini player",
+              "plan.md — title + first lines",
+              "report.html — live scaled-down preview",
+              "spec.pdf — first page",
+              "data.csv — first lines",
+              "archive.zip — icon + 2.1 MB"
+            ]
+          },
+          {
+            "note": "WHAT A FILE LOOKS LIKE BEFORE YOU OPEN IT, decided by fileInfo(mime, name) from @tm/shared — extension first for .md and .html, because agents' uploads often arrive as text/plain. The HTML preview is the same sandboxed srcdoc frame as the viewer, scaled down and not interactive. Click opens the File viewer; ⋯ has Download and Open in new tab"
+          }
+        ]
+      }
+    },
+    {
+      "name": "File viewer",
+      "platform": "svelte",
+      "reads": [
+        "app/schema/files",
+        "app/schema/attachments"
+      ],
+      "calls": [],
+      "components": [
+        "Markdown view"
+      ],
+      "uses": [
+        "app/schema/files",
+        "app/components/Markdown view",
+        "app/screens/File"
+      ],
+      "wire": {
+        "blocks": [
+          {
+            "bar": [
+              "report.html · 48 KB · Builder · 10:42",
+              "‹ 3 of 6 ›",
+              "Source",
+              "Download",
+              "Open in new tab ↗",
+              "✕"
+            ]
+          },
+          {
+            "panel": "The file",
+            "lines": 6
+          },
+          {
+            "table": [
+              "Kind",
+              "Opens as"
+            ]
+          },
+          {
+            "note": "image: lightbox with zoom, pan, next/prev · video, audio: native player · Markdown: the Markdown view, with contents and a Source toggle · HTML: <iframe sandbox=\"allow-scripts allow-popups allow-forms\" srcdoc> — NEVER allow-same-origin, so the document runs its own scripts but cannot touch the app or your session · PDF: the browser's viewer in an iframe · text, code, JSON: highlighted; CSV: a table · anything else: Download"
+          },
+          {
+            "note": "AN OVERLAY OVER THE TICKET, stepping through the files before and after this one. 'Open in new tab' opens /f/{boardKey}/{ticketKey}/{fileId} — the same viewer as a full page. Contents come through short-lived download URLs, which Storage only issues to people on the board"
+          }
+        ]
+      }
+    }
+  ]
+}

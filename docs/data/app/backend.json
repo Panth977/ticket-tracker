@@ -1,0 +1,1492 @@
+{
+  "triggers": [
+    {
+      "name": "api",
+      "logo": "api",
+      "note": "A request to the one HTTPS function `api`. Every command the Svelte app sends lands here — and the REST API and MCP server (Platform) reach the same handlers through their own middleware."
+    },
+    {
+      "name": "firestore",
+      "logo": "firestore",
+      "note": "A document changed under it and it ran. Used only for derived data: search index, rollups, counts."
+    },
+    {
+      "name": "auth",
+      "logo": "auth",
+      "note": "An account was created or deleted, by any provider."
+    },
+    {
+      "name": "storage",
+      "logo": "storage",
+      "note": "An object finished uploading."
+    },
+    {
+      "name": "schedule",
+      "logo": "schedule",
+      "note": "Cloud Scheduler, on a cron."
+    },
+    {
+      "name": "queue",
+      "logo": "queue",
+      "note": "A Cloud Tasks queue — retried with backoff, rate-limited, deduplicated by task name."
+    },
+    {
+      "name": "module",
+      "logo": "module",
+      "note": "Not reached from outside: logic other code imports."
+    }
+  ],
+  "middleware": [
+    {
+      "name": "user",
+      "color": "#2f6fed",
+      "note": "A Firebase ID token, from the Svelte app.",
+      "code": [
+        "token = bearer(req)                  → 401 if absent",
+        "verifyIdToken(token, checkRevoked)   → { uid, email }",
+        "ctx = { actor: uid, via: 'app' }",
+        "",
+        "// AUTHORIZATION IS NOT HERE. Who you are is a token fact; what",
+        "// you may do is a BOARD fact, answered per command by can() after",
+        "// the board is loaded — the reference tracker's loadBoardWithRole",
+        "// + requireMin, which was the right shape."
+      ]
+    }
+  ],
+  "proxyFunctions": [
+    {
+      "name": "can",
+      "location": "one question: may this actor do this to this board?",
+      "ioSchema": [
+        "type Action = 'read' | 'comment' | 'create' | 'edit' | 'move' | 'state'",
+        "            | 'restore' | 'delete' | 'pin' | 'admin'",
+        "            | 'assign' | 'upload'          // phase 2",
+        "",
+        "function can(ctx, board: Board, action: Action, ticket?: Ticket, toStageId?: string): boolean",
+        "",
+        "// ctx.actor is a PRINCIPAL: a uid, or an agent id when a token acts as an agent"
+      ],
+      "implementation": [
+        "role = effectiveRole(board, ctx.actor)   // board.access[actor]; an agent's 'admin' reads as editor",
+        "if !role → false   // not on the board: nothing, not even read",
+        "",
+        "if ctx.scopes && !scopeAllows(ctx.scopes, action) → false",
+        "if ctx.boardIds && board.id not in ctx.boardIds  → false",
+        "",
+        "admin:     everything, including inviting, removing and re-roling people",
+        "editor:    everything but 'admin' and 'restore'",
+        "commenter: read, comment, upload, and 'move' IF",
+        "           grant = board.stageGrants[actor]",
+        "           from ∈ grant.stages && to ∈ grant.stages",
+        "           && (!grant.assignedOnly || actor ∈ ticket.assigneeUids)",
+        "viewer:    read",
+        "",
+        "'delete' additionally needs board.settings.allowDelete, and no token",
+        "scope grants it — hard delete is app-only.",
+        "",
+        "SCOPES → ACTIONS (ACTION_SCOPES): comment/pin ← comments:write,",
+        "create ← tickets:create, edit ← tickets:update, move ← tickets:move,",
+        "assign ← tickets:assign, state/restore ← tickets:state,",
+        "upload ← files:write, admin ← board:admin | webhooks:manage.",
+        "",
+        "WHAT A TOKEN MAY DO = its scopes ∩ what its principal's role allows.",
+        "An agent that is a commenter never moves a ticket outside its",
+        "StageGrant, whatever its token says. People and agents take exactly",
+        "the same path through here — there is no agent branch to forget.",
+        "",
+        "ONE LOOKUP, ONE ROLE, ONE BOARD. Nothing above the board can grant",
+        "anything on it.",
+        "",
+        "PURE AND UNIT-TESTED, like the reference's _tt-role.ts."
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/members"
+      ]
+    },
+    {
+      "name": "allocateKey",
+      "location": "inside the ticket-create transaction",
+      "ioSchema": [
+        "function allocateKey(tx, board): { key: TicketKey, number: number }"
+      ],
+      "implementation": [
+        "n = board.nextNumber",
+        "tx.update(board, { nextNumber: n + 1 })",
+        "tx.create(keys/{board.key}-{n}, { ticketId, boardId, current })",
+        "",
+        "A COUNTER ON THE BOARD DOCUMENT, not a query for max(number). The",
+        "board doc can take ~1 sustained write/sec, which is one new ticket",
+        "per second on one board — a bulk import uses allocateRange(n)."
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/keys"
+      ]
+    },
+    {
+      "name": "parseRichText",
+      "location": "every body that arrives from any door",
+      "ioSchema": [
+        "function parseRichText(doc, board): RichText"
+      ],
+      "implementation": [
+        "validate doc against the TipTap schema   // unknown node → 400",
+        "strip marks not in the allow-list        // no raw HTML, ever",
+        "mentions = mention nodes whose uid is on this board (members/)",
+        "refs     = ticketRef nodes on boards the AUTHOR can read",
+        "text     = plain-text render ('@Priya Shah', '#ENG-42')",
+        "",
+        "Markdown arriving from REST / MCP / email is converted to the same doc",
+        "first. A mention there is written as an EMAIL — '@priya@x.com' or",
+        "[@Priya](mailto:priya@x.com) — and resolved to that person's uid on",
+        "this board; an email not on the board stays plain text."
+      ],
+      "touches": [
+        "app/schema/members",
+        "app/schema/keys"
+      ]
+    },
+    {
+      "name": "rank",
+      "location": "ordering inside a column or a list",
+      "ioSchema": [
+        "function between(a: string | null, b: string | null): string"
+      ],
+      "implementation": [
+        "fractional-indexing: a string strictly between a and b",
+        "",
+        "A DRAG WRITES ONE DOCUMENT. Integer positions would renumber the",
+        "whole column on every drop — N writes, N snapshot events, N",
+        "chances to race another person dragging in the same column."
+      ]
+    },
+    {
+      "name": "notify",
+      "location": "every event, every channel — one router",
+      "ioSchema": [
+        "function notify(event: NotifyEvent, ticket: Ticket, ctx, extra?: {",
+        "  messageId?: string, mentioned?: PrincipalId[], changes?: object,",
+        "  unassigned?: PrincipalId[]      // phase 2: agents get an 'unassigned' event",
+        "}): Promise<void>"
+      ],
+      "implementation": [
+        "candidates = watchers ∪ assignees ∪ board readers   (board-wide events)",
+        "           | mentioned                              ('mentioned' — unconditional)",
+        "drop the actor — never notify yourself (a person OR an agent)",
+        "",
+        "split by principalKind(id):",
+        "",
+        "PEOPLE, as before:",
+        "  pref = prefs/{uid}  — mode (all | mine | muted) / events / stageIds as the",
+        "                        reference's boardRecipients(); watching overrides",
+        "  channels = user.notify.channels[event]",
+        "  write users/{uid}/inbox (collapsed by groupKey)       — always, if pref allows",
+        "  enqueue deliver/{uid}:{groupKey}:{minute}            — push / email / whatsapp",
+        "",
+        "AGENTS (phase 2) — no prefs, no channels, no delivery:",
+        "  only if assigned to or watching the ticket, or mentioned",
+        "  event ∈ assigned | unassigned | mentioned | comment | stage | updated | created",
+        "  write agentInbox/{agentId}/events/{agentEventId(now, suffix)}",
+        "    { type, boardId, ticketId, ticketKey, messageId?, actor, summary, ackedAt: null }",
+        "  NOT collapsed: each is a thing for the orchestrator to handle",
+        "",
+        "ENQUEUED, NOT SENT. The command returns before any channel is",
+        "touched. The reference fired email as void-promises from the",
+        "handler — a cold SMTP connection then counted against the request,",
+        "and a crash lost the mail. A queue retries and deduplicates.",
+        "",
+        "AGENTS GET AN INBOX, NOT A PUSH. An orchestrator is a program: it",
+        "polls, streams or acks; it has no phone. Board webhooks keep working",
+        "for orchestrators that want push."
+      ],
+      "touches": [
+        "app/schema/inbox",
+        "app/schema/prefs",
+        "app/schema/users",
+        "platform/services/deliver",
+        "app/schema/agentInbox"
+      ]
+    },
+    {
+      "name": "diff",
+      "location": "what changed, as activity and as notification copy",
+      "ioSchema": [
+        "function diff(before: Ticket, after: Ticket): Record<string, { from, to }>"
+      ],
+      "implementation": [
+        "compare the fields a person would call a change —",
+        "  title, description, stage, priority, tags, assignees, dates,",
+        "  estimate, fields.*, links",
+        "ignore derived ones — counts, rank, lastActivityAt, updatedAt"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "inviteCreate",
+      "trigger": "api",
+      "location": "POST /api/inviteCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  invites: { email: string, role: BoardRole }[]   // up to 50",
+        "  message?: string",
+        "}",
+        "interface Res { invited: string[], alreadyOnBoard: string[] }"
+      ],
+      "implementation": [
+        "can(admin) — or editor, when board.settings.editorsCanInvite",
+        "for each email (lower-cased):",
+        "  a user with this email already on the board → alreadyOnBoard",
+        "  a pending invite exists → refreshed, not duplicated",
+        "  token = random(32); create invites/{id} with sha256(token)",
+        "  enqueue email 'invite': '<Priya> invited you to <Engineering> as editor'",
+        "  a user with this email exists → also an inbox item 'invited'",
+        "",
+        "ANYONE CAN BE INVITED — they need not have an account. They sign up",
+        "with that address and the invite is waiting in their inbox.",
+        "",
+        "OPEN SIGN-UP MEANS ANYONE CAN SEND MAIL THROUGH US. So: 50 invites per",
+        "person per day, 10 new boards per person per day (rateLimits), and an",
+        "invite email names the inviter's verified address — never a free-text sender."
+      ],
+      "touches": [
+        "app/schema/invites",
+        "app/schema/members",
+        "app/schema/users",
+        "platform/services/deliver",
+        "platform/schema/rateLimits"
+      ]
+    },
+    {
+      "name": "inviteAccept",
+      "trigger": "api",
+      "location": "POST /api/inviteAccept",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  inviteId: string",
+        "  token?: string        // from the email link; absent when accepting from the inbox",
+        "  accept: boolean       // false = decline",
+        "}",
+        "interface Res { boardId: BoardId, boardKey: BoardKey }"
+      ],
+      "implementation": [
+        "invite pending && not expired                    → 410 otherwise",
+        "token given: sha256(token) == tokenHash          → 404 otherwise",
+        "auth email (verified) == invite.email            → 403 otherwise",
+        "",
+        "THE ACCEPTING ACCOUNT MUST OWN THE INVITED ADDRESS. A forwarded link",
+        "is the most common way access goes to the wrong person.",
+        "",
+        "decline → status 'declined'; the inviter is told",
+        "accept, in one transaction:",
+        "  board.access[uid] = role; readerUids / editorUids += uid",
+        "  create boards/{b}/members/{uid} from users/{uid}",
+        "  invite.status = 'accepted'",
+        "then: RTDB boardReaders mirror; notify inviter 'Asha joined Engineering'",
+        "",
+        "FROM HERE THEY CAN BE ASSIGNED, MENTIONED AND NOTIFIED on this board —",
+        "and only on this board."
+      ],
+      "touches": [
+        "app/schema/invites",
+        "app/schema/boards",
+        "app/schema/members",
+        "app/proxyFunctions/notify"
+      ]
+    },
+    {
+      "name": "inviteRevoke",
+      "trigger": "api",
+      "location": "POST /api/inviteRevoke",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { inviteId, resend?: true }"
+      ],
+      "implementation": [
+        "can(admin) on the invite's board (or its inviter)",
+        "resend → new token, new expiry, the email again",
+        "otherwise status = 'revoked'; the link and the inbox row stop working"
+      ],
+      "touches": [
+        "app/schema/invites",
+        "platform/services/deliver"
+      ]
+    },
+    {
+      "name": "boardCreate",
+      "trigger": "api",
+      "location": "POST /api/boardCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  name: string",
+        "  key: BoardKey                  // 409 if boardKeys/{key} exists",
+        "  template?: 'blank' | 'kanban' | 'bugs' | 'support' | 'sprint' | { fromBoardId: BoardId }",
+        "}",
+        "interface Res { boardId: BoardId }"
+      ],
+      "implementation": [
+        "ANY signed-in user may create a board",
+        "transaction:",
+        "  create boardKeys/{key}   → 409 if taken",
+        "  create boards/{b}        from the template; access = { [actor]: 'admin' }; readerUids = [actor]",
+        "  create boards/{b}/members/{actor}",
+        "create default views: Board (kanban by stage), Table, Calendar, Mine",
+        "template { fromBoardId } copies stages, fields and views — never people"
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/boardKeys",
+        "app/schema/members",
+        "app/schema/views"
+      ]
+    },
+    {
+      "name": "boardUpdate",
+      "trigger": "api",
+      "location": "POST /api/boardUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  patch: Partial<Pick<Board, 'name' | 'color' | 'icon' | 'description'",
+        "        | 'stages' | 'priorities' | 'tags' | 'fields' | 'settings' | 'defaultViewId'>>",
+        "  // removing a stage in use needs somewhere to put its tickets:",
+        "  remap?: { stages?: Record<string, string>, priorities?: Record<string, string> }",
+        "}"
+      ],
+      "implementation": [
+        "can(admin)",
+        "a removed stage with tickets and no remap → 409 { stageId, count }",
+        "a removed field is ARCHIVED, never deleted — values stay",
+        "a stage whose category changed → batch-update stageCategory on its tickets",
+        "",
+        "PATCHES ARE PER-SECTION, not a whole SETTINGS blob. The reference's",
+        "PATCH replaced settings wholesale and had to carry `reporting`",
+        "through by hand so a normal save could not wipe the secret."
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/tickets"
+      ]
+    },
+    {
+      "name": "tagCreate",
+      "trigger": "api",
+      "location": "POST /api/tagCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, name: string, color?: string }",
+        "interface Res { tag: Option }"
+      ],
+      "implementation": [
+        "can(edit) — editors make tags on the fly from the picker, as in the reference;",
+        "renaming, recolouring and deleting tags stays with admins (boardUpdate)",
+        "same name, any case → the existing tag is returned (the reference's rule)"
+      ],
+      "touches": [
+        "app/schema/boards"
+      ]
+    },
+    {
+      "name": "boardAccessSet",
+      "trigger": "api",
+      "location": "POST /api/boardAccessSet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  people?: Record<Uid, BoardRole | null>          // change a role; null removes them — PEOPLE only",
+        "  stageGrants?: Record<Uid, StageGrant | null>",
+        "  leave?: true                                    // remove yourself",
+        "}"
+      ],
+      "implementation": [
+        "can(admin), except 'leave', which anyone may do",
+        "at least one admin must remain → 409 otherwise",
+        "a removed person:",
+        "  access / readerUids / members/{uid} removed",
+        "  taken off assigneeUids and watcherUids of the board's active tickets",
+        "  (listed in each ticket's activity), and told",
+        "  their messages stay",
+        "new people are never added here — only through inviteCreate / inviteAccept",
+        "an agent id in people / stageGrants → 400: agents go through boardAgentSet",
+        "a removed person's tokens for this board are revoked (revokedReason 'ownerLeft')"
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/members",
+        "app/schema/tickets",
+        "platform/schema/apiKeys"
+      ]
+    },
+    {
+      "name": "boardAgentSet",
+      "trigger": "api",
+      "location": "POST /api/boardAgentSet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  agentId: AgentId",
+        "  role: 'editor' | 'commenter' | 'viewer' | null   // null removes the agent; never 'admin'",
+        "  stageGrant?: StageGrant | null                  // commenters; absent = unchanged",
+        "}"
+      ],
+      "implementation": [
+        "ADDING (not on the board yet): can(admin) AND the actor OWNS the agent,",
+        "  agent not archived → 403 / 404 / 409 otherwise",
+        "CHANGING or REMOVING: any board admin — an admin must be able to take",
+        "  someone else's agent off their board",
+        "",
+        "transaction:",
+        "  board.access[agentId] = role, stageGrants[agentId] = grant",
+        "  readerUids / editorUids untouched — agents are never in them",
+        "  members/{agentId} = { kind: 'agent', uid: agentId, role, stageGrant,",
+        "      name, avatarPath, icon, description, ownerUid, addedBy: actor,",
+        "      email: '', invitedBy: null, joinedAt }",
+        "",
+        "role: null — works like removing a person:",
+        "  access / stageGrants / members/{agentId} removed",
+        "  taken off assigneeUids and watcherUids of the board's active tickets",
+        "  (listed in each ticket's activity); its messages stay",
+        "  its tokens for this board → revoked, revokedReason 'agentRemoved'",
+        "",
+        "NO INVITE. An agent has nobody to accept for it, and the person who",
+        "could accept is the admin adding it. Webhook 'member.joined' fires",
+        "with actor.kind 'agent'."
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/members",
+        "app/schema/agents",
+        "app/schema/tickets",
+        "app/schema/activity",
+        "app/proxyFunctions/can",
+        "platform/schema/apiKeys",
+        "platform/services/webhookDispatch"
+      ]
+    },
+    {
+      "name": "agentInboxAck",
+      "trigger": "api",
+      "location": "POST /api/agentInboxAck  ·  POST /v1/events/ack  ·  MCP ack_events",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  agentId: AgentId",
+        "  ids?: string[]      // ≤ 500",
+        "  upTo?: string       // an event id / cursor: ack everything ≤ it",
+        "}                     // exactly one of ids | upTo",
+        "interface Res { ok: true, acked: number }"
+      ],
+      "implementation": [
+        "the agent's owner (app), or a token acting as that agent (scope events:read)",
+        "ackedAt = now on the named events, or on every event with id ≤ upTo",
+        "acking twice is ok — acked counts only the ones that changed",
+        "",
+        "ACK IS NOT DELETE. The orchestrator's cursor already says what it has",
+        "seen; ack says what it has HANDLED, so a crashed run can re-read",
+        "?unacked=1 and pick up where it died. Acked events are TTL-deleted",
+        "after 30 days."
+      ],
+      "touches": [
+        "app/schema/agentInbox"
+      ]
+    },
+    {
+      "name": "boardArchive",
+      "trigger": "api",
+      "location": "POST /api/boardArchive",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, action: 'archive' | 'restore' | 'delete', confirmKey?: BoardKey }"
+      ],
+      "implementation": [
+        "can(admin)",
+        "archive: archivedAt = now — read-only for everyone, off the sidebar, under 'Archived' on Boards",
+        "restore: archivedAt = null",
+        "delete: confirmKey must equal the key; queued recursive delete of tickets, threads, files;",
+        "        the key stays claimed (keys/ and boardKeys/ kept as tombstones) so old #links say 'deleted'"
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/boardKeys",
+        "app/schema/keys",
+        "app/schema/tickets"
+      ]
+    },
+    {
+      "name": "boardPrefSet",
+      "trigger": "api",
+      "location": "POST /api/boardPrefSet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, pref: Partial<BoardPref> }   // always the caller's own"
+      ],
+      "implementation": [
+        "can(read) on the board",
+        "writes prefs/{actor} — there is no uid parameter: nobody sets another person's",
+        "",
+        "The reference's owner-managed mode (notify_pref_control) is dropped."
+      ],
+      "touches": [
+        "app/schema/prefs"
+      ]
+    },
+    {
+      "name": "viewSave",
+      "trigger": "api",
+      "location": "POST /api/viewSave",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, viewId?, view: Omit<View, 'ownerUid'> }",
+        "interface Res { viewId }"
+      ],
+      "implementation": [
+        "personal → can(read); shared → can(edit)",
+        "validate filter fields exist on the board (a view naming a",
+        "deleted field would silently match nothing)"
+      ],
+      "touches": [
+        "app/schema/views"
+      ]
+    },
+    {
+      "name": "viewDelete",
+      "trigger": "api",
+      "location": "POST /api/viewDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, viewId }"
+      ],
+      "implementation": [
+        "personal → its owner; shared → can(edit)",
+        "the board's default view cannot be deleted (choose another default first)",
+        "prefs whose lastViewId pointed at it fall back to the default"
+      ],
+      "touches": [
+        "app/schema/views",
+        "app/schema/prefs"
+      ]
+    },
+    {
+      "name": "ticketCreate",
+      "trigger": "api",
+      "location": "POST /api/ticketCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  title: string",
+        "  description?: RichText['doc']",
+        "  stageId?: string          // default: the board's first stage BY POSITION (§Q3)",
+        "  priorityId?, tagIds?, assigneeUids?,",
+        "  startAt?, dueAt?, dueAllDay?, estimate?,",
+        "  fields?: Record<string, FieldValue>",
+        "  attachments?: string[]    // Storage paths already uploaded",
+        "  clientId?: string         // idempotency — a retried create is one ticket",
+        "}",
+        "interface Res { ticketId: TicketId, key: TicketKey }"
+      ],
+      "implementation": [
+        "can(create)",
+        "validate stage / priority / tags / fields against the board",
+        "required fields present",
+        "assignees: every principal (person or agent) is on this board (members/) — else 400, naming them",
+        "description = parseRichText(description)",
+        "",
+        "transaction:",
+        "  { key } = allocateKey(board)",
+        "  create ticket { …, rank: between(last in stage, null), watcherUids:",
+        "                [actor, …assignees], createdVia: ctx.via }",
+        "  create activity { action: 'create' }\n  create files/* for each attachment (source 'description')\n  for each #ref in the description: referencedBy += this ticket on the target",
+        "",
+        "after commit:",
+        "  notify('created'), notify('assigned', assignees),",
+        "  notify('mentioned', description.mentions)",
+        "  emit webhook 'ticket.created'"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/activity",
+        "app/schema/keys",
+        "app/proxyFunctions/allocateKey",
+        "app/proxyFunctions/notify",
+        "platform/services/webhookDispatch",
+        "app/schema/files"
+      ]
+    },
+    {
+      "name": "ticketUpdate",
+      "trigger": "api",
+      "location": "POST /api/ticketUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId",
+        "  patch: Partial<{ title, description, stageId, priorityId, tagIds,",
+        "    assigneeUids, startAt, dueAt, dueAllDay, estimate,",
+        "    commitments, fields, links }>",
+        "  rank?: { after?: TicketId, before?: TicketId }   // drag & drop",
+        "  ifUpdatedAt?: Millis    // optimistic concurrency for the title/description",
+        "}"
+      ],
+      "implementation": [
+        "state != 'active' → 409 (read-only, as in the reference)",
+        "only stageId (+rank) changing and !can(edit) → can(move, to)",
+        "otherwise can(edit); assigneeUids changing → can(assign)",
+        "a token needs EVERY scope patchScopes(patch) names: stageId → tickets:move,",
+        "assigneeUids → tickets:assign, anything else → tickets:update",
+        "ifUpdatedAt given and stale → 409 with the current ticket",
+        "",
+        "transaction:",
+        "  apply patch; stageCategory follows stageId;",
+        "  completedAt set/cleared on entering/leaving 'done'",
+        "  activity { changes: diff(before, after), viaGrant }",
+        "",
+        "after commit: notify('stage' | 'updated' | 'assigned', unassigned), webhook 'ticket.updated'",
+        "",
+        "FIELD-LEVEL MERGE, not last-write-wins on the document: two people",
+        "changing the priority and the due date at once both land.",
+        "",
+        "links: a 'blocks' on A writes 'blockedBy' on B in the same transaction",
+        "(and 'relates'/'duplicates' both ways); activity 'link' on both",
+        "stage 'requires' unmet → 422 { missing: fieldIds } — the UI opens a small",
+        "form for exactly those fields instead of snapping the card back"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/activity",
+        "app/proxyFunctions/can",
+        "app/proxyFunctions/diff",
+        "app/proxyFunctions/notify",
+        "platform/services/webhookDispatch"
+      ]
+    },
+    {
+      "name": "ticketBulk",
+      "trigger": "api",
+      "location": "POST /api/ticketBulk",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  ticketIds: TicketId[]     // ≤ 500",
+        "  action: { type: 'stage', stageId } | { type: 'priority', priorityId }",
+        "        | { type: 'due', dueAt } | { type: 'addTag', tagId }",
+        "        | { type: 'addAssignee', uid } | { type: 'state', state: TicketState }",
+        "        | { type: 'field', fieldId, value }",
+        "}",
+        "interface Res { updated: number, skipped: TicketId[] }"
+      ],
+      "implementation": [
+        "the reference's POST_TtBoardTasksBulk: the board and role are",
+        "resolved once; a commenter may only run 'stage', over the tickets",
+        "their grant covers — the rest are SKIPPED and reported, not failed",
+        "",
+        "batched writes of 250 (ticket + activity each)",
+        "ONE digest notification per recipient ('Priya moved 14 tickets to Done')",
+        "rather than fourteen"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/activity",
+        "app/proxyFunctions/notify"
+      ]
+    },
+    {
+      "name": "ticketState",
+      "trigger": "api",
+      "location": "POST /api/ticketState",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { ticketId, state: TicketState }"
+      ],
+      "implementation": [
+        "active → archived : can(state)     // PHASE 6: no 'cancelled', no reason",
+        "archived → active : can(restore)   // admin, as in the reference",
+        "activity + system message + notify('state')"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/activity",
+        "app/schema/messages"
+      ]
+    },
+    {
+      "name": "ticketDelete",
+      "trigger": "api",
+      "location": "POST /api/ticketDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { ticketId: TicketId }"
+      ],
+      "implementation": [
+        "board.settings.allowDelete && can(delete)",
+        "recursive delete: ticket, messages, activity, files, Storage prefix;\nremove it from the links / referencedBy of the tickets that pointed at it",
+        "keys/{key} kept with { deleted: true } so #ENG-42 says 'deleted'",
+        "rather than 'not found' — and is never reissued"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/keys",
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "messagePost",
+      "trigger": "api",
+      "location": "POST /api/messagePost",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId",
+        "  body: RichText['doc']",
+        "  markdown?: string           // phase 2: the Markdown source (REST / MCP doors); stored as Message.markdown",
+        "  replyTo?: string",
+        "  attachments?: string[]      // Storage paths under this ticket (the app's direct uploads)",
+        "  fileIds?: string[]          // phase 2: files ALREADY on this ticket (uploaded by a token)",
+        "  clientId: string            // idempotency; the optimistic bubble's id",
+        "}",
+        "interface Res { messageId: string }"
+      ],
+      "implementation": [
+        "can(comment); state == 'active' (closed tickets have closed threads)",
+        "body = parseRichText(body)",
+        "attachments: object exists, under this ticket's prefix, size/mime ok",
+        "fileIds: files/{id} on THIS ticket, not deleted; source 'upload' → 'message', messageId set",
+        "body or files, at least one — a message can be files only",
+        "authorUid = ctx.actor (a person or an agent); viaToken = ctx.keyName",
+        "",
+        "transaction:",
+        "  create message; create files/* for each attachment (source 'message')",
+        "  ticket.counts.messages++, attachments += n, lastMessageAt = now",
+        "  ticket.refs ∪= body.refs; watcherUids ∪= [actor]",
+        "  reads/{actor} = now          // your own message is read",
+        "",
+        "after commit:",
+        "  notify('mentioned', body.mentions)      // unconditional",
+        "  notify('comment') minus those mentioned // no double ping",
+        "  for each NEW #ref: target.referencedBy += this ticket, and a system line\n  on THAT ticket: 'referenced from ENG-40'",
+        "  webhook 'message.created'"
+      ],
+      "touches": [
+        "app/schema/messages",
+        "app/schema/tickets",
+        "app/schema/reads",
+        "app/proxyFunctions/parseRichText",
+        "app/proxyFunctions/notify",
+        "app/schema/files"
+      ]
+    },
+    {
+      "name": "messageEdit",
+      "trigger": "api",
+      "location": "POST /api/messageEdit",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { messageId, body?: RichText['doc'], delete?: true }"
+      ],
+      "implementation": [
+        "author only (admins may delete, not edit)",
+        "edit: editedAt = now; NEW mentions notify, old ones do not again",
+        "delete: tombstone — body cleared, deletedAt set, attachments removed",
+        "delete also stamps deletedAt on that message's files/"
+      ],
+      "touches": [
+        "app/schema/messages"
+      ]
+    },
+    {
+      "name": "messagePin",
+      "trigger": "api",
+      "location": "POST /api/messagePin",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { messageId, pinned: boolean }"
+      ],
+      "implementation": [
+        "can(pin) = editor+ (the reference gated pin on 'edit')",
+        "pinnedAt/pinnedBy set or cleared; ticket.counts.pinned ±1",
+        "system message 'Priya pinned a message' — pins are decisions,",
+        "and who made one belongs in the thread"
+      ],
+      "touches": [
+        "app/schema/messages",
+        "app/schema/tickets"
+      ]
+    },
+    {
+      "name": "questionAsk",
+      "trigger": "api",
+      "location": "POST /api/questionAsk  ·  POST /v1/tickets/{KEY}/questions  ·  MCP ask_question",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId",
+        "  title: string               // 'Which database should the report use?'",
+        "  body?: RichText['doc'] | null   // optional context",
+        "  fields: QuestionField[]     // 1–10; single / multi carry their options",
+        "  allowComment?: boolean      // adds 'Anything else?'",
+        "  to?: PrincipalId[] | null   // who should answer; null = anyone who may comment",
+        "  blocking?: boolean          // default true",
+        "  expiresAt?: Millis | null",
+        "  clientId: string            // IS the message id — the card's thread position",
+        "}",
+        "interface Res { messageId: string, questionId: string }   // '{ticketId}.{messageId}'"
+      ],
+      "implementation": [
+        "can(ask) — commenter+, normally an agent's token with questions:write",
+        "the ticket must be active (a closed thread takes no questions → 409)",
+        "`to` must name principals ON the board, or the card waits forever (400)",
+        "",
+        "transaction:",
+        "  the message: kind 'question', the form in `question`, body = title +",
+        "  context so search, previews and the notification line read it",
+        "  ticket counts.messages++, lastMessageAt, watcherUids ∪= asker",
+        "  ticket.waitingOn when the question blocks   // the ❓ badge on cards",
+        "",
+        "after commit:",
+        "  notify('question') to the `to` people — or, when it names nobody, the",
+        "  assignees and watchers — through their normal channels",
+        "  webhook 'message.created', carrying the form card"
+      ],
+      "touches": [
+        "app/schema/messages",
+        "app/schema/tickets",
+        "app/proxyFunctions/can",
+        "app/proxyFunctions/notify",
+        "app/proxyFunctions/parseRichText"
+      ]
+    },
+    {
+      "name": "questionAnswer",
+      "trigger": "api",
+      "location": "POST /api/questionAnswer   // a PERSON answers, in the app",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId",
+        "  messageId: string           // the card",
+        "  values: Record<fieldId, QuestionValue>",
+        "  comment?: string            // only when the question has allowComment",
+        "  clientId: string            // Submit goes through the outbox like any write",
+        "}",
+        "interface Res { ok: true, answeredAt: Millis }"
+      ],
+      "implementation": [
+        "canAnswerQuestion(): commenter+, and in `to` when it is set; the question",
+        "still open at now (409 answered / cancelled / expired)",
+        "values checked by the SHARED validateAnswer — the browser disables Submit",
+        "for the same reason the server answers 422",
+        "",
+        "transaction:",
+        "  the card locks in place: question.status 'answered' + the answer",
+        "  the answer ALSO posts as the person's reply bubble (replyTo = the card)",
+        "  ticket counters; ticket.waitingOn recomputed when it was blocking",
+        "",
+        "after commit: the ASKING AGENT's inbox event 'question_answered', carrying",
+        "the values — an orchestrator needs no second call to act on it.",
+        "",
+        "THERE IS NO answer_question TOOL. An agent asks; a person answers."
+      ],
+      "touches": [
+        "app/schema/messages",
+        "app/schema/tickets",
+        "app/schema/agentInbox",
+        "app/proxyFunctions/can"
+      ]
+    },
+    {
+      "name": "questionCancel",
+      "trigger": "api",
+      "location": "POST /api/questionCancel  ·  POST /v1/questions/{id}/cancel  ·  MCP cancel_question",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { ticketId: TicketId, messageId: string, clientId: string }",
+        "interface Res { ok: true }"
+      ],
+      "implementation": [
+        "the ASKER (the message author, usually the agent through its token) or a",
+        "board admin; open questions only (409 otherwise)",
+        "",
+        "transaction: question.status 'cancelled' + cancelledAt; ticket.waitingOn",
+        "recomputed. No thread line — the card itself says it.",
+        "",
+        "after commit: 'question_cancelled' to the asking agent, but only when",
+        "somebody ELSE cancelled it (§D: an agent never hears its own actions)."
+      ],
+      "touches": [
+        "app/schema/messages",
+        "app/schema/tickets",
+        "app/schema/agentInbox"
+      ]
+    },
+    {
+      "name": "tasklistSet",
+      "trigger": "api",
+      "location": "POST /api/tasklistSet  ·  PUT /v1/tickets/{KEY}/tasklists/{listId}  ·  MCP set_tasklist",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId",
+        "  listId?: string             // absent = create; present = create-or-replace THAT list",
+        "  title: string",
+        "  items: { id?, title, status?, note? }[]    // ≤ 100 — the WHOLE list",
+        "  position?: number",
+        "  closed?: boolean            // true = the plan is finished",
+        "  clientId: string",
+        "}",
+        "interface Res { listId: string, itemIds: string[] }"
+      ],
+      "implementation": [
+        "canEditTasklist(): editor+, or the list's OWNER (a commenter agent through",
+        "its token with tasklists:write). Creating sets owner = actor; replacing",
+        "keeps the owner it has. The ticket must be active.",
+        "",
+        "WHOLE-LIST WRITES, so an agent republishing its plan never has to diff it.",
+        "An item keeps its id — and its updatedAt when nothing about it changed —",
+        "so a replace does not make every row look touched.",
+        "",
+        "transaction:",
+        "  the list document",
+        "  ticket.tasklistProgress rolled up over EVERY list on the ticket ('4/7')",
+        "  a system line when the list is CREATED, and one when it is FINISHED",
+        "  — never for an item (§L2: 'to keep the thread readable')"
+      ],
+      "touches": [
+        "app/schema/tasklists",
+        "app/schema/tickets",
+        "app/schema/messages",
+        "app/proxyFunctions/can"
+      ]
+    },
+    {
+      "name": "tasklistItemUpdate",
+      "trigger": "api",
+      "location": "POST /api/tasklistItemUpdate  ·  PATCH /v1/tickets/{KEY}/tasklists/{listId}/items/{itemId}  ·  MCP update_task_item",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  ticketId: TicketId, listId: string, itemId: string",
+        "  status?: 'todo' | 'doing' | 'done' | 'skipped' | 'failed'",
+        "  note?: string | null        // null clears it",
+        "  clientId: string",
+        "}",
+        "interface Res { ok: true, updatedAt: Millis }"
+      ],
+      "implementation": [
+        "canEditTasklist() on the STORED list. THE HOT PATH: an agent calls this as",
+        "it works, and a person ticking a box by hand goes through the same command.",
+        "",
+        "No activity row and no thread line. The one exception is the list",
+        "FINISHING: when this tick settles the last item the list closes and the",
+        "second (and last) system line goes out.",
+        "",
+        "ticket.tasklistProgress is rolled up again — the card's chip is the only",
+        "thing on the board that has to notice."
+      ],
+      "touches": [
+        "app/schema/tasklists",
+        "app/schema/tickets",
+        "app/schema/messages"
+      ]
+    },
+    {
+      "name": "tasklistDelete",
+      "trigger": "api",
+      "location": "POST /api/tasklistDelete  ·  DELETE /v1/tickets/{KEY}/tasklists/{listId}  ·  MCP delete_tasklist",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { ticketId: TicketId, listId: string, clientId: string }",
+        "interface Res { ok: true }"
+      ],
+      "implementation": [
+        "canEditTasklist() on the stored list — editor+, or its owner.",
+        "Silent: no thread line, no activity row. The ticket's chip is recomputed",
+        "from the lists that remain (none left → no chip).",
+        "",
+        "The only 'delete' anywhere in the API removes a CHECKLIST, never a ticket."
+      ],
+      "touches": [
+        "app/schema/tasklists",
+        "app/schema/tickets"
+      ]
+    },
+    {
+      "name": "agentHeartbeat",
+      "trigger": "api",
+      "location": "POST /api/agentHeartbeat  ·  POST /v1/heartbeat  ·  MCP heartbeat",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  boardId: BoardId",
+        "  ticketId?: TicketId         // absent = an agent-level beat, about no ticket",
+        "  agentId?: AgentId           // absent = ctx.actor (an agent token IS the agent)",
+        "  state: 'working' | 'idle' | 'done' | 'error'",
+        "  message?: string | null     // 'Running tests (3/12)' — ≤ 200",
+        "  progress?: number | null    // 0–1",
+        "}",
+        "interface Res { ok: true, statusId: string, at: Millis }"
+      ],
+      "implementation": [
+        "canHeartbeat(): a token acting as the agent (or a board admin) with",
+        "status:write; the agent must hold a role on the board.",
+        "",
+        "WRITES EXACTLY ONE SMALL DOCUMENT — boards/{b}/agentStatus/{id} — and",
+        "NEVER the ticket. A beat a minute on the ticket would retrigger its search",
+        "indexing and re-render every listener on the board.",
+        "",
+        "startedAt  the first beat of THIS run; reset when 'working' follows a",
+        "           done / error beat",
+        "endedAt    set by 'done' / 'error', cleared when work resumes",
+        "silenceNotifiedAt  left alone: a fresh lastBeatAt re-arms the sweep",
+        "",
+        "Nothing is notified. The beat is read, not pushed: the board's one",
+        "agentStatus listener turns it into a dot."
+      ],
+      "touches": [
+        "app/schema/agentStatus",
+        "app/schema/boards",
+        "app/proxyFunctions/can"
+      ]
+    },
+    {
+      "name": "messageReact",
+      "trigger": "api",
+      "location": "POST /api/messageReact",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { messageId, emoji: string, on: boolean }"
+      ],
+      "implementation": [
+        "can(comment); arrayUnion/arrayRemove on reactions[emoji]",
+        "no notification — a reaction is not a message"
+      ],
+      "touches": [
+        "app/schema/messages"
+      ]
+    },
+    {
+      "name": "ticketWatch",
+      "trigger": "api",
+      "location": "POST /api/ticketWatch",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { ticketId, watching: boolean }"
+      ],
+      "implementation": [
+        "watcherUids ± actor; prefs/{actor}.watching ± ticketId",
+        "the reference's 'subscribe' — overrides a muted board"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/prefs"
+      ]
+    },
+    {
+      "name": "searchKey",
+      "trigger": "api",
+      "location": "POST /api/searchKey",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {}",
+        "interface Res { key: string, host: string, expiresAt: Millis }"
+      ],
+      "implementation": [
+        "boards = where(readerUids array-contains actor)",
+        "key = typesense.generateScopedSearchKey(searchOnlyKey,",
+        "        { filter_by: `boardId:[${boards}]`, expires_at: +1h })"
+      ],
+      "touches": [
+        "app/schema/boards",
+        "app/schema/tickets index"
+      ]
+    },
+    {
+      "name": "profileUpdate",
+      "trigger": "api",
+      "location": "POST /api/profileUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  name?: string              // display name, 1–60 chars",
+        "  avatarPath?: string | null  // just uploaded to users/{uid}/avatar/…; null removes it",
+        "  timezone?: string, locale?: string, theme?: 'system' | 'light' | 'dark'",
+        "}"
+      ],
+      "implementation": [
+        "avatarPath: must be under users/{actor}/avatar/, exist, and be an image",
+        "update users/{actor}; the previous picture is deleted",
+        "name or avatar changed → collectionGroup('members') where uid == actor",
+        "                          → update name / avatarPath on every board they're on",
+        "",
+        "Mentions and assignees hold the uid, so nothing else is rewritten —",
+        "they render the new name and picture on their own.",
+        "",
+        "EMAIL IS NOT HERE. It is the sign-in identity; changing it goes through",
+        "Firebase Auth's verify-new-email flow, and a trigger copies the verified",
+        "address to users/ and members/."
+      ],
+      "touches": [
+        "app/schema/users",
+        "app/schema/members",
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "agentCreate",
+      "trigger": "api",
+      "location": "POST /api/agentCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  agentId?: AgentId          // optional client-made 'ag_…' id, so the picture can be",
+        "                             // uploaded under users/{uid}/agents/{agentId}/avatar/ first",
+        "  name: string               // 1–60",
+        "  description?: string | null",
+        "  systemPrompt?: string      // Markdown, ≤ 50 000",
+        "  avatarPath?: string | null",
+        "  icon?: string | null       // a prebuilt icon id (AGENT_ICON_IDS); unknown → 400",
+        "}",
+        "interface Res { agentId: AgentId }"
+      ],
+      "implementation": [
+        "any signed-in person; they become its owner",
+        "50 agents per person → 429",
+        "agentId given and taken → 409",
+        "avatarPath: under users/{actor}/agents/{agentId}/avatar/, exists, image",
+        "create agents/{agentId} { ownerUid: actor, …, archivedAt: null }",
+        "",
+        "APP-ONLY. No token scope reaches the agent commands: a token acts AS",
+        "an agent, it never manages one."
+      ],
+      "touches": [
+        "app/schema/agents",
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "agentUpdate",
+      "trigger": "api",
+      "location": "POST /api/agentUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req {",
+        "  agentId: AgentId",
+        "  name?: string, description?: string | null,",
+        "  systemPrompt?: string, avatarPath?: string | null,",
+        "  icon?: string | null       // a prebuilt icon id (AGENT_ICON_IDS); null clears it, the picture stays",
+        "}"
+      ],
+      "implementation": [
+        "owner only — 404 otherwise (agents are private; not even 403)",
+        "archived → 409",
+        "update agents/{agentId}; a replaced picture is deleted",
+        "name or avatar changed → collectionGroup('members') where uid == agentId",
+        "                          → update name / avatarPath / icon / description on every board it is on",
+        "",
+        "THE SAME FAN-OUT AS profileUpdate. Assignees, mentions and authors",
+        "hold the id, so they render the new name and picture on their own.",
+        "",
+        "A new system prompt reaches the orchestrator the next time it asks",
+        "(GET /v1/me, MCP whoami) — nothing is pushed."
+      ],
+      "touches": [
+        "app/schema/agents",
+        "app/schema/members",
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "agentArchive",
+      "trigger": "api",
+      "location": "POST /api/agentArchive",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { agentId: AgentId, action?: 'archive' | 'restore' }   // default 'archive'",
+        "interface Res { ok: true, boardsLeft: number, tokensRevoked: number }"
+      ],
+      "implementation": [
+        "owner only (404 otherwise)",
+        "archive:",
+        "  every board it is on → boardAgentSet(role: null): off access, members,",
+        "  assignees and watchers; its messages stay",
+        "  every apiKey acting as it → revokedAt = now, revokedReason 'agentArchived'",
+        "  archivedAt = now",
+        "restore: archivedAt = null. It rejoins no board and no token comes",
+        "  back — both were decisions, and restoring should not re-make them.",
+        "",
+        "ARCHIVE, NOT DELETE: its name and picture still have to render on",
+        "every message it wrote."
+      ],
+      "touches": [
+        "app/schema/agents",
+        "app/services/boardAgentSet",
+        "platform/schema/apiKeys"
+      ]
+    },
+    {
+      "name": "whatsappLink",
+      "trigger": "api",
+      "location": "POST /api/whatsappLink",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { step: 'send', number: string } | { step: 'verify', code: string }",
+        "interface Res { ok: true }"
+      ],
+      "implementation": [
+        "send:   6-digit code via the WhatsApp 'otp' template; hash stored 10 min",
+        "verify: 5 attempts; users/{uid}.whatsapp = { number, verifiedAt, optIn: true }",
+        "",
+        "OPT-IN IS EXPLICIT AND RECORDED. Meta requires it before any",
+        "business-initiated template, and it is the only defence when a",
+        "number is reported."
+      ],
+      "touches": [
+        "app/schema/users"
+      ]
+    },
+    {
+      "name": "accountDelete",
+      "trigger": "api",
+      "location": "POST /api/accountDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { confirm: 'DELETE', recentLogin: true }"
+      ],
+      "implementation": [
+        "the only admin of a board that has other people on it → 409, naming the boards",
+        "  (make someone else admin, or delete the board)",
+        "leave every board (boardAccessSet leave)",
+        "archive every agent they own (agentArchive) — its messages stay",
+        "boards where they were the only person → deleted",
+        "users/{uid}: name → 'Deleted user', email/phone/avatar cleared,",
+        "             deletedAt = now; picture deleted",
+        "messages STAY, authored by 'Deleted user' — deleting them would",
+        "rewrite other people's conversations",
+        "admin.auth().deleteUser(uid)"
+      ],
+      "touches": [
+        "app/schema/users",
+        "app/schema/members",
+        "app/services/boardAccessSet",
+        "app/services/agentArchive"
+      ]
+    },
+    {
+      "name": "accountExport",
+      "trigger": "api",
+      "location": "POST /api/accountExport",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Res { jobId: string }  // emailed when ready"
+      ],
+      "implementation": [
+        "queued: profile, messages authored, tickets created/assigned → JSON + files → zip in Storage",
+        "signed URL valid 7 days, emailed"
+      ],
+      "touches": [
+        "app/schema/attachments",
+        "platform/services/deliver"
+      ]
+    },
+    {
+      "name": "onUserCreated",
+      "trigger": "auth",
+      "location": "beforeUserCreated + onCreate",
+      "ioSchema": [
+        "// onCreate: create users/{uid}"
+      ],
+      "implementation": [
+        "users/{uid} = { name and email from the provider, timezone from the client's",
+        "                first call, notify: defaults }",
+        "the provider's photo (Google) is copied into users/{uid}/avatar/ so the",
+        "picture never depends on a third-party URL",
+        "pending invites for this (verified) email → an inbox item each",
+        "",
+        "NO GATE. Anyone may sign up; a new account simply has no boards until",
+        "it creates one or accepts an invite."
+      ],
+      "touches": [
+        "app/schema/users",
+        "app/schema/invites",
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "onUserSignedIn",
+      "trigger": "auth",
+      "location": "beforeUserSignedIn (blocking)",
+      "ioSchema": [
+        "// runs on every sign-in, before the token is issued"
+      ],
+      "implementation": [
+        "email or email_verified differs from users/{uid}.email →",
+        "  update users/{uid}.email and every boards/*/members/{uid}.email",
+        "",
+        "HOW AN EMAIL CHANGE REACHES THE DATA. Firebase has no 'email changed'",
+        "trigger; the next sign-in after a verified change is the first moment we",
+        "can see it, and the token it mints carries the new address anyway."
+      ],
+      "touches": [
+        "app/schema/users",
+        "app/schema/members"
+      ]
+    },
+    {
+      "name": "onTicketWritten",
+      "trigger": "firestore",
+      "location": "…/tickets/{ticketId} onWrite",
+      "ioSchema": [
+        "// derived data only — never business rules"
+      ],
+      "implementation": [
+        "upsert / delete the Typesense document",
+        "board.counts (active / done / overdue) via FieldValue.increment",
+        "",
+        "IDEMPOTENT BY EVENT ID. Firestore triggers are at-least-once; a",
+        "counter bumped twice is a board that says 41 when there are 40."
+      ],
+      "touches": [
+        "app/schema/tickets index",
+        "app/schema/boards"
+      ]
+    },
+    {
+      "name": "onMessageWritten",
+      "trigger": "firestore",
+      "location": "…/messages/{messageId} onWrite",
+      "ioSchema": [
+        "// derived data only"
+      ],
+      "implementation": [
+        "fold the ticket's last 20 message texts into its Typesense document,",
+        "so search finds a ticket by something said in its thread"
+      ],
+      "touches": [
+        "app/schema/tickets index"
+      ]
+    },
+    {
+      "name": "onAttachmentFinalized",
+      "trigger": "storage",
+      "location": "boards/** onObjectFinalized",
+      "ioSchema": [
+        "// image/* → thumb_400.webp; application/pdf → first-page preview"
+      ],
+      "implementation": [
+        "sharp → webp thumbnail, metadata width/height",
+        "(phase 3) ClamAV on Cloud Run for non-images; infected → quarantined",
+        "unattached after 24h → deleted by attachmentSweep",
+        "users/*/avatar/* → cropped square, 256px webp; the original is replaced"
+      ],
+      "touches": [
+        "app/schema/attachments"
+      ]
+    },
+    {
+      "name": "deadlineSweep",
+      "trigger": "schedule",
+      "location": "every 15 minutes",
+      "ioSchema": [
+        "// collection-group: tickets where state == 'active' && dueAt <= now + 72h",
+        "// (72h = the longest lead time anyone may choose)"
+      ],
+      "implementation": [
+        "for each ticket not in a 'done' stage, for each assignee:",
+        "  lead = users/{uid}.notify.dueSoonLeadMinutes",
+        "  dueAt - now ≤ lead && !dueNotified[uid].soon → notify('dueSoon', to: uid)",
+        "  dueAt < now && !dueNotified[uid].overdue    → notify('overdue', to: uid)",
+        "",
+        "dueNotified IS PER PERSON AND MAKES A RE-RUN HARMLESS. Changing dueAt",
+        "clears it, so a moved deadline warns again.",
+        "",
+        "commitments[uid] passed and commitmentReminders → a nudge to THAT person",
+        "",
+        "board.counts.overdue recomputed for every board touched — time makes a",
+        "ticket overdue, and no write would ever notice"
+      ],
+      "touches": [
+        "app/schema/tickets",
+        "app/schema/users",
+        "app/schema/boards",
+        "app/proxyFunctions/notify"
+      ]
+    },
+    {
+      "name": "agentSilenceSweep",
+      "trigger": "schedule",
+      "location": "every 1 minute",
+      "ioSchema": [
+        "// collection-group agentStatus where state == 'working'",
+        "//   && lastBeatAt <= now - 5 min      (§L3)",
+        "// plus: question messages whose expiresAt has passed (§L1)"
+      ],
+      "implementation": [
+        "THE PHASE-3 MINUTE TICK — two sweeps ride on it because both must happen",
+        "within about a minute of their deadline and neither is worth a schedule.",
+        "",
+        "silence: a 'working' agent quiet for 5 minutes → ONE inbox row for its",
+        "  OWNER, event 'agentSilence' ('Builder stopped reporting on ENG-42 — no",
+        "  signal for 6 min'), then silenceNotifiedAt = now so it is said ONCE per",
+        "  silence. An archived agent is not running: nobody is told.",
+        "  The DOT does not need this — the UI derives 'No signal' from the clock.",
+        "",
+        "expiry: a question past its expiresAt locks as 'Expired' and the ticket's",
+        "  waitingOn is recomputed, so the ❓ badge goes away by itself."
+      ],
+      "touches": [
+        "app/schema/agentStatus",
+        "app/schema/agents",
+        "app/schema/inbox",
+        "app/schema/messages",
+        "app/schema/tickets"
+      ]
+    },
+    {
+      "name": "digestSend",
+      "trigger": "schedule",
+      "location": "every hour, on the hour",
+      "ioSchema": [
+        "// users whose local time is 09:00 (daily) or anyone with hourly digest"
+      ],
+      "implementation": [
+        "unread inbox items since the last digest, grouped by board",
+        "+ 'due today' and 'overdue' from My Work",
+        "one email; nothing to say → nothing sent"
+      ],
+      "touches": [
+        "app/schema/inbox",
+        "app/schema/users",
+        "platform/services/deliver"
+      ]
+    },
+    {
+      "name": "housekeeping",
+      "trigger": "schedule",
+      "location": "daily 03:00 UTC",
+      "ioSchema": [
+        "// the jobs nobody should have to remember"
+      ],
+      "implementation": [
+        "invites past expiresAt → 'expired'",
+        "inbox items older than 90 days and read → deleted",
+        "boards with autoArchiveDoneAfterDays → archive done tickets",
+        "unattached uploads older than 24h → deleted",
+        "webhook deliveries older than 30 days → deleted"
+      ],
+      "touches": [
+        "app/schema/invites",
+        "app/schema/inbox",
+        "app/schema/tickets",
+        "app/schema/attachments"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <!-- viewport-fit=cover: the app draws under the notch / home indicator and every
+         fixed bar pads itself with env(safe-area-inset-*) (agents.html § S). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>TaskManager</title>
+
+    <!-- ── installable (agents.html § S) ─────────────────────────────────── -->
+    <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+    <!-- The manifest can only carry one theme colour; these two carry both, and the
+         boot script below overrides them when the profile forces a theme. -->
+    <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151413" media="(prefers-color-scheme: dark)" />
+    <meta name="application-name" content="TaskManager" />
+    <meta name="description" content="Tickets, boards and agents — your work, on your phone." />
+
+    <!-- iOS: no manifest support worth the name, so the same facts again. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tasks" />
+    <!-- 'default' on light (dark text on the light bar), 'black-translucent' on dark
+         so the app's own background runs under the status bar. Kept in step at runtime. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link
+      rel="apple-touch-icon"
+      href="%sveltekit.assets%/icons/apple-touch-icon-180.png"
+      sizes="180x180"
+    />
+
+    <script>
+      // Applied before first paint (lib/ui/theme.ts keeps it in sync with the
+      // profile). 'system' = no attribute → prefers-color-scheme.
+      try {
+        var t = localStorage.getItem('tm.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+
+      // The installed app's status bar / title bar follows the theme. The two
+      // media <meta theme-color> tags cover 'system'; a forced theme needs one
+      // unconditional tag, which we add and keep in step with data-theme.
+      // (Everything here is in app.html because <html> already carries the
+      // theme before any module runs — lib/pwa only ever reads the result.)
+      (function () {
+        var LIGHT = '#f7f6f3';
+        var DARK = '#151413';
+        var el = null;
+        function apply() {
+          var forced = document.documentElement.dataset.theme;
+          if (forced !== 'light' && forced !== 'dark') {
+            if (el) {
+              el.remove();
+              el = null;
+            }
+            document
+              .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+              ?.setAttribute(
+                'content',
+                matchMedia('(prefers-color-scheme: dark)').matches
+                  ? 'black-translucent'
+                  : 'default',
+              );
+            return;
+          }
+          if (!el) {
+            el = document.createElement('meta');
+            el.name = 'theme-color';
+            document.head.appendChild(el);
+          }
+          el.content = forced === 'dark' ? DARK : LIGHT;
+          document
+            .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+            ?.setAttribute('content', forced === 'dark' ? 'black-translucent' : 'default');
+        }
+        apply();
+        new MutationObserver(apply).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-theme'],
+        });
+        try {
+          matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
+        } catch (e) {}
+      })();
+
+      // Chrome fires beforeinstallprompt once, early — often before the Shell has
+      // mounted. Stash it here; lib/pwa/install.svelte.ts picks it up and offers
+      // Install from the account menu (never a banner). See agents.html § S.
+      window.__tmInstall = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__tmInstall = e;
+        window.dispatchEvent(new Event('tm:installable'));
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__tmInstall = null;
+        window.dispatchEvent(new Event('tm:installed'));
+      });
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

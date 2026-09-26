@@ -1,0 +1,364 @@
+{
+  "services": [
+    {
+      "name": "firestore",
+      "logo": "firestore"
+    },
+    {
+      "name": "realtime database",
+      "logo": "realtime database"
+    }
+  ],
+  "types": [
+    {
+      "name": "Scope",
+      "code": [
+        "type Scope =",
+        "  | 'board:read' | 'members:read'",
+        "  | 'tickets:read' | 'tickets:create' | 'tickets:update'   // update: title, description, fields, dates, tags, links",
+        "  | 'tickets:move' | 'tickets:assign' | 'tickets:state'    // state: archive / cancel",
+        "  | 'comments:read' | 'comments:write'",
+        "  | 'files:read' | 'files:write'",
+        "  | 'events:read'",
+        "  // PHASE 3 (§L4) — an agent that shows its work:",
+        "  | 'questions:write'   // ask, cancel (and, for a person's token, answer)",
+        "  | 'tasklists:write'   // publish a plan and tick it off",
+        "  | 'status:write'      // heartbeat",
+        "  // ADMIN scopes — a token acting as a PERSON only; agents are never admin:",
+        "  | 'board:admin' | 'webhooks:manage'",
+        "",
+        "// ONE VOCABULARY FOR API KEYS, OAUTH AND MCP. can() reads ctx.scopes",
+        "// whatever door the call came through; a scope NARROWS what the",
+        "// acting principal's board role allows and never widens it:",
+        "//   allowed = token.scopes ∩ can(principal, board, action)",
+        "// So a commenter agent never moves a ticket outside its StageGrant,",
+        "// whatever its token says.",
+        "",
+        "// PRESETS on the token form: Read only (every :read), Worker (read +",
+        "// comments:write + files:write + tickets:move + tickets:update +",
+        "// questions:write + tasklists:write + status:write), Everything (every",
+        "// checkbox, no admin scopes).",
+        "",
+        "// PHASE-1 NAMES ('boards:read', 'tickets:write' …) are still ACCEPTED",
+        "// from stored OAuth grants and older MCP clients and expanded by",
+        "// normalizeScopes(); they are never written back."
+      ]
+    },
+    {
+      "name": "WebhookEvent",
+      "code": [
+        "type WebhookEvent =",
+        "  | 'ticket.created' | 'ticket.updated' | 'ticket.moved' | 'ticket.state'",
+        "  | 'ticket.deleted'",
+        "  | 'message.created' | 'message.pinned'",
+        "  | 'board.updated' | 'member.joined'"
+      ]
+    },
+    {
+      "name": "Envelope",
+      "code": [
+        "interface Envelope<T> {",
+        "  id: string            // 'evt_…' — receivers dedupe on this",
+        "  type: WebhookEvent",
+        "  createdAt: string     // ISO",
+        "  boardId: string",
+        "  actor: {",
+        "    id: string, name: string, via: Via",
+        "    kind?: 'user' | 'agent'      // phase 2; absent = user",
+        "    via_token?: string | null    // phase 2; the token's name when a token made the change",
+        "  }",
+        "  data: T               // the public Ticket / Message shape, never the raw doc",
+        "}",
+        "",
+        "// Headers: X-TM-Event, X-TM-Delivery,",
+        "//          X-TM-Signature: t=<unix>,v1=hex(HMAC_SHA256(secret, `${t}.${body}`))"
+      ]
+    },
+    {
+      "name": "DeliveryChannel",
+      "code": [
+        "type DeliveryChannel = 'push' | 'email' | 'whatsapp' | 'slack'"
+      ]
+    }
+  ],
+  "schema": [
+    {
+      "name": "apiKeys",
+      "service": "firestore",
+      "location": "users/{uid}/apiKeys/{keyId}",
+      "rules": [
+        "allow read:  auth.uid == uid",
+        "allow write: never   // apiKeyCreate, apiKeyRevoke, agentArchive, boardAgentSet",
+        "",
+        "// ONE BOARD PER TOKEN. Each board gets its own tokens, so a leaked",
+        "// token is one board's problem and the Tokens list reads as 'what can",
+        "// touch ENG'. A token acts as its owner, or AS ONE OF THE OWNER'S",
+        "// AGENTS that is on that board — never more than that principal's",
+        "// board role allows.",
+        "",
+        "// Shown once, stored as a hash; a lost key is rotated, not recovered.",
+        "",
+        "// PHASE-1 KEYS (boardIds, no actsAs) no longer parse; the middleware",
+        "// treats them as revoked, and the Tokens list says so."
+      ],
+      "schema": [
+        "interface ApiKey {",
+        "  name: string            // 'orch-eng-builder' — shown in 'via token …'",
+        "  boardId: BoardId        // exactly one board the owner is on",
+        "  actsAs: PrincipalRef    // { kind: 'user', id: owner } | { kind: 'agent', id: agentId }",
+        "  scopes: Scope[]         // agent tokens never carry board:admin / webhooks:manage",
+        "  prefix: string          // 'tm_live_3fa9' — shown in the list",
+        "  hash: string            // sha256 of the full key; queried by the middleware",
+        "  limits: { perMin: number, perDay: number }   // default 60 / 10 000",
+        "  lastUsedAt: Millis | null",
+        "  expiresAt: Millis | null    // never / 30 / 90 / 365 days",
+        "  revokedAt: Millis | null",
+        "  revokedReason?: 'owner' | 'agentArchived' | 'agentRemoved' | 'ownerLeft' | null",
+        "  createdAt: Millis",
+        "}",
+        "",
+        "// ACTS AS AN AGENT → the token carries the agent's identity: its changes",
+        "// are authored by the agent ('Builder (agent) via token orch-eng-builder'),",
+        "// it reads the agent's inbox and profile (system prompt included).",
+        "// The OWNER stays answerable: rate limits and idempotency key on them.",
+        "",
+        "// REVOKED FOR YOU when the agent is archived (agentArchived), the agent",
+        "// is removed from the board (agentRemoved), or you leave the board",
+        "// (ownerLeft) — a token never outlives the fact it was made from."
+      ]
+    },
+    {
+      "name": "oauthClients",
+      "service": "firestore",
+      "location": "oauthClients/{clientId}",
+      "rules": [
+        "allow read, write: never   // server only"
+      ],
+      "schema": [
+        "interface OAuthClient {",
+        "  name: string            // 'Claude', 'Cursor', 'Zapier'",
+        "  redirectUris: string[]",
+        "  public: boolean         // PKCE, no secret — every MCP client",
+        "  secretHash?: string",
+        "  registeredVia: 'dcr' | 'manual'   // RFC 7591 dynamic registration",
+        "  logoUrl?: string",
+        "  createdAt: Millis",
+        "}",
+        "",
+        "// DYNAMIC CLIENT REGISTRATION IS WHAT THE MCP AUTH SPEC EXPECTS: a",
+        "// user pastes our MCP URL into their client, the client registers",
+        "// itself, and the consent screen names it."
+      ]
+    },
+    {
+      "name": "oauthGrants",
+      "service": "firestore",
+      "location": "users/{uid}/oauthGrants/{grantId}",
+      "rules": [
+        "allow read:   auth.uid == uid",
+        "allow delete: never   // revoke via grantRevoke, which kills the tokens too"
+      ],
+      "schema": [
+        "interface OAuthGrant {",
+        "  clientId: string",
+        "  clientName: string",
+        "  scopes: Scope[]",
+        "  createdAt: Millis",
+        "  lastUsedAt: Millis",
+        "}"
+      ]
+    },
+    {
+      "name": "oauthTokens",
+      "service": "firestore",
+      "location": "oauthTokens/{sha256(token)}",
+      "rules": [
+        "allow read, write: never"
+      ],
+      "schema": [
+        "interface OAuthToken {",
+        "  kind: 'access' | 'refresh' | 'code'",
+        "  uid: Uid",
+        "  grantId: string",
+        "  clientId: string",
+        "  scopes: Scope[]",
+        "  codeChallenge?: string   // PKCE, kind == 'code'",
+        "  expiresAt: Millis        // access 1h, refresh 30d rotating, code 60s",
+        "}",
+        "",
+        "// TTL policy on expiresAt deletes them; nothing sweeps by hand."
+      ]
+    },
+    {
+      "name": "webhooks",
+      "service": "firestore",
+      "location": "boards/{boardId}/webhooks/{webhookId}",
+      "rules": [
+        "allow read: boardRole(boardId) == 'admin'",
+        "allow write: never"
+      ],
+      "schema": [
+        "interface Webhook {",
+        "  url: string                 // https only; private IPs refused (SSRF)",
+        "  secretHash: string",
+        "  events: WebhookEvent[]",
+        "  active: boolean",
+        "  failures: number            // consecutive; 20 → disabled + owner emailed",
+        "  createdBy: Uid",
+        "  createdAt: Millis",
+        "}"
+      ]
+    },
+    {
+      "name": "webhookDeliveries",
+      "service": "firestore",
+      "location": "boards/{boardId}/webhooks/{webhookId}/deliveries/{deliveryId}",
+      "rules": [
+        "allow read: boardRole(boardId) == 'admin'",
+        "allow write: never"
+      ],
+      "schema": [
+        "interface WebhookDelivery {",
+        "  event: WebhookEvent",
+        "  envelopeId: string",
+        "  attempt: number",
+        "  status: 'pending' | 'ok' | 'failed' | 'gave_up'",
+        "  responseCode: number | null",
+        "  responseSnippet: string     // first 500 bytes — for the 'Recent deliveries' panel",
+        "  durationMs: number",
+        "  nextAttemptAt: Millis | null",
+        "  createdAt: Millis           // TTL 30 days",
+        "}"
+      ]
+    },
+    {
+      "name": "installs",
+      "service": "firestore",
+      "location": "boards/{boardId}/integrations/{provider}",
+      "rules": [
+        "allow read: canRead(boardId)",
+        "allow write: never   // installConnect, board admin"
+      ],
+      "schema": [
+        "interface Integration {",
+        "  provider: 'github' | 'slack' | 'gcal' | 'gitlab'",
+        "  status: 'active' | 'error' | 'removed'",
+        "  externalId: string          // GitHub installation id, Slack workspace id",
+        "  config: {",
+        "    repos?: { fullName: string, moveOnMerge?: string }[]   // github: repos linked to THIS board",
+        "    channelId?: string; events?: WebhookEvent[]            // slack: where this board posts",
+        "  }",
+        "  connectedBy: Uid",
+        "  connectedAt: Millis",
+        "}",
+        "",
+        "// Provider tokens live in Secret Manager under integrations/{boardId}/{provider}."
+      ]
+    },
+    {
+      "name": "intakes",
+      "service": "firestore",
+      "location": "intakes/{slug}",
+      "rules": [
+        "allow read, write: never"
+      ],
+      "schema": [
+        "interface Intake {",
+        "  // THE REFERENCE TRACKER'S 'REPORTING API', kept whole: a board made",
+        "  // addressable from a website's feedback widget, authorised by a",
+        "  // board-scoped slug + secret instead of a user session.",
+        "  boardId: BoardId",
+        "  enabled: boolean",
+        "  secretHash: string          // shown once, rotated — not stored in clear",
+        "  rotatedAt: Millis",
+        "  limits: { perMin: 10, perHour: 100, perDay: 500 }   // the reference's defaults",
+        "  allowedOrigins: string[]",
+        "  defaults: { stageId?, priorityId?, tagIds?, assigneeUids? }",
+        "  fieldMap: Record<string, string>   // widget key → FieldDef.id",
+        "  email: string | null        // 'eng-bugs@in.taskmanager.app' — email-to-board",
+        "}"
+      ]
+    },
+    {
+      "name": "deliveries",
+      "service": "firestore",
+      "location": "deliveries/{deliveryId}",
+      "rules": [
+        "allow read: auth.uid == resource.data.uid",
+        "allow write: never"
+      ],
+      "schema": [
+        "interface Delivery {",
+        "  uid: Uid",
+        "  channel: DeliveryChannel",
+        "  groupKey: string",
+        "  inboxIds: string[]          // what this one message carried",
+        "  status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'suppressed'",
+        "  provider: 'fcm' | 'resend' | 'meta' | 'slack'",
+        "  providerId: string | null   // for status callbacks",
+        "  error: string | null",
+        "  createdAt: Millis           // TTL 30 days",
+        "}",
+        "",
+        "// THE ANSWER TO 'WHY DIDN'T I GET THE EMAIL'. The reference logged",
+        "// the decision to a debug log; here it is a row the person can see",
+        "// under Account › Notifications › Recent deliveries."
+      ]
+    },
+    {
+      "name": "emailThreads",
+      "service": "firestore",
+      "location": "emailThreads/{replyToken}",
+      "rules": [
+        "allow read, write: never"
+      ],
+      "schema": [
+        "interface EmailThread {",
+        "  // Reply-To: t.{replyToken}@in.taskmanager.app",
+        "  // replyToken = base32(ticketId + uid + HMAC) — the reply is attributed",
+        "  // to the person the mail was SENT to, and only if From matches them.",
+        "  boardId, ticketId, uid",
+        "  messageIdHeader: string     // threading: every mail about a ticket",
+        "                              // replies to one phantom root (the reference's fix)",
+        "  expiresAt: Millis           // 90 days",
+        "}"
+      ]
+    },
+    {
+      "name": "whatsappSessions",
+      "service": "firestore",
+      "location": "whatsappSessions/{e164}",
+      "rules": [
+        "allow read, write: never"
+      ],
+      "schema": [
+        "interface WhatsappSession {",
+        "  uid: Uid",
+        "  // META ONLY ALLOWS FREE-FORM MESSAGES INSIDE 24H OF THE USER'S LAST",
+        "  // MESSAGE. Outside it, only approved templates — so the sender",
+        "  // must know which side of the window it is on.",
+        "  lastInboundAt: Millis | null",
+        "  // Which ticket a bare reply refers to: the last one we notified about.",
+        "  contextTicketId: TicketId | null",
+        "  contextExpiresAt: Millis",
+        "}"
+      ]
+    },
+    {
+      "name": "rateLimits",
+      "service": "realtime database",
+      "location": "rate/{bucket}/{window}",
+      "rules": [
+        ".read: false",
+        ".write: false   // Admin SDK only"
+      ],
+      "schema": [
+        "// bucket = key:{keyId} | intake:{slug} | ip:{hash} | mcp:{grantId}",
+        "// window = floor(now / 60s) etc.; value = count via transaction()",
+        "",
+        "// RTDB BECAUSE A COUNTER HERE IS ONE CHEAP TRANSACTION, not a",
+        "// contended Firestore document. Old windows deleted by housekeeping."
+      ]
+    }
+  ]
+}

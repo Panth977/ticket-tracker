@@ -1,0 +1,626 @@
+{
+  "stages": [
+    {
+      "name": "browser",
+      "logo": "browser"
+    },
+    {
+      "name": "server",
+      "logo": "cloud functions"
+    },
+    {
+      "name": "push",
+      "logo": "push"
+    },
+    {
+      "name": "email",
+      "logo": "email"
+    },
+    {
+      "name": "whatsapp",
+      "logo": "whatsapp"
+    }
+  ],
+  "flows": [
+    {
+      "name": "Signing up",
+      "steps": [
+        {
+          "name": "Anyone signs in with Google or an email link — there is no gate.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Sign in"
+          ],
+          "screen": null
+        },
+        {
+          "name": "onCreate writes users/{uid} and turns any invites waiting for that address into inbox items.",
+          "where": "server",
+          "uses": [
+            "app/services/onUserCreated",
+            "app/schema/users",
+            "app/schema/invites"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Welcome: profile picture (Google's, or upload one), display name, time zone — then the invites, first.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Welcome",
+            "app/services/profileUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "No invites? 'Create your first board' — they are its admin.",
+          "where": "server",
+          "uses": [
+            "app/services/boardCreate",
+            "app/schema/boardKeys"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Inviting someone to a board",
+      "steps": [
+        {
+          "name": "A board admin types an email and picks a role: 'asha@x.com — editor'.",
+          "where": "browser",
+          "uses": [
+            "app/components/People & roles",
+            "app/services/inviteCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "An invite is stored with a hash of a random token; it names the board, so she can read it before she can read the board.",
+          "where": "server",
+          "uses": [
+            "app/schema/invites"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The email goes out; if she already has an account, it is in her inbox too.",
+          "where": "email",
+          "uses": [
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "She signs up (or in) with that address and accepts — from the link or the inbox.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Accept an invite",
+            "app/screens/Boards",
+            "app/services/inviteAccept"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Her role, the board's readerUids and her members/ row commit together; Priya is told.",
+          "where": "server",
+          "uses": [
+            "app/schema/boards",
+            "app/schema/members",
+            "app/proxyFunctions/notify"
+          ],
+          "screen": null
+        },
+        {
+          "name": "From now on she can be assigned, @mentioned and notified on that board, and on no other.",
+          "where": "browser",
+          "uses": [
+            "app/components/Composer"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Creating a ticket",
+      "steps": [
+        {
+          "name": "C, or Quick add under a column: 'Fix login redirect @priya !high due:fri'.",
+          "where": "browser",
+          "uses": [
+            "app/components/Quick add"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The card appears at once with a pending key ('ENG-…'); the request carries a clientId.",
+          "where": "browser",
+          "uses": [
+            "app/services/ticketCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "can(create), validation, required fields — then one transaction: key, ticket, activity.",
+          "where": "server",
+          "uses": [
+            "app/proxyFunctions/can",
+            "app/proxyFunctions/allocateKey",
+            "app/schema/tickets",
+            "app/schema/activity",
+            "app/schema/keys"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The board's listener delivers the real document; the optimistic card is replaced by id.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Board"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Assignees and mentioned people are notified; a webhook fires; the search index updates.",
+          "where": "server",
+          "uses": [
+            "app/proxyFunctions/notify",
+            "platform/services/webhookDispatch",
+            "app/services/onTicketWritten"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Moving a card",
+      "steps": [
+        {
+          "name": "A card is dragged from In progress to Review, between two others.",
+          "where": "browser",
+          "uses": [
+            "app/components/Kanban"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The browser computes a rank between its new neighbours and moves the card locally.",
+          "where": "browser",
+          "uses": [
+            "app/proxyFunctions/rank"
+          ],
+          "screen": null
+        },
+        {
+          "name": "ticketUpdate: an editor may; a commenter only inside their StageGrant; 'requires' fields for Review must be set.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate",
+            "app/proxyFunctions/can"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Refused → the card animates back and says why. Accepted → activity row and 'stage' notifications.",
+          "where": "server",
+          "uses": [
+            "app/schema/activity",
+            "app/proxyFunctions/notify"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Everyone else with the board open sees it move, live.",
+          "where": "browser",
+          "uses": [
+            "app/schema/tickets"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A conversation on a ticket",
+      "steps": [
+        {
+          "name": "Asha types in the composer, @-mentions Priya, links #ENG-40 and pastes a screenshot.",
+          "where": "browser",
+          "uses": [
+            "app/components/Composer",
+            "app/schema/members",
+            "app/schema/tickets index"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The screenshot uploads to Storage while she is still typing.",
+          "where": "browser",
+          "uses": [
+            "app/schema/attachments"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Send: the bubble appears immediately, marked sending.",
+          "where": "browser",
+          "uses": [
+            "app/services/messagePost"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The body is validated and its mentions and refs derived; message, counts and read pointer commit.",
+          "where": "server",
+          "uses": [
+            "app/proxyFunctions/parseRichText",
+            "app/schema/messages",
+            "app/schema/tickets",
+            "app/schema/reads"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya gets 'mentioned' — in app, push, and email — regardless of her board mode.",
+          "where": "push",
+          "uses": [
+            "app/proxyFunctions/notify",
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Watchers get 'comment' through their board prefs; ENG-40's thread gets 'mentioned in ENG-42'.",
+          "where": "server",
+          "uses": [
+            "app/schema/prefs",
+            "app/schema/messages"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya replies to the email; the reply lands in the same thread, via email.",
+          "where": "email",
+          "uses": [
+            "platform/services/emailInbound"
+          ],
+          "screen": null
+        },
+        {
+          "name": "An editor pins the decision; it floats to the top of the thread for everyone.",
+          "where": "browser",
+          "uses": [
+            "app/services/messagePin"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Relating tickets",
+      "steps": [
+        {
+          "name": "In ENG-40's description Asha writes 'needs #ENG-42 and #ENG-43 first'.",
+          "where": "browser",
+          "uses": [
+            "app/components/Composer",
+            "app/schema/tickets index"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The refs are derived; ENG-42 and ENG-43 get ENG-40 in referencedBy and a 'referenced from ENG-40' line.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate",
+            "app/schema/tickets"
+          ],
+          "screen": null
+        },
+        {
+          "name": "She also marks ENG-43 'blocks' ENG-40; ENG-40 gets 'blocked by ENG-43' in the same write.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Each drawer's Related panel shows both directions; ENG-40's card shows ⛔ blocked until ENG-43 is done.",
+          "where": "browser",
+          "uses": [
+            "app/components/Ticket drawer",
+            "app/components/Ticket card"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The timeline draws the 'blocks' link as an arrow.",
+          "where": "browser",
+          "uses": [
+            "app/components/Timeline"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Adding a custom field and a view over it",
+      "steps": [
+        {
+          "name": "An admin adds 'Client' (select: Acme, Globex) and 'Contract value' (currency INR).",
+          "where": "browser",
+          "uses": [
+            "app/screens/Board settings",
+            "app/components/Field editor"
+          ],
+          "screen": null
+        },
+        {
+          "name": "boardUpdate appends two FieldDefs; no ticket is written.",
+          "where": "server",
+          "uses": [
+            "app/services/boardUpdate",
+            "app/schema/boards"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The Field panel and the Table grow the two editors, because both render from board.fields.",
+          "where": "browser",
+          "uses": [
+            "app/components/Field panel"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Somebody groups the kanban by Client and filters 'Contract value > 5L', then Save as shared view.",
+          "where": "browser",
+          "uses": [
+            "app/components/Board bar",
+            "app/components/Filter builder",
+            "app/services/viewSave"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A deadline approaching",
+      "steps": [
+        {
+          "name": "Every 15 minutes, active tickets due within the next day are swept.",
+          "where": "server",
+          "uses": [
+            "app/services/deadlineSweep"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Each assignee's own lead time and channels decide who hears, where, and when.",
+          "where": "server",
+          "uses": [
+            "app/schema/users",
+            "app/proxyFunctions/notify"
+          ],
+          "screen": null
+        },
+        {
+          "name": "A push: 'ENG-42 is due in 3 hours'.",
+          "where": "push",
+          "uses": [
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Missed → 'overdue' on WhatsApp, for people who linked a number and asked for it.",
+          "where": "whatsapp",
+          "uses": [
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "dueNotified is stamped so the next sweep says nothing; moving the date re-arms it.",
+          "where": "server",
+          "uses": [
+            "app/schema/tickets"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Deleting an account",
+      "steps": [
+        {
+          "name": "Account › Data & deletion; a fresh sign-in is required.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Account"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Refused if they are the only admin of a board other people are on; they hand it over or delete it.",
+          "where": "server",
+          "uses": [
+            "app/services/accountDelete"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Memberships end; the profile becomes 'Deleted user'; messages stay attributed to that.",
+          "where": "server",
+          "uses": [
+            "app/schema/users",
+            "app/schema/members"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The Auth user is deleted, which revokes every session and token.",
+          "where": "server",
+          "uses": [],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Setting up an agent",
+      "steps": [
+        {
+          "name": "You open Agents from the sidebar and make 'Builder': a picture, a one-line description and a Markdown system prompt.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Agents",
+            "app/screens/Agent",
+            "app/services/agentCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "agents/{ag_…} is written with you as its owner — nobody else can read it.",
+          "where": "server",
+          "uses": [
+            "app/schema/agents"
+          ],
+          "screen": null
+        },
+        {
+          "name": "On ENG › People & roles you choose + Add agent, pick Builder and give it commenter with a stage grant of Build and Review.",
+          "where": "browser",
+          "uses": [
+            "app/components/People & roles",
+            "app/services/boardAgentSet"
+          ],
+          "screen": null
+        },
+        {
+          "name": "boardAgentSet checks you are admin there and own Builder, then writes access, stageGrants and members/{agentId} with kind 'agent'. No invite is sent.",
+          "where": "server",
+          "uses": [
+            "app/proxyFunctions/can",
+            "app/schema/boards",
+            "app/schema/members"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Builder now shows in the assignee picker and the @ menu, with its badge; Priya assigns it ENG-42.",
+          "where": "browser",
+          "uses": [
+            "app/components/Principal",
+            "app/services/ticketUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "notify() sees an agent among the recipients and writes an 'assigned' event to its inbox instead of a push.",
+          "where": "server",
+          "uses": [
+            "app/proxyFunctions/notify",
+            "app/schema/agentInbox"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Account › Tokens › New token: name orch-eng-builder, board ENG, acts as Builder, preset Worker, 90 days. The key is shown once with an MCP config and curl lines.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Account",
+            "app/components/Token form",
+            "platform/services/apiKeyCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The hash, board, actsAs and scopes are stored under your account; archiving Builder or removing it from ENG would revoke it.",
+          "where": "server",
+          "uses": [
+            "platform/schema/apiKeys"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Asking a question, and planning the work",
+      "steps": [
+        {
+          "name": "Ada is stuck on ENG-42 and needs Grace to choose. In the composer she presses ❓ (or types /ask), starts from 'Pick one', writes the question, types two options, names Grace and leaves Blocking on.",
+          "where": "browser",
+          "uses": [
+            "app/components/Composer",
+            "app/components/Question builder"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Ask posts through the outbox, so the card is in the thread before the server answers. questionAsk writes a message of kind 'question' with the form in `question`, rolls ticket.waitingOn up for the ❓ badge and notifies Grace.",
+          "where": "server",
+          "uses": [
+            "app/services/questionAsk",
+            "app/schema/messages",
+            "app/schema/tickets"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Grace sees ❓ Waiting for you on the board card without opening the ticket, opens it, picks an option and writes a line in 'Anything else?'.",
+          "where": "browser",
+          "uses": [
+            "app/components/Ticket card",
+            "app/components/Question card"
+          ],
+          "screen": null
+        },
+        {
+          "name": "questionAnswer locks the question in place (one field on the message), posts Grace's answer as her own reply bubble, clears ticket.waitingOn and — if an agent had asked — files a question_answered event in its inbox.",
+          "where": "server",
+          "uses": [
+            "app/services/questionAnswer",
+            "app/schema/messages",
+            "app/schema/agentInbox"
+          ],
+          "screen": null
+        },
+        {
+          "name": "With the answer in hand Ada plans the work: + New list in the right pane, a title, and five pasted lines that become five items.",
+          "where": "browser",
+          "uses": [
+            "app/components/Task lists"
+          ],
+          "screen": null
+        },
+        {
+          "name": "tasklistSet writes boards/{b}/tickets/{t}/tasklists/{listId} with Ada as its owner, rolls ticket.tasklistProgress up for the card chip and says it once in the thread ('Ada added a plan: …').",
+          "where": "server",
+          "uses": [
+            "app/services/tasklistSet",
+            "app/schema/tasklists"
+          ],
+          "screen": null
+        },
+        {
+          "name": "As the work happens she clicks items through todo → doing → done, marks one skipped and one failed with a note. Builder, the agent on the ticket, ticks items off ITS own list beside hers — and Ada can tick those too.",
+          "where": "browser",
+          "uses": [
+            "app/components/Task lists",
+            "app/services/tasklistItemUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "tasklistItemUpdate changes the one item and the roll-up, and says nothing in the thread — ticking is not news. The card chip sums every list on the ticket, whoever owns it.",
+          "where": "server",
+          "uses": [
+            "app/services/tasklistItemUpdate",
+            "app/schema/tickets"
+          ],
+          "screen": null
+        }
+      ]
+    }
+  ]
+}

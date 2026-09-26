@@ -1,0 +1,676 @@
+{
+  "stages": [
+    {
+      "name": "browser",
+      "logo": "browser"
+    },
+    {
+      "name": "server",
+      "logo": "cloud functions"
+    },
+    {
+      "name": "mcp client",
+      "logo": "mcp"
+    },
+    {
+      "name": "third party",
+      "logo": "third party"
+    },
+    {
+      "name": "push",
+      "logo": "push"
+    },
+    {
+      "name": "email",
+      "logo": "email"
+    },
+    {
+      "name": "whatsapp",
+      "logo": "whatsapp"
+    },
+    {
+      "name": "orchestrator",
+      "logo": "module"
+    }
+  ],
+  "flows": [
+    {
+      "name": "Connecting Claude over MCP",
+      "steps": [
+        {
+          "name": "Somebody adds https://api.taskmanager.app/mcp as a connector in their MCP client.",
+          "where": "mcp client",
+          "uses": [],
+          "screen": null
+        },
+        {
+          "name": "The first call has no token; the 401 names the protected-resource metadata.",
+          "where": "server",
+          "uses": [
+            "platform/services/mcp"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The client discovers the auth server, registers itself, and opens the consent page with PKCE.",
+          "where": "server",
+          "uses": [
+            "platform/services/oauth",
+            "platform/schema/oauthClients"
+          ],
+          "screen": null
+        },
+        {
+          "name": "They approve tickets:read, tickets:write, comments:write.",
+          "where": "browser",
+          "uses": [
+            "platform/schema/oauthGrants"
+          ],
+          "screen": null
+        },
+        {
+          "name": "'What's overdue for me?' → my_work; 'split ENG-42 into three tickets' → three create_ticket calls, each referencing #ENG-42.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Each tool call is the same command the app uses; the thread says 'Panth via Claude (MCP)'.",
+          "where": "server",
+          "uses": [
+            "platform/proxyFunctions/commands",
+            "app/services/ticketCreate"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Scripting with the REST API",
+      "steps": [
+        {
+          "name": "You create a personal token scoped to tickets:write on the SUP board.",
+          "where": "browser",
+          "uses": [
+            "app/screens/Account",
+            "platform/services/apiKeyCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "It is shown once; changes made with it read 'Panth via API · Zendesk sync'.",
+          "where": "server",
+          "uses": [
+            "platform/schema/apiKeys"
+          ],
+          "screen": null
+        },
+        {
+          "name": "A script POSTs /v1/boards/SUP/tickets with an Idempotency-Key.",
+          "where": "third party",
+          "uses": [
+            "platform/services/rest"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Hash lookup, rate limit, scope and board check — then commands.ticketCreate.",
+          "where": "server",
+          "uses": [
+            "platform/schema/rateLimits",
+            "app/proxyFunctions/can",
+            "app/services/ticketCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The response is the public shape — names, not ids — with the key SUP-118.",
+          "where": "server",
+          "uses": [
+            "platform/proxyFunctions/toPublic"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A webhook delivery",
+      "steps": [
+        {
+          "name": "A ticket moves to Done; ticketUpdate commits.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "One envelope 'ticket.moved' is enqueued; the dispatcher fans it out to matching webhooks.",
+          "where": "server",
+          "uses": [
+            "platform/services/webhookDispatch",
+            "platform/schema/webhooks"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The receiver verifies X-TM-Signature and answers 500.",
+          "where": "third party",
+          "uses": [],
+          "screen": null
+        },
+        {
+          "name": "Retried at 1m, 5m, 30m…; each attempt is a row in Recent deliveries.",
+          "where": "server",
+          "uses": [
+            "platform/schema/webhookDeliveries"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Twenty consecutive failures disable it and email the owner.",
+          "where": "email",
+          "uses": [
+            "platform/services/deliver"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "One event, four channels",
+      "steps": [
+        {
+          "name": "Asha mentions Priya on ENG-42 at 22:40 Priya's time.",
+          "where": "server",
+          "uses": [
+            "app/services/messagePost",
+            "app/proxyFunctions/notify"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The inbox row is written at once; the bell updates in every open tab.",
+          "where": "browser",
+          "uses": [
+            "app/schema/inbox"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The delivery ticket waits a minute, collapsing anything else about ENG-42 into it.",
+          "where": "server",
+          "uses": [
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya read it in the app during that minute — push and email are suppressed.",
+          "where": "server",
+          "uses": [
+            "platform/schema/deliveries"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Had she not: a push now; the email held until quiet hours end at 08:00.",
+          "where": "push",
+          "uses": [
+            "app/schema/devices"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Her email reply the next morning posts to the thread, via email.",
+          "where": "email",
+          "uses": [
+            "platform/services/emailInbound",
+            "platform/schema/emailThreads"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A deadline on WhatsApp",
+      "steps": [
+        {
+          "name": "deadlineSweep finds ENG-42 overdue; Priya's matrix sends 'overdue' to WhatsApp.",
+          "where": "server",
+          "uses": [
+            "app/services/deadlineSweep"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Outside the 24h window, so the approved template goes: title, due, [Mark done] [Snooze 1d].",
+          "where": "whatsapp",
+          "uses": [
+            "platform/services/deliver",
+            "platform/schema/whatsappSessions"
+          ],
+          "screen": null
+        },
+        {
+          "name": "She taps Mark done.",
+          "where": "whatsapp",
+          "uses": [],
+          "screen": null
+        },
+        {
+          "name": "The button payload becomes commands.ticketUpdate via 'whatsapp'; the thread records it.",
+          "where": "server",
+          "uses": [
+            "platform/services/whatsappInbound",
+            "app/services/ticketUpdate"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A bug reported from a website",
+      "steps": [
+        {
+          "name": "A customer uses the feedback widget on the product site.",
+          "where": "third party",
+          "uses": [],
+          "screen": null
+        },
+        {
+          "name": "The widget posts with the board's intake slug and secret.",
+          "where": "server",
+          "uses": [
+            "platform/services/intakeSubmit",
+            "platform/schema/intakes"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Rate limits hold; a ticket is created with the reporter and the page metadata in fields.",
+          "where": "server",
+          "uses": [
+            "platform/schema/rateLimits",
+            "app/services/ticketCreate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The reporter gets 'We've logged SUP-119' and can reply to add detail.",
+          "where": "email",
+          "uses": [
+            "platform/services/deliver",
+            "platform/services/emailInbound"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "A pull request closing a ticket",
+      "steps": [
+        {
+          "name": "A branch 'eng-42-login-redirect' is pushed and a PR opened: 'ENG-42 fix redirect'.",
+          "where": "third party",
+          "uses": [],
+          "screen": null
+        },
+        {
+          "name": "The GitHub hook finds ENG-42 and posts a system message with the PR link.",
+          "where": "server",
+          "uses": [
+            "platform/services/githubHook",
+            "app/schema/keys"
+          ],
+          "screen": null
+        },
+        {
+          "name": "On merge, the repo's moveOnMerge moves it to Done, via integration.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "An orchestrator works a ticket",
+      "steps": [
+        {
+          "name": "Your orchestrator starts with Builder's token and calls whoami (or GET /v1/me): it gets the agent's name, board ENG, its scopes and its system prompt.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "platform/services/rest",
+            "app/schema/agents"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The apiKey middleware finds the key by hash, checks Builder is not archived and still on ENG, and sets the actor to the agent.",
+          "where": "server",
+          "uses": [
+            "platform/schema/apiKeys",
+            "app/schema/boards",
+            "platform/schema/rateLimits"
+          ],
+          "screen": null
+        },
+        {
+          "name": "It waits on its inbox: get_events, or the GET /v1/events/stream SSE feed, returns 'Priya assigned you ENG-42'.",
+          "where": "mcp client",
+          "uses": [
+            "app/schema/agentInbox",
+            "platform/services/rest"
+          ],
+          "screen": null
+        },
+        {
+          "name": "get_ticket ENG-42 with its last messages; read_file on the brief Priya attached returns its Markdown as text.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "app/schema/tickets",
+            "app/schema/messages",
+            "app/schema/files"
+          ],
+          "screen": null
+        },
+        {
+          "name": "It runs the agent with the system prompt and the ticket, then move_ticket to Build — allowed, because Build is in Builder's stage grant.",
+          "where": "mcp client",
+          "uses": [
+            "app/services/ticketUpdate",
+            "app/proxyFunctions/can"
+          ],
+          "screen": null
+        },
+        {
+          "name": "upload_file { name: 'plan.md', text } and { name: 'report.html', text } put two documents on the ticket, source 'upload'.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "app/schema/files",
+            "app/schema/attachments"
+          ],
+          "screen": null
+        },
+        {
+          "name": "post_message with Markdown and both fileIds: the message is authored by Builder, 'via token orch-eng-builder', and the files move to it.",
+          "where": "server",
+          "uses": [
+            "app/services/messagePost",
+            "app/schema/messages"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya and every watcher are notified as usual — in the app, by push, by email. Builder is not: its own actions never land in its inbox.",
+          "where": "push",
+          "uses": [
+            "app/proxyFunctions/notify",
+            "platform/services/deliver"
+          ],
+          "screen": null
+        },
+        {
+          "name": "In the thread the plan renders as Markdown with a contents list and the report as a live preview card; clicking it opens the sandboxed viewer, and Open in new tab gives it /f/ENG/ENG-42/{fileId}.",
+          "where": "browser",
+          "uses": [
+            "app/components/Message",
+            "app/components/File viewer",
+            "app/screens/File"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya replies '@Builder use the flag, not a branch'. A 'mentioned' event lands in Builder's inbox; the orchestrator handles it and ack_events { upTo } marks it done.",
+          "where": "mcp client",
+          "uses": [
+            "app/schema/agentInbox",
+            "app/services/agentInboxAck"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "Watching an agent work",
+      "steps": [
+        {
+          "name": "Builder's orchestrator beats before it starts: heartbeat { ticket: 'ENG-42', state: 'working', message: 'Reading the exporter' }.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "app/services/agentHeartbeat"
+          ],
+          "screen": null
+        },
+        {
+          "name": "agentHeartbeat writes ONE small document — boards/ENG/agentStatus/{agentId}__{ticketId} — and never the ticket, so a beat a minute costs nothing anybody is listening to.",
+          "where": "server",
+          "uses": [
+            "app/schema/agentStatus"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya has ENG-42 open: the board's single agentStatus listener turns that document into 🟢 'Builder · Working · Reading the exporter' in the drawer header, and a green dot on the card.",
+          "where": "browser",
+          "uses": [
+            "app/components/Agent health",
+            "app/components/Ticket card"
+          ],
+          "screen": null
+        },
+        {
+          "name": "set_tasklist publishes the plan — five items, one already 'doing'. The thread gets ONE system line, 'Builder added a plan: add CSV export'.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "app/services/tasklistSet",
+            "app/schema/tasklists"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The plan appears at the top of the right pane with a 4/7 bar; the running item has a spinner. The ticket's roll-up puts the same '4/7' chip on the card.",
+          "where": "browser",
+          "uses": [
+            "app/components/Task lists",
+            "app/schema/tickets"
+          ],
+          "screen": null
+        },
+        {
+          "name": "update_task_item ticks items off as the work goes. No thread line, no activity row — only the bar moves.",
+          "where": "mcp client",
+          "uses": [
+            "app/services/tasklistItemUpdate"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Then it hits a decision it may not take: ask_question { title: 'Which database should the report use?', fields: [single: Postgres | BigQuery], to: ['priya@acme.com'], blocking: true }.",
+          "where": "mcp client",
+          "uses": [
+            "platform/services/mcp",
+            "app/services/questionAsk"
+          ],
+          "screen": null
+        },
+        {
+          "name": "questionAsk posts a message with kind 'question' and stamps ticket.waitingOn, then notifies Priya through her normal channels as the event 'question'.",
+          "where": "server",
+          "uses": [
+            "app/schema/messages",
+            "app/schema/tickets",
+            "app/proxyFunctions/notify"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Priya's phone buzzes: 'Builder asked: Which database should the report use?'",
+          "where": "push",
+          "uses": [
+            "platform/services/deliver",
+            "app/schema/inbox"
+          ],
+          "screen": null
+        },
+        {
+          "name": "In the thread the question is a FORM: radio buttons and a 'Why?' box. Priya picks BigQuery and submits; the card locks in place with 'Answered by Priya · 10:42', and her answer also appears as her own reply bubble.",
+          "where": "browser",
+          "uses": [
+            "app/components/Question card",
+            "app/services/questionAnswer"
+          ],
+          "screen": null
+        },
+        {
+          "name": "While it waits, the orchestrator beats 'idle' — 🟡 'Idle · waiting for an answer' rather than a dot that looks dead.",
+          "where": "mcp client",
+          "uses": [
+            "app/services/agentHeartbeat",
+            "app/schema/agentStatus"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The answer reaches Builder as an inbox event 'question_answered' carrying the values { db: 'bq' } — get_events, and it can act without a second call.",
+          "where": "mcp client",
+          "uses": [
+            "app/schema/agentInbox",
+            "platform/services/rest"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Work finishes: the last tick closes the plan (the second and last system line) and heartbeat { state: 'done' } leaves ⚪ 'Finished · 10:42' on the header.",
+          "where": "server",
+          "uses": [
+            "app/services/tasklistItemUpdate",
+            "app/services/agentHeartbeat"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Had the orchestrator died instead, nothing would have been written: the dot goes 🔴 'No signal for 3 min' on the clock alone, and after five minutes agentSilenceSweep tells Builder's owner — once.",
+          "where": "server",
+          "uses": [
+            "app/services/agentSilenceSweep",
+            "app/schema/inbox"
+          ],
+          "screen": null
+        }
+      ]
+    },
+    {
+      "name": "An orchestrator on the SDK",
+      "steps": [
+        {
+          "name": "npm i https://…/lib/v1/tm-sdk.tgz, then createClient({ token: process.env.TM_TOKEN }). tm.me() answers with Builder, its board, its scopes and its system prompt — the orchestrator loads its own instructions from the token alone.",
+          "where": "orchestrator",
+          "uses": [
+            "platform/services/sdk",
+            "platform/services/rest",
+            "app/schema/agents"
+          ],
+          "screen": null
+        },
+        {
+          "name": "tm.work(handler, { filter: ['assigned'] }) streams the inbox over SSE and hands each event to the handler — keeping a heartbeat alive for as long as it runs, and acking only once it returned, so a crash replays the event.",
+          "where": "orchestrator",
+          "uses": [
+            "platform/services/sdk",
+            "app/schema/agentInbox",
+            "app/services/agentInboxAck"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Ada assigns ENG-42 to Builder. notify() files an `assigned` event in agentInbox; the stream delivers it and the handler starts.",
+          "where": "server",
+          "uses": [
+            "app/services/ticketUpdate",
+            "app/proxyFunctions/notify",
+            "app/schema/agentInbox"
+          ],
+          "screen": null
+        },
+        {
+          "name": "tm.tasklists.set(key, { title: 'Plan: add CSV export', items: [...] }) publishes the plan before any of it is done, and tm.tasklists.item() ticks each one off as the work goes.",
+          "where": "orchestrator",
+          "uses": [
+            "app/services/tasklistSet",
+            "app/services/tasklistItemUpdate",
+            "app/schema/tasklists"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Ada has the ticket open and never reloads it: the plan appears in the right pane with its 1 / 4 bar, and the header carries 🟢 Working · Reading the ticket from the beat.",
+          "where": "browser",
+          "uses": [
+            "app/components/Task lists",
+            "app/components/Agent health",
+            "app/schema/agentStatus"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Then a decision the orchestrator may not take: tm.questions.ask(key, { title: 'How should the report look?', fields, blocking: true }).waitForAnswer() — and the beat turns 🟡 idle, because waiting for a person is not working.",
+          "where": "orchestrator",
+          "uses": [
+            "app/services/questionAsk",
+            "app/services/agentHeartbeat"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Ada fills the form card in the thread and submits. waitForAnswer() resolves with the values keyed by field id — typed from the fields that were passed, so answer.values.format is a string the compiler already knows about.",
+          "where": "browser",
+          "uses": [
+            "app/components/Question card",
+            "app/services/questionAnswer"
+          ],
+          "screen": null
+        },
+        {
+          "name": "tm.files.upload() puts report.md and report.html on the ticket and tm.messages.post() posts one message with both attached, authored by Builder 'via token orch-sample'.",
+          "where": "orchestrator",
+          "uses": [
+            "app/services/messagePost",
+            "app/schema/files",
+            "app/schema/messages"
+          ],
+          "screen": null
+        },
+        {
+          "name": "Both documents preview in the thread — the Markdown rendered, the HTML in the sandboxed viewer — the plan reads 4 / 4, and the ticket has moved to Review because the answer asked for it.",
+          "where": "browser",
+          "uses": [
+            "app/components/Message",
+            "app/components/File viewer",
+            "app/components/Task lists"
+          ],
+          "screen": null
+        },
+        {
+          "name": "The handler returns: work() sends the final beat (⚪ Finished · 10:42), acks the event and — running with max: 1 — exits 0. A thrown error would have sent 🔴 with its message instead, and left the event unacked.",
+          "where": "orchestrator",
+          "uses": [
+            "app/services/agentHeartbeat",
+            "app/schema/agentStatus",
+            "app/services/agentInboxAck"
+          ],
+          "screen": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>SDK · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk" class="on">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>The SDK</h1>
+    <p class="lede">Everything <a href="/plan/agents">Agents · §M</a> promised, as it was built: the package in
+    <code>sdk/</code>, the artefacts hosted at <code>/lib/**</code>, every method on the client, the orchestrator
+    loop, the MCP tool factory, and the versioning and cache rules that let a URL import be typed and still be fast.</p>
+
+    <p>Writing a client by hand for every orchestrator is the thing this app exists to avoid. So the app ships one:
+    a small, typed, dependency-free JavaScript SDK, hosted next to the API it talks to, that turns every
+    <code>/v1</code> route and every MCP tool into a function. Its types come from the same
+    <code>@tm/shared</code> schemas the server validates with, so a wrong field is a compile error rather than a 400.</p>
+
+    <h2 id="where">Where it lives</h2>
+    <pre>https://taskmanager-example.web.app/lib/       the install page: a tab per runtime, examples
+   /lib/v1/sdk.js           ESM bundle, no dependencies   (browsers, Deno, Bun)
+   /lib/v1/sdk.min.js       the same, minified
+   /lib/v1/sdk.ts           the whole SDK as ONE TypeScript file (Deno and Bun type it natively)
+   /lib/v1/sdk.d.ts         one flat declaration file — no imports, so a URL import can use it
+   /lib/v1/tm-sdk-1.0.0.tgz   and   tm-sdk.tgz     npm install, for Node
+   /lib/v1/openapi.json     OpenAPI 3.1 for /v1, as of this build
+   /lib/v1/sdk.json         what this build is: version, byte sizes, SHA-256 of every file
+   /lib/latest/…            the same eight files, never cached</pre>
+
+    <p>The <code>v1</code> is the API's <em>wire</em> version, not the package's. A breaking change to the wire format
+    gets a new prefix (<code>/lib/v2/</code>) and <code>/lib/v1/</code> keeps working; a new SDK build for the same
+    wire version replaces the files in place and arrives under a new tarball name.</p>
+
+    <h3>One source, five artefacts</h3>
+    <p><code>sdk/build.mjs</code> concatenates <code>sdk/src/*.ts</code> into one file with the local imports stripped,
+    and derives everything else from <em>that</em>:</p>
+    <pre>sdk/src/*.ts  ──concat, imports stripped──▶  dist/sdk.ts
+                                                │
+                     tsc --emitDeclarationOnly  │        esbuild
+                                                ▼            ▼
+                                          dist/sdk.d.ts   dist/sdk.js + sdk.min.js
+                                                             │  npm pack
+                                                             ▼
+                                                   dist/tm-sdk-&lt;version&gt;.tgz</pre>
+    <p>Concatenating first is what makes the whole promise cheap to keep. The declaration file is emitted from a file
+    that <em>has</em> no imports, so it cannot come out mentioning <code>@tm/shared</code> or <code>zod</code> — which
+    a URL import could never resolve — and <code>sdk.ts</code> is the very thing that was type-checked and bundled,
+    not a second copy that drifts. The build then imports every artefact and calls it before it will write a tarball.</p>
+
+    <h2 id="install">Installing it</h2>
+    <table>
+      <tr><th>Runtime</th><th>Install</th><th>How the types arrive</th></tr>
+      <tr><td><b>Node</b></td>
+        <td><code>npm i https://…/lib/v1/tm-sdk.tgz</code><br>then <code>import { createClient } from '@tm/sdk'</code></td>
+        <td>The tarball's <code>package.json</code> carries <code>types</code>, an <code>exports</code> map with the
+          <code>types</code> condition <em>first</em>, and the <code>.d.ts</code>. It is a normal dependency, so tsc and
+          every editor resolve it. Node cannot import over https, so this is the supported path — pin a build with the
+          versioned tarball name.</td></tr>
+      <tr><td><b>Deno</b></td>
+        <td><code>import { createClient } from 'https://…/lib/v1/sdk.ts'</code><br>or map it in <code>deno.json</code>:
+          <code>"imports": { "@tm/sdk": "https://…/lib/v1/sdk.ts" }</code></td>
+        <td>Importing the <code>.ts</code> gives Deno the real source, so types need nothing else. Import
+          <code>sdk.js</code> instead and hosting sends <code>X-TypeScript-Types: /lib/v1/sdk.d.ts</code>; the bundle
+          also starts with <code>/// &lt;reference types="./sdk.d.ts" /&gt;</code>. Deno honours either.</td></tr>
+      <tr><td><b>Bun</b></td><td>the npm tarball, or the URL import like Deno</td>
+        <td>Same as above; Bun reads the triple-slash reference.</td></tr>
+      <tr><td><b>Browser</b></td><td><code>&lt;script type="module"&gt;</code> from <code>/lib/v1/sdk.js</code></td>
+        <td>Types are not needed at runtime; editors pick them up from the <code>.d.ts</code> beside it.
+          <code>Access-Control-Allow-Origin: *</code> makes the fetch legal.</td></tr>
+    </table>
+
+    <p><code>sdk/fixtures/check.mjs</code> proves all three, per runtime, against a local stand-in for hosting that
+    sends exactly the headers firebase.json sends: it <code>npm i</code>s the real tarball into a project of its own
+    and runs <code>tsc --strict</code> on it, and it <code>deno check</code>s a script importing the <code>.ts</code>
+    and another importing the <code>.js</code>. Every fixture ends in <code>@ts-expect-error</code> lines, which fail
+    both if the mistake compiles <em>and</em> if the types never resolved at all — so "no types" cannot pass as
+    "types fine". A negative control with both hints removed must fail, and does.</p>
+
+    <h2 id="client">The client</h2>
+    <pre>import { createClient } from '@tm/sdk'
+
+const tm = createClient({ token: process.env.TM_TOKEN })</pre>
+    <p>The token names one board and one identity — it acts as you, or as one of your agents — so nothing on the
+    client takes a board. What it may do is its scopes ∩ the role of the principal it acts as; the server decides,
+    the SDK never guesses.</p>
+
+    <table>
+      <tr><th>Option</th><th>Default</th><th>What it does</th></tr>
+      <tr><td><code>token</code></td><td>required</td><td><code>tm_live_…</code>, from Account › Tokens.</td></tr>
+      <tr><td><code>baseUrl</code></td><td><code>https://taskmanager-example.web.app</code></td><td>With or without the <code>/v1</code>; both are accepted.</td></tr>
+      <tr><td><code>fetch</code></td><td>the global</td><td>Inject your own — every test in <code>sdk/test</code> does.</td></tr>
+      <tr><td><code>retry</code></td><td><code>{ retries: 3, baseMs: 250, maxMs: 10_000 }</code></td><td><code>false</code> turns retrying off entirely.</td></tr>
+      <tr><td><code>timeoutMs</code></td><td><code>30_000</code></td><td>Per attempt, not per call. <code>0</code> = none.</td></tr>
+      <tr><td><code>signal</code></td><td>—</td><td>Aborts everything this client is doing.</td></tr>
+      <tr><td><code>userAgent</code></td><td>—</td><td>Shows up in the board's logs.</td></tr>
+    </table>
+
+    <h3>Every method</h3>
+    <p>Each one is a thin, typed wrapper over the transport, which does the retries, the idempotency keys and the
+    errors. <code>o</code> is always the optional per-call <code>{ signal, timeoutMs, idempotencyKey }</code>.</p>
+
+    <table>
+      <tr><th>Method</th><th>Returns</th><th>What it does</th></tr>
+      <tr><td><code>tm.version</code> · <code>tm.baseUrl</code></td><td><code>string</code></td><td>The build this client came from, and the <code>/v1</code> root it talks to.</td></tr>
+      <tr><td><code>tm.me(o?)</code></td><td><code>Me</code></td><td>Who this token is: principal, board, role, scopes — and, for an agent, its system prompt.</td></tr>
+      <tr><td><code>tm.board(o?)</code></td><td><code>Board</code></td><td>The token's board: stages, priorities, tags, fields, members.</td></tr>
+      <tr><td><code>tm.boards(o?)</code></td><td><code>Page&lt;Board&gt;</code></td><td>Every board this credential may act on — exactly one, for a board token.</td></tr>
+      <tr><td><code>tm.search(q, o?)</code></td><td><code>{ data: SearchHit[] }</code></td><td>Find tickets by text.</td></tr>
+    </table>
+
+    <table>
+      <tr><th>Tickets</th><th>Returns</th><th></th></tr>
+      <tr><td><code>tm.tickets.list(filter?)</code></td><td><code>Page&lt;Ticket&gt;</code></td><td>A page; <code>next_cursor</code> goes back in as <code>cursor</code>.</td></tr>
+      <tr><td><code>tm.tickets.iterate(filter?)</code></td><td><code>AsyncGenerator&lt;Ticket&gt;</code></td><td>The same, paged for you: <code>for await (const t of …)</code>.</td></tr>
+      <tr><td><code>tm.tickets.get(key, o?)</code></td><td><code>TicketDetail</code></td><td>Links, pinned messages, files — and the last <code>messages: n</code> if you ask.</td></tr>
+      <tr><td><code>tm.tickets.create(input, o?)</code></td><td><code>Ticket</code></td><td></td></tr>
+      <tr><td><code>tm.tickets.update(key, patch, o?)</code></td><td><code>Ticket</code></td><td></td></tr>
+      <tr><td><code>tm.tickets.move(key, stage, o?)</code></td><td><code>Ticket</code></td><td>Stage by name or id.</td></tr>
+      <tr><td><code>tm.tickets.state(key, state, o?)</code></td><td><code>Ticket</code></td><td>Archive, cancel or restore.</td></tr>
+      <tr><td><code>tm.tickets.assign(key, { add, remove }, o?)</code></td><td><code>Ticket</code></td><td>Changes the list without replacing it.</td></tr>
+    </table>
+
+    <table>
+      <tr><th>The thread and its files</th><th>Returns</th><th></th></tr>
+      <tr><td><code>tm.messages.list(key, o?)</code></td><td><code>Page&lt;Message&gt;</code></td><td>Oldest first by default; <code>order: 'desc'</code> for newest.</td></tr>
+      <tr><td><code>tm.messages.post(key, input, o?)</code></td><td><code>Message</code></td><td>Markdown, optionally with <code>attachments</code> from <code>files.upload</code>.</td></tr>
+      <tr><td><code>tm.files.list(key, o?)</code></td><td><code>{ data: TmFile[] }</code></td><td></td></tr>
+      <tr><td><code>tm.files.upload(key, input, o?)</code></td><td><code>UploadedFile</code></td><td><code>text</code> makes .md / .html reports trivial; <code>bytes</code> (or <code>base64</code>) carries anything else, up to 25 MB.</td></tr>
+      <tr><td><code>tm.files.get(fileId, o?)</code></td><td><code>FileWithContent</code></td><td>Metadata and a signed URL, good for 15 minutes.</td></tr>
+      <tr><td><code>tm.files.read(fileId, o?)</code></td><td><code>string</code></td><td>The text of Markdown, HTML, text, CSV, JSON and code. Anything else answers 422 — use <code>get()</code>.</td></tr>
+    </table>
+
+    <table>
+      <tr><th>Asking a person</th><th>Returns</th><th></th></tr>
+      <tr><td><code>tm.questions.ask(key, input, o?)</code></td><td><code>AskHandle&lt;F&gt;</code></td><td><code>await</code> it for the <code>Question</code>, or call <code>.waitForAnswer()</code>.</td></tr>
+      <tr><td><code>…​.waitForAnswer({ timeoutMs, pollMs, signal })</code></td><td><code>TypedAnswer&lt;F&gt;</code></td><td>Polls until somebody submits. 30 minutes by default; <code>TmError</code> <code>'timeout'</code> if nobody does, <code>'gone'</code> if it is cancelled or expires.</td></tr>
+      <tr><td><code>tm.questions.get(id, o?)</code></td><td><code>Question</code></td><td>Status, and the answer once it is given.</td></tr>
+      <tr><td><code>tm.questions.cancel(id, o?)</code></td><td><code>Question</code></td><td>The card locks and nobody is chased for it.</td></tr>
+      <tr><td><code>tm.questions.waitForAnswer(q, opts?)</code></td><td><code>TypedAnswer&lt;F&gt;</code></td><td>Wait on a question you already have — a resumed run, say.</td></tr>
+    </table>
+
+    <p><code>answer.values</code> is typed from the fields you passed, not from a schema you repeat:
+    a <code>'multi'</code> field answers <code>string[]</code>, <code>'number'</code> and <code>'date'</code> answer
+    <code>number</code>, <code>'boolean'</code> answers <code>boolean</code>, and everything else a
+    <code>string</code>. That is what makes <code>answer.values.db</code> below compile and
+    <code>answer.values.dbb</code> not.</p>
+
+    <pre>const answer = await tm.questions.ask('ENG-42', {
+  title: 'Which database?', blocking: true,
+  fields: [{ id: 'db', label: 'Database', type: 'single', options: ['Postgres', 'SQLite'], required: true }],
+}).waitForAnswer({ timeoutMs: 30 * 60_000 })
+
+answer.values.db     // string — and `answer.question` is the Question it belongs to</pre>
+
+    <table>
+      <tr><th>Plans, heartbeat, inbox</th><th>Returns</th><th></th></tr>
+      <tr><td><code>tm.tasklists.list(key, o?)</code></td><td><code>{ data: Tasklist[] }</code></td><td></td></tr>
+      <tr><td><code>tm.tasklists.set(key, input, o?)</code></td><td><code>Tasklist</code></td><td>Publishes a plan: creates a list, or replaces <code>listId</code> outright. Plain strings become items.</td></tr>
+      <tr><td><code>tm.tasklists.item(key, listId, itemId, patch, o?)</code></td><td><code>Tasklist</code></td><td>Tick one item off, start it, or fail it with a note.</td></tr>
+      <tr><td><code>tm.tasklists.delete(key, listId, o?)</code></td><td><code>{ deleted: true }</code></td><td></td></tr>
+      <tr><td><code>tm.heartbeat.send(state, input?, o?)</code></td><td><code>AgentStatus</code></td><td>One beat, by hand.</td></tr>
+      <tr><td><code>tm.heartbeat.start(input?)</code></td><td><code>Beat</code></td><td>A beat now and every 60 s after, until <code>done()</code>, <code>error()</code> or <code>stop()</code>.</td></tr>
+      <tr><td><code>tm.agents.status(o?)</code></td><td><code>{ data: AgentStatus[] }</code></td><td>What every agent on the board is doing (needs <code>members:read</code>).</td></tr>
+      <tr><td><code>tm.events.list(q?)</code></td><td><code>EventPage</code></td><td>A page of the agent inbox, oldest first, from <code>cursor</code>.</td></tr>
+      <tr><td><code>tm.events.ack(ids | { upTo })</code></td><td><code>{ acked: n }</code></td><td></td></tr>
+      <tr><td><code>tm.events.stream(opts?)</code></td><td><code>AsyncGenerator&lt;TmEvent&gt;</code></td><td>SSE. Resumes from its cursor and reconnects on its own.</td></tr>
+      <tr><td><code>tm.webhooks.{list,create,update,delete}</code></td><td><code>Webhook</code></td><td>Needs <code>webhooks:manage</code>.</td></tr>
+      <tr><td><code>tm.request(method, path, init?)</code> · <code>tm.http</code></td><td><code>T</code></td><td>Any <code>/v1</code> route the SDK does not wrap yet, with the same retries and errors.</td></tr>
+    </table>
+
+    <p>The beat is what puts <b>🟢 Working · "Running tests"</b> on the ticket, and it is why
+    <code>heartbeat.start()</code> returns a handle rather than a promise:</p>
+    <pre>const beat = tm.heartbeat.start({ ticket: 'ENG-42', message: 'Running tests' })
+beat.update({ message: 'Writing the report', progress: 0.8 })   // and sends one right away
+await beat.done()            // or beat.error('the build failed') — the UI stops saying "working"</pre>
+    <p>Beats go out every 60 s and the app calls an agent <em>stale</em> after 75 s of silence
+    (<a href="/plan/agents#l">§L</a>), so <code>everyMs</code> is a knob you should rarely turn.</p>
+
+    <h3>Errors, retries, idempotency</h3>
+    <p>Everything that fails throws <code>TmError</code>: a <code>code</code>
+    (<code>'invalid'</code>, <code>'unauthenticated'</code>, <code>'forbidden'</code>, <code>'not_found'</code>,
+    <code>'conflict'</code>, <code>'gone'</code>, <code>'too_large'</code>, <code>'unprocessable'</code>,
+    <code>'rate_limited'</code>, <code>'internal'</code>, <code>'unavailable'</code>, <code>'timeout'</code>,
+    <code>'network'</code>), the HTTP <code>status</code>, and the whole RFC 9457 <code>problem+json</code> body.
+    <code>isTmError(e)</code> narrows it.</p>
+    <ul>
+      <li>429, 5xx and network failures retry with exponential backoff and jitter, and honour <code>Retry-After</code>.</li>
+      <li>Every write carries an <code>Idempotency-Key</code>, generated once per call and <em>reused across that
+        call's retries</em> — so a retried create is still one ticket. Pass your own in <code>o.idempotencyKey</code>
+        to make a retry across process restarts safe too.</li>
+      <li>4xx other than 429 never retries: the request was wrong and will stay wrong.</li>
+    </ul>
+
+    <h2 id="work">The orchestrator loop</h2>
+    <p>The loop every orchestrator would otherwise write by hand:</p>
+    <pre>stream the inbox  →  run the handler for each event  →  keep a heartbeat alive on that
+ticket while it runs  →  mark it done (or error, with the message)  →  ack the event,
+but only once the handler returned</pre>
+    <pre>await tm.work(
+  async ({ event, ticket, tm, beat, signal }) =&gt; {
+    await beat?.update({ message: 'Reading the ticket' })
+    const t = await tm.tickets.get(ticket!)
+    await tm.messages.post(ticket!, { markdown: `On it: ${t.title}` })
+  },
+  { concurrency: 2, filter: ['assigned', 'mentioned'] },
+)</pre>
+    <table>
+      <tr><th>Option</th><th>Default</th><th></th></tr>
+      <tr><td><code>concurrency</code></td><td><code>1</code></td><td>How many events may be in flight at once.</td></tr>
+      <tr><td><code>filter</code></td><td>everything</td><td>A list of <code>EventType</code>s, or a predicate.</td></tr>
+      <tr><td><code>heartbeat</code></td><td>on</td><td><code>false</code> for a token without <code>status:write</code>; otherwise <code>{ everyMs, message }</code>.</td></tr>
+      <tr><td><code>onError</code></td><td>log and carry on</td><td>Called when a handler throws.</td></tr>
+      <tr><td><code>max</code></td><td>—</td><td>Stop after this many events: one-shot runs and tests.</td></tr>
+      <tr><td><code>ack</code></td><td><code>true</code></td><td>Ack handled events.</td></tr>
+    </table>
+    <p>Two decisions in there are worth keeping in mind:</p>
+    <ul>
+      <li><b>Acking last.</b> A crash mid-handler leaves the event unacked, so the next run picks it up again. The
+        cost is that a handler must tolerate being run twice for one event; the benefit is that nothing is ever
+        silently dropped, which is the failure you cannot debug afterwards.</li>
+      <li><b>Never two handlers on one ticket.</b> Whatever <code>concurrency</code> says, two events for the
+        <em>same</em> ticket are serialised — two handlers editing one task list would race, and the second event is
+        usually about the first one's own work.</li>
+    </ul>
+    <p>It resolves with <code>{ handled, failed, cursor }</code>, so a caller can resume somewhere else.</p>
+
+    <h2 id="mcp">The MCP tool factory</h2>
+    <p>Rather than handing an agent the whole <code>/mcp</code> endpoint, an orchestrator builds the tool list it
+    wants. <code>mcpTools()</code> returns plain data —
+    <code>{ name, description, inputSchema, handler, scopes, readOnly, originalName }</code>, a JSON Schema and no
+    zod — so it drops into any MCP server, not just the official SDK.</p>
+    <pre>import { createClient, mcpTools, registerTools } from '…/lib/v1/sdk.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
+const tools = await mcpTools(tm, {
+  only: ['get_ticket', 'post_message', 'set_tasklist', 'update_task_item', 'ask_question', 'heartbeat'],
+  exclude: ['delete_tasklist'],
+  rename: { post_message: 'reply' },
+  describe: { reply: 'Reply to the ticket you are working on. Markdown.' },
+  defaults: { ticket: 'ENG-42' },
+  wrap: { reply: (call) =&gt; async (args) =&gt; call({ ...args, markdown: prefix + args.markdown }) },
+})
+
+registerTools(new McpServer({ name: 'my-orch', version: '1' }), tools)</pre>
+    <table>
+      <tr><th>Option</th><th>Keyed by</th><th></th></tr>
+      <tr><td><code>only</code> · <code>exclude</code></td><td>the original name</td><td>Which of the 24 tools to keep.</td></tr>
+      <tr><td><code>rename</code></td><td>the original name</td><td><code>{ post_message: 'reply' }</code> — what the model sees it called.</td></tr>
+      <tr><td><code>describe</code></td><td>the name the model sees</td><td>Your words instead of the published description.</td></tr>
+      <tr><td><code>defaults</code></td><td>argument name</td><td>Arguments the model never passes and cannot change. <code>ticket</code> also fills the <code>key</code> argument, since most tools call it that.</td></tr>
+      <tr><td><code>wrap</code></td><td>the name the model sees</td><td>A middleware around the call — prefix the text, count the calls, refuse one.</td></tr>
+      <tr><td><code>scopes</code></td><td>—</td><td>Skip the <code>GET /v1/me</code> it would otherwise do to learn them.</td></tr>
+      <tr><td><code>skipScopeFilter</code></td><td>—</td><td>Keep every tool, whatever the scopes say.</td></tr>
+    </table>
+    <p>Two things it does quietly. It <b>drops the tools the token's scopes already forbid</b>, so a model is never
+    offered something that must fail — the server still checks, of course; the filter is about not wasting a turn on
+    a refusal. And each tool's name, description, input schema and scopes are the <em>same ones</em>
+    <code>/mcp</code> publishes from <code>shared/api/mcp.ts</code>: <code>sdk/test/mcp.test.ts</code> compares the
+    two lists item by item, so they cannot drift apart.</p>
+    <p><code>registerTools()</code> is the convenience for the official SDK. Call it before <code>connect()</code>,
+    and do not mix it with that server's own <code>registerTool()</code>.</p>
+
+    <h2 id="cache">Versioning and cache rules</h2>
+    <p>Hosting sends these, from <code>firebase.json</code>, on everything under <code>/lib/</code>:</p>
+    <table>
+      <tr><th>Path</th><th>Header</th><th>Why</th></tr>
+      <tr><td><code>/lib/v1/**</code></td><td><code>Cache-Control: public, max-age=31536000, immutable</code></td>
+        <td>What a lockfile and an editor's cache point at. A year, and no revalidation: a URL import in a hot loop
+          must not cost a round trip.</td></tr>
+      <tr><td><code>/lib/latest/**</code></td><td><code>Cache-Control: no-store</code></td>
+        <td>A moving name is only useful if it moves. Nothing may keep a copy.</td></tr>
+      <tr><td><code>/lib/</code></td><td><code>Cache-Control: no-cache</code></td><td>The install page changes with the docs; revalidate every time.</td></tr>
+      <tr><td><code>/lib/**/*.ts</code></td><td><code>Content-Type: application/typescript; charset=utf-8</code></td>
+        <td>Hosting would otherwise call a <code>.ts</code> file <code>video/mp2t</code> — an MPEG transport stream —
+          and Deno would refuse it. One rule covers <code>.d.ts</code>, which also ends in <code>.ts</code>.</td></tr>
+      <tr><td><code>/lib/**/*.js</code></td><td><code>Content-Type: text/javascript; charset=utf-8</code></td><td></td></tr>
+      <tr><td><code>/lib/**/*.tgz</code></td><td><code>Content-Type: application/gzip</code></td><td>npm is happier with the real type than with <code>application/octet-stream</code>.</td></tr>
+      <tr><td><code>/lib/**</code></td><td><code>Access-Control-Allow-Origin: *</code><br><code>X-Content-Type-Options: nosniff</code><br><code>Cross-Origin-Resource-Policy: cross-origin</code></td>
+        <td>Everything here exists to be fetched from somewhere else. Nothing under <code>/lib</code> is private —
+          it is the same bundle every consumer already has.</td></tr>
+      <tr><td><code>/lib/v1/sdk*.js</code></td><td><code>X-TypeScript-Types: /lib/v1/sdk.d.ts</code></td>
+        <td>The one that makes <code>import … from 'https://…/sdk.js'</code> <em>typed</em> in Deno. Absolute, so it
+          resolves the same from any importing module; <code>/lib/latest/</code> points at its own copy.</td></tr>
+    </table>
+
+    <div class="warn">
+      <strong>Header rules match the request path, not the file.</strong> <code>/lib/index.html</code> does not match
+      a request for <code>/lib/</code>, which is what people actually type — so the install page's rule is spelled
+      three ways (<code>/lib</code>, <code>/lib/</code>, <code>/lib/index.html</code>). This is the kind of thing that
+      looks right in review and is wrong in production, which is why it is asserted rather than argued.
+    </div>
+
+    <h2 id="integrate">The page you point an agent at</h2>
+    <p>The SDK is for the person <em>writing</em> the orchestrator. The thing you hand the orchestrator itself is
+    <a href="/plan/agents#o">Agents · §O</a>: one URL that teaches it the whole software, generated from the same
+    sources so it cannot drift.</p>
+    <table>
+      <tr><th>URL</th><th>What it is</th></tr>
+      <tr><td><code>/llms-full.txt</code></td>
+        <td><b>The one page.</b> Markdown, ~100&nbsp;kB: what the software is, how an agent gets a token, the three
+          doors, a complete runnable orchestrator (SDK and raw REST), the whole generated reference, the rules of the
+          house, recipes, and the changelog.</td></tr>
+      <tr><td><code>/llms.txt</code></td><td>The short index: the URLs and how to authenticate.</td></tr>
+      <tr><td><code>/integrate</code></td><td>The same content as a readable page — a plain static file, not the SPA.</td></tr>
+      <tr><td><code>/integrate.json</code></td>
+        <td>The machine manifest: <code>apiBase</code>, <code>mcpUrl</code>, the SDK URLs, <code>openapiUrl</code>,
+          <code>llmsFullUrl</code>, the version, every scope, every event type, every route, every MCP tool and the
+          limits — plus a <code>contentSha256</code> an agent can compare against the copy it holds.</td></tr>
+      <tr><td><code>/integrate/claude</code></td>
+        <td><b>For a person, not an orchestrator</b> (<a href="/plan/agents#r">§R3</a>): the three ways to put this
+          inside Claude — a custom connector over OAuth, one <code>claude mcp add --transport http …</code>, or the
+          plugin — and the "memory palace" note with a paste-ready project-instructions snippet.</td></tr>
+      <tr><td><code>/lib/claude-plugin.zip</code><br /><code>/lib/claude-plugin/</code></td>
+        <td>The Claude Code plugin: <code>.claude-plugin/plugin.json</code> wiring the MCP server, a skill carrying
+          the §O context (with <code>llms-full.txt</code> bundled as its reference file), and the commands
+          <code>/tm-inbox</code>, <code>/tm-triage</code>, <code>/tm-new</code>, <code>/tm-ticket</code>,
+          <code>/tm-standup</code>. The zip is written by the same generator, STORE-only and stamped from the
+          changelog date, so it is byte-stable and the deploy guard can compare it.</td></tr>
+    </table>
+    <p><code>scripts/gen-integration.mjs</code> builds all of them: the prose lives in
+    <code>scripts/integration-source/*.md</code> (with the Claude guide in <code>integrate-claude.md</code> and the
+    plugin's own files under <code>claude-plugin/</code>) with <code>{{gen:…}}</code> markers, and everything else is read from
+    the OpenAPI document, the MCP tool registry in <code>@tm/shared</code>, the shared contracts and
+    <code>sdk/dist/sdk.d.ts</code> — the SDK surface is copied out of the declaration file <em>verbatim</em>, because a
+    paraphrase is a second copy and a second copy rots.</p>
+    <p>It is <b>deterministic</b>, which is what lets the deploy guard it the way the SDK artefacts are guarded: the
+    same inputs produce the same bytes, every list is emitted in a fixed order, and nothing reads the clock. The
+    "updated" stamp is the date of the newest <em>changelog</em> entry, not <code>new&nbsp;Date()</code> — a wall-clock
+    stamp would fail the guard every midnight for no reason. The changelog's top entry must also match the SDK's
+    version, so a release cannot ship without saying what changed.</p>
+    <pre>pnpm integrate:gen        regenerate every published file (and the plugin zip)
+pnpm integrate:check      fail if the committed copy is stale (what the deploy runs)
+pnpm build                builds everything, then regenerates</pre>
+    <p>Hosting serves the <code>.txt</code> files as <code>text/plain; charset=utf-8</code>, with
+    <code>Cache-Control: no-store</code> on <code>/llms*.txt</code> and <code>/integrate.json</code> — an agent
+    re-reading the page is asking whether its knowledge is current, and a cached answer defeats the question — and
+    <code>Access-Control-Allow-Origin: *</code> throughout, since an agent fetches it from anywhere.
+    <code>scripts/deploy-lib-check.mjs</code> asserts all of that against the real hosting emulator, along with the
+    fact that <code>/llms-full.txt</code> really does contain every REST path and every MCP tool name.</p>
+
+    <h2 id="deploy">How it gets there</h2>
+    <p><code>pnpm deploy:prod</code>, in order:</p>
+    <ol>
+      <li>check <code>frontend/.env.production</code></li>
+      <li>build the SPA — which copies <code>frontend/static/lib/index.html</code> to <code>frontend/build/lib/</code></li>
+      <li>package the functions and simulate Cloud Build on them</li>
+      <li><b><code>scripts/deploy-lib.mjs</code></b>: stage <code>sdk/dist</code> into
+        <code>frontend/build/lib/{v1,latest}/</code>, and generate <code>openapi.json</code></li>
+      <li><b><code>scripts/gen-integration.mjs</code></b>: refuse a stale committed copy of the integration context,
+        then stage a copy carrying this project's URLs into <code>frontend/build/</code></li>
+      <li><code>firebase deploy --config firebase.deploy.json</code></li>
+    </ol>
+    <p>Step 4 comes <em>after</em> step 3 on purpose: <code>openapi.json</code> is generated by importing the backend
+    that was just built (the document is a pure function of the zod schemas, and <code>API_URL</code> is the only
+    thing it takes from a request), so what <code>/lib</code> ships describes what <code>/v1</code> will serve.</p>
+    <p>It refuses to ship a stale SDK. Every artefact must exist, be stamped with the version
+    <code>sdk/package.json</code> claims, start with the triple-slash reference, have a flat declaration file, and be
+    <em>newer</em> than every source under <code>sdk/src</code> — otherwise the deploy stops and says to run
+    <code>pnpm sdk:build</code>. A deploy that silently shipped yesterday's bundle next to today's API is the exact
+    failure this plumbing exists to prevent.</p>
+    <p>And the headers are checked rather than believed:</p>
+    <pre>node scripts/lock.mjs emulators -- node scripts/deploy-lib-check.mjs</pre>
+    <p>starts the real hosting emulator on the real config and fetches all eighteen files, asserting the content type,
+    the cache rule, the CORS header and <code>X-TypeScript-Types</code> on each, plus the bytes themselves — the
+    bundle's reference line, the gzip magic number, that <code>openapi.json</code> parses — and that
+    <code>firebase.deploy.json</code> still carries the same header block. It does the same for the four
+    <a href="#integrate">integration-context</a> URLs.</p>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

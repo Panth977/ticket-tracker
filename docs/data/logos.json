@@ -1,0 +1,501 @@
+{
+ "logos": [
+  {
+   "name": "firestore",
+   "note": "The folded, stacked layers.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M2 5.6 8 2.2l6 3.4L8 9z",
+     "fill": "#F6820D"
+    },
+    {
+     "shape": "path",
+     "d": "M2 5.6 8 9v4.8L2 10.4z",
+     "fill": "#FBBC04"
+    },
+    {
+     "shape": "path",
+     "d": "M14 5.6 8 9v4.8l6-3.4z",
+     "fill": "#FDE293"
+    }
+   ]
+  },
+  {
+   "name": "cloud storage",
+   "note": "A bucket, in Google Cloud's blue.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M2.6 3.6h10.8l-1.3 9.1a1 1 0 0 1-1 .9H4.9a1 1 0 0 1-1-.9z",
+     "fill": "#4285F4"
+    },
+    {
+     "shape": "rect",
+     "x": "1.8",
+     "y": "2.2",
+     "width": "12.4",
+     "height": "2",
+     "rx": "1",
+     "fill": "#1A73E8"
+    },
+    {
+     "shape": "circle",
+     "cx": "8",
+     "cy": "8.4",
+     "r": "1.5",
+     "fill": "#fff",
+     "opacity": ".85"
+    }
+   ]
+  },
+  {
+   "name": "realtime database",
+   "note": "A stack of discs.",
+   "shapes": [
+    {
+     "shape": "ellipse",
+     "cx": "8",
+     "cy": "3.6",
+     "rx": "5.4",
+     "ry": "2",
+     "fill": "#1E8E3E"
+    },
+    {
+     "shape": "path",
+     "d": "M2.6 3.6v3.2c0 1.1 2.4 2 5.4 2s5.4-.9 5.4-2V3.6c0 1.1-2.4 2-5.4 2s-5.4-.9-5.4-2z",
+     "fill": "#34A853"
+    },
+    {
+     "shape": "path",
+     "d": "M2.6 7.8V11c0 1.1 2.4 2 5.4 2s5.4-.9 5.4-2V7.8c0 1.1-2.4 2-5.4 2s-5.4-.9-5.4-2z",
+     "fill": "#81C995"
+    }
+   ]
+  },
+  {
+   "name": "auth",
+   "note": "The person in a rounded square.",
+   "shapes": [
+    {
+     "shape": "rect",
+     "x": "1.6",
+     "y": "1.6",
+     "width": "12.8",
+     "height": "12.8",
+     "rx": "3.4",
+     "fill": "#FBBC04"
+    },
+    {
+     "shape": "circle",
+     "cx": "8",
+     "cy": "6.2",
+     "r": "2.1",
+     "fill": "#fff"
+    },
+    {
+     "shape": "path",
+     "d": "M3.9 13.1a4.4 4.4 0 0 1 8.2 0z",
+     "fill": "#fff"
+    }
+   ]
+  },
+  {
+   "name": "cloud functions",
+   "note": "The hexagon, with the brace that says \"this is code\".",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M8 1.3l5.6 3.2v6.6L8 14.7 2.4 11.5V4.5z",
+     "fill": "#F6820D"
+    },
+    {
+     "shape": "path",
+     "d": "M8 1.3l5.6 3.2v6.6L8 14.7z",
+     "fill": "#FBBC04"
+    },
+    {
+     "shape": "path",
+     "d": "M6.6 5.6c-.9 0-.8 1.2-.8 1.8s-.3 1.2-1 1.2c.7 0 1 .5 1 1.2s-.1 1.8.8 1.8",
+     "fill": "none",
+     "stroke": "#fff",
+     "stroke-width": "1.1",
+     "stroke-linecap": "round"
+    },
+    {
+     "shape": "path",
+     "d": "M9.4 5.6c.9 0 .8 1.2.8 1.8s.3 1.2 1 1.2c-.7 0-1 .5-1 1.2s.1 1.8-.8 1.8",
+     "fill": "none",
+     "stroke": "#fff",
+     "stroke-width": "1.1",
+     "stroke-linecap": "round"
+    }
+   ]
+  },
+  {
+   "name": "api",
+   "note": "An address somebody calls. Two arrows, there and back.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M2 5.4h9.2M8.6 2.6 11.9 5.4 8.6 8.2",
+     "fill": "none",
+     "stroke": "#B26A0C",
+     "stroke-width": "1.5",
+     "stroke-linecap": "round",
+     "stroke-linejoin": "round"
+    },
+    {
+     "shape": "path",
+     "d": "M14 10.6H4.8M7.4 7.8 4.1 10.6l3.3 2.8",
+     "fill": "none",
+     "stroke": "#B26A0C",
+     "stroke-width": "1.5",
+     "stroke-linecap": "round",
+     "stroke-linejoin": "round"
+    }
+   ]
+  },
+  {
+   "name": "trigger",
+   "note": "Something changed and this ran.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M9.1 1.4 3.2 9h3.4l-.7 5.6L12.8 7H9.4z",
+     "fill": "#F6820D"
+    }
+   ]
+  },
+  {
+   "name": "module",
+   "note": "Neither: a table, or a piece of logic other code reads.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M6.2 2.2C4.5 2.2 4.6 4.4 4.6 5.6c0 1.4-.5 2.4-2 2.4 1.5 0 2 1 2 2.4 0 1.2-.1 3.4 1.6 3.4",
+     "fill": "none",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4",
+     "stroke-linecap": "round"
+    },
+    {
+     "shape": "path",
+     "d": "M9.8 2.2c1.7 0 1.6 2.2 1.6 3.4 0 1.4.5 2.4 2 2.4-1.5 0-2 1-2 2.4 0 1.2.1 3.4-1.6 3.4",
+     "fill": "none",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4",
+     "stroke-linecap": "round"
+    }
+   ]
+  },
+  {
+   "name": "cloudflare",
+   "note": "The worker in front of the shop.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M11.6 12.4H4.2a3 3 0 0 1-.4-6 4 4 0 0 1 7.5-1 2.6 2.6 0 0 1 3 2.6 2.6 2.6 0 0 1-2.7 4.4z",
+     "fill": "#F6821F"
+    }
+   ]
+  },
+  {
+   "name": "browser",
+   "note": "Runs on the reader's own machine.",
+   "shapes": [
+    {
+     "shape": "rect",
+     "x": "1.6",
+     "y": "2.6",
+     "width": "12.8",
+     "height": "10.8",
+     "rx": "1.8",
+     "fill": "none",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4"
+    },
+    {
+     "shape": "path",
+     "d": "M1.6 6h12.8",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4"
+    },
+    {
+     "shape": "circle",
+     "cx": "4",
+     "cy": "4.3",
+     "r": ".7",
+     "fill": "#6b6259"
+    }
+   ]
+  },
+  {
+   "name": "whatsapp",
+   "note": "A message, in the app the shop actually talks to people in.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M8 1.6a6.4 6.4 0 0 0-5.5 9.7L1.6 14.4l3.2-.9A6.4 6.4 0 1 0 8 1.6z",
+     "fill": "#25D366"
+    },
+    {
+     "shape": "path",
+     "d": "M5.9 5c.2 0 .4 0 .5.4l.5 1.2c.1.2 0 .4-.1.5l-.4.4a4.6 4.6 0 0 0 2.1 2l.4-.5c.2-.2.3-.2.5-.1l1.2.6c.2.1.3.3.2.5-.2.7-.9 1.1-1.6 1-1.9-.3-3.9-2.3-4.2-4.2-.1-.7.3-1.4 1-1.7z",
+     "fill": "#fff"
+    }
+   ]
+  },
+  {
+   "name": "email",
+   "note": "An inbox, which is somewhere else entirely.",
+   "shapes": [
+    {
+     "shape": "rect",
+     "x": "1.6",
+     "y": "3.4",
+     "width": "12.8",
+     "height": "9.2",
+     "rx": "1.4",
+     "fill": "none",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4"
+    },
+    {
+     "shape": "path",
+     "d": "M2.2 4.4 8 8.6l5.8-4.2",
+     "fill": "none",
+     "stroke": "#6b6259",
+     "stroke-width": "1.4",
+     "stroke-linecap": "round",
+     "stroke-linejoin": "round"
+    }
+   ]
+  },
+  {
+   "name": "counter",
+   "note": "The shop's own screens — an internal app, not this website.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M2 5.2 3.4 2.4h9.2L14 5.2z",
+     "fill": "#B26A0C"
+    },
+    {
+     "shape": "rect",
+     "x": "2.6",
+     "y": "5.2",
+     "width": "10.8",
+     "height": "8.2",
+     "rx": "1",
+     "fill": "#FBBC04"
+    },
+    {
+     "shape": "rect",
+     "x": "6.1",
+     "y": "8.4",
+     "width": "3.8",
+     "height": "5",
+     "rx": "0.6",
+     "fill": "#fff",
+     "opacity": ".9"
+    }
+   ]
+  },
+  {
+   "name": "schedule",
+   "note": "A clock face.",
+   "shapes": [
+    {
+     "shape": "circle",
+     "cx": 8,
+     "cy": 8,
+     "r": 6,
+     "fill": "none",
+     "stroke": "#7c3aed",
+     "stroke-width": 1.6
+    },
+    {
+     "shape": "path",
+     "d": "M8 4.5V8l2.4 1.6",
+     "fill": "none",
+     "stroke": "#7c3aed",
+     "stroke-width": 1.6,
+     "stroke-linecap": "round"
+    }
+   ]
+  },
+  {
+   "name": "queue",
+   "note": "Three stacked bars, a queue.",
+   "shapes": [
+    {
+     "shape": "rect",
+     "x": 2,
+     "y": 3,
+     "width": 12,
+     "height": 2.4,
+     "rx": 1,
+     "fill": "#0ea5a3"
+    },
+    {
+     "shape": "rect",
+     "x": 2,
+     "y": 6.8,
+     "width": 9,
+     "height": 2.4,
+     "rx": 1,
+     "fill": "#0ea5a3",
+     "opacity": 0.7
+    },
+    {
+     "shape": "rect",
+     "x": 2,
+     "y": 10.6,
+     "width": 6,
+     "height": 2.4,
+     "rx": 1,
+     "fill": "#0ea5a3",
+     "opacity": 0.45
+    }
+   ]
+  },
+  {
+   "name": "storage",
+   "note": "A bucket being filled.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M3 4h10l-1.2 9H4.2z",
+     "fill": "#4285F4"
+    },
+    {
+     "shape": "rect",
+     "x": 2.4,
+     "y": 2.6,
+     "width": 11.2,
+     "height": 2,
+     "rx": 1,
+     "fill": "#1a56c4"
+    }
+   ]
+  },
+  {
+   "name": "typesense",
+   "note": "A magnifier.",
+   "shapes": [
+    {
+     "shape": "circle",
+     "cx": 7,
+     "cy": 7,
+     "r": 4.2,
+     "fill": "none",
+     "stroke": "#d9336b",
+     "stroke-width": 1.8
+    },
+    {
+     "shape": "path",
+     "d": "M10.2 10.2 14 14",
+     "stroke": "#d9336b",
+     "stroke-width": 2,
+     "stroke-linecap": "round"
+    }
+   ]
+  },
+  {
+   "name": "mcp",
+   "note": "Two linked nodes — a client and a tool.",
+   "shapes": [
+    {
+     "shape": "circle",
+     "cx": 4.5,
+     "cy": 8,
+     "r": 2.6,
+     "fill": "#111827"
+    },
+    {
+     "shape": "circle",
+     "cx": 11.5,
+     "cy": 8,
+     "r": 2.6,
+     "fill": "none",
+     "stroke": "#111827",
+     "stroke-width": 1.6
+    },
+    {
+     "shape": "path",
+     "d": "M7 8h2",
+     "stroke": "#111827",
+     "stroke-width": 1.6
+    }
+   ]
+  },
+  {
+   "name": "push",
+   "note": "A bell.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M8 2.2a4 4 0 0 0-4 4v3L2.6 11.6h10.8L12 9.2v-3a4 4 0 0 0-4-4z",
+     "fill": "#f59e0b"
+    },
+    {
+     "shape": "circle",
+     "cx": 8,
+     "cy": 13.3,
+     "r": 1.4,
+     "fill": "#b45309"
+    }
+   ]
+  },
+  {
+   "name": "third party",
+   "note": "A plug.",
+   "shapes": [
+    {
+     "shape": "path",
+     "d": "M5.5 2v3M10.5 2v3",
+     "stroke": "#475569",
+     "stroke-width": 1.6,
+     "stroke-linecap": "round"
+    },
+    {
+     "shape": "path",
+     "d": "M3.5 5h9v2.5a4.5 4.5 0 0 1-9 0z",
+     "fill": "#475569"
+    },
+    {
+     "shape": "path",
+     "d": "M8 12v2.5",
+     "stroke": "#475569",
+     "stroke-width": 1.6
+    }
+   ]
+  },
+  {
+   "name": "webhook",
+   "note": "An arrow leaving a box.",
+   "shapes": [
+    {
+     "shape": "rect",
+     "x": 2,
+     "y": 6,
+     "width": 7,
+     "height": 8,
+     "rx": 1.2,
+     "fill": "none",
+     "stroke": "#16a34a",
+     "stroke-width": 1.5
+    },
+    {
+     "shape": "path",
+     "d": "M7 9 14 2M10 2h4v4",
+     "fill": "none",
+     "stroke": "#16a34a",
+     "stroke-width": 1.6,
+     "stroke-linecap": "round"
+    }
+   ]
+  }
+ ]
+}

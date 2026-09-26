@@ -1,0 +1,318 @@
+rules_version = '2';
+
+// TaskManager — Firestore security rules.
+//
+// Source of truth: the `rules` block of every Firestore collection in
+// docs/data/app/db.json and docs/data/platform/db.json.
+//
+// THE SHAPE OF IT: clients READ; the command layer (Admin SDK, which bypasses
+// these rules) WRITES. The only client writes are facts about one person that
+// hold no invariant across documents:
+//   users/{uid}/devices/*   register this browser for push
+//   users/{uid}/reads/*     "I read this ticket up to here"
+//   users/{uid}/inbox/*     readAt / archivedAt / snoozedUntil flags only
+//
+// ONE ROLE, ONE BOARD: every board-scoped read is one get() of the board,
+// whose `access` map is the authority and `readerUids` its derived list.
+// Anything not matched below is denied (oauthClients, oauthTokens, intakes,
+// emailThreads, whatsappSessions, _idem, _jobs, _whatsappOtp, _dev — server only).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+
+    // AUTHENTICATED: the ID token is valid. It says nothing about being
+    // ALLOWED — see below; almost nothing in this file wants this one.
+    function authed() {
+      return request.auth != null;
+    }
+
+    // PHASE 16 (§X) — THE ALLOW LIST, IN ONE HOP. This tracker is private:
+    // signing in is open, DOING anything is not. The list itself lives in
+    // `_config/allow`, which no rule and no client can read, so every person
+    // carries a MIRROR of the answer on their own profile —
+    // `users/{uid}.allowed`, written by onUserCreated when they first arrive
+    // and by userAllow / userDisallow afterwards.
+    //
+    // ABSENT means "nothing decided here", and reads as allowed: a profile can
+    // only come into existence through a path that was already gated (the
+    // sign-up trigger, which always writes the flag, or a command behind the
+    // app's middleware, which refuses anyone not on the list). An explicit
+    // `false` is the only refusal — and it is the one the Users module writes.
+    //
+    // `get()` answers null for a document that does not exist (a brand-new
+    // account, a rules test's bare uid), and repeated get()s of one path cost
+    // one read per evaluation.
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function allowed() {
+      return authed()
+        && (myProfile() == null || myProfile().data.get('allowed', true) != false);
+    }
+
+    // SIGNED IN *AND* ALLOWED — what every rule in this file means by "signed
+    // in". Changing it here is the point: no rule below can forget the gate.
+    function signedIn() {
+      return allowed();
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function board(b) {
+      return get(/databases/$(database)/documents/boards/$(b)).data;
+    }
+
+    // Any role on the board. readerUids is the keys of access, derived.
+    function canRead(b) {
+      return signedIn() && request.auth.uid in board(b).readerUids;
+    }
+
+    // 'admin' | 'editor' | 'commenter' | 'viewer' | null (not on the board).
+    function boardRole(b) {
+      return signedIn() ? board(b).access.get(request.auth.uid, null) : null;
+    }
+
+    // An update that touches only these top-level keys.
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function isMillis(v) {
+      return v is int && v >= 0;
+    }
+
+    function isMillisOrNull(v) {
+      return v == null || isMillis(v);
+    }
+
+    // DeviceSchema (shared/src/schema/user.ts), exactly these four fields.
+    function validDevice() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['fcmToken', 'kind', 'userAgent', 'lastSeenAt'])
+        && d.keys().hasAll(['fcmToken', 'kind', 'userAgent', 'lastSeenAt'])
+        && d.fcmToken is string && d.fcmToken.size() > 0 && d.fcmToken.size() <= 4096
+        && d.kind in ['web', 'ios', 'android']
+        && d.userAgent is string && d.userAgent.size() <= 1024
+        && isMillis(d.lastSeenAt);
+    }
+
+    // ------------------------------------------------------------ users/{uid}
+
+    match /users/{uid} {
+      // Any allowed person may GET a profile by uid (an avatar on a card needs
+      // one) but never LIST people — that is what members/ is for.
+      //
+      // §X: your OWN profile is the one document an account that is NOT allowed
+      // may still read — the "ask for access" screen shows them their own
+      // address and needs the flag to know it is refused.
+      allow get: if signedIn() || (authed() && request.auth.uid == uid);
+      allow list: if false;
+      allow write: if false; // profileUpdate fans a change out to every board
+
+      // THE one collection a client writes directly.
+      match /devices/{deviceId} {
+        allow read, delete: if isUser(uid);
+        allow create, update: if isUser(uid) && validDevice();
+      }
+
+      // THE IN-APP CHANNEL. The owner may only flip its three flags.
+      match /inbox/{notificationId} {
+        allow read: if isUser(uid);
+        allow update: if isUser(uid)
+          && onlyChanges(['readAt', 'archivedAt', 'snoozedUntil'])
+          && isMillisOrNull(request.resource.data.get('readAt', null))
+          && isMillisOrNull(request.resource.data.get('archivedAt', null))
+          && isMillisOrNull(request.resource.data.get('snoozedUntil', null));
+        allow create, delete: if false;
+      }
+
+      // Per-user read pointers: 'mark read' touches nothing shared.
+      // ticketId (optional, = the doc id) lets the thread's 'Seen by' find them.
+      match /reads/{ticketId} {
+        allow read: if isUser(uid);
+        allow create: if isUser(uid)
+          && request.resource.data.keys().hasOnly(['readAt', 'boardId', 'ticketId'])
+          && request.resource.data.keys().hasAll(['readAt', 'boardId'])
+          && isMillis(request.resource.data.readAt)
+          && request.resource.data.boardId is string
+          && request.resource.data.get('ticketId', ticketId) == ticketId;
+        allow update: if isUser(uid)
+          && onlyChanges(['readAt', 'boardId', 'ticketId'])
+          && isMillis(request.resource.data.readAt)
+          && request.resource.data.boardId is string
+          && request.resource.data.get('ticketId', ticketId) == ticketId;
+        allow delete: if isUser(uid);
+      }
+
+      // Personal API keys — shown once, stored as a hash.
+      match /apiKeys/{keyId} {
+        allow read: if isUser(uid);
+        allow write: if false;
+      }
+
+      // Revoke goes through grantRevoke, which kills the tokens too.
+      match /oauthGrants/{grantId} {
+        allow read: if isUser(uid);
+        allow write: if false;
+      }
+    }
+
+    // ------------------------------------------------------------ top level
+
+    // 'What have I been invited to' — where(email == mine), across boards.
+    // Invite emails are stored lower-cased; tokens may not be.
+    match /invites/{inviteId} {
+      allow get, list: if signedIn() && (
+          (request.auth.token.email != null
+            && request.auth.token.email_verified == true
+            && resource.data.email == request.auth.token.email.lower())
+          || boardRole(resource.data.boardId) == 'admin');
+      allow write: if false;
+    }
+
+    // 'Is ENG free?' while typing a new board's key.
+    match /boardKeys/{key} {
+      allow get: if signedIn();
+      allow list, write: if false;
+    }
+
+    // '#ENG-42' → where it is now. Reveals only ids.
+    match /keys/{ticketKey} {
+      allow get: if signedIn();
+      allow list, write: if false;
+    }
+
+    // Notification delivery log — 'why didn't I get the email'.
+    match /deliveries/{deliveryId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.uid;
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------ phase 2: agents
+    // (docs/plan/agents.html §B, §D)
+
+    // An agent profile is private to the person who made it: get it, or list
+    // where(ownerUid == me). Its system prompt never reaches anyone else (the
+    // agent's own tokens read it through the API). Writes: agentCreate /
+    // agentUpdate / agentArchive. Agents themselves never sign in, so no
+    // rule here ever sees an agent.
+    match /agents/{agentId} {
+      allow get, list: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // The agent inbox: written by notify(), read and acked only through the
+    // API with a token acting as the agent (REST /v1/events, MCP get_events).
+    match /agentInbox/{agentId} {
+      allow read, write: if false;
+
+      match /events/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ------------------------------------------------------- boards/{boardId}
+
+    match /boards/{boardId} {
+      // Checked on the document itself (no extra get()). A LIST is only
+      // provable with where(readerUids array-contains auth.uid) — any other
+      // query of boards is rejected, so there is no board directory.
+      allow get, list: if signedIn() && request.auth.uid in resource.data.readerUids;
+      allow write: if false;
+
+      match /members/{uid} {
+        allow read: if canRead(boardId);
+        allow write: if false; // inviteAccept, boardAccessSet
+      }
+
+      // One doc per person per board — Firestore cannot hide one map key.
+      match /prefs/{uid} {
+        allow read: if isUser(uid);
+        allow write: if false; // boardPrefSet
+      }
+
+      // Personal views are private to their owner; shared views to the board.
+      match /views/{viewId} {
+        allow read: if canRead(boardId)
+          && (resource.data.scope == 'shared' || resource.data.ownerUid == request.auth.uid);
+        allow write: if false; // viewSave
+      }
+
+      match /webhooks/{webhookId} {
+        allow read: if boardRole(boardId) == 'admin';
+        allow write: if false;
+
+        match /deliveries/{deliveryId} {
+          allow read: if boardRole(boardId) == 'admin';
+          allow write: if false;
+        }
+      }
+
+      match /integrations/{provider} {
+        allow read: if canRead(boardId);
+        allow write: if false; // installConnect, board admin
+      }
+
+      // ------------------------------------------------ phase 3: heartbeat
+      // (docs/plan/agents.html §L3) boards/{b}/agentStatus/{agentId}__{ticketId|'_'}
+      //
+      // 'The board listens to agentStatus ONCE and every card and drawer reads
+      // from that' — so anyone on the board may read the whole collection.
+      // Beats arrive through agentHeartbeat (a token with status:write); the
+      // silence sweep writes silenceNotifiedAt. Never a client.
+      match /agentStatus/{statusId} {
+        allow read: if canRead(boardId);
+        allow write: if false; // agentHeartbeat, agentSilenceSweep
+      }
+
+      // ------------------------------------------------ phase 17: cost per day
+      // (docs/plan/agents.html §Y2) boards/{b}/stats/{yyyy-mm-dd} — the day's
+      // turn receipts, summed. Written by messagePost in the same transaction
+      // as the receipt; read by the Analytics view (at most ~90 rows).
+      match /stats/{day} {
+        allow read: if canRead(boardId);
+        allow write: if false; // messagePost
+      }
+
+      // ------------------------------------------ phase 15: ONE DOCUMENT
+      // (docs/plan/agents.html §W) The board screen is ONE query returning ten
+      // documents, and opening a ticket costs nothing more: the thread, the
+      // activity, the task lists and the file rows are FIELDS of the ticket,
+      // so they are covered by the ticket's own read rule — the same rule the
+      // messages/, activity/, files/ and tasklists/ subcollections had
+      // (canRead(boardId)), which is why those blocks are gone.
+      match /tickets/{ticketId} {
+        allow read: if canRead(boardId);
+        allow write: if false; // every write goes through the command layer
+
+        // Older messages / activity that spilled forward, one frozen page each.
+        // Read by anyone on the board, only when someone scrolls back.
+        match /data/{pageId} {
+          allow read: if canRead(boardId);
+          allow write: if false;
+        }
+      }
+    }
+
+    // My Work: collectionGroup('tickets') where(assigneeUids array-contains me).
+    // Provable from the query alone — no get() at all. (Also where
+    // watcherUids array-contains me, or createdBy == me.)
+    // 'Seen by': everyone on a board may see who read one of its tickets.
+    // The query must filter boardId (and ticketId) so this can be checked.
+    match /{path=**}/reads/{ticketId} {
+      allow read: if canRead(resource.data.boardId);
+    }
+
+    match /{path=**}/tickets/{ticketId} {
+      allow read: if signedIn() && (
+          request.auth.uid in resource.data.assigneeUids
+          || request.auth.uid in resource.data.watcherUids
+          || request.auth.uid == resource.data.createdBy);
+    }
+  }
+}

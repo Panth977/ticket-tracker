@@ -1,0 +1,17 @@
+{
+  // A consumer's own settings, not ours: strict, NodeNext (so the tarball's
+  // `exports` map with its `types` condition is what resolves), and no @types
+  // beyond what the SDK itself needs from the platform.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+    "verbatimModuleSyntax": true
+  },
+  "include": ["main.ts"]
+}

@@ -1,0 +1,3202 @@
+# TaskManager — integration context
+
+> The whole operating context for an orchestrator, in one file. Generated from this app's own
+> OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
+> drift from the software it describes.
+
+version:           1.1.0
+api:               v1
+updated:           2026-09-26  (the newest changelog entry — this file is byte-stable between releases on purpose)
+content-sha256:    10904deb0b1cc60fa42543688cef627f87ff9d35cf6759f8c23a9ab42d6bee22
+source:            scripts/gen-integration.mjs
+this file:         https://taskmanager-example.web.app/llms-full.txt
+readable page:     https://taskmanager-example.web.app/integrate
+machine manifest:  https://taskmanager-example.web.app/integrate.json
+short index:       https://taskmanager-example.web.app/llms.txt
+
+---
+## Contents
+
+- [Contents](#contents)
+- [1. What this software is](#1-what-this-software-is)
+  - [The shape of the data](#the-shape-of-the-data)
+  - [Principals: people and agents](#principals-people-and-agents)
+  - [What an agent can do](#what-an-agent-can-do)
+  - [What it will never do](#what-it-will-never-do)
+- [2. How an agent gets in](#2-how-an-agent-gets-in)
+  - [Three kinds of credential](#three-kinds-of-credential)
+  - [The three steps a person takes, once](#the-three-steps-a-person-takes-once)
+  - [What the token carries](#what-the-token-carries)
+  - [The one rule to internalise](#the-one-rule-to-internalise)
+  - [Using it](#using-it)
+- [3. The three doors](#3-the-three-doors)
+  - [The SDK (recommended)](#the-sdk-recommended)
+  - [REST](#rest)
+  - [MCP](#mcp)
+- [4. The loop — a complete orchestrator](#4-the-loop-a-complete-orchestrator)
+  - [4.1 With the SDK, the short way](#4-1-with-the-sdk-the-short-way)
+  - [4.2 With the SDK, the loop written out](#4-2-with-the-sdk-the-loop-written-out)
+  - [4.3 Watching a BOARD, not just your inbox](#4-3-watching-a-board-not-just-your-inbox)
+  - [4.4 The same loop in raw REST](#4-4-the-same-loop-in-raw-rest)
+  - [4.5 What the loop costs](#4-5-what-the-loop-costs)
+  - [4.6 Say what a run cost: the turn receipt](#4-6-say-what-a-run-cost-the-turn-receipt)
+  - [4.7 The rules this example is obeying](#4-7-the-rules-this-example-is-obeying)
+- [5. Reference](#5-reference)
+  - [5.1 Scopes, events, errors and vocabularies](#5-1-scopes-events-errors-and-vocabularies)
+  - [5.2 REST — every endpoint](#5-2-rest-every-endpoint)
+  - [5.3 MCP — every tool](#5-3-mcp-every-tool)
+  - [5.4 SDK — every method](#5-4-sdk-every-method)
+- [6. Rules of the house](#6-rules-of-the-house)
+  - [6.1 Idempotency](#6-1-idempotency)
+  - [6.2 Retries and backoff](#6-2-retries-and-backoff)
+  - [6.3 There are no rate limits — which is why the shape matters](#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters)
+  - [6.4 Scopes never exceed the role](#6-4-scopes-never-exceed-the-role)
+  - [6.5 Files](#6-5-files)
+  - [6.6 Markdown and HTML](#6-6-markdown-and-html)
+  - [6.7 What is optimistic, and what is not](#6-7-what-is-optimistic-and-what-is-not)
+  - [6.8 Being a good citizen of the thread](#6-8-being-a-good-citizen-of-the-thread)
+- [7. Recipes](#7-recipes)
+  - [7.1 Triage a board](#7-1-triage-a-board)
+  - [7.2 Answer-driven work](#7-2-answer-driven-work)
+  - [7.3 A long job with visible progress](#7-3-a-long-job-with-visible-progress)
+  - [7.4 Publish an HTML report](#7-4-publish-an-html-report)
+  - [7.5 React to being assigned (a stateless worker)](#7-5-react-to-being-assigned-a-stateless-worker)
+- [8. Version and changelog](#8-version-and-changelog)
+  - [1.1.0 — 2026-09-26](#1-1-0-2026-09-26)
+  - [1.0.0 — 2026-09-26](#1-0-0-2026-09-26)
+
+Everything under **5. Reference** is generated from the running software: the OpenAPI document that
+the REST routes are parsed with, the MCP tool registry, the shared contract module that the backend
+and the web app both import, and the SDK's published declaration file. If it says something here,
+that is what the server does.
+
+## 1. What this software is
+
+TaskManager is a ticket manager in which **software agents are members, not integrations**.
+
+### The shape of the data
+
+- A **board** is the top of the world. There is no workspace, org or project above it. A board owns
+  its stages, priorities, tags, custom fields and its people. Every board has a short **key**
+  (`ENG`), and access is granted per board.
+- A **ticket** lives on exactly one board and is addressed by its **key**: `ENG-42`. It carries a
+  title, a Markdown description, a stage, a priority, assignees, watchers, tags, dates, an estimate,
+  custom fields and links to other tickets.
+- A ticket has a **thread**: messages in GitHub-flavoured Markdown, with file attachments, replies,
+  reactions and pins. System lines ("Priya moved this to QA") sit in the same thread.
+- A ticket has **files**. Images, video, audio, PDFs — and, importantly for an agent, Markdown and
+  HTML documents, which the app renders natively: a `.md` plan reads like a message, and a `.html`
+  report opens in a sandboxed viewer with its own URL.
+- A ticket has **task lists**: a published checklist with items that are `todo`, `doing`, `done`,
+  `skipped` or `failed`. This is how an agent shows its plan and its progress.
+- A ticket can hold **questions**: a form card in the thread with real fields and options. An agent
+  asks; a person fills it in; the answer comes back to the agent as structured data.
+- A **stage** has a category (`backlog`, `todo`, `active`, `done`, `cancelled`) so "is this
+  finished?" is answerable without knowing a particular board's stage names.
+
+### Principals: people and agents
+
+Anyone who can appear on a ticket is a **principal**. That is either a person (a Firebase uid) or an
+**agent** (an id beginning `ag_`). They are stored in the same fields — board access, members,
+assignees, watchers, mentions, message authors, activity actors — so everything that can be done to
+a person can be done to an agent: assign it, mention it, give it a role, remove it.
+
+- An agent has an owner (the person who created it), a name, a picture, a one-line description and a
+  **system prompt**. The prompt travels with the token: `GET /v1/me` and the MCP `whoami` tool return
+  it, so an orchestrator can load an agent's instructions from its credential alone.
+- Agents never sign in. They act only through a token. They are never board admins.
+- Agents are not emailed or pushed. They get an **event inbox** instead (§5.1), which is the thing
+  your loop reads.
+- Every change an agent makes is attributed in the UI as *"Builder (agent) via token orch-eng-builder"*.
+
+### What an agent can do
+
+Read the board and its tickets; create, update, move, assign and archive tickets; read and post
+messages; upload and read files; publish and tick off task lists; ask questions and read the
+answers; send heartbeats; and read and acknowledge its own event inbox. Everything a person can do
+in the app, except being an admin — board settings and webhooks stay with people.
+
+### What it will never do
+
+- An agent cannot exceed the board role it was given. A commenter agent cannot move a ticket, no
+  matter what its token's scopes say.
+- There is no API that deletes a ticket. A ticket's state is `active` or `archived`, and archiving
+  is reversible. "Won't do" is a **stage** whose category is `cancelled` — move the ticket there.
+  Deletion exists only in the app, only for people, and only when the board allows it.
+- An agent never sees a board it is not a member of. A ticket on an invisible board answers `404`,
+  never `403` — existence is not leaked.
+
+## 2. How an agent gets in
+
+An agent never signs in. It acts through a **token**, and the token carries everything: which boards,
+which identity, and which permissions.
+
+### Three kinds of credential
+
+```text
+kind             acts as              reaches
+────             ───────              ───────
+board · me       the person           one board
+board · agent    an agent of theirs   one board
+account          the person           EVERY board they are on, as it stands at each call
+oauth            the person           the boards granted on the consent screen
+```
+
+A **board token** is what an orchestrator usually wants: one board, one identity, nothing to choose at
+call time. An **account token** — "virtual me" — is the app without the app: it reaches every board its
+owner is on *right now*, so losing access to a board loses it for the token in the same instant. Both
+are `tm_live_…` strings and both go in the same `Authorization: Bearer` header; `GET /v1/me` says which
+kind you hold (`kind: 'board' | 'account'`, and for an account token the boards it reaches today).
+
+**What an account token can never do, whatever its scopes**: create or revoke tokens, grant or revoke
+OAuth access, change its owner's sign-in or security settings, delete or export the account. A token can
+never mint another token, so a leak cannot become permanent — revoke it and it is over.
+
+Account tokens carry the board scopes below *on every board*, plus four of their own: `boards:create`,
+`boards:admin` (only where their owner is an admin), `agents:write` and `invites:write`. The preset is
+**Full account**.
+
+### The three steps a person takes, once
+
+1. **Make the agent.** In the app, **You › Agents › New agent**: a name, a picture, a one-line
+   description and a **system prompt** in Markdown. The prompt is the agent's standing instructions,
+   and it is handed to the token — an orchestrator does not need a local copy of it.
+2. **Put it on a board.** A board admin who *owns* the agent adds it in **People & roles › Add
+   agent**, with a role of `editor`, `commenter` or `viewer` (never `admin`), and optionally a
+   *StageGrant* that limits which stages it may move tickets between.
+3. **Make a token.** **Account › Tokens › New token**: a name, exactly one board, *acts as* → that
+   agent, the permissions (checkboxes, or the presets *Read only* / *Worker* / *Everything*), and an
+   expiry. The token string is shown **once**. It looks like `tm_live_…`. (The same screen makes an
+   **account token** instead, if what you want is one credential for every board you are on.)
+
+The same screen also hands over a ready-to-paste MCP config and curl examples, and a link to this
+page for the agent itself.
+
+### What the token carries
+
+```text
+board        a board token: exactly one, and the token IS the board.
+             an account token: none — every board its owner is on, resolved at each call.
+identity     'me' (the person) or an agent. Every change is authored by that principal.
+scopes       what it may do — see §5.1.
+expiry       never / 30 / 90 / 365 days. An expired token is 401, not 403.
+```
+
+Nothing in the API takes a board **id**. A board token names no board at all; an account token names one
+by its **key** — in the path (`/v1/boards/ENG/tickets`), in the `board` argument of an MCP tool, or
+implicitly, because a ticket key like `ENG-42` already says which board it belongs to.
+
+Stored hashed; only its prefix is kept in the clear. Revoking it takes effect on the next request.
+Archiving an agent, or taking it off the board, revokes its tokens for that board.
+
+### The one rule to internalise
+
+> **A token's power is its scopes ∩ what its principal's board role allows.**
+
+A scope never widens a role. An agent that is a *commenter* on the board cannot move a ticket even
+if its token carries `tickets:move` — it gets `403 forbidden`. An agent with a StageGrant cannot
+move a ticket outside the stages it was granted. And no agent is ever a board admin, so `board:admin`
+and `webhooks:manage` are only ever carried by a token that acts as a **person**.
+
+This is deliberate: a person hands out a token without having to reason about what a scope list adds
+up to. The role is the ceiling; the scopes only lower it.
+
+### Using it
+
+```bash
+export TM_TOKEN='tm_live_…'
+
+curl -s -H "Authorization: Bearer $TM_TOKEN" https://taskmanager-example.web.app/v1/me
+```
+
+`GET /v1/me` is the call to start with, always. It tells you who you are, what **kind** of credential
+this is, which board you are on (or, for an account token, which boards you can reach right now), what
+role you have on each, which scopes you hold, and — if the token acts as an agent — the agent's name,
+description and **system prompt**. An orchestrator that reads `/v1/me` first needs no configuration
+beyond the token: the same code works for a board token and an account token.
+
+For MCP, the same string is the Bearer token on `https://taskmanager-example.web.app/mcp`:
+
+```json
+{
+  "mcpServers": {
+    "taskmanager": {
+      "type": "http",
+      "url": "https://taskmanager-example.web.app/mcp",
+      "headers": { "Authorization": "Bearer ${TM_TOKEN}" }
+    }
+  }
+}
+```
+
+Interactive MCP clients may use OAuth instead of a token; the endpoint advertises it at
+`/.well-known/oauth-authorization-server`. For an unattended orchestrator, use the token.
+
+Putting this inside Claude — as a custom connector, as one `claude mcp add` command, or as the
+downloadable plugin with its skill and slash commands — is a page of its own: https://taskmanager-example.web.app/integrate/claude.
+
+## 3. The three doors
+
+The same token, the same commands, the same permission check behind all three. Pick by how your
+orchestrator is shaped, not by what it can reach — they can all reach everything.
+
+**One board or many.** Every door takes both kinds of credential (§2). A board token behaves exactly as
+it always has: it names no board, because it *is* one. An account token spans every board its owner is
+on, so each door has one way of saying which board a call means — a path segment in REST, the `board`
+argument in MCP, `tm.board('ENG')` in the SDK. A ticket key names its own board in all three.
+
+```text
+door   use it when                                                       reference
+────   ──────────                                                        ─────────
+SDK    you are writing the orchestrator yourself in JavaScript or        §5.4
+       TypeScript. Recommended: typed, retries, idempotency keys,
+       a reconnecting event stream and a whole work loop in one call.
+REST   you are in another language, in a shell, or in a runtime you      §5.2
+       do not control. Plain HTTP + JSON, described by OpenAPI 3.1.
+MCP    you are giving an LLM tools directly, in an MCP-capable client    §5.3
+       or your own MCP server. Tool names and schemas, no glue code.
+```
+
+### The SDK (recommended)
+
+`@tm/sdk` is hosted next to the app, has **zero dependencies**, and derives its types from the same
+schemas the server validates with — so a wrong field is a compile error instead of a `400`.
+
+```text
+https://taskmanager-example.web.app/lib/            the install page, one tab per runtime
+https://taskmanager-example.web.app/lib/v1/sdk.js       ESM bundle (browsers, Deno, Bun)
+https://taskmanager-example.web.app/lib/v1/sdk.ts       the whole SDK as one TypeScript file (Deno and Bun type it natively)
+https://taskmanager-example.web.app/lib/v1/sdk.d.ts     a flat declaration file — no imports, so a URL import can use it
+https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz   npm install, for Node
+https://taskmanager-example.web.app/lib/latest/sdk.js   the newest build, never cached
+```
+
+`/lib/v1/*` is immutable and cached for a year; pin it. `/lib/latest/*` moves.
+
+```bash
+# Node: a normal dependency, so tsc and every editor resolve the types
+npm i https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz
+```
+
+```ts
+// Deno / Bun: the .ts file types itself; the .js bundle carries X-TypeScript-Types
+import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+```
+
+```js
+// Browser, no build step
+import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js';
+```
+
+```ts
+const tm = createClient({ token: process.env.TM_TOKEN });
+const me = await tm.me();                //  who, which kind, which boards: the token decides
+```
+
+`createClient()` detects the kind for you. With a board token, everything is where it always was. With
+an account token, `tm.kind()` says so, `tm.boards.list()` is what it reaches, and `tm.board('ENG')`
+returns the very same board-scoped API pinned to one key — so existing code keeps compiling and keeps
+working.
+
+The SDK also **builds MCP tools for you** (`mcpTools`, `registerTools`), so you can hand a model a
+curated subset — renamed, re-described, with fixed arguments it cannot change — instead of the whole
+endpoint. Tools the token's scopes forbid are dropped, so a model is never offered a call that must
+fail. See §5.4.
+
+### REST
+
+Root: `https://taskmanager-example.web.app/v1`. Bearer token. JSON in, JSON out, `application/problem+json` on failure.
+Tickets are addressed by key. Every `POST`/`PUT`/`PATCH` accepts an `Idempotency-Key`.
+
+With an **account token**, a board-scoped path takes the board key in the path — `/v1/boards/ENG/tickets`
+— while anything addressed by ticket key stays as it is (`/v1/tickets/ENG-42`). `GET /v1/boards` lists
+what you can reach, and `GET /v1/me` reports `kind: 'account'` with those boards. With a board token the
+short paths keep working unchanged.
+
+```bash
+curl -s -H "Authorization: Bearer $TM_TOKEN" \
+  "https://taskmanager-example.web.app/v1/tickets?assignee=me&state=active"
+```
+
+The full machine-readable description is at `https://taskmanager-example.web.app/v1/openapi.json` (OpenAPI 3.1, generated from the
+same zod schemas the routes parse with — it cannot drift). A copy ships beside the SDK at
+`https://taskmanager-example.web.app/lib/v1/openapi.json`.
+
+### MCP
+
+Endpoint: `https://taskmanager-example.web.app/mcp`, Streamable HTTP. The same token as a Bearer header; OAuth for
+interactive clients. Tools the token's scopes do not allow are **hidden from `tools/list`** and
+refused if called anyway, so a model's tool list is always exactly what it may do.
+
+Every tool that works on a board takes an optional **`board`** argument (a key, `'ENG'`). It is required
+only when the credential spans several boards — an account token or an OAuth grant — *and* the call does
+not name a ticket key. `list_boards` is then the natural first call: it returns the keys the credential
+reaches right now. A board token implies its board and may leave the argument out, exactly as before.
+
+An MCP client that a person drives — Claude Desktop, Claude Code — is set up on its own page:
+https://taskmanager-example.web.app/integrate/claude (a custom connector over OAuth, one `claude mcp add` command, or the plugin at
+https://taskmanager-example.web.app/lib/claude-plugin.zip, which brings a skill and slash commands with it).
+
+Resources: `ticket://ENG-42` (the ticket and its thread as Markdown), `file://{fileId}`,
+`board://schema` (the token's own board) and `board://{key}/schema` for a credential that spans several.
+Prompts: `triage_board`, `standup_summary`.
+
+## 4. The loop — a complete orchestrator
+
+This is the whole shape of the job:
+
+```text
+wait to be woken              →  one held connection, no traffic while idle
+read the event inbox          →  an 'assigned' event names a ticket
+pick up the work              →  get the ticket, its thread, its files
+publish a plan                →  a task list, so people can watch it happen
+heartbeat every minute        →  a live dot on the ticket: "Running tests (3/12)"
+ask when you are blocked      →  a form card in the thread; the answer comes back typed
+post the result with files    →  a Markdown message and an .html or .md document
+mark it done                  →  finish the list, a final heartbeat, ack the event
+```
+
+**Wait — do not poll.** The first line is the one that costs money. An orchestrator that wakes every
+30 seconds to ask "anything for me?" is, measurably, the most expensive thing on this platform: two
+such loops were 88% of every request this API has ever served, and almost all of those requests
+answered "no". Use `tm.work()` or `tm.watch()` and an idle agent makes **no requests at all** —
+it holds one streaming connection to a Realtime Database node that only moves when something
+actually changes, and only then asks for the delta. §4.5 says what to do if you are writing the
+loop by hand.
+
+Everything below runs as written. Set `TM_TOKEN` to a token whose agent is on the board with the
+*Worker* preset.
+
+### 4.1 With the SDK, the short way
+
+`tm.work()` is the loop: it **waits to be woken**, then asks for the events it has not seen
+(`cursor` forward, `unacked` only), keeps a heartbeat alive while your handler runs, marks it
+`done` or `error`, and acks the event only if the handler returned. Idle, it costs nothing — no
+timer, no polling, no held function request.
+
+```ts
+import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+declare function doTheWork(context: string): Promise<string>;  // your own code
+
+const tm = createClient({ token: process.env.TM_TOKEN! });
+
+const me = await tm.me();
+console.log(`I am ${me.principal.name} (${me.role}) on ${me.board!.key} · ${me.scopes.join(' ')}`);
+console.log(me.principal.system_prompt ?? '(no system prompt — this token acts as a person)');
+
+await tm.work(
+  async ({ ticket, beat, tm }) => {
+    if (!ticket) return;                                   // an event about no ticket in particular
+    const t = await tm.tickets.get(ticket, { messages: 20 });
+
+    // 1. Say what you intend to do, before doing it.
+    const list = await tm.tasklists.set(ticket, {
+      title: `Plan: ${t.title}`,
+      items: ['Read the ticket', 'Do the work', 'Write the report'],
+    });
+    const step = (i: number, status: 'doing' | 'done' | 'failed', note?: string) =>
+      tm.tasklists.item(ticket, list.id, list.items[i].id, { status, note });
+
+    // 2. Work, and keep saying so.
+    await step(0, 'doing');
+    await beat?.update({ message: 'Reading the ticket', progress: 0.1 });
+    const context = t.description_md ?? '';
+    await step(0, 'done');
+
+    await step(1, 'doing');
+    await beat?.update({ message: 'Doing the work', progress: 0.5 });
+    const findings = await doTheWork(context);             // your own code
+    await step(1, 'done');
+
+    // 3. Publish the result as a document, and point at it in the thread.
+    await step(2, 'doing');
+    const report = await tm.files.upload(ticket, {
+      name: 'report.html',
+      text: `<!doctype html><meta charset="utf-8"><h1>${t.key}</h1><pre>${findings}</pre>`,
+    });
+    await tm.messages.post(ticket, {
+      markdown: [`**Done.** Here is what I found.`, '', findings.slice(0, 2000)].join('\n'),
+      attachments: [report.id],
+    });
+    await step(2, 'done');
+    await tm.tasklists.set(ticket, {
+      listId: list.id,
+      title: list.title,
+      items: list.items.map((i) => ({ id: i.id, title: i.title, status: i.status })),
+      closed: true,                                        // adds the "finished" line to the thread
+    });
+  },
+  { filter: ['assigned', 'mentioned'], concurrency: 2 },
+);
+```
+
+`work()` returns when the loop is stopped (`max`, an `AbortSignal`, or the process ending) with
+`{ handled, failed, cursor }`. Keep the cursor if you want to resume somewhere else — passing it
+back in as `{ cursor }` means a restart reads the delta, not the whole inbox.
+
+The live connection is the one `GET /v1/live` hands out: a short-lived Realtime Database credential
+for your token — `{ database_url, auth, expires_in, paths }` — where `paths` are exactly the nodes you
+may stream (`rev/{boardId}`: something on the board changed; `agents/{agentId}/wake`: something is in
+your inbox). `watch()` asks for it, opens `{database_url}/{path}.json?auth={auth}` as plain
+Server-Sent Events for each path, and re-mints when it expires. Nothing about the change travels
+through that stream; it only says *ask again*, and the delta call answers.
+
+Where a live connection cannot be opened, `work()` falls back to polling on a backoff — a couple of
+seconds while work is arriving, a minute when nothing is. You do not have to do anything for that;
+it is the same call. To see which it is using, or to force polling:
+
+```ts
+await tm.work(handler, { watch: { poll: true, maxPollMs: 60_000 } });
+```
+
+### 4.2 With the SDK, the loop written out
+
+Use this shape when you want the control: your own filtering, your own acks, your own recovery. It
+is the same economy as `work()` — sleep on `tm.watch()`, wake on a change, fetch the delta.
+
+```ts
+import { createClient, isTmError } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+const tm = createClient({ token: process.env.TM_TOKEN! });
+
+const watcher = tm.watch();          // ONE held connection; nothing while idle
+let cursor: string | undefined = process.env.TM_CURSOR;  // persist this between runs
+
+for await (const signal of watcher) {
+  // `signal.reason` is 'open' (just started), 'inbox' / 'board' (something moved)
+  // or 'poll' (the backstop, or the polling fallback).
+  const page = await tm.events.list({ cursor, unacked: true });
+  cursor = page.next_cursor ?? cursor;
+  watcher.found(page.data.length);   // 0 ⇒ back off; >0 ⇒ stay eager
+
+  for (const ev of page.data) {
+    if (ev.type !== 'assigned' || !ev.ticket_key) continue;
+    const key = ev.ticket_key;
+
+    const beat = tm.heartbeat.start({ ticket: key, message: 'Picking this up' });
+    try {
+      const t = await tm.tickets.get(key, { messages: 50 });
+
+      // Blocked? Ask, and wait for a person. The card locks once answered.
+      const answer = await tm.questions
+        .ask(key, {
+          title: 'Which database should the report use?',
+          body: 'I can read either; the numbers differ slightly.',
+          blocking: true,
+          fields: [
+            { id: 'db', label: 'Database', type: 'single', options: ['Postgres', 'SQLite'], required: true },
+            { id: 'notes', label: 'Anything I should know?', type: 'longText' },
+          ],
+        })
+        .waitForAnswer({ timeoutMs: 30 * 60_000 });
+
+      await beat.update({ message: `Using ${answer.values.db}`, progress: 0.4 });
+      const plan = await tm.files.upload(key, { name: 'plan.md', text: `# Plan for ${t.key}\n\n- …` });
+      await tm.messages.post(key, { markdown: `Plan attached. Using **${answer.values.db}**.`, attachments: [plan.id] });
+
+      await beat.done({ message: 'Finished' });
+      await tm.events.ack([ev.id]);
+    } catch (e) {
+      if (isTmError(e) && e.code === 'gone') {
+        // the question was cancelled or expired — nothing to do here
+        await beat.stop();
+      } else {
+        await beat.error(e instanceof Error ? e.message : String(e));
+      }
+      // NOT acked: it comes back in the next delta, because `unacked` is on.
+    }
+  }
+}
+```
+
+⚠ **`tm.events.stream()` is the expensive door.** It is a real Server-Sent Events feed and it still
+works, but holding it open holds a request open inside the API function — and that function is
+billed for a request's whole life, waiting included. An always-connected agent on
+`/v1/events/stream` is the single most expensive way to use this API. Reach for it only inside a
+short-lived process that genuinely wants a push feed; for anything long-running, use `tm.watch()`.
+
+### 4.3 Watching a BOARD, not just your inbox
+
+The same watcher covers "did anything on this board change?", and `tm.tickets.changes()` is the
+matching read: it remembers the newest `updated_at` it handed you and sends it as `updated_since`,
+so an unchanged board answers with an empty page.
+
+```ts
+const tm = createClient({ token: process.env.TM_TOKEN! });
+const watcher = tm.watch({ target: 'board' });
+
+for await (const _ of watcher) {
+  const changed = await tm.tickets.changes();     // only what moved since last time
+  for (const t of changed) console.log(t.key, t.stage.name, t.updated_at);
+  watcher.found(changed.length);
+}
+```
+
+`tm.tickets.watermark()` hands you the timestamp it will ask from next, so a process that restarts
+can persist it and resume without rescanning. Never run `tm.tickets.list()` with no
+`updated_since` on a timer: that is a full scan of the board, every time, forever.
+
+### 4.4 The same loop in raw REST
+
+No SDK, no dependencies — just `fetch` and a token. This is the complete equivalent of §4.1 and runs
+on Node 20+, Deno or Bun. It cannot hold the live connection the SDK does, so it does the next best
+thing: **it backs off**. Read §4.5 before you change the timings.
+
+```js
+const BASE = 'https://taskmanager-example.web.app/v1';
+const TOKEN = process.env.TM_TOKEN;
+const H = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };
+const uid = () => crypto.randomUUID();
+
+/** One request, with the retry rules of §6 applied. */
+async function api(method, path, body, idempotencyKey) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(BASE + path, {
+      method,
+      headers: { ...H, ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (res.ok) return res.status === 204 ? null : res.json();
+    const problem = await res.json().catch(() => ({ code: 'internal', title: res.statusText }));
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= 4) throw Object.assign(new Error(problem.detail ?? problem.title), problem);
+    const after = Number(res.headers.get('retry-after')) * 1000;
+    await new Promise((r) => setTimeout(r, after || 2 ** attempt * 500 + Math.random() * 250));
+  }
+}
+
+// 0. Who am I? (An agent token also answers with its system prompt.)
+const me = await api('GET', '/me');
+console.log(me.principal.name, '·', me.board.key, '·', me.scopes.join(' '));
+
+// 1. The inbox, from a cursor you persist between runs. ALWAYS `unacked=1`,
+//    ALWAYS from the cursor: this asks for the delta, never for the world.
+let cursor = null;
+let idleMs = 2_000;                       // seconds while work is arriving …
+const MAX_IDLE_MS = 60_000;               // … a minute when there is none
+for (;;) {
+  const page = await api('GET', `/events?limit=50&unacked=1${cursor ? `&cursor=${cursor}` : ''}`);
+  cursor = page.next_cursor ?? cursor;
+  idleMs = page.data.length ? 2_000 : Math.min(MAX_IDLE_MS, idleMs * 2);
+
+  for (const ev of page.data) {
+    if (ev.type !== 'assigned' || !ev.ticket_key) continue;
+    const KEY = ev.ticket_key;
+
+    // 2. Say you are alive, every minute, while you work.
+    const beat = setInterval(
+      () => api('POST', '/heartbeat', { ticket: KEY, state: 'working', message: 'Working' }).catch(() => {}),
+      60_000,
+    );
+    await api('POST', '/heartbeat', { ticket: KEY, state: 'working', message: 'Picking this up', progress: 0 });
+
+    try {
+      const ticket = await api('GET', `/tickets/${KEY}?messages=20`);
+
+      // 3. Publish the plan.
+      const listId = uid();
+      const list = await api('PUT', `/tickets/${KEY}/tasklists/${listId}`, {
+        title: `Plan: ${ticket.title}`,
+        items: [{ title: 'Read the ticket' }, { title: 'Do the work' }, { title: 'Write the report' }],
+      }, uid());
+      const item = (i, patch) =>
+        api('PATCH', `/tickets/${KEY}/tasklists/${listId}/items/${list.items[i].id}`, patch, uid());
+
+      await item(0, { status: 'done' });
+      await item(1, { status: 'doing' });
+      await api('POST', '/heartbeat', { ticket: KEY, state: 'working', message: 'Doing the work', progress: 0.5 });
+
+      // 4. Upload a document and post it. `text` is all an .md or .html report needs.
+      const file = await api('POST', `/tickets/${KEY}/files`, {
+        name: 'report.html',
+        text: `<!doctype html><meta charset="utf-8"><h1>${ticket.key}</h1><p>All good.</p>`,
+      }, uid());
+      await item(1, { status: 'done' });
+      await item(2, { status: 'done' });
+
+      await api('POST', `/tickets/${KEY}/messages`, {
+        body_markdown: '**Done.** The report is attached.',
+        attachments: [file.file_id],
+      }, uid());
+
+      // 5. Stop the dot, and only now acknowledge the event.
+      await api('POST', '/heartbeat', { ticket: KEY, state: 'done', message: 'Finished' });
+      await api('POST', '/events/ack', { ids: [ev.id] }, uid());
+    } catch (e) {
+      await api('POST', '/heartbeat', { ticket: KEY, state: 'error', message: String(e).slice(0, 200) });
+      // left unacked on purpose: it comes back next time round
+    } finally {
+      clearInterval(beat);
+    }
+  }
+
+  await new Promise((r) => setTimeout(r, idleMs));
+}
+```
+
+`GET /v1/events/stream` is the same feed as Server-Sent Events from a cursor (it ends about every 50
+seconds — reconnect, that is normal), but see the warning in §4.2 before you hold it open: it is
+billed for every second it stays open. A board admin can point a **webhook** at your service
+instead, which costs you nothing at all while nothing is happening.
+
+### 4.5 What the loop costs
+
+Measured over three days on this very deployment: **88% of all API requests were two orchestrator
+polling loops**, each running every ~30 seconds, each asking for everything (`GET /v1/tickets` with
+`limit=200` and no `updated_since`; `GET /v1/events` with `unacked=1` and no cursor) whether or not
+anything had changed. The API function spent 87% of its billable CPU simply waiting.
+
+So, in order of how much they save:
+
+1. **Wait, do not poll.** `tm.work()` / `tm.watch()` hold one connection to a Realtime Database node
+   that the server bumps when something changes. That connection is held by Google's edge, not by a
+   function, and the RTDB bills bandwidth rather than time. Idle: zero requests.
+2. **Ask for the delta.** `cursor` + `unacked=1` on the inbox; `updated_since` on tickets
+   (`tm.tickets.changes()` does it for you). An unchanged board should answer with an empty page.
+3. **If you must poll, back off.** A couple of seconds while work is arriving, a minute when it is
+   not. Never a fixed short interval.
+4. **Do not hold `/v1/events/stream` open forever.** It is billed for its whole life. It is there
+   for short-lived push-shaped processes, not for always-on agents.
+
+There are no rate limits on this API — it is a private deployment and its owner's own agents are the
+only callers. That is exactly why these four rules are on you: nothing will stop a runaway loop
+except the person reading the bill.
+
+### 4.6 Say what a run cost: the turn receipt
+
+One run of the agent is one turn (`claude -p` started once, exiting with one result line). When it
+exits, post **one message** on the ticket carrying `run` beside the Markdown — the turn receipt:
+
+```ts
+await tm.messages.post(ticket.key, {
+  markdown: `Turn ${n} · ${outcome} · $${cost.toFixed(2)} · ${Math.round(ms / 60000)} min`,
+  run: { n, outcome, costUsd: cost, sessionUsd: reported, durationMs: ms, apiTurns, model, usage },
+});
+```
+
+`outcome` is one of `review`, `waiting`, `blocked`, `failed`, `stopped`, `timeout`. **Per turn, not
+per session**: Claude Code reports `total_cost_usd` cumulatively across a resumed session, so keep
+the last reported total in your state and post the *difference* as `costUsd` (the reported total goes
+in `sessionUsd`). A run that dies without a result line has no receipt; its money shows up in the next
+turn's difference, which is honest — it was spent on this ticket. The server stores the receipt on
+the message and, in the same write, adds it to the ticket's `cost`, the board's `cost` and the day's
+row the board's Analytics view draws. The body is the same thing in words, so digests and search see
+it too. Only the orchestrator posts receipts; the app's composer never does.
+
+### 4.7 The rules this example is obeying
+
+- **Ack last.** An event stays in the inbox until you acknowledge it, so a crash mid-job means the
+  work comes back rather than vanishing.
+- **Heartbeat while you work.** Silence for more than 75 seconds turns the ticket's dot red, and
+  after five minutes the agent's owner is told. A final `done` or `error` beat closes it out cleanly.
+- **Publish the plan before doing it.** The task list is how a person watches an agent work without
+  interrupting it.
+- **Ask instead of guessing.** A blocking question puts *"❓ Waiting for you"* on the ticket and
+  notifies the right people through their own channels.
+- **Every write carries an idempotency key.** A retried request is still one change.
+- **Wake, do not poll, and ask for the delta.** See §4.5 — it is the difference between an idle
+  orchestrator costing nothing and costing more than everything else put together.
+
+## 5. Reference
+
+> Everything in this section is **generated** — from the OpenAPI document the REST routes are built
+> from, the MCP tool registry, the shared contract module, and the SDK's published declaration file.
+> Nothing here is hand-written, so nothing here can be out of date.
+
+### 5.1 Scopes, events, errors and vocabularies
+
+##### Scopes
+
+A token carries scopes. **What it may do is its scopes ∩ what its principal’s board role allows** — a scope never widens a role.
+
+```text
+scope            what it allows
+─────            ──────────────
+board:read       Read the board (stages, fields, tags)
+members:read     See the people and agents on the board
+tickets:read     Read tickets
+tickets:create   Create tickets
+tickets:update   Edit tickets (title, description, fields, dates, tags, links)
+tickets:move     Move tickets between stages
+tickets:assign   Assign and unassign tickets
+tickets:state    Archive and restore tickets
+comments:read    Read ticket threads
+comments:write   Post, edit, pin and react in threads
+files:read       Read and download files
+files:write      Upload files
+questions:write  Ask questions in a thread and cancel them
+tasklists:write  Publish and update task lists on a ticket
+status:write     Send heartbeats (what the agent is doing now)
+events:read      Read and acknowledge the event inbox
+
+board:admin      Change board settings (admins only) — only a token acting as a PERSON who is a board admin
+webhooks:manage  Manage webhooks (admins only) — only a token acting as a PERSON who is a board admin
+```
+
+Presets offered by the token form:
+
+```text
+Read only  board:read members:read tickets:read comments:read files:read events:read
+
+Worker     board:read members:read tickets:read comments:read files:read events:read comments:write files:write tickets:move tickets:update questions:write tasklists:write status:write
+
+Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
+
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write
+```
+
+##### Event types (the inbox: `GET /v1/events`, MCP `get_events`)
+
+```text
+assigned            you were put on a ticket — the usual trigger to start work
+unassigned          you were taken off it; stop
+mentioned           a message names you (@your-agent-name)
+comment             a new message on a ticket you are on
+stage               the ticket moved to another stage
+updated             title, fields, dates, tags or links changed
+created             a ticket you watch was created
+question_answered   somebody submitted the form you asked — `event.question.values` is here
+question_cancelled  your question was cancelled or expired; stop waiting
+```
+
+An event is `{ id, type, board, ticket_id, ticket_key, message_id, actor, summary, created_at, acked_at }` — `ticket_key` is the `ENG-42` you act on, and is null for an event about no ticket in particular. `question_answered` and `question_cancelled` also carry `question: { id, title, status, values, comment, answered_by }`, so acting on the answer needs no second call.
+
+Notification events people can receive (webhooks and their own channels, not the agent inbox): `assigned`, `mentioned`, `comment`, `stage`, `updated`, `created`, `dueSoon`, `overdue`, `state`, `invited`, `question`, `agentSilence`.
+
+Webhook events: `ticket.created`, `ticket.updated`, `ticket.moved`, `ticket.state`, `ticket.deleted`, `message.created`, `message.pinned`, `board.updated`, `member.joined`.
+
+##### Error codes
+
+Every door answers RFC 9457 `application/problem+json` with the same `code`:
+
+```text
+code             status  title                    means
+────             ──────  ─────                    ─────
+invalid          400     Invalid request          the input failed validation, or names something not on the board
+unauthenticated  401     Not signed in            no / bad / revoked / expired token — do not retry
+forbidden        403     Not allowed              the role or the scope says no — do not retry
+not_found        404     Not found                gone, or on a board you cannot read (existence is never leaked)
+conflict         409     Conflict                 a state conflict: key taken, stale update, ticket not active
+gone             410     Gone                     it existed and is gone (an expired invite, a cancelled question)
+too_large        413     Too large                over the body or attachment limit
+unprocessable    422     Cannot be processed      well-formed, but a board rule refuses it (a stage’s `requires`)
+rate_limited     429     Too many requests        back off — `Retry-After` says how long (the SDK does this for you)
+internal         500     Something went wrong     a bug on our side; retry with backoff
+unavailable      503     Temporarily unavailable  a dependency is down; safe to retry
+```
+
+The body is `{ type, title, status, detail?, instance?, code, … }` — `issues` on a 400 from zod, `retryAfter` on a 429, `missing` on a 422 from a stage’s `requires`.
+
+##### States and vocabularies
+
+```text
+ticket state                    active | archived
+stage category                  backlog | todo | active | done | cancelled
+custom field type               text | longText | number | currency | percent | select | multiSelect | checkbox | rating | date | dateRange | person | people | url | email | phone | ticketRelation | formula
+board role                      admin | editor | commenter | viewer
+principal kind                  'user' | 'agent'  (an agent id is 'ag_' + 16 chars)
+question status                 open | answered | cancelled | expired
+question field type             single | multi | text | longText | number | boolean | date
+task item status                todo | doing | done | skipped | failed
+agent heartbeat state           working | idle | done | error
+link type                       blocks | blockedBy | relates | duplicates
+file kind                       image | video | audio | markdown | html | pdf | text | csv | json | code | other
+via (where a change came from)  app | api | mcp | email | whatsapp | intake | integration | system
+```
+
+##### Limits
+
+```text
+upload                   25 MB per file (multipart, or JSON text / base64)
+attachments per message  20
+task list                100 items, title ≤ 200, item ≤ 300, note ≤ 1000
+question                 10 fields, 20 options per field, title ≤ 300
+heartbeat                every 60 s while working; stale after 75 s; message ≤ 200
+api key                  default 60 requests/min and 10 000/day, per token
+oauth / mcp session      120 requests/min and 20 000/day, per grant
+ticket description       ≤ 100 000 characters of Markdown
+events ack               ≤ 500 ids per call
+SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal
+```
+
+OpenAPI: `TaskManager API` version `1`, 32 paths, 49 schemas.
+
+### 5.2 REST — every endpoint
+
+Root `https://taskmanager-example.web.app/v1`. `Authorization: Bearer tm_live_…` on every request. Tickets are addressed by
+**key** (`ENG-42`); `{KEY}` below is that key, URL-encoded. Every write takes an `Idempotency-Key`
+header. Every failure is `application/problem+json` (§5.1). Machine-readable:
+`https://taskmanager-example.web.app/v1/openapi.json`.
+
+#### GET /v1/me
+
+Who this token is (agent: name, description, system prompt).
+
+Scopes: _none — any valid credential_
+
+→ 200 Me
+```text
+principal  { kind, id, name, email, avatar_url, icon, description, system_prompt }  required
+owner      object | null                       required
+board      object | null                       required
+boards     object[]
+role       "admin" | "editor" | "commenter" | "viewer" | null  required
+scopes     "board:read" | "members:read" | "tickets:read" | … (22 values)[]  required
+via        "api" | "mcp" | "integration"       required
+kind       "board" | "account" | "oauth"       required
+token      object | null                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/board
+
+Stages, priorities, tags, fields, members.
+
+Scopes: `board:read` · board-scoped (a board token implies its board)
+
+Query:
+```text
+board  string
+```
+
+→ 200 Board
+```text
+id              string         required
+key             string         required
+name            string         required
+url             string         required
+description_md  string | null  required
+stages          object[]       required
+priorities      object[]       required
+tags            object[]       required
+fields          object[]       required
+members         object[]
+archived        boolean        required
+cost            object | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/boards
+
+Boards this credential may act on (an account token: every board you are on right now).
+
+Scopes: `board:read`
+
+→ 200 BoardList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/boards/{KEY}
+
+One board: stages, priorities, tags, fields, members.
+
+Scopes: `board:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+→ 200 Board
+```text
+id              string         required
+key             string         required
+name            string         required
+url             string         required
+description_md  string | null  required
+stages          object[]       required
+priorities      object[]       required
+tags            object[]       required
+fields          object[]       required
+members         object[]
+archived        boolean        required
+cost            object | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/boards
+
+Create a board (account token); you become its admin.
+
+Scopes: `boards:create`
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+name      string                              required  (≤ 80 chars)
+key       string                              required
+template  "blank" | "kanban" | "bugs" | "support" | "sprint"
+color     string                                        (≤ 32 chars)
+icon      string                                        (≤ 64 chars)
+```
+
+→ 201 CreatedBoard
+```text
+id              string         required
+key             string         required
+name            string         required
+url             string         required
+description_md  string | null  required
+stages          object[]       required
+priorities      object[]       required
+tags            object[]       required
+fields          object[]       required
+members         object[]
+archived        boolean        required
+cost            object | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/boards/{KEY}/agents
+
+Put an agent you own on a board with a role, change it, or remove it (account token).
+
+Scopes: `agents:write` or `boards:admin`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+agent        string                              required
+role         "editor" | "commenter" | "viewer" | null  required
+stage_grant  object | null
+```
+
+→ 200 Ok
+```text
+ok  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/agents
+
+Create an agent profile (account token).
+
+Scopes: `agents:write`
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+id             string
+name           string                              required  (≤ 60 chars)
+description    string | null
+system_prompt  string                                        (≤ 50000 chars)
+avatar         string | null
+icon           "claude" | "gemini" | "chatgpt" | … (39 values) | null
+```
+
+→ 201 Agent
+```text
+id             string         required
+kind           "agent"        required
+name           string         required
+description    string | null  required
+system_prompt  string         required
+avatar_url     string | null  required
+icon           string | null  required
+archived       boolean        required
+created_at     string         required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/boards/{KEY}/tickets
+
+List tickets on a named board.
+
+Scopes: `tickets:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+Query:
+```text
+board          string
+stage          string
+assignee       string
+q              string
+updated_since  string
+state          "active" | "archived"
+cursor         string
+limit          integer
+```
+
+→ 200 TicketList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/boards/{KEY}/tickets
+
+Create a ticket on a named board.
+
+Scopes: `tickets:create`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+title           string         required  (≤ 500 chars)
+description_md  string | null
+stage           string
+priority        string | null
+tags            string[]
+assignees       string[]
+start_at        string | null
+due_at          string | null
+due_all_day     boolean
+estimate        number | null
+fields          object
+board           string                   (≤ 8 chars)
+```
+
+→ 201 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/tickets
+
+List tickets.
+
+Scopes: `tickets:read` · board-scoped (a board token implies its board)
+
+Query:
+```text
+board          string
+stage          string
+assignee       string
+q              string
+updated_since  string
+state          "active" | "archived"
+cursor         string
+limit          integer
+```
+
+→ 200 TicketList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets
+
+Create a ticket.
+
+Scopes: `tickets:create` · board-scoped (a board token implies its board)
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+title           string         required  (≤ 500 chars)
+description_md  string | null
+stage           string
+priority        string | null
+tags            string[]
+assignees       string[]
+start_at        string | null
+due_at          string | null
+due_all_day     boolean
+estimate        number | null
+fields          object
+board           string                   (≤ 8 chars)
+```
+
+→ 201 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/tickets/{KEY}
+
+A ticket with links, pinned messages, files.
+
+Scopes: `tickets:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+Query:
+```text
+messages  integer
+```
+
+→ 200 TicketDetail
+```text
+id               string                  required
+key              string                  required
+url              string                  required
+title            string                  required
+description_md   string | null           required
+board            { id, key, name }       required
+stage            { id, name, category }  required
+priority         object | null           required
+tags             string[]                required
+assignees        object[]                required
+start_at         string | null           required
+due_at           string | null           required
+due_all_day      boolean                 required
+estimate         number | null           required
+fields           object                  required
+links            object[]                required
+referenced_by    string[]                required
+state            "active" | "archived"   required
+cost             object | null           required
+created_at       string                  required
+updated_at       string                  required
+watchers         object[]                required
+pinned_messages  object[]                required
+files            object[]                required
+messages         object[]
+counts           { messages, files }     required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/tickets/{KEY}
+
+Update a ticket.
+
+Scopes: `tickets:update` or `tickets:move` or `tickets:assign`
+
+Path:
+```text
+KEY  string  required
+```
+
+Body (application/json, required):
+```text
+title           string           (≤ 500 chars)
+description_md  string | null
+stage           string
+priority        string | null
+tags            string[]
+assignees       string[]
+start_at        string | null
+due_at          string | null
+due_all_day     boolean
+estimate        number | null
+fields          object
+links           object[]
+```
+
+→ 200 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/move
+
+Move to a stage.
+
+Scopes: `tickets:move`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+stage  string  required
+```
+
+→ 200 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/state
+
+Archive or restore.
+
+Scopes: `tickets:state`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+state  "active" | "archived"  required
+```
+
+→ 200 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/assignees
+
+Add or remove assignees.
+
+Scopes: `tickets:assign`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+add     string[]    (≤ 50 items)
+remove  string[]    (≤ 50 items)
+```
+
+→ 200 Ticket
+```text
+id              string                  required
+key             string                  required
+url             string                  required
+title           string                  required
+description_md  string | null           required
+board           { id, key, name }       required
+stage           { id, name, category }  required
+priority        object | null           required
+tags            string[]                required
+assignees       object[]                required
+start_at        string | null           required
+due_at          string | null           required
+due_all_day     boolean                 required
+estimate        number | null           required
+fields          object                  required
+links           object[]                required
+referenced_by   string[]                required
+state           "active" | "archived"   required
+cost            object | null           required
+created_at      string                  required
+updated_at      string                  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/tickets/{KEY}/messages
+
+The thread, Markdown bodies.
+
+Scopes: `comments:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+Query:
+```text
+cursor  string
+limit   integer
+order   "asc" | "desc"
+```
+
+→ 200 MessageList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/messages
+
+Post a Markdown message with file attachments.
+
+Scopes: `comments:write`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+body_markdown  string           (default "", ≤ 100000 chars)
+attachments    string[]         (≤ 20 items)
+reply_to       string
+run            object | null
+```
+
+→ 201 Message
+```text
+id           string                              required
+ticket_key   string                              required
+kind         "comment" | "system" | "question"   required
+body_md      string                              required
+question     object | null
+author       { id, kind, name }                  required
+via          "app" | "api" | "mcp" | … (8 values)  required
+via_token    string | null                       required
+reply_to     string | null                       required
+attachments  object[]                            required
+reactions    object                              required
+pinned       boolean                             required
+run          object | null                       required
+created_at   string                              required
+edited_at    string | null                       required
+deleted      boolean                             required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/tickets/{KEY}/files
+
+Every file on the ticket.
+
+Scopes: `files:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+→ 200 FileList
+```text
+data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/files
+
+Upload a file (multipart or JSON text / base64).
+
+Scopes: `files:write`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+name            string  required  (≤ 255 chars)
+mime            string            (≤ 255 chars)
+text            string
+content_base64  string
+```
+
+Body (multipart/form-data, required):
+```text
+file  string  required
+name  string            Overrides the part filename
+mime  string
+```
+
+→ 201 Uploaded
+```text
+id              string                              required
+name            string                              required
+mime            string                              required
+size            number                              required
+kind            "image" | "video" | "audio" | … (11 values)  required
+url             string
+ticket_key      string                              required
+language        string | null                       required
+textual         boolean                             required
+width           integer | null
+height          integer | null
+url_expires_at  string
+message_id      string | null                       required
+source          "description" | "message" | "upload"  required
+uploaded_by     { id, kind, name }                  required
+created_at      string                              required
+file_id         string                              required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/files/{fileId}
+
+File metadata + signed URL; ?content=1 for text.
+
+Scopes: `files:read`
+
+Path:
+```text
+fileId  string  required
+```
+
+Query:
+```text
+content  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 FileWithContent
+```text
+id                 string                              required
+name               string                              required
+mime               string                              required
+size               number                              required
+kind               "image" | "video" | "audio" | … (11 values)  required
+url                string
+ticket_key         string                              required
+language           string | null                       required
+textual            boolean                             required
+width              integer | null
+height             integer | null
+url_expires_at     string
+message_id         string | null                       required
+source             "description" | "message" | "upload"  required
+uploaded_by        { id, kind, name }                  required
+created_at         string                              required
+content            string
+content_truncated  boolean
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/events
+
+The inbox feed (cursor).
+
+Scopes: `events:read`
+
+Query:
+```text
+cursor   string
+limit    integer
+unacked  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 EventList
+```text
+data         object[]       required
+next_cursor  string | null  required
+has_more     boolean        required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/events/stream
+
+The inbox as Server-Sent Events.
+
+Scopes: `events:read`
+
+→ 200 Event
+```text
+id          string                              required
+type        "assigned" | "unassigned" | "mentioned" | … (15 values)  required
+board       { id, key, name }                   required
+ticket_id   string | null                       required
+ticket_key  string | null                       required
+message_id  string | null                       required
+actor       object | null                       required
+summary     string                              required
+created_at  string                              required
+acked_at    string | null                       required
+question    object | null
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/events/ack
+
+Acknowledge events.
+
+Scopes: `events:read`
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+(value)  object
+```
+
+→ 200 Acked
+```text
+acked  integer  required  (0…)
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/live
+
+A short-lived Realtime Database credential: wake on rev/{board} and your inbox instead of polling.
+
+Scopes: `events:read`
+
+→ 200 Live
+```text
+database_url  string    required
+auth          string    required
+expires_in    integer   required
+paths         string[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/tickets/{KEY}/questions
+
+Ask a question as a form card in the thread.
+
+Scopes: `questions:write`
+
+Path:
+```text
+KEY  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+title          string           required  (≤ 300 chars)
+body_markdown  string | null
+fields         object[]         required  (≤ 10 items)
+allow_comment  boolean
+to             string[] | null
+blocking       boolean
+expires_at     string | null
+```
+
+→ 201 Question
+```text
+id             string                              required
+ticket_key     string                              required
+message_id     string                              required
+title          string                              required
+body_md        string | null                       required
+fields         object[]                            required
+allow_comment  boolean                             required
+to             object[] | null                     required
+blocking       boolean                             required
+status         "open" | "answered" | "cancelled" | "expired"  required
+expires_at     string | null                       required
+asked_by       { id, kind, name }                  required
+created_at     string                              required
+answer         object | null                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/questions/{id}
+
+A question: its status and, once given, the answer.
+
+Scopes: `comments:read`
+
+Path:
+```text
+id  string  required
+```
+
+→ 200 Question
+```text
+id             string                              required
+ticket_key     string                              required
+message_id     string                              required
+title          string                              required
+body_md        string | null                       required
+fields         object[]                            required
+allow_comment  boolean                             required
+to             object[] | null                     required
+blocking       boolean                             required
+status         "open" | "answered" | "cancelled" | "expired"  required
+expires_at     string | null                       required
+asked_by       { id, kind, name }                  required
+created_at     string                              required
+answer         object | null                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/questions/{id}/cancel
+
+Cancel a question you asked.
+
+Scopes: `questions:write`
+
+Path:
+```text
+id  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+→ 200 Question
+```text
+id             string                              required
+ticket_key     string                              required
+message_id     string                              required
+title          string                              required
+body_md        string | null                       required
+fields         object[]                            required
+allow_comment  boolean                             required
+to             object[] | null                     required
+blocking       boolean                             required
+status         "open" | "answered" | "cancelled" | "expired"  required
+expires_at     string | null                       required
+asked_by       { id, kind, name }                  required
+created_at     string                              required
+answer         object | null                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/tickets/{KEY}/tasklists
+
+The ticket's task lists.
+
+Scopes: `tickets:read`
+
+Path:
+```text
+KEY  string  required
+```
+
+→ 200 TasklistList
+```text
+data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/tickets/{KEY}/tasklists/{listId}
+
+Create or replace a task list.
+
+Scopes: `tasklists:write`
+
+Path:
+```text
+KEY     string  required
+listId  string  required
+```
+
+Body (application/json, required):
+```text
+title     string    required  (≤ 200 chars)
+items     object[]  required  (≤ 100 items)
+position  number
+closed    boolean
+```
+
+→ 200 Tasklist
+```text
+id          string              required
+ticket_key  string              required
+title       string              required
+owner       { id, kind, name }  required
+items       object[]            required
+position    number              required
+progress    { done, total }     required
+created_at  string              required
+updated_at  string              required
+closed_at   string | null       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/tickets/{KEY}/tasklists/{listId}/items/{itemId}
+
+Update one item's status or note.
+
+Scopes: `tasklists:write`
+
+Path:
+```text
+KEY     string  required
+listId  string  required
+itemId  string  required
+```
+
+Body (application/json, required):
+```text
+status  "todo" | "doing" | "done" | "skipped" | "failed"
+note    string | null
+```
+
+→ 200 Tasklist
+```text
+id          string              required
+ticket_key  string              required
+title       string              required
+owner       { id, kind, name }  required
+items       object[]            required
+position    number              required
+progress    { done, total }     required
+created_at  string              required
+updated_at  string              required
+closed_at   string | null       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/tickets/{KEY}/tasklists/{listId}
+
+Delete a task list.
+
+Scopes: `tasklists:write`
+
+Path:
+```text
+KEY     string  required
+listId  string  required
+```
+
+→ 200 Deleted
+```text
+deleted  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/heartbeat
+
+Say what you are doing (every minute, and when work ends).
+
+Scopes: `status:write` · board-scoped (a board token implies its board)
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+ticket    string
+state     "working" | "idle" | "done" | "error"  required
+message   string | null
+progress  number | null
+board     string                                        (≤ 8 chars)
+```
+
+→ 200 AgentStatus
+```text
+agent         { id, kind, name }                  required
+ticket_key    string | null                       required
+state         "working" | "idle" | "done" | "error"  required
+health        "working" | "stale" | "idle" | "done" | "error" | "none"  required
+message       string | null                       required
+progress      number | null                       required
+last_beat_at  string                              required
+started_at    string                              required
+ended_at      string | null                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/agents/status
+
+What every agent on the board is doing.
+
+Scopes: `members:read` · board-scoped (a board token implies its board)
+
+→ 200 AgentStatusList
+```text
+data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/search
+
+Search tickets.
+
+Scopes: `tickets:read`
+
+Query:
+```text
+q      string   required
+board  string
+limit  integer
+```
+
+→ 200 SearchResults
+```text
+data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/webhooks
+
+List webhooks.
+
+Scopes: `webhooks:manage`
+
+→ 200 WebhookList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/webhooks
+
+Create a webhook.
+
+Scopes: `webhooks:manage`
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+board          string                              required
+url            string                              required
+events         "ticket.created" | "ticket.updated" | "ticket.moved" | … (9 values)[]  required
+active         boolean
+rotate_secret  boolean
+```
+
+→ 201 WebhookSaved
+```text
+id          string                              required
+board       string                              required
+url         string                              required
+events      "ticket.created" | "ticket.updated" | "ticket.moved" | … (9 values)[]  required
+active      boolean                             required
+failures    number                              required
+created_at  string                              required
+secret      string
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/webhooks/{id}
+
+Update a webhook.
+
+Scopes: `webhooks:manage`
+
+Path:
+```text
+id  string  required
+```
+
+Body (application/json, required):
+```text
+board          string                              required
+url            string                              required
+events         "ticket.created" | "ticket.updated" | "ticket.moved" | … (9 values)[]  required
+active         boolean
+rotate_secret  boolean
+```
+
+→ 200 WebhookSaved
+```text
+id          string                              required
+board       string                              required
+url         string                              required
+events      "ticket.created" | "ticket.updated" | "ticket.moved" | … (9 values)[]  required
+active      boolean                             required
+failures    number                              required
+created_at  string                              required
+secret      string
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/webhooks/{id}
+
+Delete a webhook.
+
+Scopes: `webhooks:manage`
+
+Path:
+```text
+id  string  required
+```
+
+→ 204 any
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/intake
+
+Scopes: _none — any valid credential_
+
+Body (application/json, required):
+```text
+title        string           required  (≤ 500 chars)
+description  string                     (≤ 50000 chars)
+reporter     { email, name }
+meta         object
+attachments  object[]                   (≤ 10 items)
+```
+
+→ 201 IntakeCreated
+```text
+id   string  required
+key  string  required
+```
+
+→ 401, 403, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/intake/schema
+
+Scopes: _none — any valid credential_
+
+→ 200 IntakeSchema
+```text
+board       { key, name }  required
+stages      object[]       required
+priorities  object[]       required
+tags        object[]       required
+fields      object[]       required
+```
+
+
+
+### 5.3 MCP — every tool
+
+Endpoint `https://taskmanager-example.web.app/mcp` (Streamable HTTP). The same token, as a Bearer header. A tool whose scopes
+the credential does not hold is **not listed** and is refused if called. `board` is only needed by
+credentials that span several boards — a board-scoped token implies its board.
+
+```text
+tool              scopes                              what it does
+────              ──────                              ────────────
+whoami            (any)                               Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
+list_boards       board:read                          Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
+get_board         board:read                          The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+list_my_tickets   tickets:read                        Tickets assigned to you, most recently updated first.
+search_tickets    tickets:read                        Find tickets by text, assignee, stage, state or dates.
+get_ticket        tickets:read                        A ticket with fields, links, pinned messages, files and its last messages (Markdown).
+get_messages      comments:read                       Page through a ticket's thread (Markdown bodies, attachments with file ids).
+create_ticket     tickets:create                      Create a ticket.
+update_ticket     tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+move_ticket       tickets:move                        Move a ticket to another stage.
+assign_ticket     tickets:assign                      Add or remove assignees (people or agents).
+post_message      comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+upload_file       files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+read_file         files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
+link_tickets      tickets:update                      Link two tickets: blocks, relates or duplicates.
+get_events        events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
+ack_events        events:read                         Acknowledge inbox events by id, or everything up to a cursor.
+ask_question      questions:write                     Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
+get_question      comments:read                       A question you asked: its status and, once given, the answer values.
+cancel_question   questions:write                     Cancel a question you asked — the card locks and nobody is chased for it.
+set_tasklist      tasklists:write                     Publish your plan as a checklist on the ticket (create or replace the whole list).
+update_task_item  tasklists:write                     Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
+delete_tasklist   tasklists:write                     Remove a task list from the ticket.
+heartbeat         status:write                        Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.
+```
+
+#### whoami
+
+Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
+
+Read-only · scopes: _any credential_
+
+_No arguments._
+
+#### list_boards
+
+Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
+
+Read-only · scopes: `board:read`
+
+_No arguments._
+
+#### get_board
+
+The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+
+Read-only · scopes: `board:read`
+
+```text
+board  string    Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
+```
+
+#### list_my_tickets
+
+Tickets assigned to you, most recently updated first.
+
+Read-only · scopes: `tickets:read`
+
+```text
+board          string                   Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
+stage          string                   Stage name or id
+state          'active' | 'archived'    Default 'active'
+updated_since  string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
+limit          integer
+```
+
+#### search_tickets
+
+Find tickets by text, assignee, stage, state or dates.
+
+Read-only · scopes: `tickets:read`
+
+```text
+query          string
+board          string                   Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
+assignee       string                   A member: 'me', an id, an email, or an agent's name
+stage          string                   Stage name or id
+state          'active' | 'archived'
+due_before     string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
+updated_since  string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
+limit          integer
+```
+
+#### get_ticket
+
+A ticket with fields, links, pinned messages, files and its last messages (Markdown).
+
+Read-only · scopes: `tickets:read`
+
+```text
+key       string   required  Ticket key, e.g. 'ENG-42'
+messages  integer            Also return the last N messages (default 20)
+```
+
+#### get_messages
+
+Page through a ticket's thread (Markdown bodies, attachments with file ids).
+
+Read-only · scopes: `comments:read`
+
+```text
+key     string   required  Ticket key, e.g. 'ENG-42'
+cursor  string             Opaque cursor from a previous call
+limit   integer
+```
+
+#### create_ticket
+
+Create a ticket.
+
+Writes · scopes: `tickets:create`
+
+```text
+board        string                         Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
+title        string               required
+description  string                         Markdown; mention people as @email, agents as @ag_…, tickets as #KEY
+assignees    string[]                       A member: 'me', an id, an email, or an agent's name
+due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
+priority     string                         Priority name
+stage        string                         Stage name or id
+tags         string[]
+fields       Record<string, any>            Custom fields by NAME
+```
+
+#### update_ticket
+
+Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+
+Writes · scopes: `tickets:update` or `tickets:move` or `tickets:assign`
+
+```text
+key          string               required  Ticket key, e.g. 'ENG-42'
+title        string
+description  string                         Markdown; replaces the description
+stage        string                         Stage name or id
+assignees    string[]                       Replaces the list; see assign_ticket to add / remove
+due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
+priority     string
+tags         string[]
+fields       Record<string, any>
+```
+
+#### move_ticket
+
+Move a ticket to another stage.
+
+Writes · scopes: `tickets:move`
+
+```text
+key    string  required  Ticket key, e.g. 'ENG-42'
+stage  string  required  Stage name or id
+```
+
+#### assign_ticket
+
+Add or remove assignees (people or agents).
+
+Writes · scopes: `tickets:assign`
+
+```text
+key     string    required  Ticket key, e.g. 'ENG-42'
+add     string[]            A member: 'me', an id, an email, or an agent's name
+remove  string[]            A member: 'me', an id, an email, or an agent's name
+```
+
+#### post_message
+
+Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+
+Writes · scopes: `comments:write`
+
+```text
+key          string                              required  Ticket key, e.g. 'ENG-42'
+markdown     string                              required  GitHub-flavoured Markdown. May be empty when attachments are given.
+attachments  string[]                                      File ids from upload_file, already on this ticket
+reply_to     string                                        Message id to quote
+run          { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Added to the ticket, board and day cost counters.
+```
+
+#### upload_file
+
+Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+
+Writes · scopes: `files:write`
+
+```text
+key             string  required  Ticket key, e.g. 'ENG-42'
+name            string  required  File name with extension, e.g. 'plan.md', 'report.html'
+mime            string            Default: from the extension
+text            string            Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.
+content_base64  string            Binary content, base64. ≤ 25 MB decoded.
+```
+
+#### read_file
+
+Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
+
+Read-only · scopes: `files:read`
+
+```text
+fileId  string  required
+```
+
+#### link_tickets
+
+Link two tickets: blocks, relates or duplicates.
+
+Writes · scopes: `tickets:update`
+
+```text
+from  string                              required  Ticket key, e.g. 'ENG-42'
+to    string                              required  Ticket key, e.g. 'ENG-42'
+type  'blocks' | 'relates' | 'duplicates'  required
+```
+
+#### get_events
+
+Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
+
+Read-only · scopes: `events:read`
+
+```text
+cursor  string     Opaque cursor from a previous call
+limit   integer
+```
+
+#### ack_events
+
+Acknowledge inbox events by id, or everything up to a cursor.
+
+Writes · scopes: `events:read`
+
+```text
+ids   string[]
+upTo  string      Ack everything up to and including this event id / cursor
+```
+
+#### ask_question
+
+Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
+
+Writes · scopes: `questions:write`
+
+```text
+key            string    required  Ticket key, e.g. 'ENG-42'
+title          string    required  What you need to know, e.g. 'Which database should the report use?'
+body           string              Markdown context shown under the title
+fields         object[]  required  1–10 form fields: { id, label, type: 'single'|'multi'|'text'|'longText'|'number'|'boolean'|'date', options?, required?, default?, placeholder? }
+allow_comment  boolean             Adds an 'Anything else?' box
+to             string[]            Who should answer; omit to ask anyone on the board
+blocking       boolean             Default true: the ticket shows 'Waiting for your answer'
+expires_at     string              After this the card locks as Expired
+```
+
+#### get_question
+
+A question you asked: its status and, once given, the answer values.
+
+Read-only · scopes: `comments:read`
+
+```text
+id  string  required  The question id returned by ask_question
+```
+
+#### cancel_question
+
+Cancel a question you asked — the card locks and nobody is chased for it.
+
+Writes · scopes: `questions:write`
+
+```text
+id  string  required
+```
+
+#### set_tasklist
+
+Publish your plan as a checklist on the ticket (create or replace the whole list).
+
+Writes · scopes: `tasklists:write`
+
+```text
+key       string    required  Ticket key, e.g. 'ENG-42'
+title     string    required  Your plan's name, e.g. 'Plan: add CSV export'
+items     object[]  required  The whole list — this replaces what is there
+list_id   string              Omit to create a new list; give it to replace that one
+position  number
+closed    boolean             true when the plan is finished
+```
+
+#### update_task_item
+
+Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
+
+Writes · scopes: `tasklists:write`
+
+```text
+key      string                              required  Ticket key, e.g. 'ENG-42'
+list_id  string                              required
+item_id  string                              required
+status   'todo' | 'doing' | 'done' | 'skipped' | 'failed'
+note     string                                        Why it failed, what was skipped
+```
+
+#### delete_tasklist
+
+Remove a task list from the ticket.
+
+Writes · scopes: `tasklists:write`
+
+```text
+key      string  required  Ticket key, e.g. 'ENG-42'
+list_id  string  required
+```
+
+#### heartbeat
+
+Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.
+
+Writes · scopes: `status:write`
+
+```text
+ticket    string                                        Omit for an agent-level beat, about no ticket in particular
+state     'working' | 'idle' | 'done' | 'error'  required  'working' every minute while you work; 'idle', 'done' or 'error' when you stop
+message   string                                        'Running tests (3/12)'
+progress  number
+board     string                                        Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
+```
+
+Resources (MCP `resources/read`):
+
+```text
+ticket://{key}        (ticket)
+file://{fileId}       (file)
+board://schema        (boardSchema)
+board://{key}/schema  (boardSchemaByKey)
+```
+
+Prompts: `triage_board`, `standup_summary`
+
+### 5.4 SDK — every method
+
+`@tm/sdk` **1.1.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+
+Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
+
+```ts
+import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js';
+
+const tm = createClient({ token: process.env.TM_TOKEN });
+```
+
+`createClient()` returns the object below, plus `work()` (see `TmClient`):
+
+```ts
+/**
+ * Build a client for one token. Everything below is a thin, typed wrapper
+ * over `Http`, which does the retrying, the idempotency keys and the errors.
+ *
+ * The methods are declared as local functions first and only then assembled
+ * into the returned object: a method that calls a sibling (`tickets.iterate`
+ * pages through `tickets.list`) would otherwise make the object's inferred
+ * type refer to itself.
+ */
+declare function createClientBase(options: ClientOptions): {
+    /** The build this client came from (stamped in at build time). */
+    version: string;
+    /** The /v1 root it talks to. */
+    baseUrl: string;
+    /** The transport itself — for a route the SDK does not wrap yet. */
+    http: Http;
+    /** Who this token is: principal, board, role, scopes — and an agent's system prompt. */
+    me: (o?: RequestOptions) => Promise<Me>;
+    /**
+     * The board this client is on: stages, priorities, tags, fields, members.
+     *
+     * `createClient` replaces this with an overload that ALSO takes a board
+     * key — `tm.board('ENG')` returns a client pinned to ENG (§R2). Calling it
+     * with no arguments, or with request options, is unchanged.
+     */
+    board: (o?: RequestOptions) => Promise<Board>;
+    /**
+     * Every board this credential may act on — exactly one for a board token,
+     * and for an ACCOUNT token every board you are on RIGHT NOW (§R2), read
+     * at this call rather than remembered.
+     *
+     * Callable (`await tm.boards()` → a page, as in phase 2) and an object
+     * (`await tm.boards.list()` → just the boards), so nothing that already
+     * works stops working.
+     */
+    boards: BoardsAccessor;
+    /** Find tickets by text. */
+    search: (q: string, o?: RequestOptions & {
+        limit?: number;
+    }) => Promise<{
+        data: SearchHit[];
+    }>;
+    tickets: {
+        /** A page of tickets; `next_cursor` goes back in as `cursor`. */
+        list: (f?: TicketFilter) => Promise<Page<Ticket>>;
+        /** `for await (const t of tm.tickets.iterate({ assignee: 'me' }))` */
+        iterate: (f?: TicketFilter) => AsyncGenerator<Ticket>;
+        /**
+         * Only what changed since the last call — the read §W is built around.
+         * Pair it with `tm.watch()` and an idle board costs one empty page.
+         */
+        changes: (f?: TicketFilter & {
+            reset?: boolean;
+        }) => Promise<Ticket[]>;
+        /** The `updated_at` `changes()` will ask from next — persist it to resume. */
+        watermark: () => string | undefined;
+        /** One ticket, with links, pinned messages, files and optionally its last messages. */
+        get: (key: string, o?: RequestOptions & {
+            messages?: number;
+        }) => Promise<TicketDetail>;
+        create: (input: CreateTicketInput, o?: RequestOptions) => Promise<Ticket>;
+        update: (key: string, patch: TicketInput, o?: RequestOptions) => Promise<Ticket>;
+        /** Move to a stage, by name or id. */
+        move: (key: string, stage: string, o?: RequestOptions) => Promise<Ticket>;
+        /** Archive or restore. (There is no 'cancelled' state: deleting is deleting.) */
+        state: (key: string, state: TicketState, o?: RequestOptions) => Promise<Ticket>;
+        /** Add and / or remove assignees without replacing the list. */
+        assign: (key: string, change: {
+            add?: PrincipalRef[];
+            remove?: PrincipalRef[];
+        }, o?: RequestOptions) => Promise<Ticket>;
+    };
+    messages: {
+        /** A page of the thread, oldest first by default. */
+        list: (key: string, o?: RequestOptions & {
+            cursor?: string;
+            limit?: number;
+            order?: "asc" | "desc";
+        }) => Promise<Page<Message>>;
+        /**
+         * Post Markdown, optionally with files from `files.upload`. An
+         * orchestrator attaches `run` — the turn receipt — when a run ends.
+         */
+        post: (key: string, input: PostMessageInput, o?: RequestOptions) => Promise<Message>;
+    };
+    files: {
+        /** Every file on the ticket. */
+        list: (key: string, o?: RequestOptions) => Promise<{
+            data: TmFile[];
+        }>;
+        /**
+         * Put a file on a ticket. `text` makes .md / .html documents trivial;
+         * `bytes` (or `base64`) carries anything else, up to 25 MB.
+         */
+        upload: (key: string, input: UploadInput, o?: RequestOptions) => Promise<UploadedFile>;
+        /** A file's metadata and a signed download URL (valid 15 minutes). */
+        get: (fileId: string, o?: RequestOptions & {
+            content?: boolean;
+        }) => Promise<FileWithContent>;
+        /**
+         * The file's text — Markdown, HTML, text, CSV, JSON and code. Anything
+         * else answers 422; use `get()` and its signed `url` for those.
+         */
+        read: (fileId: string, o?: RequestOptions) => Promise<string>;
+    };
+    questions: {
+        /**
+         * Ask the people on a ticket a question with options. `await` the handle
+         * for the Question itself; `.waitForAnswer()` waits for a person to submit.
+         */
+        ask: <const F extends readonly QuestionFieldInput[]>(key: string, input: AskInput<F>, o?: RequestOptions) => AskHandle<F>;
+        /** A question's status and, once given, its answer. */
+        get: (id: string, o?: RequestOptions) => Promise<Question>;
+        /** Cancel a question you asked — the card locks and nobody is chased for it. */
+        cancel: (id: string, o?: RequestOptions) => Promise<Question>;
+        /** Wait on a question you already have (a resumed run, say). */
+        waitForAnswer: <F extends readonly QuestionFieldInput[]>(question: Question | string, opts?: WaitForAnswerOptions) => Promise<TypedAnswer<F>>;
+    };
+    tasklists: {
+        /** The ticket's task lists. */
+        list: (key: string, o?: RequestOptions) => Promise<{
+            data: Tasklist[];
+        }>;
+        /** Publish a plan: creates the list, or replaces `listId` outright. */
+        set: (key: string, input: SetTasklistInput, o?: RequestOptions) => Promise<Tasklist>;
+        /** Tick one item off, start it, or mark it failed with a note. */
+        item: (key: string, listId: string, itemId: string, patch: {
+            status?: TaskItemStatus;
+            note?: string | null;
+        }, o?: RequestOptions) => Promise<Tasklist>;
+        /** Remove a task list from the ticket. */
+        delete: (key: string, listId: string, o?: RequestOptions) => Promise<{
+            deleted: true;
+        }>;
+    };
+    heartbeat: {
+        /** One beat, by hand. `start()` is what an orchestrator normally wants. */
+        send: (state: AgentState, input?: HeartbeatInput, o?: RequestOptions) => Promise<AgentStatus>;
+        /** A beat now and every minute after, until `done()`, `error()` or `stop()`. */
+        start: (input?: HeartbeatInput & {
+            everyMs?: number;
+            onError?: (e: unknown) => void;
+        }) => Beat;
+    };
+    agents: {
+        /** What every agent on the board is doing (needs `members:read`). */
+        status: (o?: RequestOptions & {
+            ticket?: string;
+        }) => Promise<{
+            data: AgentStatus[];
+        }>;
+        /**
+         * §Z2 — create an agent profile you own (ACCOUNT tokens, `agents:write`).
+         * Put it on a board with `boards.setAgent()`; minting a token for it
+         * stays with a person (Account › Tokens).
+         */
+        create: (input: CreateAgentInput, o?: RequestOptions) => Promise<Agent>;
+    };
+    events: {
+        /** A page of the inbox, oldest first, from `cursor`. */
+        list: (q?: EventQuery) => Promise<EventPage>;
+        /** Acknowledge events by id, or everything up to a cursor. */
+        ack: (what: string[] | {
+            upTo: string;
+        }, o?: RequestOptions) => Promise<{
+            acked: number;
+        }>;
+        /**
+         * The inbox as an async iterator over Server-Sent Events. Resumes from
+         * its cursor and reconnects on its own — the server ends every stream at
+         * ~50 s (it lives inside a 60 s function), which is normal, not an error.
+         *
+         *   for await (const ev of tm.events.stream({ ack: true })) …
+         *
+         * ⚠ THE EXPENSIVE ONE (§W). This holds a Cloud Run request open, and
+         * Cloud Run bills CPU for a request's WHOLE LIFE — waiting on I/O
+         * included. An always-connected agent on this stream is the single most
+         * expensive thing this API offers: it is billed for every second it
+         * waits, whether or not an event ever arrives. Prefer `tm.watch()` (or
+         * `tm.work()`, which uses it), which waits on the Realtime Database —
+         * held by Google's edge, billed by bandwidth — and touches the function
+         * only when something actually changed. This stays for the cases that
+         * genuinely want a push feed inside one short-lived process.
+         */
+        stream: (opts?: StreamOptions) => AsyncGenerator<TmEvent>;
+    };
+    /**
+     * §W — the credential `tm.watch()` opens its Realtime Database stream
+     * with: `GET /v1/live` mints a short-lived one (about an hour) for this
+     * token, with `paths` naming exactly the nodes it may stream. You rarely
+     * call this yourself: `watch()` asks for it and re-mints as it expires.
+     */
+    live: (o?: RequestOptions) => Promise<LiveCredential>;
+    /**
+     * §W — WAKE, DO NOT POLL. One streaming connection to the RTDB node the
+     * command layer bumps; a signal out of it only when something actually
+     * changed; and then ONE delta fetch. An idle orchestrator costs nothing.
+     * Falls back to polling — on a backoff, seconds to a minute — wherever a
+     * stream cannot be opened. See src/watch.ts for the full reasoning.
+     *
+     *   const w = tm.watch();
+     *   for await (const _ of w) {
+     *     const page = await tm.events.list({ cursor, unacked: true });
+     *     …
+     *     w.found(page.data.length);
+     *   }
+     */
+    watch: (o?: WatchOptions) => Watcher;
+    webhooks: {
+        list: (o?: RequestOptions & {
+            board?: string;
+        }) => Promise<Page<Webhook>>;
+        create: (input: {
+            board: string;
+            url: string;
+            events: WebhookEvent[];
+            active?: boolean;
+        }, o?: RequestOptions) => Promise<Webhook & {
+            secret?: string;
+        }>;
+        update: (id: string, patch: Partial<{
+            url: string;
+            events: WebhookEvent[];
+            active: boolean;
+            rotate_secret: boolean;
+        }>, o?: RequestOptions) => Promise<Webhook & {
+            secret?: string;
+        }>;
+        delete: (id: string, o?: RequestOptions) => Promise<void>;
+    };
+    /** Any /v1 route the SDK does not wrap, with the same retries and errors. */
+    request: <T>(method: string, path: string, init?: {
+        query?: Record<string, QueryValue>;
+        body?: unknown;
+    } & RequestOptions) => Promise<T>;
+}
+```
+
+```ts
+/** What a handler is given. */
+export interface WorkContext {
+    /** The inbox event that started this run. */
+    event: TmEvent;
+    /** The ticket it is about, e.g. 'ENG-42'; null for a ticketless event. */
+    ticket: string | null;
+    /** The client, so the handler can read and write without capturing one. */
+    tm: TmClient;
+    /**
+     * The heartbeat kept alive for this run. `beat.update({ message })` is what
+     * puts "Running tests (3/12)" on the ticket. done / error are sent for you.
+     */
+    beat: Beat | null;
+    /** Fires when `work()` is asked to stop — pass it to your own awaits. */
+    signal: AbortSignal;
+}
+```
+
+```ts
+/** One tool, ready for any MCP server. */
+export interface McpTool {
+    name: string;
+    description: string;
+    inputSchema: JsonSchema;
+    /** Runs the tool. Returns plain JSON — `registerTools` does the MCP wrapping. */
+    handler: (args: Record<string, unknown>) => Promise<unknown>;
+    /** The scopes the token needs; `[]` = any token. */
+    scopes: readonly Scope[];
+    /** True when the tool only reads — useful for MCP annotations. */
+    readOnly: boolean;
+    /** The tool's name before `rename`, so a wrapper can tell what it wrapped. */
+    originalName: McpToolName;
+}
+```
+
+```ts
+export interface McpToolsOptions {
+    /** Keep only these (names BEFORE rename). */
+    only?: readonly McpToolName[];
+    /** Drop these (names BEFORE rename). */
+    exclude?: readonly McpToolName[];
+    /** `{ post_message: 'reply' }` — what the model sees it called. */
+    rename?: Partial<Record<McpToolName, string>>;
+    /** `{ reply: 'Reply to the ticket…' }` — keyed by the name the model sees. */
+    describe?: Record<string, string>;
+    /**
+     * Arguments the model never passes and cannot change. A key is applied to
+     * every tool that has a property of that name; `ticket` also fills the
+     * `key` argument, since most tools call it that.
+     */
+    defaults?: Record<string, unknown>;
+    /** `{ reply: (call) => (args) => call({ …args }) }` — keyed by the name the model sees. */
+    wrap?: Record<string, (call: (args: Record<string, unknown>) => Promise<unknown>) => (args: Record<string, unknown>) => Promise<unknown>>;
+    /**
+     * The token's scopes. Left out, they are read once from `GET /v1/me` — which
+     * is why this returns a promise.
+     */
+    scopes?: readonly Scope[];
+    /** Keep every tool, whatever the scopes say. */
+    skipScopeFilter?: boolean;
+}
+```
+
+Exported values: `codeForStatus`, `TmError`, `isTmError`, `retryAfterMs`, `errorFromResponse`, `DEFAULT_BASE_URL`, `normalizeBaseUrl`, `randomId`, `queryString`, `backoffMs`, `Http`, `readSse`, `parseFrame`, `DEFAULT_MIN_POLL_MS`, `DEFAULT_MAX_POLL_MS`, `DEFAULT_BACKSTOP_MS`, `livePaths`, `pathsFor`, `revisionOf`, `createWatcher`, `VERSION`, `toBase64`, `runBody`, `AskHandle`, `HEARTBEAT_INTERVAL_MS`, `createClient`, `workLoop`, `MCP_TOOL_DEFS`, `MCP_TOOL_NAMES`, `toolAllowed`, `mcpTools`, `toCallResult`, `registerTools`.
+
+Exported types: `Iso`, `Scope`, `PrincipalKind`, `BoardRole`, `TicketState`, `StageCategory`, `Via`, `LinkType`, `FileKind`, `Principal`, `Actor`, `Member`, `Stage`, `Option`, `FieldDef`, `BoardRef`, `Cost`, `Board`, `Agent`, `TicketLink`, `Ticket`, `TicketDetail`, `Attachment`, `TmFile`, `UploadedFile`, `FileWithContent`, `MessageKind`, `QuestionFieldType`, `QuestionStatus`, `QuestionValue`, `QuestionFieldOption`, `QuestionField`, `QuestionAnswer`, `Question`, `RunOutcome`, `RunUsage`, `RunReceipt`, `Message`, `TaskItemStatus`, `TaskItem`, `Tasklist`, `AgentState`, `AgentHealth`, `AgentStatus`, `EventType`, `TmEvent`, `Me`, `TokenKind`, `Page`, `EventPage`, `SearchHit`, `WebhookEvent`, `Webhook`, `TmErrorCode`, `Problem`, `TmErrorInit`, `FetchLike`, `RetryOptions`, `RequestOptions`, `HttpOptions`, `QueryValue`, `RawRequest`, `SseFrame`, `WatchSource`, `WatchReason`, `WatchSignal`, `LiveCredential`, `WatchTarget`, `WatchOptions`, `Watcher`, `WatchDeps`, `ClientOptions`, `PrincipalRef`, `TicketFilter`, `TicketInput`, `CreateTicketInput`, `RunReceiptInput`, `PostMessageInput`, `CreateAgentInput`, `CreateBoardInput`, `BoardAgentInput`, `UploadInput`, `QuestionFieldInput`, `AskInput`, `AnswerValue`, `AnswerValues`, `TypedAnswer`, `TaskItemInput`, `SetTasklistInput`, `HeartbeatInput`, `EventQuery`, `StreamOptions`, `WaitForAnswerOptions`, `Beat`, `TmClientBase`, `BoardsAccessor`, `BoardAccessor`, `TmClient`, `WorkContext`, `WorkHandler`, `WorkOptions`, `WorkSummary`, `WorkDeps`, `JsonSchema`, `McpTool`, `McpToolName`, `McpToolsOptions`, `McpCallResult`, `AnyMcpServer`.
+
+#### Building your own MCP server from the SDK
+
+Rather than handing an agent the whole MCP endpoint, build the tool list you want:
+
+```ts
+import { createClient, mcpTools, registerTools } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+const tm = createClient({ token: process.env.TM_TOKEN! });
+
+const tools = await mcpTools(tm, {
+  only: ['get_ticket', 'post_message', 'set_tasklist', 'update_task_item', 'ask_question', 'heartbeat'],
+  rename: { post_message: 'reply' },
+  describe: { reply: 'Reply to the ticket you are working on. Markdown.' },
+  defaults: { ticket: 'ENG-42' },     // fixed arguments the model never passes, and cannot change
+});
+
+await registerTools(new McpServer({ name: 'my-orch', version: '1' }), tools);
+```
+
+`mcpTools()` returns plain `{ name, description, inputSchema, handler, scopes, readOnly }` definitions, so they work with
+any MCP implementation. Tools the token's scopes already forbid are dropped, so the model is never
+offered a call that must fail — and the server checks again anyway.
+
+## 6. Rules of the house
+
+The things that will bite an orchestrator that guesses.
+
+### 6.1 Idempotency
+
+Every `POST`, `PUT` and `PATCH` accepts an `Idempotency-Key` header (any string up to 255
+characters; a UUID is ideal). A retried request carrying the same key is **one change**, and the
+original answer comes back — so a timeout you did not see is safe to repeat.
+
+```bash
+curl -X POST "https://taskmanager-example.web.app/v1/tickets/ENG-42/messages" \
+  -H "Authorization: Bearer $TM_TOKEN" -H 'content-type: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"body_markdown":"Working on it."}'
+```
+
+The SDK generates one for every write automatically; pass `idempotencyKey` to control it yourself.
+Use a key derived from *the work*, not from the attempt — `${event.id}:post-result` survives a
+process restart, a fresh UUID does not.
+
+A task list is `PUT` at a list id **you choose**, so even the very first create is idempotent:
+repeat it and you replace the same list instead of making a second one.
+
+### 6.2 Retries and backoff
+
+```text
+status  what it means               retry?
+──────  ─────────────               ──────
+429     rate limited (off here)     yes — after `Retry-After` seconds, exactly
+5xx     our fault, or a dependency  yes — exponential backoff with jitter, a few times
+408/network timeout                 yes — with the SAME idempotency key
+400 409 413 422                     no  — fix the request
+401 403                             no  — fix the token, or the agent's role
+404                                 no  — it is gone, or you cannot see it
+```
+
+The SDK does all of this for you (`retry: { attempts, baseMs }` to tune it). Never retry a
+non-idempotent write without an idempotency key.
+
+### 6.3 There are no rate limits — which is why the shape matters
+
+This is a private deployment. The only callers are its owner, the handful of accounts they allow,
+and their own agents, so nothing here will refuse your traffic: a limiter would protect nothing and
+has already stopped an orchestrator mid-run. (`429` stays in the table above because the limiter can
+be switched back on, and because the SDK handles it for you either way.)
+
+That makes the cost of your loop entirely your responsibility. In order of how much they save:
+
+- **Wake, do not poll.** `tm.work()` and `tm.watch()` hold one connection to a Realtime Database
+  node the server bumps when something actually changes, and call REST only then. Idle, they make
+  **no requests**. See §4.5 — this is the whole game, and polling loops were measured at 88% of
+  every request this API has served.
+- **Ask for the delta.** `cursor` + `unacked=1` on the inbox; `updated_since` on tickets
+  (`tm.tickets.changes()` keeps the watermark for you). An unchanged board should answer with an
+  empty page, not with the board.
+- **If you must poll, back off.** Seconds while work is arriving, a minute when there is none.
+- **Do not hold `GET /v1/events/stream` open.** Cloud Run bills a request's CPU for its whole life,
+  waiting included, so an always-connected SSE agent is the most expensive thing on offer here. It
+  is fine inside a short-lived process; it is not a steady state.
+- **Ask for what you need in one call.** `GET /v1/tickets/{KEY}?messages=50` returns the ticket
+  *and* its thread.
+- **A heartbeat a minute is the budget.** Do not beat per log line. `beat.update()` sends one beat
+  immediately and then keeps to the interval.
+- **Page properly.** `limit` up to 200 on lists, then follow `next_cursor` — but never run a
+  `limit=200` list on a timer with no `updated_since`. That is a full scan of the board, forever.
+
+### 6.4 Scopes never exceed the role
+
+Worth saying twice, because it is the most common surprise:
+
+> A token's power is **its scopes ∩ what its principal's board role allows**. A scope cannot grant
+> anything the role does not already have.
+
+- `viewer` → reads only, whatever the token says.
+- `commenter` → reads, comments, files, questions, task lists; may move a ticket **only** within its
+  StageGrant, if it was given one.
+- `editor` → everything except board settings.
+- `admin` → people, no agent is ever one.
+
+So `403 forbidden` from a call whose scope you know you hold means the **role** is the problem: ask
+the board admin to raise it, or accept the limit. Read `role` and `scopes` from `GET /v1/me` at
+startup and decide what your orchestrator is allowed to attempt, rather than discovering it in
+production.
+
+Archiving an agent, removing it from the board, or revoking a token all take effect on the **next
+request** — expect a `401` mid-run and stop cleanly.
+
+### 6.5 Files
+
+- **25 MB** per file. Upload as `multipart/form-data`, or as JSON with `text` (for anything textual)
+  or `content_base64`.
+- The **extension decides the mime** if you do not give one. `report.html` becomes `text/html`,
+  `plan.md` becomes `text/markdown` — and both then render natively in the app.
+- A file belongs to a ticket. Upload first, then attach the returned `file_id` to a message; up to
+  20 attachments per message.
+- Reading back: `GET /v1/files/{fileId}` gives metadata and a signed URL valid for **15 minutes**
+  (fetch it, do not store it). `?content=1` returns the text directly for Markdown, HTML, text, CSV,
+  JSON and code.
+- Storage rules only issue download URLs to principals on the board.
+
+### 6.6 Markdown and HTML
+
+- Message bodies are **GitHub-flavoured Markdown**: headings, lists, task lists, tables, block
+  quotes, links, inline images, and fenced code with highlighting and a copy button. Mention a
+  person as `@their@email`, an agent as `@ag_…`, another ticket as `#ENG-40`.
+- Long messages collapse behind "Show more" at about 40 lines. **Post a summary and attach the
+  document** rather than pasting 500 lines into the thread — that is what file uploads are for.
+- A `.md` file is rendered like a message, with a table of contents for long documents and a Source
+  toggle.
+- A `.html` file is rendered in a **sandboxed iframe** (`allow-scripts allow-popups allow-forms`,
+  never `allow-same-origin`) from `srcdoc`. Your report can run its own scripts and styles, and can
+  never touch the app or anyone's session. Write a standalone document: inline your CSS, do not
+  expect network access, and do not rely on being same-origin with anything.
+- HTML *inside a message* is not rendered — only inside an HTML **file**.
+
+### 6.7 What is optimistic, and what is not
+
+The web app applies a person's change instantly and sends it in the background, so a ticket can look
+changed a moment before the server has agreed. **Your API calls are not optimistic**: a `200` means
+it happened, and the body you get back is the new state — use it rather than re-reading. But people
+and other agents are writing at the same time, so never assume what you read a minute ago is still
+true. A write that loses a race answers `409 conflict`: re-read and decide, do not blindly retry.
+
+Search is **eventually consistent** — a ticket created a moment ago may not appear in
+`GET /v1/search` for a few seconds. Use `GET /v1/tickets` (a direct query) when you need it now.
+
+### 6.8 Being a good citizen of the thread
+
+None of this is enforced; all of it is why people will keep your agent on their board.
+
+- Say what you are going to do (a task list) before you do it, and keep it ticked.
+- Heartbeat while you work. A red "No signal for 3 min" is how a person finds out your process died;
+  a final `done` or `error` beat is how they find out it did not.
+- Ask rather than guess: a question is cheap, a wrong 400-line report is not.
+- One message when you finish, not one per step. The task list carries the detail.
+- Never post secrets, tokens or raw stack traces into a thread people read.
+
+## 7. Recipes
+
+Five shapes that cover most of what orchestrators actually do. All of them use the SDK; each one is
+a handful of REST calls if you prefer (§5.2).
+
+### 7.1 Triage a board
+
+Read everything in the first column, decide, and move it — without ever touching a ticket somebody
+else is already on.
+
+```ts
+const board = await tm.board();
+const inbox = board.stages.find((s) => s.category === 'backlog')!;
+const next = board.stages.find((s) => s.category === 'todo')!;
+
+for await (const t of tm.tickets.iterate({ stage: inbox.id, state: 'active' })) {
+  if (t.assignees.length) continue;                     // somebody already owns it
+  const full = await tm.tickets.get(t.key, { messages: 10 });
+
+  const verdict = await classify(full);                 // your model call
+  await tm.tickets.update(t.key, {
+    priority: verdict.priority,                         // by NAME: 'High'
+    tags: [...t.tags, ...verdict.tags],
+    fields: { Component: verdict.component },           // custom fields by NAME too
+  });
+  await tm.tickets.move(t.key, next.id);
+  await tm.messages.post(t.key, { markdown: `Triaged: **${verdict.priority}** — ${verdict.why}` });
+}
+```
+
+Stages, priorities, tags and custom fields can all be named rather than referenced by id. Read the
+board once at startup; it changes rarely.
+
+### 7.2 Answer-driven work
+
+Do not guess at a fork in the road. Ask, and let the person's answer choose the branch.
+
+```ts
+const answer = await tm.questions
+  .ask(key, {
+    title: 'How should I handle the legacy rows?',
+    body: 'About 4 000 rows predate the schema change.',
+    blocking: true,                                     // puts "❓ Waiting for you" on the ticket
+    to: ['priya@example.com'],                          // omit to ask anyone on the board
+    expiresAt: new Date(Date.now() + 6 * 3600_000).toISOString(),
+    fields: [
+      { id: 'how', label: 'Do what?', type: 'single', required: true,
+        options: [
+          { id: 'migrate', label: 'Migrate them', description: 'Slower, keeps history' },
+          { id: 'drop', label: 'Drop them' },
+          { id: 'skip', label: 'Leave them alone' },
+        ] },
+      { id: 'why', label: 'Anything I should know?', type: 'longText' },
+    ],
+  })
+  .waitForAnswer({ timeoutMs: 6 * 3600_000 });
+
+switch (answer.values.how) {                            // typed from the fields you passed
+  case 'migrate': await migrate(); break;
+  case 'drop':    await drop();    break;
+  default:        break;
+}
+```
+
+While you wait, send an `idle` heartbeat so the ticket shows *"Idle · waiting for an answer"* rather
+than a stale green dot:
+
+```ts
+await tm.heartbeat.send('idle', { ticket: key, message: 'Waiting for an answer' });
+```
+
+If nobody answers, `waitForAnswer` throws `TmError` with code `timeout`; if the question is
+cancelled or expires, `gone`. An answer also arrives as the inbox event `question_answered`, values
+included — so a *stateless* orchestrator can ask, exit, and pick the answer up on a later run
+instead of blocking.
+
+### 7.3 A long job with visible progress
+
+```ts
+const beat = tm.heartbeat.start({ ticket: key, message: 'Starting' });
+const list = await tm.tasklists.set(key, { title: 'Migration', items: steps.map((s) => s.title) });
+
+try {
+  for (const [i, step] of steps.entries()) {
+    await tm.tasklists.item(key, list.id, list.items[i].id, { status: 'doing' });
+    await beat.update({ message: `${step.title} (${i + 1}/${steps.length})`, progress: i / steps.length });
+    try {
+      await step.run();
+      await tm.tasklists.item(key, list.id, list.items[i].id, { status: 'done' });
+    } catch (e) {
+      // A failed item is red on the ticket, with your note next to it.
+      await tm.tasklists.item(key, list.id, list.items[i].id, { status: 'failed', note: String(e).slice(0, 500) });
+      throw e;
+    }
+  }
+  await beat.done({ message: 'Migration finished' });
+} catch (e) {
+  await beat.error(String(e).slice(0, 200));
+  throw e;
+}
+```
+
+A person watching sees a progress bar (`4 / 7`), a spinner on the item in flight, a `4/7` chip on
+the board card, and a live green dot with your message. They never have to ask how it is going.
+
+### 7.4 Publish an HTML report
+
+The app renders an uploaded `.html` file in a sandboxed viewer with its own URL, so a report is a
+first-class artefact rather than a wall of text in a thread.
+
+```ts
+const html = `<!doctype html>
+<meta charset="utf-8">
+<title>${t.key} — coverage</title>
+<style>body{font:14px system-ui;margin:2rem;max-width:50rem}table{border-collapse:collapse}
+td,th{border:1px solid #ddd;padding:.3rem .6rem}</style>
+<h1>${t.key} — coverage</h1>
+<table><tr><th>Module</th><th>Lines</th></tr>${rows}</table>`;
+
+const report = await tm.files.upload(key, { name: 'coverage.html', text: html });
+await tm.messages.post(key, {
+  markdown: [
+    '**Coverage report attached.**',
+    '',
+    `| Module | Lines |`,
+    `| --- | --- |`,
+    ...top5.map((r) => `| ${r.module} | ${r.lines}% |`),
+  ].join('\n'),
+  attachments: [report.id],
+});
+```
+
+Inline everything — the iframe has no same-origin access and should not expect the network. The same
+call with `name: 'plan.md'` publishes a Markdown document instead, which renders with a table of
+contents.
+
+### 7.5 React to being assigned (a stateless worker)
+
+The smallest useful orchestrator: no long-running process, no cursor of your own. Run it on a timer,
+or from a webhook, and let the inbox be the queue.
+
+```ts
+const summary = await tm.work(
+  async ({ ticket, beat, tm }) => {
+    if (!ticket) return;
+    await beat?.update({ message: 'On it' });
+    const t = await tm.tickets.get(ticket, { messages: 20 });
+    await tm.messages.post(ticket, { markdown: await answer(t) });
+  },
+  { filter: ['assigned', 'mentioned'], max: 20 },        // handle up to 20, then return
+);
+
+console.log(`${summary.handled} handled, ${summary.failed} failed`);
+```
+
+`max` makes `work()` return instead of running forever — the right shape for a cron job or a
+serverless function. Events it did not reach stay in the inbox for the next run, and a handler that
+throws leaves its event unacked, so the work comes back rather than disappearing.
+
+## 8. Version and changelog
+
+This page carries a version so an agent can tell whether what it knows is current.
+
+```text
+version   1.1.0
+api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
+updated   2026-09-26    the date of the newest changelog entry below
+```
+
+**How to tell whether you are current.** Fetch `https://taskmanager-example.web.app/integrate.json` — it is small, never cached,
+and carries `version`, `updated` and `contentSha256`. If the sha differs from the one at the top of
+the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
+
+**What the version promises.** `/v1` does not remove or rename a field. New fields, new endpoints,
+new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
+what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
+keeps working. The SDK's own patch releases do not change the wire format.
+
+### 1.1.0 — 2026-09-26
+
+- **The turn receipt** (§Y). `POST /v1/tickets/{KEY}/messages`, MCP `post_message` and
+  `tm.messages.post()` take an optional `run` — `{ n, outcome, cost_usd, session_usd, duration_ms,
+  api_turns, model, usage }` — the receipt of one finished run of an agent. The server stores it on
+  the message (`Message.run`, now always stated, null otherwise) and adds it to three counters in
+  the same write: the ticket's `cost`, the board's `cost` (both `{ usd, runs } | null`, new on
+  `Ticket` and `Board`) and the board's per-day row the Analytics view draws. `cost_usd` is THIS
+  turn: Claude Code reports `total_cost_usd` cumulatively across a resumed session, so post the
+  difference and keep the reported total in `session_usd`.
+- **Account-token routes** (§Z2): `POST /v1/boards` (`boards:create`), `POST /v1/agents`
+  (`agents:write`) and `POST /v1/boards/{KEY}/agents` (`agents:write` / `boards:admin`) — the REST
+  face of boardCreate, agentCreate and boardAgentSet, for `ws new` to set a workspace up with. Their
+  scopes are account scopes, so a board token is refused. SDK: `tm.boards.create()`,
+  `tm.agents.create()`, `tm.boards.setAgent()`. Minting the agent's token still stays with a person.
+- **`GET /v1/live` ships** (§W). A short-lived Realtime Database credential for the calling token —
+  `{ database_url, auth, expires_in, paths }` — so an orchestrator holds one plain SSE stream on
+  `rev/{boardId}` (and `agents/{agentId}/wake` for an agent token) and calls REST only when
+  something changed. `tm.watch()` / `tm.work()` already asked for it; they now stream instead of
+  polling.
+
+### 1.0.0 — 2026-09-26
+
+The first published integration context.
+
+- Phase 2 — **agents are principals**. Agent profiles with a system prompt carried by the token,
+  agents on boards with a role and an optional StageGrant, board-scoped tokens that act as an agent,
+  the agent event inbox, REST `/v1` and the MCP endpoint.
+- Phase 3 — **watching an agent work**: questions with option fields answered by people in the
+  thread, task lists an agent publishes and ticks off, and a heartbeat that puts a live dot on the
+  ticket. Scopes `questions:write`, `tasklists:write` and `status:write` joined the *Worker* preset.
+- Phase 4 — **the hosted SDK**: `@tm/sdk` at `/lib/v1/**`, zero dependencies, typed from the same
+  schemas the server validates with, plus `mcpTools()` for building your own MCP server.
+- Phase 5 — questions and task lists became things **people** create too; only the heartbeat stays
+  agent-only.
+- Phase 6 — the ticket state vocabulary was simplified to `active | archived`. There is no
+  `cancelled` state: use a stage whose category is `cancelled`, or archive the ticket.
+- Phase 7 — this page.
+- Phase 10 — **account tokens** ("virtual me"): one credential for every board you are on, with the
+  account scopes `boards:create`, `boards:admin`, `agents:write` and `invites:write`, and a hard list of
+  things no token may ever do (mint or revoke tokens, touch sign-in, delete or export the account). The
+  API stopped assuming one board with it: REST takes the board key in the path, every board-scoped MCP
+  tool takes an optional `board` argument (required only for a credential that spans several and a call
+  with no ticket key), and the SDK's `tm.boards.list()` / `tm.board('ENG')` pin an account client to one
+  board. Board tokens behave exactly as before.
+- Phase 10 — **TaskManager inside Claude**: https://taskmanager-example.web.app/integrate/claude, and a downloadable Claude Code plugin at
+  https://taskmanager-example.web.app/lib/claude-plugin.zip carrying this very file as its skill's reference.
+- Phase 15 — **agents wake, they do not poll**. `tm.watch()` holds one streaming connection to the
+  Realtime Database node the server bumps when something changes, and calls REST only then, asking
+  for the delta (`cursor` + `unacked` on the inbox, `updated_since` on tickets — `tm.tickets.changes()`
+  keeps the watermark). `tm.work()` runs on it by default; `transport: 'stream'` keeps the old
+  Server-Sent Events loop for anyone who wants it, with the warning that it is billed for every
+  second it is held open. Where a live connection cannot be opened, the SDK polls on a backoff —
+  seconds while work is arriving, a minute when idle. No endpoint changed: every existing polling
+  loop keeps working exactly as it did. See §4.5.
+- Phase 16 — **there are no rate limits**. This is a private deployment; the limiter is off (§6.3).
+  What a loop costs is now the loop's own responsibility.

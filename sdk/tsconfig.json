@@ -1,0 +1,15 @@
+{
+  // Typechecks the SDK source AND test/contract.ts, which asserts — in both
+  // directions — that every public type here is structurally identical to the
+  // @tm/shared shape the server validates with. Nothing is emitted from here:
+  // build.mjs concatenates src/ into dist/sdk.ts and emits the flat .d.ts from
+  // that, so the shipped declaration file mentions neither @tm/shared nor zod.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["src", "test"]
+}

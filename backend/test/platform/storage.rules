@@ -1,0 +1,7 @@
+rules_version = '2';
+// Test-only: the platform emu tests reach Storage through the Admin SDK, which bypasses rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

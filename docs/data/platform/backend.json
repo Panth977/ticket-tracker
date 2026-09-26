@@ -1,0 +1,798 @@
+{
+  "triggers": [
+    {
+      "name": "api",
+      "logo": "api",
+      "note": "An HTTPS request — REST at /v1, MCP at /mcp, OAuth at /oauth, inbound hooks at /hooks. All served by the same `api` function as the app, so they reach the same command handlers."
+    },
+    {
+      "name": "queue",
+      "logo": "queue",
+      "note": "A Cloud Tasks queue: retries with exponential backoff, a max dispatch rate, and deduplication by Cloud Tasks task name."
+    },
+    {
+      "name": "schedule",
+      "logo": "schedule",
+      "note": "Cloud Scheduler."
+    },
+    {
+      "name": "module",
+      "logo": "module",
+      "note": "Imported, not reached."
+    },
+    {
+      "name": "hosting",
+      "logo": "storage",
+      "note": "A static file on Firebase Hosting, in front of the CDN — no function runs. The SDK lives here so an orchestrator can import it by URL from any runtime."
+    }
+  ],
+  "middleware": [
+    {
+      "name": "apiKey",
+      "color": "#b26a0c",
+      "note": "A board token: acts as its owner, or as one of the owner's agents.",
+      "code": [
+        "key = bearer(req)                     // 'tm_live_…'",
+        "doc = collectionGroup(apiKeys) where hash == sha256(key)   → 401",
+        "doc fails ApiKeySchema (a phase-1 key)                     → 401, treated as revoked",
+        "doc.revokedAt || doc.expiresAt < now                       → 401",
+        "rateLimit('key:' + doc.id, doc.limits)                     → 429 + Retry-After",
+        "",
+        "actsAs.kind == 'agent':",
+        "  agents/{id} exists, not archived, owned by the key's owner   → 401",
+        "  board.access[agentId] present                               → 401 (removed from the board)",
+        "",
+        "ctx = {",
+        "  actor:    actsAs.kind == 'agent' ? agentId : owner uid,",
+        "  ownerUid: owner uid,             // answerable: idempotency, limits, audit",
+        "  via:      '/mcp' ? 'mcp' : 'api',",
+        "  scopes:   doc.scopes,",
+        "  boardIds: [doc.boardId],",
+        "  keyId, keyName: doc.name          // stamped as viaToken on messages and activity",
+        "}",
+        "lastUsedAt updated at most once a minute",
+        "",
+        "THE SAME TOKEN OPENS BOTH DOORS: REST /v1 and MCP /mcp."
+      ]
+    },
+    {
+      "name": "oauth",
+      "color": "#7c3aed",
+      "note": "An OAuth 2.1 bearer token — MCP clients and third-party apps.",
+      "code": [
+        "token = bearer(req)",
+        "  absent → 401, WWW-Authenticate: Bearer resource_metadata=",
+        "           '/.well-known/oauth-protected-resource'",
+        "",
+        "// THAT HEADER IS HOW AN MCP CLIENT DISCOVERS THE WHOLE FLOW: it",
+        "// fetches the metadata, registers itself (DCR), runs PKCE, and",
+        "// comes back with a token. Nobody pastes a key into anything.",
+        "",
+        "row = oauthTokens/{sha256(token)} kind == 'access' && !expired  → 401",
+        "ctx = { actor: row.uid, via: client is MCP ? 'mcp' : 'integration',",
+        "        scopes: row.scopes }"
+      ]
+    },
+    {
+      "name": "intakeSecret",
+      "color": "#0369a1",
+      "note": "A board's intake slug + secret — a website's feedback widget.",
+      "code": [
+        "slug = header('x-tm-intake'); secret = header('x-tm-secret')",
+        "intake = intakes/{slug}, enabled, sha256(secret) == secretHash  → 401",
+        "Origin ∈ allowedOrigins (when set)                             → 403",
+        "rateLimit('intake:' + slug, intake.limits)                     → 429",
+        "",
+        "// The reference tracker's reporting API, with one change: the",
+        "// secret is hashed, so the settings screen shows it once."
+      ]
+    },
+    {
+      "name": "signed",
+      "color": "#0f766e",
+      "note": "A provider's webhook, trusted by its signature.",
+      "code": [
+        "email (Resend / SendGrid inbound)  → provider signature",
+        "WhatsApp (Meta Cloud API)          → X-Hub-Signature-256",
+        "GitHub                             → X-Hub-Signature-256",
+        "Slack                              → X-Slack-Signature + timestamp ≤ 5 min",
+        "mismatch → 401; the body is never logged"
+      ]
+    }
+  ],
+  "proxyFunctions": [
+    {
+      "name": "commands",
+      "location": "the one module every door calls",
+      "ioSchema": [
+        "// app/services/* ARE these functions. The HTTP layer is a thin",
+        "// adapter per door:",
+        "",
+        "POST /api/ticketCreate        (user)          ─┐",
+        "POST /v1/tickets              (apiKey)        ─┼─→ commands.ticketCreate(ctx, input)",
+        "MCP  tools/call create_ticket (apiKey | oauth) ─┘",
+        "",
+        "// ctx.actor is a principal: the person, or the agent a token acts as"
+      ],
+      "implementation": [
+        "ONE IMPLEMENTATION, THREE FRONT DOORS. The permission check, the",
+        "validation, the transaction, the activity row, the notification and",
+        "the webhook are written once. A door only translates: REST maps",
+        "resource-shaped JSON and Markdown; MCP maps tool arguments; the app",
+        "sends the command shape directly.",
+        "",
+        "The alternative — clients writing Firestore directly, with triggers",
+        "for side effects — would give the app a write path the API does",
+        "not have, and every rule twice: once in firestore.rules, once in",
+        "the API. See the architecture page."
+      ],
+      "touches": [
+        "app/services/ticketCreate",
+        "app/services/ticketUpdate",
+        "app/services/messagePost",
+        "app/proxyFunctions/can",
+        "app/services/agentInboxAck",
+        "app/services/boardAgentSet"
+      ]
+    },
+    {
+      "name": "toPublic",
+      "location": "the shape the outside world sees",
+      "ioSchema": [
+        "interface PublicPrincipal {         // people AND agents, one shape",
+        "  id: string, kind: 'user' | 'agent', name: string,",
+        "  email: string /* '' for agents */, avatar_url: string | null,",
+        "  icon: string | null              // agents: a prebuilt icon id ('claude', 'bot', …); null for people",
+        "}",
+        "interface PublicTicket {",
+        "  id: string, key: string, url: string",
+        "  title: string, description_md: string | null",
+        "  board: { id, key, name }",
+        "  stage: { id, name, category }, priority: { id, name } | null",
+        "  tags: string[], assignees: PublicPrincipal[]",
+        "  start_at: string | null, due_at: string | null   // ISO",
+        "  fields: Record<string /* field NAME */, unknown>",
+        "  links: { type, key }[], referenced_by: string[]   // keys",
+        "  state: TicketState, created_at, updated_at",
+        "}",
+        "interface PublicMessage {",
+        "  id, ticket_key, kind, body_md,     // Message.markdown when posted as Markdown",
+        "  author: { id, kind, name }, via, via_token: string | null,",
+        "  reply_to, attachments: PublicAttachment[], reactions, pinned, created_at, edited_at, deleted",
+        "}",
+        "interface PublicFile {",
+        "  id, name, mime, size, kind: FileKind, language, textual,",
+        "  ticket_key, message_id, source: 'description' | 'message' | 'upload',",
+        "  uploaded_by, url?, url_expires_at?   // signed, 15 min",
+        "}",
+        "interface PublicEvent { id /* = cursor */, type, board, ticket_key, message_id, actor, summary, created_at, acked_at }"
+      ],
+      "implementation": [
+        "ids are resolved to names so a script or a model can read it",
+        "without a second call; fields are keyed by NAME outside, by id",
+        "inside (a rename breaks a script, but it cannot corrupt data).",
+        "RichText → Markdown; mentions as [@Name](mailto:email) for people and",
+        "[@Name](agent:ag_…) for agents, refs as #KEY.",
+        "Accepted back the same way, or as a bare '@email' / '@ag_…', and",
+        "assignees by id, email or agent name."
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "rest",
+      "trigger": "api",
+      "location": "/v1/*",
+      "middleware": "apiKey",
+      "ioSchema": [
+        "GET    /v1/me                             principal, board, scopes; for an agent:",
+        "                                          name, description, system_prompt, avatar_url, icon",
+        "GET    /v1/board                          board:read   — stages (with categories), priorities,",
+        "                                                         tags, fields, members (people + agents)",
+        "GET    /v1/tickets?assignee=me&stage=&state=&q=&updated_since=&cursor=     tickets:read",
+        "POST   /v1/tickets                        tickets:create",
+        "GET    /v1/tickets/{KEY}                  tickets:read — fields, links, referenced_by,",
+        "                                                         pinned messages, files",
+        "PATCH  /v1/tickets/{KEY}                  tickets:update | :move | :assign (each field its own)",
+        "                                          title, description_md, fields by NAME, dates, tags,",
+        "                                          assignees by id | email | agent name",
+        "POST   /v1/tickets/{KEY}/move      { stage }            tickets:move",
+        "POST   /v1/tickets/{KEY}/state     { state }            tickets:state",
+        "POST   /v1/tickets/{KEY}/assignees { add?, remove? }    tickets:assign",
+        "GET    /v1/tickets/{KEY}/messages?cursor=                comments:read  (Markdown bodies)",
+        "POST   /v1/tickets/{KEY}/messages  { body_markdown, attachments?: fileId[], reply_to? }",
+        "                                                         comments:write",
+        "GET    /v1/tickets/{KEY}/files                           files:read",
+        "POST   /v1/tickets/{KEY}/files     multipart, or JSON { name, mime?, text | content_base64 }",
+        "                                   ≤ 25 MB → { file_id, url, kind, … }   files:write",
+        "GET    /v1/files/{fileId}          metadata + signed URL (15 min);",
+        "                                   ?content=1 → text for md / html / text / csv / json / code",
+        "GET    /v1/events?cursor=&limit=&unacked=                events:read — the inbox, oldest first",
+        "GET    /v1/events/stream?cursor=   Server-Sent Events of the same; Last-Event-ID resumes",
+        "POST   /v1/events/ack              { ids } | { upTo }    events:read",
+        "GET    /v1/live                    a short-lived RTDB credential   events:read",
+        "                                   { database_url, auth, expires_in, paths }",
+        "                                   stream rev/{board} and agents/{id}/wake instead of polling",
+        "",
+        "// PHASE 17 (§Y1) — the turn receipt an orchestrator posts when a run ends:",
+        "POST   /v1/tickets/{KEY}/messages  { …, run?: { n, outcome, cost_usd, session_usd,",
+        "                                      duration_ms, api_turns, model, usage } }",
+        "                                   → ticket.cost, board.cost, boards/{b}/stats/{day} += receipt",
+        "",
+        "// PHASE 17 (§Z2) — ACCOUNT tokens only (account scopes; a board token is 403):",
+        "POST   /v1/boards                  { name, key, template?, color?, icon? }  boards:create",
+        "POST   /v1/agents                  { name, description?, system_prompt?, id?, avatar? }",
+        "                                   → 201 { id, name, description, system_prompt, … }  agents:write",
+        "POST   /v1/boards/{KEY}/agents     { agent, role | null, stage_grant? }  agents:write | boards:admin",
+        "",
+        "// PHASE 3 (§L4) — an agent that shows its work:",
+        "POST   /v1/tickets/{KEY}/questions  { title, body_markdown?, fields,",
+        "                                      allow_comment?, to?, blocking?, expires_at? }",
+        "                                      → 201 the question    questions:write",
+        "GET    /v1/questions/{id}             status + answer values   comments:read",
+        "POST   /v1/questions/{id}/cancel                               questions:write",
+        "GET    /v1/tickets/{KEY}/tasklists                             tickets:read",
+        "PUT    /v1/tickets/{KEY}/tasklists/{listId}   { title, items }  tasklists:write",
+        "PATCH  /v1/tickets/{KEY}/tasklists/{listId}/items/{itemId}  { status?, note? }",
+        "DELETE /v1/tickets/{KEY}/tasklists/{listId}                    tasklists:write",
+        "POST   /v1/heartbeat   { ticket?, state, message?, progress? }  status:write",
+        "GET    /v1/agents/status?ticket=                               tickets:read",
+        "",
+        "// events gained question_answered / question_cancelled, carrying the",
+        "// answer values — an orchestrator acts on them without a second call.",
+        "GET    /v1/search?q=                                     tickets:read",
+        "CRUD   /v1/webhooks                                      webhooks:manage (person tokens only)",
+        "",
+        "// A token names ONE board, so /v1/board and /v1/tickets take no board",
+        "// parameter. Phase-1 paths (/v1/boards/{key}/tickets, …/comments,",
+        "// …/attachments) still answer, marked deprecated in the OpenAPI.",
+        "// Also accepts oauth tokens. Idempotency-Key header on every POST.",
+        "// Errors: RFC 9457 problem+json. Pagination: opaque cursor.",
+        "// OpenAPI 3.1 generated from the zod schemas → /v1/openapi.json"
+      ],
+      "implementation": [
+        "route → scope gate (REST_ROUTES) → zod parse → commands.X(ctx, input) → toPublic(result)",
+        "",
+        "EVERY WRITE HERE IS A COMMAND THE APP ALSO USES. There is no",
+        "API-only path to drift.",
+        "",
+        "Files: the door writes the object under the ticket's Storage prefix",
+        "and a files/{fileId} row with source 'upload'; the message that names",
+        "it later attaches it (messagePost fileIds).",
+        "",
+        "Events: an agent token reads agentInbox/{agentId}; a person's token",
+        "reads their own inbox, on its board. The event id IS the cursor.",
+        "The stream sends 'event' frames and a 'ping' every 25 s.",
+        "",
+        "Every change is attributed '<principal> via token <name>' — the",
+        "thread shows 'Builder (agent) via token orch-eng-builder'."
+      ],
+      "touches": [
+        "platform/proxyFunctions/commands",
+        "platform/proxyFunctions/toPublic",
+        "platform/schema/rateLimits",
+        "app/schema/agentInbox",
+        "app/schema/files",
+        "app/services/agentInboxAck",
+        "app/schema/agents",
+        "app/services/questionAsk",
+        "app/services/tasklistSet",
+        "app/services/agentHeartbeat",
+        "app/schema/tasklists",
+        "app/schema/agentStatus"
+      ]
+    },
+    {
+      "name": "mcp",
+      "trigger": "api",
+      "location": "POST /mcp  (Streamable HTTP)",
+      "middleware": "apiKey",
+      "ioSchema": [
+        "auth: Bearer tm_live_… (a board token, the same as REST)",
+        "      or OAuth 2.1 for interactive clients (Claude, Cursor)",
+        "",
+        "tools (hidden from tools/list, and refused, without their scope):",
+        "  whoami()                          → principal, board, scopes; for an agent its system prompt",
+        "  get_board()                       → stages, fields, members (people + agents)",
+        "  list_boards()                     → boards this credential may act on",
+        "  list_my_tickets({ stage?, state?, updated_since? })",
+        "  search_tickets({ query?, assignee?, stage?, state?, due_before?, limit? })",
+        "  get_ticket({ key, messages?: N })  → ticket + pins + files + last N messages",
+        "  get_messages({ key, cursor? })",
+        "  create_ticket({ title, description?, assignees?, due?, priority?, fields? })",
+        "  update_ticket({ key, title?, stage?, assignees?, due?, fields?, … })",
+        "  move_ticket({ key, stage })",
+        "  assign_ticket({ key, add?, remove? })       // people or agents",
+        "  post_message({ key, markdown, attachments?: fileId[], reply_to? })",
+        "  upload_file({ key, name, mime?, text? | content_base64? })  → fileId",
+        "  read_file({ fileId })             → text for md / html / text / csv / json, else a signed URL",
+        "  link_tickets({ from, to, type: 'blocks' | 'relates' | 'duplicates' })",
+        "  get_events({ cursor?, limit? })   ack_events({ ids | upTo })",
+        "",
+        "  // PHASE 3 (§L4) — hidden without questions:write / tasklists:write / status:write:",
+        "  ask_question({ key, title, body?, fields, allow_comment?, to?, blocking?, expires_at? })",
+        "  get_question({ id })              → status and, once given, the answer values",
+        "  cancel_question({ id })",
+        "  set_tasklist({ key, title, items, list_id?, position?, closed? })",
+        "  update_task_item({ key, list_id, item_id, status?, note? })",
+        "  delete_tasklist({ key, list_id })   // the only 'delete' there is, and it removes a CHECKLIST",
+        "  heartbeat({ ticket?, state, message?, progress? })",
+        "",
+        "  // THERE IS NO answer_question. An agent asks; a PERSON answers, in the app.",
+        "",
+        "resources:   ticket://ENG-42        (text/markdown, incl. the thread)",
+        "             file://{fileId}",
+        "             board://schema         (the token's board: stages, fields, members)",
+        "prompts:     triage_board, standup_summary",
+        "",
+        "annotations: readOnlyHint on whoami/list/search/get/read; destructiveHint",
+        "             on none — there is deliberately no delete tool."
+      ],
+      "implementation": [
+        "@modelcontextprotocol/sdk server, stateless (no session affinity",
+        "needed on Cloud Functions / Cloud Run)",
+        "each tool = zod input (McpToolSchemas) → commands.X(ctx{via:'mcp'}) → toPublic → text",
+        "",
+        "EVERY CHANGE IS ATTRIBUTED. With an OAuth grant: 'Panth via Claude",
+        "(MCP)', the person as actor. With an agent token: the AGENT is the",
+        "actor — 'Builder (agent) via token orch-eng-builder' — and its owner",
+        "is answerable. An agent is never a ghost editor.",
+        "",
+        "upload_file TAKES TEXT. An agent writing plan.md or report.html",
+        "passes the document as a string; no base64, no multipart.",
+        "",
+        "BOARD NAMES AND FIELD NAMES, NOT IDS, in arguments. A model reads",
+        "'stage: Review'; the tool resolves it and says which names exist",
+        "when it cannot."
+      ],
+      "touches": [
+        "platform/proxyFunctions/commands",
+        "platform/proxyFunctions/toPublic",
+        "platform/schema/oauthTokens",
+        "platform/schema/apiKeys",
+        "app/schema/agentInbox",
+        "app/schema/files",
+        "app/services/agentInboxAck",
+        "app/services/questionAsk",
+        "app/services/tasklistSet",
+        "app/services/agentHeartbeat",
+        "app/schema/tasklists",
+        "app/schema/agentStatus"
+      ]
+    },
+    {
+      "name": "sdk",
+      "trigger": "hosting",
+      "location": "/lib/  ·  /lib/v1/**  ·  /lib/latest/**",
+      "middleware": null,
+      "ioSchema": [
+        "https://taskmanager-example.web.app/lib/       install lines per runtime, examples",
+        "  /lib/v1/sdk.js          ESM bundle, no dependencies (browsers, Deno, Bun)",
+        "  /lib/v1/sdk.min.js",
+        "  /lib/v1/sdk.d.ts        ONE flat declaration file — no zod, no @tm/shared left",
+        "  /lib/v1/sdk.ts          the same SDK as a single TypeScript file (Deno, Bun)",
+        "  /lib/v1/tm-sdk-<version>.tgz  and  tm-sdk.tgz    npm install, for Node",
+        "  /lib/v1/openapi.json    a copy of /v1/openapi.json, from the same zod schemas",
+        "  /lib/v1/sdk.json        what this build is: version, sizes, sha-256 per file",
+        "  /lib/latest/…           the newest build, never cached",
+        "",
+        "headers (firebase.json):",
+        "  /lib/v1/**       Cache-Control: public, max-age=31536000, immutable",
+        "  /lib/latest/**   Cache-Control: no-store",
+        "  .ts / .d.ts → application/typescript      .tgz → application/gzip",
+        "  Access-Control-Allow-Origin: *            X-Content-Type-Options: nosniff",
+        "  X-TypeScript-Types: /lib/{channel}/sdk.d.ts   on sdk.js and sdk.min.js",
+        "",
+        "const tm = createClient({ token })      // one board, one identity: the token decides",
+        "  tm.me() · tm.board() · tm.tickets.{list,iterate,get,create,update,move,state,assign}",
+        "  tm.messages.{list,post} · tm.files.{list,upload,get,read} · tm.search()",
+        "  tm.questions.ask(…).waitForAnswer() · tm.tasklists.{list,set,item,delete}",
+        "  tm.heartbeat.start() → beat.update / done / error · tm.agents.status()",
+        "  tm.events.{list,ack,stream} (SSE, resumes from its cursor) · tm.webhooks.*",
+        "  tm.work(handler, { concurrency, filter })   // the whole orchestrator loop",
+        "",
+        "TmError { code: 'forbidden' | 'rate_limited' | 'timeout' | …, status, problem }"
+      ],
+      "implementation": [
+        "Built from sdk/ in this repo (@tm/sdk): zero runtime dependencies, one",
+        "injectable fetch, Node 20+, Deno, Bun and browsers.",
+        "",
+        "THE TYPES ARE THE SERVER'S TYPES. Every shape is asserted structurally",
+        "identical, in BOTH directions, to the @tm/shared schema the routes parse",
+        "with, so a field that drifts on the server is a compile error in the SDK",
+        "build — and a wrong field in an orchestrator is a compile error there,",
+        "rather than a 400 an hour into a run.",
+        "",
+        "TYPE HINTS ARRIVE BY EVERY ROUTE, because a URL import only carries types",
+        "if the server says where they are: the tarball's package.json (`types`, and",
+        "an `exports` map with the `types` condition first), `sdk.ts` being real",
+        "source, and `sdk.js` starting with /// <reference types=\"./sdk.d.ts\" />",
+        "beside the X-TypeScript-Types header.",
+        "",
+        "RETRIES ARE SAFE. 429, 5xx and network failures back off and honour",
+        "Retry-After; every write carries an Idempotency-Key generated once per",
+        "call and reused across its retries, so a retried create is still one",
+        "ticket.",
+        "",
+        "STAGED BY THE DEPLOY, never by hand: scripts/deploy-lib.mjs copies sdk/dist",
+        "into the hosting build and refuses a missing, stale or unstamped one —",
+        "shipping yesterday's bundle next to today's API is the exact failure this",
+        "plumbing exists to prevent.",
+        "",
+        "/lib/v1/* is what a consumer pins, so it is immutable for a year: a new",
+        "build gets a new tarball name, and a change to the wire format gets a new",
+        "prefix (/lib/v2/). /lib/latest/* is the moving target, and never cached."
+      ],
+      "touches": [
+        "platform/services/rest",
+        "platform/services/mcp"
+      ]
+    },
+    {
+      "name": "mcpTools",
+      "trigger": "module",
+      "location": "mcpTools(tm, options) — in the orchestrator's own process",
+      "middleware": null,
+      "ioSchema": [
+        "import { createClient, mcpTools, registerTools } from '…/lib/v1/sdk.js'",
+        "",
+        "const tools = mcpTools(tm, {",
+        "  only:     ['get_ticket', 'post_message', 'set_tasklist', 'ask_question', 'heartbeat'],",
+        "  exclude:  ['delete_tasklist'],",
+        "  rename:   { post_message: 'reply' },",
+        "  describe: { reply: 'Reply to the ticket you are working on. Markdown.' },",
+        "  defaults: { ticket: 'ENG-42' },   // fixed arguments the model never passes",
+        "  wrap:     { reply: (call) => (args) => call({ ...args, markdown: prefix + args.markdown }) },",
+        "  scopes:   ['tickets:read', 'comments:write'],   // else read once from GET /v1/me",
+        "})",
+        "  → [{ name, description, inputSchema (JSON Schema), handler, scopes, readOnly, originalName }]",
+        "",
+        "registerTools(new McpServer({ name: 'my-orch', version: '1' }), tools)"
+      ],
+      "implementation": [
+        "RATHER THAN HANDING AN AGENT THE WHOLE /mcp ENDPOINT, an orchestrator",
+        "builds the tool list it wants and serves it from its own MCP server.",
+        "",
+        "THE NAMES AND SHAPES ARE THE ENDPOINT’S. They come from the same tool",
+        "catalogue in @tm/shared that platform/services/mcp serves, and a test",
+        "asserts the two lists stay identical — a model moved from the hosted",
+        "endpoint to a hand-built server meets the tools it already knows.",
+        "",
+        "SCOPES FILTER THE LIST, not only the call: a tool the token may not use is",
+        "dropped, so a model is never offered something that must fail. The server",
+        "still checks, so this is a courtesy and not the security.",
+        "",
+        "`defaults` are applied where the model cannot reach them and are removed",
+        "from the JSON Schema, so a fixed `ticket` cannot be argued with; `ticket`",
+        "also fills the `key` argument most tools use.",
+        "",
+        "PLAIN DEFINITIONS, so they work with any MCP implementation.",
+        "registerTools() is the convenience for the official SDK — it wires the",
+        "server’s fallbackRequestHandler for tools/list and tools/call."
+      ],
+      "touches": [
+        "platform/services/mcp",
+        "platform/services/sdk"
+      ]
+    },
+    {
+      "name": "oauth",
+      "trigger": "api",
+      "location": "/oauth/*  +  /.well-known/*",
+      "ioSchema": [
+        "GET  /.well-known/oauth-protected-resource     RFC 9728",
+        "GET  /.well-known/oauth-authorization-server   RFC 8414",
+        "POST /oauth/register     RFC 7591 dynamic client registration",
+        "GET  /oauth/authorize    → the consent screen (Svelte route /oauth/consent)",
+        "POST /oauth/token        authorization_code + PKCE S256 | refresh_token",
+        "POST /oauth/revoke"
+      ],
+      "implementation": [
+        "consent: see the client's name and the scopes, Approve",
+        "code (60s) → access (1h) + refresh (30d, rotated on use; reuse of",
+        "an old refresh token revokes the whole grant — theft detection)",
+        "",
+        "Firebase Auth is the IDENTITY; this is only the DELEGATION layer."
+      ],
+      "touches": [
+        "platform/schema/oauthClients",
+        "platform/schema/oauthGrants",
+        "platform/schema/oauthTokens"
+      ]
+    },
+    {
+      "name": "grantRevoke",
+      "trigger": "api",
+      "location": "POST /api/grantRevoke",
+      "middleware": null,
+      "ioSchema": [
+        "// app middleware: user",
+        "interface Req { grantId }"
+      ],
+      "implementation": [
+        "owner only; delete the grant and every oauthTokens row for it",
+        "the MCP client's next call gets 401 and must ask again"
+      ],
+      "touches": [
+        "platform/schema/oauthGrants",
+        "platform/schema/oauthTokens"
+      ]
+    },
+    {
+      "name": "apiKeyCreate",
+      "trigger": "api",
+      "location": "POST /api/apiKeyCreate  (Account › Tokens)",
+      "middleware": null,
+      "ioSchema": [
+        "// app middleware: user",
+        "interface Req {",
+        "  name: string                      // 'orch-eng-builder'",
+        "  boardId: BoardId                  // exactly one",
+        "  actsAs?: { kind: 'user' } | { kind: 'agent', id: AgentId }   // default: me",
+        "  scopes: Scope[]",
+        "  expiresInDays?: number | null     // null = never; the form offers 30 / 90 / 365",
+        "}",
+        "interface Res { key: string, keyId, prefix, expiresAt }   // key: the ONLY time it is returned"
+      ],
+      "implementation": [
+        "any signed-in person, for themselves",
+        "boardId: a board they are on → 403 otherwise",
+        "actsAs agent: an agent THEY own, not archived, currently on that board",
+        "  → 404 / 403 otherwise; its token cannot carry board:admin or webhooks:manage",
+        "admin scopes on a person token: the owner must be admin there",
+        "store sha256 + prefix; return 'tm_live_' + base62(32)",
+        "",
+        "The form shows the key once, with a ready-to-paste MCP config",
+        "(mcpClientConfig) and curl examples (curlExamples) — both built in",
+        "@tm/shared so the page and the docs say the same thing.",
+        "",
+        "Changes made with it appear as 'Panth via token <name>', or for an",
+        "agent token 'Builder (agent) via token <name>'."
+      ],
+      "touches": [
+        "platform/schema/apiKeys",
+        "app/schema/agents",
+        "app/schema/members"
+      ]
+    },
+    {
+      "name": "apiKeyRevoke",
+      "trigger": "api",
+      "location": "POST /api/apiKeyRevoke",
+      "middleware": null,
+      "ioSchema": [
+        "// app middleware: user",
+        "interface Req { keyId }"
+      ],
+      "implementation": [
+        "owner only; revokedAt = now, revokedReason 'owner' — the next call with it gets 401",
+        "revoking twice is ok",
+        "",
+        "Tokens are also revoked FOR you: agentArchive ('agentArchived'),",
+        "boardAgentSet role:null ('agentRemoved'), leaving the board ('ownerLeft')."
+      ],
+      "touches": [
+        "platform/schema/apiKeys"
+      ]
+    },
+    {
+      "name": "webhookUpsert",
+      "trigger": "api",
+      "location": "POST /api/webhookUpsert  ·  /v1/webhooks",
+      "middleware": null,
+      "ioSchema": [
+        "interface Req { boardId, webhookId?, url, events, active?, rotateSecret? }",
+        "interface Res { webhookId, secret?: string }"
+      ],
+      "implementation": [
+        "can(admin) on the board",
+        "https only; resolve the host and refuse private / link-local ranges",
+        "send a 'ping' event; save even if it fails, but say so"
+      ],
+      "touches": [
+        "platform/schema/webhooks"
+      ]
+    },
+    {
+      "name": "webhookDispatch",
+      "trigger": "queue",
+      "location": "queue: webhooks  (500/s, 8 attempts over ~24h)",
+      "middleware": null,
+      "ioSchema": [
+        "// enqueued by every command after commit: { boardId, event, envelope }"
+      ],
+      "implementation": [
+        "fan out: every active webhook on that board whose events match",
+        "  → one Cloud Task per (webhook, envelope), named by both (dedupe)",
+        "POST with X-TM-Signature, 10s timeout",
+        "2xx → delivery 'ok', failures = 0",
+        "else → retry: 1m, 5m, 30m, 2h, 6h, 12h; then 'gave_up', failures++",
+        "failures ≥ 20 → active = false, owner emailed",
+        "",
+        "Slack and GitHub installs consume the same events through here.",
+        "",
+        "Envelope.actor carries kind ('user' | 'agent') and via_token, so a",
+        "receiver can ignore its own agent's changes without a lookup."
+      ],
+      "touches": [
+        "platform/schema/webhooks",
+        "platform/schema/webhookDeliveries",
+        "platform/schema/installs"
+      ]
+    },
+    {
+      "name": "deliver",
+      "trigger": "queue",
+      "location": "queue: deliver  (per-channel sub-queues)",
+      "middleware": null,
+      "ioSchema": [
+        "// enqueued by notify(): { uid, groupKey, inboxIds, channels }",
+        "// Cloud Tasks task name = `${uid}:${groupKey}:${minute}` — a burst of 5 comments",
+        "// in a minute becomes ONE push and ONE email"
+      ],
+      "implementation": [
+        "user = users/{uid}; skip everything already read in the app (inbox.readAt)",
+        "in quiet hours → reschedule to the end of them (except 'mentioned'",
+        "                 if the user allowed it)",
+        "",
+        "push:     FCM sendEach to users/{uid}/devices; unregistered → delete token",
+        "          payload: title 'ENG-42 · Priya', body, link, tag = ticketId",
+        "          (a later push REPLACES the earlier one for the same ticket)",
+        "",
+        "email:    Resend (or SES); HTML from a template like the reference's",
+        "          kicker/accent per event; Reply-To = emailThreads token;",
+        "          In-Reply-To/References = the ticket's phantom root id;",
+        "          List-Unsubscribe → one-click to the settings page",
+        "          only if the person ticked Email for this event",
+        "",
+        "whatsapp: user.whatsapp.optIn required",
+        "          inside 24h window → free-form text with the link",
+        "          outside → approved template 'ticket_update' / 'ticket_due'",
+        "          whatsappSessions.contextTicketId = ticketId (for a bare reply)",
+        "",
+        "every attempt → deliveries/{id} with provider id and status"
+      ],
+      "touches": [
+        "app/schema/users",
+        "app/schema/devices",
+        "app/schema/inbox",
+        "platform/schema/deliveries",
+        "platform/schema/emailThreads",
+        "platform/schema/whatsappSessions"
+      ]
+    },
+    {
+      "name": "emailInbound",
+      "trigger": "api",
+      "location": "POST /hooks/email",
+      "middleware": "signed",
+      "ioSchema": [
+        "// provider inbound parse: to, from, subject, text, html, attachments[]"
+      ],
+      "implementation": [
+        "to = t.{token}@in…   → a reply:",
+        "   thread = emailThreads/{token}; From must be that user's address",
+        "   strip quoted history and signature (talon-style)",
+        "   commands.messagePost(ctx{ actor: uid, via: 'email' }, markdown)",
+        "",
+        "to = {intake}@in…    → a new ticket (email-to-board):",
+        "   commands.ticketCreate on intake.boardId, reporter = From,",
+        "   subject → title, body → description, attachments → Storage",
+        "",
+        "anything else → dropped, logged"
+      ],
+      "touches": [
+        "platform/schema/emailThreads",
+        "platform/schema/intakes",
+        "app/services/messagePost",
+        "app/services/ticketCreate"
+      ]
+    },
+    {
+      "name": "whatsappInbound",
+      "trigger": "api",
+      "location": "POST /hooks/whatsapp",
+      "middleware": "signed",
+      "ioSchema": [
+        "// Meta Cloud API webhook: messages[] and statuses[]"
+      ],
+      "implementation": [
+        "statuses → deliveries status (delivered / read / failed)",
+        "messages → session = whatsappSessions/{from}; lastInboundAt = now",
+        "  button 'Mark done'  → commands.ticketUpdate(stage → first 'done')",
+        "  button 'Snooze 1d'  → inbox snoozedUntil",
+        "  text                → commands.messagePost on contextTicketId, via 'whatsapp'",
+        "  no context          → reply with the last 3 notified tickets as a list",
+        "  'STOP'              → optIn = false"
+      ],
+      "touches": [
+        "platform/schema/whatsappSessions",
+        "platform/schema/deliveries",
+        "app/services/messagePost",
+        "app/services/ticketUpdate"
+      ]
+    },
+    {
+      "name": "intakeSubmit",
+      "trigger": "api",
+      "location": "POST /v1/intake",
+      "middleware": "intakeSecret",
+      "ioSchema": [
+        "interface Req {",
+        "  title: string, description?: string",
+        "  reporter?: { email: string, name?: string }",
+        "  meta?: Record<string, unknown>     // page URL, user agent, app version…",
+        "  attachments?: { name, contentBase64 }[]   // ≤ 5 MB total",
+        "}",
+        "GET /v1/intake/schema → the board's public options (for the widget's selects)"
+      ],
+      "implementation": [
+        "commands.ticketCreate(ctx{ actor: 'intake-bot', via: 'intake' }, …defaults, fieldMap)",
+        "reporter gets an email with the key and can REPLY to add to the thread",
+        "",
+        "the reference's tt.ts widget keeps working with a two-header change"
+      ],
+      "touches": [
+        "platform/schema/intakes",
+        "platform/schema/rateLimits",
+        "app/services/ticketCreate"
+      ]
+    },
+    {
+      "name": "githubHook",
+      "trigger": "api",
+      "location": "POST /hooks/github",
+      "middleware": "signed",
+      "ioSchema": [
+        "// pull_request, push, issue_comment"
+      ],
+      "implementation": [
+        "find keys in branch name, PR title and commit messages: /\\b[A-Z][A-Z0-9]{1,5}-\\d+\\b/",
+        "for each key found, on a board that linked this repo:",
+        "  system message 'PR #812 opened by …' with the link",
+        "  merged && repo.moveOnMerge → commands.ticketUpdate(stage) via 'integration'"
+      ],
+      "touches": [
+        "platform/schema/installs",
+        "app/schema/keys",
+        "app/services/ticketUpdate"
+      ]
+    },
+    {
+      "name": "installConnect",
+      "trigger": "api",
+      "location": "GET /integrations/{provider}/connect  →  /callback",
+      "middleware": null,
+      "ioSchema": [
+        "// OAuth to the provider (GitHub App install, Slack OAuth v2, Google)"
+      ],
+      "implementation": [
+        "board admin only",
+        "state param = signed { uid, boardId, nonce }",
+        "tokens → Secret Manager; boards/{b}/integrations/{provider} written"
+      ],
+      "touches": [
+        "platform/schema/installs"
+      ]
+    },
+    {
+      "name": "icsFeed",
+      "trigger": "api",
+      "location": "GET /ics/{uid}.{token}.ics",
+      "middleware": null,
+      "ioSchema": [
+        "// a calendar subscription URL — Google / Apple / Outlook poll it"
+      ],
+      "implementation": [
+        "every active ticket assigned to uid with a dueAt, as all-day or timed VEVENTs",
+        "token is per user, rotatable in Account › Connected apps",
+        "",
+        "READ-ONLY AND POLLED, on purpose: two-way calendar sync is a phase-4",
+        "problem; seeing deadlines in your calendar is a phase-2 feature."
+      ],
+      "touches": [
+        "app/schema/tickets"
+      ]
+    }
+  ]
+}

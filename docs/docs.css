@@ -1,0 +1,1990 @@
+/*
+ * The specification, as a sheet of paper somebody writes on.
+ *
+ * WHY PAPER AND NOT A DARK DEVELOPER THEME. The obvious move was dark ground,
+ * amber accent, monospace — it would have matched the shop's own site and it
+ * would have been the wrong answer twice over: it is the default this kind of
+ * page always reaches for, and it is hostile to the one thing this document
+ * exists for. You do not annotate a dark room. You annotate paper.
+ *
+ * The shop's own documents are printed sheets — `/menu` renders the price list
+ * as printed sheets, the counters have boards — so paper is not a departure
+ * from the brand. It is the part of the brand that this artefact belongs to.
+ *
+ * TWO ACCENTS THAT NEVER SWAP JOBS. Kesar is the document talking about
+ * itself: anchors, identifiers, the shop's own vocabulary. Blue is the reader
+ * talking back: every comment, and nothing else. Once you have seen one blue
+ * mark you know what all of them are.
+ */
+
+:root {
+	--paper: #fbf8f2;
+	--ink: #1a1714;
+	--muted: #6b6259;
+	--rule: #e3dcce;
+	/* The shop's kesar, taken down for contrast on paper. */
+	--kesar: #b26a0c;
+	/* A reviewer's pen. Only ever a comment. */
+	--annot: #2b5c8a;
+	--annot-wash: #eef3f8;
+
+	--display: 'Archivo Narrow', 'Helvetica Neue', Arial, sans-serif;
+	--body: 'Source Serif 4', 'Iowan Old Style', Georgia, serif;
+	--mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--body);
+	font-size: 16px;
+	line-height: 1.66;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* ── The sheet ────────────────────────────────────────────────────────────
+ * Three columns: what is in here, the specification itself, and the margin
+ * the reader writes in. The margin is not decoration — it is the reason the
+ * document is laid out this way at all, so it holds its width even when empty.
+ */
+.sheet {
+	display: grid;
+	grid-template-columns: 15rem minmax(0, 40rem) 17rem;
+	gap: 0 2.5rem;
+	max-width: 78rem;
+	margin: 0 auto;
+	padding: 0 2rem 8rem;
+	align-items: start;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * TWO BARS: which system, then which page of it.
+ *
+ * THE MASTHEAD IS GONE. It spent the top third of every screen on a wordmark, a
+ * one-word title and a sentence restating the tab underneath it — on a document
+ * whose content began below the fold. The bars say where you are, and a page
+ * that has to introduce itself before it says anything has not started.
+ * ════════════════════════════════════════════════════════════════════════ */
+.chrome {
+	grid-column: 1 / -1;
+	padding: 1.6rem 0 0;
+	margin-bottom: 2.4rem;
+	border-bottom: 2px solid var(--ink);
+}
+
+/* WHICH SYSTEM. The bigger of the two choices, so it reads as the heading the
+   page no longer has: `public` and `business` are different systems that happen
+   to share a database. */
+.chrome__envs {
+	display: flex;
+	gap: 1.6rem;
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.5rem;
+	letter-spacing: -0.01em;
+}
+
+.chrome__envs a {
+	color: var(--rule);
+	text-decoration: none;
+}
+
+.chrome__envs a:hover {
+	color: var(--muted);
+}
+
+.chrome__envs a.on {
+	color: var(--ink);
+}
+
+
+/* WHICH PAGE OF IT. Underlined rather than boxed — this is a document, and a
+   row of buttons across the top of one belongs to an app. */
+.chrome__pages {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.4rem;
+	margin-top: 1rem;
+	font-family: var(--mono);
+	font-size: 0.76rem;
+	letter-spacing: 0.05em;
+}
+
+.chrome__pages a {
+	color: var(--muted);
+	text-decoration: none;
+	padding-bottom: 0.5rem;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+}
+
+.chrome__pages a:hover {
+	color: var(--ink);
+}
+
+.chrome__pages a.on {
+	color: var(--ink);
+	border-bottom-color: var(--kesar);
+}
+
+/* ── Contents ─────────────────────────────────────────────────────────── */
+/*
+ * IT STICKS, AND IT SCROLLS ON ITS OWN.
+ *
+ * Sticky alone is only half of it: the Backend page lists thirty-three things,
+ * which is taller than any window, so the bottom of the rail sat below the
+ * fold and could not be reached at all — the page scrolled underneath it and
+ * the rail went with the page. A reader could see the first fifteen routes and
+ * had no way to reach the rest.
+ *
+ * `max-height` and its own overflow give it a scrollbar of its own. `contain`
+ * stops a wheel that reaches the end of the rail from carrying on into the
+ * document, which is the thing that makes a nested scroller feel broken.
+ */
+.contents {
+	position: sticky;
+	top: 2rem;
+	max-height: calc(100vh - 4rem);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	/* Room for the scrollbar, so it never lands on the words. */
+	padding-right: 0.6rem;
+	font-family: var(--mono);
+	font-size: 0.74rem;
+	line-height: 1.9;
+}
+
+/* A quiet scrollbar. The rail is furniture; its scrollbar should not be the
+   most conspicuous thing on the page. */
+.contents::-webkit-scrollbar {
+	width: 6px;
+}
+
+.contents::-webkit-scrollbar-thumb {
+	background: var(--rule);
+	border-radius: 999px;
+}
+
+.contents::-webkit-scrollbar-thumb:hover {
+	background: #d2c8b6;
+}
+
+.contents::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.contents h2 {
+	font-size: 0.68rem;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin: 0 0 0.7rem;
+	font-weight: 500;
+}
+
+.contents a {
+	display: block;
+	color: var(--muted);
+	text-decoration: none;
+	padding: 0.25rem 0 0.35rem;
+	border-left: 2px solid transparent;
+	padding-left: 0.7rem;
+	margin-left: -0.7rem;
+	line-height: 1.5;
+}
+
+.contents a:hover,
+.contents a.on {
+	color: var(--ink);
+	border-left-color: var(--kesar);
+}
+
+/*
+ * ── The rail says what each thing IS ─────────────────────────────────────
+ *
+ * A column of bare names is a list of words a reader has to already know.
+ * Underneath each one now sit the two facts its card opens with — where it
+ * lives, or how it is reached — small and quiet enough that the NAME is still
+ * what the eye lands on when the column is scanned.
+ */
+.rail__name {
+	display: block;
+}
+
+.rail__fact {
+	display: grid;
+	grid-template-columns: 4.6rem 1fr;
+	gap: 0.4rem;
+	font-size: 0.66rem;
+	line-height: 1.45;
+}
+
+.rail__label {
+	color: var(--rule-ink, #a89b87);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	/* It is a label, not a word in the sentence: it must not compete with the
+	   value beside it, and at this size only weight and colour can say so. */
+	font-size: 0.6rem;
+}
+
+/*
+ * CUT BY THE BROWSER, AT WHATEVER WIDTH THE RAIL HAPPENS TO BE.
+ *
+ * `auth-monitor/limits/{rule}/{dim}/{hash}/{window}` does not fit any rail and
+ * truncating it in the renderer would have baked one column width into the
+ * document. Nothing is lost: the full value is in the markup, and hovering the
+ * row shows the whole of it in the peek card.
+ */
+.rail__value {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	opacity: 0.85;
+}
+
+.contents a:hover .rail__label,
+.contents a.on .rail__label {
+	color: var(--muted);
+}
+
+/* ── The specification ────────────────────────────────────────────────── */
+.spec {
+	min-width: 0;
+}
+
+.block {
+	position: relative;
+	margin-bottom: 3.4rem;
+	scroll-margin-top: 2rem;
+}
+
+.block > h2 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.9rem;
+	line-height: 1.1;
+	letter-spacing: -0.01em;
+	margin: 0 0 0.4rem;
+	padding-top: 1.6rem;
+	border-top: 1px solid var(--rule);
+}
+
+.block > h3 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.12rem;
+	letter-spacing: 0.01em;
+	margin: 2rem 0 0.5rem;
+}
+
+.block p {
+	margin: 0 0 0.9rem;
+}
+
+.lede {
+	color: var(--muted);
+	font-size: 1.02rem;
+}
+
+code {
+	font-family: var(--mono);
+	font-size: 0.84em;
+	background: rgb(178 106 12 / 0.08);
+	color: var(--kesar);
+	padding: 0.08em 0.34em;
+	border-radius: 3px;
+	word-break: break-word;
+}
+
+/* ── Tables: the schema and the endpoints ─────────────────────────────── */
+.rows {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0.6rem 0 1.4rem;
+	font-size: 0.88rem;
+}
+
+.rows th {
+	text-align: left;
+	font-family: var(--mono);
+	font-size: 0.66rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+	font-weight: 500;
+	padding: 0 0.9rem 0.5rem 0;
+	border-bottom: 1px solid var(--ink);
+}
+
+.rows td {
+	padding: 0.55rem 0.9rem 0.55rem 0;
+	border-bottom: 1px solid var(--rule);
+	vertical-align: top;
+}
+
+.rows td:first-child {
+	font-family: var(--mono);
+	font-size: 0.8rem;
+	color: var(--ink);
+	white-space: nowrap;
+}
+
+.rows td em {
+	font-style: normal;
+	color: var(--muted);
+}
+
+.scroller {
+	overflow-x: auto;
+}
+
+/* ── Flows: the one place numbering is honest ─────────────────────────────
+ * These are sequences and the order carries meaning, so they are numbered.
+ * Nothing else in this document is, because nothing else is a sequence.
+ */
+.flow {
+	list-style: none;
+	counter-reset: step;
+	margin: 0.8rem 0 1.4rem;
+	padding: 0;
+}
+
+.flow li {
+	counter-increment: step;
+	position: relative;
+	padding: 0 0 1rem 2.6rem;
+	border-left: 1px solid var(--rule);
+	margin-left: 0.9rem;
+}
+
+.flow li::before {
+	content: counter(step);
+	position: absolute;
+	left: -0.9rem;
+	top: 0;
+	width: 1.8rem;
+	height: 1.8rem;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--paper);
+	border: 1px solid var(--ink);
+	font-family: var(--mono);
+	font-size: 0.72rem;
+}
+
+.flow li:last-child {
+	border-left-color: transparent;
+}
+
+.flow b {
+	font-weight: 600;
+}
+
+/* A fact worth stopping on — never more than one per section. */
+.note {
+	border-left: 3px solid var(--kesar);
+	background: rgb(178 106 12 / 0.05);
+	padding: 0.85rem 1rem;
+	margin: 0 0 1.2rem;
+	font-size: 0.92rem;
+}
+
+.note b {
+	display: block;
+	font-family: var(--display);
+	letter-spacing: 0.02em;
+}
+
+/* The reason, in a sentence or two. Everything ELSE the note has to say is in
+   the table or the pseudo-code under it — a shape read as a shape rather than
+   as a paragraph somebody has to hold in their head to the end of. */
+.note__why {
+	margin: 0.25rem 0 0;
+}
+
+.note__why:not(:last-child) {
+	margin-bottom: 0.7rem;
+}
+
+/*
+ * WHAT HAPPENS, IN ORDER. Set as code because that is what it is — the shape
+ * of a decision or a sequence, where indentation carries meaning and a
+ * paragraph would have to spell out what a line break already says.
+ */
+.note__code {
+	margin: 0 0 0.2rem;
+	padding: 0.7rem 0.85rem;
+	background: var(--paper);
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	font-family: var(--mono);
+	font-size: 0.76rem;
+	line-height: 1.65;
+	overflow-x: auto;
+	white-space: pre;
+}
+
+/* What goes where. Narrower and quieter than the field tables above it, since
+   it is evidence for a claim rather than the subject of the section. */
+.note__rows {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0.2rem 0 0.2rem;
+	font-size: 0.82rem;
+}
+
+.note__rows th {
+	text-align: left;
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+	font-weight: 500;
+	padding: 0 0.8rem 0.35rem 0;
+	border-bottom: 1px solid var(--rule);
+}
+
+.note__rows td {
+	padding: 0.4rem 0.8rem 0.4rem 0;
+	border-bottom: 1px solid var(--rule);
+	vertical-align: top;
+}
+
+.note__rows tr:last-child td {
+	border-bottom: 0;
+}
+
+.note__rows td:first-child {
+	font-family: var(--mono);
+	font-size: 0.76rem;
+	white-space: nowrap;
+}
+
+/* ── The margin, which is the point ───────────────────────────────────── */
+.margin {
+	position: relative;
+	font-size: 0.82rem;
+	line-height: 1.55;
+}
+
+/* The same for the margin: a page with twenty notes on it has a rail longer
+   than the window, and a note nobody can scroll to is a note nobody answers. */
+.margin__rail {
+	position: sticky;
+	top: 2rem;
+	max-height: calc(100vh - 4rem);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding-right: 0.6rem;
+}
+
+.margin__rail::-webkit-scrollbar {
+	width: 6px;
+}
+
+.margin__rail::-webkit-scrollbar-thumb {
+	background: var(--rule);
+	border-radius: 999px;
+}
+
+.margin__rail::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.margin h2 {
+	font-family: var(--mono);
+	font-size: 0.68rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--annot);
+	margin: 0 0 0.8rem;
+	font-weight: 500;
+}
+
+.mark {
+	border-left: 2px solid var(--annot);
+	background: var(--annot-wash);
+	padding: 0.7rem 0.8rem;
+	margin-bottom: 0.7rem;
+	border-radius: 0 4px 4px 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.mark {
+		animation: ink 260ms ease-out;
+	}
+}
+
+@keyframes ink {
+	from {
+		opacity: 0;
+		transform: translateX(-4px);
+	}
+}
+
+.mark__where {
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--annot);
+	display: block;
+	margin-bottom: 0.3rem;
+	cursor: pointer;
+}
+
+.mark__text {
+	margin: 0;
+	white-space: pre-wrap;
+}
+
+.mark__foot {
+	display: flex;
+	gap: 0.7rem;
+	align-items: center;
+	margin-top: 0.5rem;
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	color: var(--muted);
+}
+
+.mark__foot button {
+	border: 0;
+	background: none;
+	padding: 0;
+	font: inherit;
+	color: var(--annot);
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+.mark--done {
+	border-left-color: var(--rule);
+	background: transparent;
+	opacity: 0.6;
+}
+
+.mark--done .mark__where {
+	color: var(--muted);
+}
+
+.mark__resolution {
+	margin: 0.5rem 0 0;
+	padding-left: 0.6rem;
+	border-left: 2px solid var(--rule);
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+
+/* Focus is visible on everything that takes it. */
+.pop textarea:focus-visible,
+.contents a:focus-visible,
+button:focus-visible {
+	outline: 2px solid var(--annot);
+	outline-offset: 2px;
+}
+
+.btn {
+	font-family: var(--mono);
+	font-size: 0.7rem;
+	letter-spacing: 0.06em;
+	padding: 0.45rem 0.8rem;
+	border-radius: 3px;
+	border: 1px solid var(--annot);
+	background: var(--annot);
+	color: var(--paper);
+	cursor: pointer;
+}
+
+.btn--quiet {
+	background: none;
+	color: var(--annot);
+}
+
+.empty {
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-style: italic;
+}
+
+/* ── Narrow ───────────────────────────────────────────────────────────────
+ * The margin folds under the text rather than disappearing. Losing the
+ * annotations on a phone would lose the document's whole purpose there.
+ */
+@media (max-width: 66rem) {
+	.sheet {
+		grid-template-columns: minmax(0, 1fr);
+		padding: 0 1.2rem 5rem;
+	}
+
+	.contents {
+		position: static;
+		border-bottom: 1px solid var(--rule);
+		padding-bottom: 1.2rem;
+		margin-bottom: 2rem;
+		columns: 2;
+	}
+
+	.margin__rail {
+		position: static;
+	}
+
+	.margin {
+		border-top: 2px solid var(--annot);
+		padding-top: 1.2rem;
+		margin-top: 2rem;
+	}
+
+	.block__add {
+		position: static;
+		opacity: 1;
+		width: auto;
+		height: auto;
+		border-radius: 3px;
+		padding: 0.2rem 0.6rem;
+		margin-top: 0.6rem;
+	}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * The site, rather than the single sheet it began as.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Cross-references ─────────────────────────────────────────────────────
+ * The same treatment everywhere, so a reference reads as a reference wherever
+ * it appears, and its shape says which index it goes to.
+ */
+.xref {
+	font-family: var(--mono);
+	font-size: 0.76rem;
+	color: var(--ink);
+	text-decoration: none;
+	border-bottom: 1px solid var(--kesar);
+	white-space: nowrap;
+}
+
+.xref:hover {
+	background: rgb(178 106 12 / 0.12);
+}
+
+.usedby {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: baseline;
+	margin: 0.5rem 0 0.9rem;
+}
+
+.usedby span:first-child {
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.path {
+	font-family: var(--mono);
+	font-size: 0.78rem;
+	color: var(--kesar);
+	margin: 0 0 0.5rem;
+	word-break: break-all;
+}
+
+/*
+ * WHERE A STEP HAPPENS, beside the step.
+ *
+ * Half the steps of a flow have no screenshot and never will — an order being
+ * written, a message arriving in WhatsApp, a manager at the counter's own app.
+ * Without the prose those steps were a heading and two links and read as
+ * unfinished; the stage is what they carry instead. Quiet, because the step is
+ * the sentence and this is the margin of it.
+ */
+.flow__stage {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	margin-left: 0.5rem;
+	vertical-align: 0.05em;
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.flow__stage .logo {
+	/* The mark is what is read at a glance; the word is the fallback. */
+	opacity: 0.9;
+}
+
+.flow__refs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-top: 0.4rem;
+}
+
+@media (max-width: 66rem) {
+	.sheet--index {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Commenting on anything, rather than on a whole section.
+ *
+ * A note is pinned to a JSON ENTITY — a collection, a script, a page, a flow —
+ * and the page has to show which, without turning the document into a form.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.dock {
+	position: fixed;
+	right: 1.4rem;
+	bottom: 1.4rem;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+}
+
+.dock__btn {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1rem;
+	border-radius: 999px;
+	border: 1px solid var(--annot);
+	background: var(--paper);
+	color: var(--annot);
+	font-family: var(--mono);
+	font-size: 0.74rem;
+	letter-spacing: 0.04em;
+	cursor: pointer;
+	box-shadow: 0 3px 14px rgb(26 23 20 / 0.1);
+}
+
+.dock__btn:hover {
+	background: var(--annot-wash);
+}
+
+.dock__btn.on {
+	background: var(--annot);
+	color: var(--paper);
+}
+
+.dock__n:not(:empty) {
+	min-width: 1.15rem;
+	height: 1.15rem;
+	display: grid;
+	place-items: center;
+	border-radius: 999px;
+	background: var(--annot);
+	color: var(--paper);
+	font-size: 0.64rem;
+}
+
+.dock__btn.on .dock__n:not(:empty) {
+	background: var(--paper);
+	color: var(--annot);
+}
+
+/* Only while the mode is on. A permanent instruction is furniture. */
+.dock__hint {
+	display: none;
+	font-family: var(--mono);
+	font-size: 0.66rem;
+	color: var(--muted);
+	background: var(--paper);
+	padding: 0.35rem 0.6rem;
+	border-radius: 999px;
+	order: -1;
+}
+
+.commenting .dock__hint {
+	display: block;
+}
+
+/* ── What can be marked, while marking is on ──────────────────────────────
+ * A dotted outline on hover rather than a filled highlight: the document still
+ * has to be readable while it is being annotated, and a wash over every
+ * paragraph you pass makes it a colouring book.
+ */
+.commenting [data-loc] {
+	cursor: crosshair;
+}
+
+/*
+ * ONE RULE FOR EVERYTHING MARKABLE, and `:has()` keeps it honest: a cell that
+ * contains a `code` should not draw its own outline while the cursor is over
+ * the code, because the code is what would be marked. Without that you get two
+ * nested dashed boxes and no way to tell which one the click will take.
+ */
+.commenting [data-loc]:hover {
+	outline: 1px dashed var(--annot);
+	outline-offset: 2px;
+}
+
+/* ── Already marked ───────────────────────────────────────────────────────
+ * Visible ALWAYS, not only in comment mode. An outstanding note is a fact
+ * about the document, and hiding it until you go looking is how a review gets
+ * forgotten.
+ */
+/*
+ * A MARKED CARD, not a marked phrase.
+ *
+ * It was a pen-stroke highlight under the words, because a note used to land on
+ * a sentence or a table cell. A note is about an ENTITY now, and the same
+ * gradient stretched across a whole card paints its bottom third blue and looks
+ * like a rendering fault — which is exactly what happened the first time a note
+ * fell back to its section, and is what this shape was written to avoid.
+ *
+ * So: a rail down the side and a number in the gutter. It reads as "there is
+ * something to say about this one" without touching a single word of it.
+ */
+[data-marked] {
+	position: relative;
+}
+
+[data-marked='exact'] {
+	box-shadow: -1.1rem 0 0 -1rem var(--annot);
+	background: linear-gradient(90deg, rgb(43 92 138 / 0.05), transparent 22rem);
+}
+
+/* The note's number, in the gutter beside the card it belongs to. */
+[data-marked]::after {
+	content: attr(data-marks);
+	position: absolute;
+	top: 0.15rem;
+	left: -2.4rem;
+	width: 1.15rem;
+	height: 1.15rem;
+	display: grid;
+	place-items: center;
+	border-radius: 999px;
+	background: var(--annot);
+	color: var(--paper);
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	line-height: 1;
+}
+
+.flash {
+	animation: flash 900ms ease-out;
+}
+
+@keyframes flash {
+	0%,
+	100% {
+		background-color: transparent;
+	}
+	25% {
+		background-color: rgb(43 92 138 / 0.22);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.flash {
+		animation: none;
+		outline: 2px solid var(--annot);
+	}
+}
+
+/* ── In the margin ────────────────────────────────────────────────────── */
+.pin {
+	display: inline-grid;
+	place-items: center;
+	width: 1.05rem;
+	height: 1.05rem;
+	border-radius: 999px;
+	background: var(--annot);
+	color: var(--paper);
+	font-size: 0.6rem;
+	margin-right: 0.35rem;
+	vertical-align: middle;
+}
+
+/* WHERE THE NOTE LIVES IN THE JSON — `db.json · schema · users`. It was the
+   sentence the note was written against, which stopped matching the moment the
+   card was rewritten; this is the one thing about an entity that a rewrite does
+   not touch, and it is also what somebody acting on the note has to open. */
+.mark__quote {
+	margin: 0 0 0.4rem;
+	padding-left: 0.5rem;
+	border-left: 2px solid var(--rule);
+	color: var(--muted);
+	font-family: var(--mono);
+	font-size: 0.66rem;
+}
+
+.mark__flag {
+	font-style: normal;
+	font-size: 0.6rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--kesar);
+	margin-left: 0.3rem;
+}
+
+.mark__done-head {
+	margin-top: 1.6rem;
+}
+
+@media (max-width: 66rem) {
+	.dock {
+		right: 0.8rem;
+		bottom: 0.8rem;
+	}
+
+	.dock__hint {
+		display: none !important;
+	}
+
+	[data-marked]::after {
+		right: -0.2rem;
+		top: -0.7rem;
+	}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * The composer, where the click was.
+ *
+ * ABSOLUTE RATHER THAN FIXED, so it stays with the thing it belongs to when
+ * the page scrolls under it. It began life in the right-hand margin, which put
+ * the writing a long way from the sentence it was about — you looked at one
+ * end of the page and typed at the other.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.pop {
+	position: absolute;
+	z-index: 50;
+	width: 20rem;
+	max-width: calc(100vw - 2rem);
+	background: var(--paper);
+	border: 1px solid var(--annot);
+	border-radius: 5px;
+	padding: 0.7rem;
+	box-shadow: 0 8px 28px rgb(26 23 20 / 0.16);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.pop {
+		animation: pop 130ms ease-out;
+	}
+}
+
+@keyframes pop {
+	from {
+		opacity: 0;
+		transform: translateY(-3px);
+	}
+}
+
+/* Which entity is being marked. Somebody who shift-clicked the wrong card
+   should see that before they have written a paragraph about it. */
+.pop__where {
+	margin: 0 0 0.5rem;
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	line-height: 1.5;
+	color: var(--muted);
+}
+
+.pop__where b {
+	color: var(--annot);
+	letter-spacing: 0.06em;
+	font-weight: 500;
+	font-size: 0.72rem;
+}
+
+/* The file and the list it is in, quieter than the name — a reader recognises
+   the entity by its key and needs the rest only to be sure. */
+.pop__loc {
+	display: block;
+	opacity: 0.75;
+}
+
+.pop textarea {
+	width: 100%;
+	min-height: 5rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	padding: 0.5rem;
+	font: inherit;
+	font-size: 0.82rem;
+	background: var(--paper);
+	color: var(--ink);
+	resize: vertical;
+}
+
+.pop__row {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+}
+
+/*
+ * No text selection while marking up. Shift-click is the browser's own gesture
+ * for extending a selection, and belt-and-braces here is warranted: cancelling
+ * the mousedown stops it, and this stops the half-selection that a stray drag
+ * would still leave painted across the thing being annotated.
+ *
+ * The composer is exempt, obviously — it is the one place you are typing.
+ */
+.commenting .spec,
+.commenting main {
+	user-select: none;
+}
+
+.pop,
+.pop * {
+	user-select: text;
+}
+
+/*
+ * Lit while the composer is open.
+ *
+ * Solid where hover is dashed, because this is settled rather than a
+ * possibility — and strong enough to find at a glance in a page of
+ * near-identical table rows, which is the case that made it necessary.
+ */
+.composing,
+.commenting .composing {
+	outline: 2px solid var(--annot);
+	outline-offset: 2px;
+	background: rgb(43 92 138 / 0.1);
+	border-radius: 2px;
+}
+
+/* Widening, from the composer's own header. Quiet — it is the second thing
+   anybody does here, and only when the first was slightly off. */
+#composer-wider {
+	float: right;
+	border: 0;
+	background: none;
+	padding: 0;
+	font: inherit;
+	font-size: 0.62rem;
+	color: var(--annot);
+	cursor: pointer;
+	text-decoration: underline;
+	letter-spacing: 0.04em;
+}
+
+#composer-wider:hover {
+	color: var(--ink);
+}
+
+/* Who may read, and who may write. A pair of labelled lines rather than a
+   one-row table — see the note in `render.js`. */
+.access {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.35rem 1rem;
+	margin: 0.6rem 0 1.4rem;
+	font-size: 0.88rem;
+}
+
+.access dt {
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+	padding-top: 0.2rem;
+}
+
+.access dd {
+	margin: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Photographs of the pages.
+ *
+ * Taken by `docs/shots.mjs` and always signed out, so nothing here can carry
+ * a customer's name or address. A specification that describes twelve screens
+ * and shows none of them makes the reader hold a picture in their head that
+ * may not match what was built.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.shot {
+	display: block;
+	margin: 0.9rem 0 1.2rem;
+}
+
+/* The frame is on the LINK, not on the figure, because a caption sits outside
+   the picture and inside the figure — a border around both would draw a box
+   round the sentence explaining the box. */
+.shot > a {
+	display: block;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	overflow: hidden;
+	background: var(--rule);
+	line-height: 0;
+}
+
+.shot img {
+	width: 100%;
+	height: auto;
+	display: block;
+}
+
+.shot > a:hover {
+	border-color: var(--kesar);
+}
+
+/*
+ * WHAT WAS DONE TO REACH THIS SCREEN.
+ *
+ * Only on the screens that have no address of their own — a drawer, a sheet,
+ * the third step of a form. An uncaptioned screenshot in a specification reads
+ * as "go here and you will see this", and half of these cannot be gone to.
+ */
+.shot__staged {
+	margin: 0.4rem 0 0;
+	font-size: 0.76rem;
+	line-height: 1.45;
+	color: var(--muted);
+	font-style: italic;
+}
+
+/* In a flow, the picture is evidence for a step rather than the subject of
+   one — small, and set in from the step's own text so the sequence still
+   reads as a sequence rather than as a column of screenshots. */
+.shot--step {
+	max-width: 15rem;
+	margin: 0.6rem 0 0.2rem;
+	opacity: 0.86;
+}
+
+.shot--step:hover {
+	opacity: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A screenshot, full screen.
+ *
+ * THE ONE DARK SURFACE IN A DOCUMENT MADE OF PAPER, and the exception earns
+ * itself. Everything else here is a sheet somebody writes on; this is the one
+ * moment the reader is looking AT a picture rather than reading around one,
+ * and paper behind a screenshot competes with it — the shots are pale pages
+ * themselves, and on cream they float without an edge. Ink behind them is the
+ * darkroom, not a theme change.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.lb {
+	position: fixed;
+	inset: 0;
+	z-index: 200;
+	background: rgb(16 13 10 / 0.96);
+	display: grid;
+	place-items: center;
+	padding: 3.5rem 4.5rem;
+	overflow: auto;
+	cursor: zoom-in;
+}
+
+.lb[hidden] {
+	display: none;
+}
+
+/*
+ * FOCUS MOVES ONTO THE OVERLAY ITSELF, and it wears no ring.
+ *
+ * It has to move somewhere inside — left on the page behind, Tab walks through
+ * a document nobody can see. It was put on the close button, which is the
+ * usual answer and put a bright focus ring in the top corner of every
+ * screenshot the moment it opened. The container takes the focus instead: the
+ * keys all listen on the document, Tab still reaches the three buttons, and
+ * nothing is drawn around a thing nobody aimed at.
+ */
+.lb:focus {
+	outline: none;
+}
+
+/* The document behind must not scroll under the overlay — on a trackpad that
+   turns a flick to dismiss into a flick through the specification. */
+body.lb-open {
+	overflow: hidden;
+}
+
+.lb__frame {
+	margin: 0;
+	display: grid;
+	gap: 0.9rem;
+	justify-items: center;
+	max-width: 100%;
+}
+
+.lb__img {
+	display: block;
+	max-width: 100%;
+	/* Room for the caption under it, so a wide screenshot is not cropped by its
+	   own explanation. */
+	max-height: calc(100vh - 11rem);
+	width: auto;
+	height: auto;
+	border-radius: 4px;
+	box-shadow: 0 2rem 5rem rgb(0 0 0 / 0.5);
+	background: var(--paper);
+	cursor: zoom-in;
+}
+
+/*
+ * ACTUAL PIXELS, AND THE OVERLAY SCROLLS.
+ *
+ * These are 1100px wide and the reader is often trying to make out a label in
+ * a corner of the counter screen. Fitting them to the window is the right
+ * default and the wrong ceiling.
+ */
+.lb--zoom {
+	place-items: start center;
+	cursor: zoom-out;
+}
+
+.lb--zoom .lb__img {
+	max-width: none;
+	max-height: none;
+	cursor: zoom-out;
+}
+
+.lb__cap {
+	max-width: 46rem;
+	text-align: center;
+	color: #cdc4b4;
+	font-size: 0.86rem;
+	line-height: 1.5;
+}
+
+.lb__cap b {
+	display: block;
+	font-family: var(--display);
+	font-size: 1.05rem;
+	letter-spacing: 0.01em;
+	color: #f4efe4;
+	margin-bottom: 0.15rem;
+}
+
+.lb__cap span {
+	font-style: italic;
+}
+
+/* ── The controls, which stay out of the way until wanted ──────────────── */
+
+.lb__shut,
+.lb__step {
+	position: fixed;
+	z-index: 1;
+	border: 0;
+	background: rgb(255 255 255 / 0.07);
+	color: #f4efe4;
+	cursor: pointer;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	transition: background 120ms ease, opacity 120ms ease;
+	opacity: 0.55;
+}
+
+.lb__shut:hover,
+.lb__step:hover,
+.lb__shut:focus-visible,
+.lb__step:focus-visible {
+	background: rgb(255 255 255 / 0.16);
+	opacity: 1;
+}
+
+.lb__shut {
+	top: 1.1rem;
+	right: 1.1rem;
+	width: 2.4rem;
+	height: 2.4rem;
+	font-size: 0.95rem;
+}
+
+.lb__step {
+	top: 50%;
+	transform: translateY(-50%);
+	width: 3rem;
+	height: 3rem;
+	font-size: 1.8rem;
+	/* The glyph sits high in its own box. */
+	line-height: 0.8;
+	padding-bottom: 0.3rem;
+}
+
+.lb__step--back {
+	left: 0.8rem;
+}
+
+.lb__step--on {
+	right: 0.8rem;
+}
+
+.lb__step[hidden] {
+	display: none;
+}
+
+/*
+ * WHAT THE KEYS DO, SAID ONCE AND QUIETLY.
+ *
+ * Arrow keys through a flow's screens is the thing worth knowing here and the
+ * one thing nothing on screen would otherwise suggest. It is set at the foot
+ * in the dimmest ink on the page: legible if looked for, invisible if not.
+ */
+.lb__hint {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0.9rem;
+	margin: 0;
+	text-align: center;
+	font-family: var(--mono);
+	font-size: 0.66rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: rgb(244 239 228 / 0.38);
+	pointer-events: none;
+}
+
+/* A phone has no room for margins around a screenshot, and no arrow keys to
+   advertise. */
+@media (max-width: 40rem) {
+	.lb {
+		padding: 3rem 0.6rem 4rem;
+	}
+
+	.lb__step {
+		width: 2.4rem;
+		height: 2.4rem;
+		font-size: 1.4rem;
+	}
+
+	.lb__cap {
+		padding: 0 0.8rem;
+	}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Declarations — the rules, and the shape of a document.
+ *
+ * WRITTEN AS CODE BECAUSE THEY ARE CODE. This page described a document with a
+ * three-column table of field, type and note, and a sentence beside it saying
+ * who could read it — a translation, into a form that loses optionality,
+ * nesting, unions and defaults, of a thing every reader of this page can
+ * already read. An interface says all of that in the language the code is
+ * written in, and the rules read better as the conditions they are than as
+ * prose about them.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.decl {
+	margin: 0 0 1.4rem;
+}
+
+.decl__label {
+	display: block;
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin-bottom: 0.4rem;
+}
+
+.decl__code {
+	margin: 0;
+	padding: 0.9rem 1rem;
+	background: #fdfcf9;
+	border: 1px solid var(--rule);
+	border-left: 3px solid var(--kesar);
+	border-radius: 3px;
+	font-family: var(--mono);
+	font-size: 0.78rem;
+	line-height: 1.7;
+	overflow-x: auto;
+	white-space: pre;
+	tab-size: 2;
+}
+
+/*
+ * ══════════════════════════════════════════════════════════════════════════
+ * COLOURING THE CODE, so the rule and the sentence about it are not one ink.
+ *
+ * These blocks are half explanation and half binding: the rules that actually
+ * hold sit among comments saying why. In one colour a reader parses every line
+ * to find the two that matter — which is the work the block was meant to save.
+ *
+ * A PALETTE FOR PAPER. Every colour here is dark enough to read on an off-white
+ * ground at 0.78rem and far enough from the next to be told apart at a glance;
+ * none of them is the kesar the page already spends on links and rails, so a
+ * type reference stays the one thing in a block that looks clickable.
+ *
+ * SEVEN CLASSES, and each answers a different question:
+ *
+ *   note     why this is here          — receding, italic
+ *   key      what kind of statement    — interface, allow, if, return
+ *   type     what a value IS           — string, Timestamp, boolean
+ *   str      a value somebody chose
+ *   num      a bound. Nearly every number in these blocks is a limit
+ *   call     something being done
+ *   op       where the logic turns     — ==, &&, |, ?
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* THE SENTENCE, NOT THE RULE. Italic as well as pale, so it still reads as an
+   aside where the colour does not survive — printed, or in a browser told to
+   ignore ours. */
+.hl-note {
+	color: #a2998a;
+	font-style: italic;
+}
+
+/* What kind of statement this is. */
+.hl-key {
+	color: #a3305e;
+}
+
+/* What a value is. Separated from the keywords because they answer different
+   questions, and a schema in one colour is an undifferentiated block. */
+.hl-type {
+	color: #0f766e;
+}
+
+.hl-str {
+	color: #1e7f3a;
+}
+
+.hl-num {
+	color: #2b5c8a;
+}
+
+/* Something being done — anything with a `(` after it. */
+.hl-call {
+	color: #7a4fa3;
+}
+
+/* Where the logic turns. Quiet: these are joints, not words. */
+.hl-op {
+	color: #8a8071;
+}
+
+/*
+ * INSIDE THE HOVER CARD TOO, because it renders the same markup through the
+ * same renderer — which is the whole reason the preview is worth having.
+ */
+.peek .hl-note {
+	color: #a9a091;
+}
+
+/*
+ * A TYPE NAME YOU CAN FOLLOW. The point of naming a type is being able to go
+ * and read it, so every occurrence is a link — underlined faintly rather than
+ * coloured, because a listing with eight bright words in it stops reading as
+ * code.
+ */
+.xref--type {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--kesar);
+	text-underline-offset: 0.18em;
+}
+
+.xref--type:hover {
+	color: var(--kesar);
+}
+
+/* The shared types, set apart from the collections above them: they have no
+   path and no rules, and are here to be arrived at rather than read through. */
+.block--type > h2 {
+	font-size: 1.35rem;
+}
+
+.contents__more {
+	margin-top: 1.2rem !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A type's declaration, on hover.
+ *
+ * The link already goes to the definition and that costs a jump: `status:
+ * OrderStatus` sends you to the foot of the page, and coming back means finding
+ * your place in an interface you were half way through. Nine times in ten the
+ * question is "what are the five values", which is a glance rather than a
+ * navigation. Hover to look, click to go.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * WHAT IS ON THE OTHER END OF A LINK, without going there.
+ *
+ * EVERY LINK, not only the types. It began as a type peek, which left the
+ * asymmetry that the cheapest jump on the page — a type, a few lines down — was
+ * the only one a reader was spared, while a cross-link to another page had
+ * nothing.
+ *
+ * IT IS THE REAL CARD, ON PAPER. It was a dark monospace box holding whatever
+ * text the kind happened to have, which made a page preview as a paragraph
+ * while its listing on the page is a paragraph AND a photograph of the screen.
+ * The same renderer draws both now, so the preview inherits the code blocks,
+ * the lede and the screenshot frame by descent — which is why it is paper here
+ * and not ink, and why the shadow and the border have to do the work of saying
+ * it is laid ON the page rather than part of it.
+ */
+.peek {
+	position: fixed;
+	z-index: 150;
+	/* AS WIDE AS ITS CONTENT, up to a limit. A one-line type declaration in a
+	   42rem box is mostly box; a schema of twenty lines needs the room. */
+	width: max-content;
+	max-width: min(42rem, calc(100vw - 2rem));
+	/* Long enough to answer, short enough not to become the page. */
+	max-height: min(64vh, 36rem);
+	margin: 0;
+	padding: 1rem 1.1rem;
+	background: var(--paper);
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	box-shadow: 0 0.9rem 2.4rem rgb(43 34 24 / 0.22);
+	overflow: auto;
+	/*
+	 * HOVERABLE, AND SELECTABLE. An interface of nine lines is a thing somebody
+	 * reads at their own pace, copies a field name out of, and scrolls when it
+	 * runs long — none of which is possible on a card that vanishes when reached
+	 * for. `peek.js` holds it open while the cursor is inside; the delay on the
+	 * way out is what covers the gap between the link and here.
+	 */
+	user-select: text;
+	overscroll-behavior: contain;
+}
+
+/* The card inside it is the page's card, so it must not carry the page's
+   spacing: no gap under the last block, and a picture that fits the width it
+   was given rather than the one the listing has. */
+.peek__card > :first-child {
+	margin-top: 0;
+}
+
+.peek__card > :last-child {
+	margin-bottom: 0;
+}
+
+.peek__card .shot {
+	margin-bottom: 0;
+}
+
+.peek__card .decl:last-child {
+	margin-bottom: 0;
+}
+
+.peek[hidden] {
+	display: none;
+}
+
+/* Dark, where the rest of the sheet is paper — the same exception the enlarged
+   screenshot makes, and for the same reason: it is a thing laid ON the page
+   rather than part of it, and it has to be told apart from the listing it is
+   floating over at a glance. */
+@media (prefers-reduced-motion: no-preference) {
+	.peek {
+		animation: peek-in 100ms ease-out;
+	}
+}
+
+@keyframes peek-in {
+	from {
+		opacity: 0;
+		transform: translateY(-0.2rem);
+	}
+}
+
+
+/*
+ * WHERE A THING LIVES, OR HOW IT IS REACHED — a pair of labelled facts.
+ *
+ * This was one string with a separator in it: `Realtime Database ·
+ * auth-monitor/blocks/{hash}`. Which SERVICE holds a thing decides what can be
+ * done to it — which rules file, whether there is a document limit, whether a
+ * TTL policy is possible — and a reader scanning for "what is in Firestore" had
+ * to parse every line to find out. Two facts are two facts.
+ */
+.where {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.25rem 1.1rem;
+	margin: 0.4rem 0 1.3rem;
+	font-size: 0.88rem;
+}
+
+.where dt {
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+	padding-top: 0.22em;
+}
+
+.where dd {
+	margin: 0;
+}
+
+/*
+ * A SERVICE, WITH ITS MARK IN FRONT OF IT.
+ *
+ * The mark is the fast half and the word is the exact half. Reading down a
+ * column of ten entries for "which of these are Firestore" is a shape-matching
+ * task, and shape-matching is what a logo is for; the word is there so the
+ * answer is never a guess about a 14px drawing.
+ */
+.marked {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-family: var(--mono);
+	font-size: 0.8rem;
+}
+
+/*
+ * NAMED `logo`, NOT `mark`. `.mark` was already taken by a reviewer's comment
+ * card in the margin — border-left in the annotation blue, pale blue ground —
+ * so every service logo on the page rendered as a small empty blue box with the
+ * artwork drawn underneath it. The paths were right and the class was wrong,
+ * which is the hardest kind of wrong to see in a screenshot.
+ */
+.logo {
+	flex: none;
+	display: block;
+	width: 14px;
+	height: 14px;
+}
+
+/*
+ * ONE OF A SMALL SET, COLOURED.
+ *
+ * The question a reader has of an enum is almost never "what does this one
+ * say", it is "which of these are the same" — and a word in the same ink as
+ * every other word answers that only by being read.
+ */
+.badge {
+	display: inline-block;
+	padding: 0.1em 0.55em;
+	border-radius: 999px;
+	border: 1px solid currentColor;
+	font-family: var(--mono);
+	font-size: 0.64rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	vertical-align: 0.08em;
+	white-space: nowrap;
+}
+
+/* ── The auth middleware ─────────────────────────────────────────────────
+ * Open, closed, and the one that is both. The COLOURS ARE IN `backend.json`,
+ * beside the middleware they belong to and applied inline — green reads as
+ * "anybody may knock", kesar as "prove who you are", blue as neither-and-both.
+ * They were three rules here, which meant a fourth middleware was an entry in
+ * a list AND a colour somebody had to remember to add in a stylesheet.
+ *
+ * It is a link: the badge says which one, and what that MEANS is written once
+ * at the foot of the page it governs. */
+.badge--mw {
+	text-decoration: none;
+	cursor: pointer;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * WIREFRAMES, drawn from each screen's own spec rather than pasted in.
+ *
+ * The website's pictures are photographs of a site that exists. This app does
+ * not yet, and a mockup exported as an image would be a drawing of an intention
+ * that stops being true the moment somebody builds the screen and forgets to
+ * export it again. These are rendered from the same JSON the card is, so the
+ * layout and the data it lists change in one edit.
+ *
+ * DELIBERATELY CRUDE. Grey boxes, thin rules, no colour, and no words beyond
+ * the labels the spec gives — enough to see that Sell is a picker beside a bill
+ * and Reports is a table with a push above it; not enough to be mistaken for a
+ * design. The layout is the decision being recorded. The typeface is not.
+ * ════════════════════════════════════════════════════════════════════════ */
+.wf {
+	margin: 0 0 1.4rem;
+	padding: 0;
+	border: 1px solid var(--rule);
+	border-radius: 4px;
+	background: #fdfcf9;
+	overflow: hidden;
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	color: var(--muted);
+}
+
+.wf figcaption {
+	padding: 0.4rem 0.7rem;
+	border-top: 1px solid var(--rule);
+	background: rgb(0 0 0 / 0.015);
+	font-size: 0.6rem;
+	letter-spacing: 0.06em;
+	color: #a2998a;
+}
+
+/* The app's own frame: a rail down the side, a bar across the top. Drawn once
+   here rather than repeated in every screen's spec — which is what the Shell
+   component is. */
+.wf-shell {
+	display: grid;
+	grid-template-columns: 6.5rem 1fr;
+	min-height: 12rem;
+}
+
+.wf-side {
+	border-right: 1px solid var(--rule);
+	background: rgb(0 0 0 / 0.02);
+	padding: 0.5rem;
+}
+
+.wf-main {
+	padding: 0.5rem 0.7rem 0.8rem;
+	min-width: 0;
+}
+
+.wf-loose {
+	padding: 0.7rem;
+}
+
+.wf-top {
+	display: flex;
+	justify-content: space-between;
+	padding-bottom: 0.45rem;
+	margin-bottom: 0.6rem;
+	border-bottom: 1px solid var(--rule);
+	color: var(--ink);
+}
+
+/* ── The blocks ─────────────────────────────────────────────────────────── */
+
+.wf-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+
+.wf-nav span,
+.wf-bar span,
+.wf-chips span,
+.wf-menu span {
+	display: block;
+	padding: 0.15rem 0.35rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	background: var(--paper);
+	white-space: nowrap;
+}
+
+.wf-bar,
+.wf-chips,
+.wf-menu,
+.wf-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+	margin-bottom: 0.6rem;
+}
+
+.wf-chips span {
+	border-radius: 999px;
+}
+
+.wf-actions b {
+	padding: 0.2rem 0.5rem;
+	border: 1px solid var(--muted);
+	border-radius: 3px;
+	background: var(--paper);
+	font-weight: 500;
+	color: var(--ink);
+}
+
+/* A table is its columns and the shape of the rows under them. The rows are
+   bars rather than lorem: nothing here should read as content. */
+.wf-table {
+	margin-bottom: 0.6rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.wf-tr {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.25rem 0.4rem;
+	border-top: 1px solid var(--rule);
+}
+
+.wf-tr:first-child {
+	border-top: 0;
+}
+
+.wf-th {
+	background: rgb(0 0 0 / 0.025);
+	color: var(--ink);
+}
+
+.wf-tr > span,
+.wf-tr > i {
+	flex: 1;
+	min-width: 0;
+}
+
+.wf-tr > i {
+	height: 0.45rem;
+	align-self: center;
+	background: var(--rule);
+	border-radius: 2px;
+}
+
+.wf-form {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	align-items: center;
+	gap: 0.35rem 0.6rem;
+	margin-bottom: 0.6rem;
+}
+
+.wf-form i {
+	height: 1rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	background: var(--paper);
+}
+
+.wf-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	margin-bottom: 0.6rem;
+}
+
+.wf-list i {
+	height: 1.1rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	background: var(--paper);
+}
+
+.wf-tiles,
+.wf-totals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.6rem;
+}
+
+.wf-tiles > div,
+.wf-totals > div {
+	flex: 1;
+	min-width: 4.5rem;
+	padding: 0.3rem 0.4rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	background: var(--paper);
+}
+
+.wf-tiles i,
+.wf-totals i {
+	display: block;
+	height: 0.6rem;
+	margin-top: 0.25rem;
+	background: var(--rule);
+	border-radius: 2px;
+}
+
+.wf-panel {
+	padding: 0.4rem 0.5rem;
+	margin-bottom: 0.6rem;
+	border: 1px solid var(--rule);
+	border-radius: 3px;
+	background: var(--paper);
+}
+
+.wf-panel b {
+	display: block;
+	margin-bottom: 0.3rem;
+	font-weight: 500;
+	color: var(--ink);
+}
+
+.wf-panel i,
+.wf-time i {
+	display: block;
+	height: 0.45rem;
+	margin-top: 0.25rem;
+	background: var(--rule);
+	border-radius: 2px;
+}
+
+/* An entry's events, in order, with the rule between them that says the log is
+   a sequence and not a list. */
+.wf-time {
+	margin: 0 0 0.6rem;
+	padding-left: 0.8rem;
+	border-left: 1px solid var(--rule);
+	list-style: none;
+}
+
+.wf-time li {
+	position: relative;
+	margin-bottom: 0.4rem;
+}
+
+.wf-time li::before {
+	content: '';
+	position: absolute;
+	left: -1.05rem;
+	top: 0.25rem;
+	width: 0.35rem;
+	height: 0.35rem;
+	border-radius: 999px;
+	background: var(--rule);
+}
+
+.wf-time b {
+	font-weight: 500;
+	color: var(--ink);
+}
+
+.wf-split {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.7rem;
+	margin-bottom: 0.6rem;
+}
+
+.wf-split > div {
+	min-width: 0;
+}
+
+.wf-note {
+	margin: 0;
+	font-style: italic;
+	color: #a2998a;
+}
+
+@media (max-width: 66rem) {
+	.wf-split {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* A sidebar is a column, and its indentation is the tree. */
+.wf-nav { margin-bottom: 0.6rem; max-width: 22rem; }
+.wf-nav span { white-space: pre; }

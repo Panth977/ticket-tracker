@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Agents · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents" class="on">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Agents</h1>
+    <p class="lede">Phase 2 turns TaskManager into the place your own orchestrators work. An orchestrator reads tickets, runs agents,
+    and the agents write back to the tickets: comments, Markdown and HTML documents, status changes. This page is the spec the phase-2
+    build follows. It covers agents as members of a board, tokens that carry an agent's identity, the REST and MCP API, and a
+    conversation view that opens images, video, audio, Markdown and HTML natively.</p>
+
+    <h2>A · Principals: people and agents</h2>
+    <p>Anyone who can appear on a ticket is a <strong>principal</strong>. That is either a person (their Firebase uid) or an
+    <strong>agent</strong>, whose id is <code>ag_</code> plus 16 characters. Both are stored in the same fields: <code>board.access</code> keys,
+    <code>members/{id}</code>, <code>assigneeUids</code>, <code>watcherUids</code>, mention nodes, <code>message.authorUid</code>, and
+    <code>activity.actor</code>. An id's prefix tells you what kind it is, and <code>members/{id}.kind</code> is <code>'user' | 'agent'</code>.</p>
+    <ul>
+      <li>Agents never sign in to Firebase. They act <em>only</em> through a token, so they never appear in <code>readerUids</code>,
+        and the Firestore rules never see them.</li>
+      <li>The UI draws every principal with one component. An agent shows its profile picture and an <b>Agent</b> badge wherever a person would appear.</li>
+      <li>Agents are not sent push, email or WhatsApp. They get an <a href="#d">event inbox</a> instead.</li>
+    </ul>
+
+    <h2>B · Agent profiles</h2>
+    <pre>agents/{agentId}
+  ownerUid: Uid                 // the person who made it; only they see or change it
+  name: string                  // 1–60
+  avatarPath: string | null     // users/{ownerUid}/agents/{agentId}/avatar/{millis}.webp
+  icon?: string | null          // a prebuilt icon id (shared AGENT_ICON_IDS: brand marks + generic glyphs); avatarPath > icon > initials
+  systemPrompt: string          // Markdown, ≤ 50 000 chars
+  description: string | null    // one line, shown in pickers
+  createdAt, updatedAt: Millis
+  archivedAt: Millis | null     // archived: off every board, its tokens revoked</pre>
+    <p>The <b>Agents</b> page is in the sidebar under You, and each agent's page is <code>/agents/{agentId}</code>. On it you set the name,
+    picture (uploaded and cropped like your own) or a prebuilt icon (a brand mark — Claude, Gemini, ChatGPT, Copilot, Mistral, Llama, Cursor — or a generic glyph,
+    drawn on the agent's colour like initials; a picture wins over an icon), description and system prompt, with a Markdown editor and a preview. The page also lists
+    the boards the agent is on and the tokens that act as it.
+    Commands: <code>agentCreate</code>, <code>agentUpdate</code>, <code>agentArchive</code>. Only the owner can read or write an agent. Its
+    <em>system prompt is given to its token</em> (<code>GET /v1/me</code>, MCP <code>whoami</code>), so an orchestrator can load
+    the prompt from the token alone.</p>
+
+    <h2>C · Agents on boards</h2>
+    <ul>
+      <li>A board admin who <em>owns</em> an agent adds it directly, with no invite, in <b>People &amp; roles</b> › <b>Add agent</b>. It gets a
+        role of editor, commenter or viewer (never admin) and an optional StageGrant. Command:
+        <code>boardAgentSet {boardId, agentId, role | null, stageGrant?}</code>. <code>role: null</code> removes the agent.</li>
+      <li>Any board admin can change the role of an agent that is already on the board, or remove it. Only the owner can add it.</li>
+      <li>Removing an agent works like removing a person: it is taken off assignees and watchers, and its messages stay.</li>
+      <li><code>members/{agentId}</code> = <code>{ kind: 'agent', role, stageGrant, name, avatarPath, icon, ownerUid, addedBy, joinedAt }</code>.
+        Renaming the agent or changing its picture or icon is copied out to every board it is on, the same way a person's profile is.</li>
+    </ul>
+
+    <h2 id="d">D · Assignment, mentions, and the agent inbox</h2>
+    <ul>
+      <li>The assignee picker and the <code>@</code> menu list people <em>and</em> agents on the board. Agents are marked with their badge.</li>
+      <li>Every <code>notify()</code> recipient that is an agent gets a document in <code>agentInbox/{agentId}/events/{eventId}</code>:
+        <code>{ type: assigned | unassigned | mentioned | comment | stage | updated | created, boardId, ticketId, ticketKey, messageId?, actor, summary, createdAt, ackedAt }</code>.
+        An agent receives events for tickets it is assigned to or watching, and for any message that mentions it.
+        The agent's own actions never create events for itself.</li>
+      <li>A token reads its agent's events through REST (a cursor feed, an SSE stream, and ack) or through the MCP tools
+        <code>get_events</code> and <code>ack_events</code>. Board webhooks keep working for push-style orchestrators.</li>
+    </ul>
+
+    <h2>E · Tokens: one board each, optionally acting as an agent</h2>
+    <p>Account › <b>Tokens</b> lists every token and has a <b>New token</b> button. The form asks for:</p>
+    <table>
+      <tr><th>Field</th><th>Choice</th></tr>
+      <tr><td>Name</td><td>free text, e.g. "orch-eng-builder"</td></tr>
+      <tr><td>Board</td><td>exactly one board you are on (each board gets its own tokens)</td></tr>
+      <tr><td>Acts as</td><td><b>Me</b>, or <b>An agent</b>: pick one of <em>your</em> agents that is on that board. The token then carries that agent's identity: its changes are authored by the agent, and it reads the agent's inbox and profile.</td></tr>
+      <tr><td>Permissions</td><td>checkboxes: <code>board:read</code>, <code>members:read</code>, <code>tickets:read</code>, <code>tickets:create</code>, <code>tickets:update</code> (title, description, fields, dates, tags, links), <code>tickets:move</code>, <code>tickets:assign</code>, <code>tickets:state</code> (archive/cancel), <code>comments:read</code>, <code>comments:write</code>, <code>files:read</code>, <code>files:write</code>, <code>events:read</code>. Presets: <em>Read only</em>, <em>Worker</em> (read + comment + files + move + update), <em>Everything</em>.</td></tr>
+      <tr><td>Expires</td><td>never / 30 / 90 / 365 days</td></tr>
+    </table>
+    <p><strong>What a token may do</strong> is its scopes ∩ what its principal's board role allows (<code>can()</code>). So an agent that is a
+    commenter can never move a ticket outside its StageGrant, whatever the token says. The token string (<code>tm_live_…</code>) is shown
+    <em>once</em>, together with a ready-to-paste MCP config and curl examples. It is stored hashed at
+    <code>users/{uid}/apiKeys/{keyId}</code> as <code>{ name, boardId, actsAs: {kind, id}, scopes, prefix, hash, expiresAt, lastUsedAt, revokedAt }</code>.
+    Every change a token makes is attributed "<em>Builder (agent) via token orch-eng-builder</em>". Archiving an agent, or removing it
+    from the board, revokes its tokens for that board.</p>
+
+    <h2>F · REST <code>/v1</code> for orchestrators</h2>
+    <pre>GET   /v1/me                         principal, board, scopes; for an agent: name, description, systemPrompt, avatar_url
+GET   /v1/board                      stages (with categories), priorities, tags, fields, members (people + agents)
+GET   /v1/tickets?assignee=me&amp;stage=&amp;state=&amp;q=&amp;updated_since=&amp;cursor=
+POST  /v1/tickets                    create
+GET   /v1/tickets/{KEY}              fields, links, referenced_by, pinned messages, files
+PATCH /v1/tickets/{KEY}              update (title, description_md, fields by NAME, dates, tags, assignees by id|email|agent name)
+POST  /v1/tickets/{KEY}/move         { stage }            POST /v1/tickets/{KEY}/state  { state }
+GET   /v1/tickets/{KEY}/messages?cursor=     (Markdown bodies, attachments with file ids)
+POST  /v1/tickets/{KEY}/messages     { body_markdown, attachments?: fileId[], reply_to? }
+POST  /v1/tickets/{KEY}/files        multipart, or JSON { name, mime, content_base64 | text }  (≤ 25 MB) → { file_id, url }
+GET   /v1/files/{fileId}             metadata + a signed download URL valid for 15 min;  ?content=1 returns text for md/html/text
+GET   /v1/events?cursor=&amp;limit=      the agent inbox (a person's token reads its own inbox items)
+GET   /v1/events/stream              Server-Sent Events of the same, from ?cursor
+POST  /v1/events/ack                 { ids } or { upTo: cursor }</pre>
+    <p>Every write goes through the same commands as the app. Errors are problem+json. Every POST takes an Idempotency-Key.
+    <code>/v1/openapi.json</code> documents all of it.</p>
+
+    <h2>G · MCP for agents</h2>
+    <p>The same token works as a Bearer token on <code>/mcp</code> (OAuth still works for interactive clients). Tools the token's
+    scopes don't allow are hidden from <code>tools/list</code> and refused if called.</p>
+    <pre>whoami                 → principal, board, scopes, and for an agent its system prompt
+get_board              → stages, fields, members
+list_my_tickets        → { stage?, state?, updated_since? }
+search_tickets         get_ticket { key, messages?: N }   get_messages { key, cursor? }
+create_ticket          update_ticket          move_ticket { key, stage }     assign_ticket { key, add?, remove? }
+post_message           { key, markdown, attachments?: fileId[], reply_to? }
+upload_file            { key, name, mime?, text? | content_base64? }  → fileId   (text makes .md / .html documents trivial)
+read_file              { fileId } → text for md/html/text/csv/json, otherwise a signed URL
+link_tickets           get_events { cursor?, limit? }     ack_events { ids | upTo }
+resources:  ticket://ENG-42 (markdown incl. thread)   file://{fileId}   board://schema</pre>
+
+    <h2>H · The conversation</h2>
+    <ul>
+      <li>Messages render <strong>GitHub-flavoured Markdown</strong>: headings, lists, task lists, tables, block quotes, links, inline
+        images, and code blocks with syntax highlighting and a copy button. Human messages written in the editor render the same way.</li>
+      <li>Long messages (over about 40 lines) collapse behind "Show more". Code blocks over 30 lines scroll.</li>
+      <li>Message actions: reply (quote), react, pin/unpin, edit, delete, copy as Markdown, copy link. Agents' messages carry the badge and
+        "via token …".</li>
+      <li>Composer: drag, drop or paste many files at once, with a progress bar each. Files can be removed before sending, and a message can be
+        sent with files only. Sending uses ⌘↵.</li>
+      <li>Attachments show as <strong>preview cards</strong> in a grid under the message, and the same cards fill the drawer's Files tab.</li>
+    </ul>
+
+    <h2>I · Opening files natively</h2>
+    <table>
+      <tr><th>Kind</th><th>Detected by</th><th>Card</th><th>Viewer</th></tr>
+      <tr><td>Image</td><td>image/*</td><td>thumbnail</td><td>lightbox, zoom and pan, next/prev</td></tr>
+      <tr><td>Video</td><td>video/*</td><td>poster + duration</td><td>native player</td></tr>
+      <tr><td>Audio</td><td>audio/*</td><td>inline mini player</td><td>player</td></tr>
+      <tr><td>Markdown</td><td>.md, text/markdown</td><td>title + first lines</td><td>rendered like a message, with a table of contents for long documents, and a Source toggle</td></tr>
+      <tr><td>HTML</td><td>.html, text/html</td><td>live scaled-down preview</td><td>sandboxed iframe (<code>sandbox="allow-scripts allow-popups allow-forms"</code>, <em>never</em> allow-same-origin), from <code>srcdoc</code>. The document can run its own scripts but can never touch the app or your session.</td></tr>
+      <tr><td>PDF</td><td>application/pdf</td><td>first-page thumbnail</td><td>the browser's PDF viewer in an iframe</td></tr>
+      <tr><td>Text / code / JSON / CSV</td><td>text/*, known extensions</td><td>first lines</td><td>syntax highlighting; CSV as a table</td></tr>
+      <tr><td>Anything else</td><td>—</td><td>icon + size</td><td>download</td></tr>
+    </table>
+    <p>Clicking a card opens the <b>in-app viewer</b>: an overlay with the file, the files before and after it on this ticket, Download, and
+    <b>Open in new tab</b>. A new tab opens <code>/f/{boardKey}/{ticketKey}/{fileId}</code>, the same viewer as a full page, so an HTML
+    report or Markdown plan gets a whole window and its own address. Files are fetched with short-lived download URLs, which the Storage
+    rules only issue to people on the board.</p>
+
+
+    <h2 id="k">K · Feel: motion, loaders, and work that never blocks</h2>
+    <p><strong>No click waits for the server.</strong> Every write goes into an <em>outbox</em>. The UI updates at once and stays usable,
+    the command runs in the background, and only a failure asks for attention.</p>
+    <h3>The outbox</h3>
+    <ul>
+      <li>One client module, <code>lib/api/outbox</code>, used by every write: <code>queue(command, input, { optimistic, rollback, draft, openTo })</code>.
+        It applies the optimistic change right away, sends in the background, and retries up to 3 times with backoff while online. It waits
+        while offline and resumes when the browser comes back online.</li>
+      <li>Entries for messages, and anything else with a draft, are <strong>persisted in IndexedDB</strong> (falling back to localStorage) for each user,
+        so an unsent message survives a reload or a closed tab and is retried on the next visit.</li>
+      <li>A small <b>Syncing · 2</b> indicator sits at the bottom of the sidebar while anything is pending. It turns into
+        <b>⚠ 1 failed</b>, and clicking it lists the failed items with Open and Cancel.</li>
+    </ul>
+    <h3>When something fails</h3>
+    <p>A toast stays until you act on it: “Couldn't create <em>Fix login copy</em> · <b>Open</b> · <b>Cancel</b>”.</p>
+    <ul>
+      <li><b>Open</b> goes to where the change was made and puts it back. A ticket reopens the full create form, prefilled from the draft.
+        A settings change reopens that section with the edited values. A message goes to its ticket with the failed bubble highlighted.</li>
+      <li><b>Cancel</b> drops the change and rolls back what the UI showed.</li>
+    </ul>
+    <h3>Creating a ticket</h3>
+    <p>The dialog closes the instant you press Create. The card appears in its column straight away, dimmed, with a small spinner and the key
+    <code>VDP-…</code>, and becomes a normal card with its real key when the server answers. If creation fails, the card shows a red edge
+    and the toast above appears, where Open reopens the prefilled form.</p>
+    <h3>Sending a message, the way chat apps do it</h3>
+    <ul>
+      <li>The composer clears on send and is never disabled. The bubble appears at once with a status mark: 🕓 sending, ✓ sent, or a red
+        <b>!</b> for failed. Attachments show their upload progress inside the bubble.</li>
+      <li>Clicking a failed bubble opens a menu with <b>Resend</b> and <b>Cancel</b> (cancel deletes it; Edit is optional).</li>
+      <li>A ticket with unsent messages shows ⚠ on its board card, on the drawer's Thread tab, and in My work.</li>
+    </ul>
+    <h3>The thread looks like Google Chat</h3>
+    <ul>
+      <li><strong>Your messages sit on the right</strong> in an accent-coloured bubble, without an avatar. <strong>Everyone else's sit on the left</strong>
+        in a neutral bubble, with their avatar and name (plus the Agent badge for agents). You see who said what without reading names.</li>
+      <li>Consecutive messages from the same author within 5 minutes are grouped: the name and avatar show once, the bubbles stack tightly,
+        and the time appears on hover, plus under the last bubble of the group. Day separators ("Today", "Yesterday", a date) sit centred between days.</li>
+      <li>System lines ("Priya moved this to QA", "referenced from ENG-40") are small, centred and grey, not bubbles.</li>
+      <li>Markdown, code and attachment cards render <em>inside</em> the bubble; wide content (tables, code, HTML previews) may widen the bubble to the pane's width.</li>
+    </ul>
+    <h3>Unread, and marking as read</h3>
+    <ul>
+      <li>When a ticket opens, the app reads your last-read time for it (<code>users/{uid}/reads/{ticketId}.readAt</code>), <em>then</em> marks the
+        ticket read (<code>readAt = now</code>). The old value is kept for as long as the ticket stays open.</li>
+      <li>In the <b>thread</b>, a divider labelled <b>New messages</b> is drawn before the first message newer than that old value, and the thread
+        opens scrolled to it. Messages arriving while the ticket is open are read at once (the pointer advances when they are in view) but stay below the divider.</li>
+      <li>In <b>Activity</b>, the same kind of divider, labelled <b>New</b>, is drawn above the entries newer than the old value (the list is newest first).</li>
+      <li>Your own messages and changes never count as unread. The unread badges on board cards, My work and the sidebar clear when the ticket is opened.</li>
+    </ul>
+    <h3>Motion</h3>
+    <table>
+      <tr><th>Where</th><th>What</th></tr>
+      <tr><td>Ticket drawer</td><td>slides in from the right (translateX 100% → 0, about 220 ms, ease-out) over a fading backdrop, and slides back out on close; its content fades in after the slide</td></tr>
+      <tr><td>Cards</td><td>new cards enter (fade + scale .97 → 1), removed ones collapse; hover lift; drag gets a raised shadow and a smooth drop</td></tr>
+      <tr><td>Messages</td><td>a new bubble rises 6 px as it fades in; the status mark cross-fades</td></tr>
+      <tr><td>Dialogs, menus, popovers, toasts</td><td>fade + slight scale or slide, 120–180 ms</td></tr>
+      <tr><td>Tabs and views</td><td>the content cross-fades; the active tab underline slides</td></tr>
+      <tr><td>Buttons</td><td>a pressed state (scale .98); a spinner only on the element itself, never blocking the page</td></tr>
+    </table>
+    <p>Everything respects <code>prefers-reduced-motion</code>, dropping to plain fades or nothing.</p>
+    <h3>Loaders</h3>
+    <ul>
+      <li>Skeleton shimmers shaped like the real content, for board columns and cards, the thread, the drawer fields, lists and tables.
+        Never a centred spinner on an empty page.</li>
+      <li>A thin progress bar at the top of the window during navigation and on first load.</li>
+      <li>Data already in the cache is shown immediately and refreshed in the background.</li>
+    </ul>
+    <h3>The ticket view: two panes, no tabs</h3>
+    <p>There are no Thread, Activity or Files tabs. The ticket (the drawer, and the <code>/t/{key}</code> page) is split into two columns,
+    and each column scrolls on its own.</p>
+    <table>
+      <tr><th>Left, wider</th><th>Right</th></tr>
+      <tr><td><b>Title and description, fixed at the top</b> (the description collapses to a few lines with "Show more" when it is long);
+        under them the <b>thread</b>, which scrolls in its own space; the <b>composer is pinned to the bottom</b>, whether the thread is empty or long,
+        and an empty thread's message is centred above it</td>
+        <td><b>Metadata fields</b> (stage, priority, assignees, dates, estimate, tags, custom fields, links / related), then the
+        <b>Attachments</b> section (every file on the ticket as preview cards), then the <b>Activity</b> section (the change history,
+        newest first, loading more on scroll); each section can be collapsed, and the column scrolls on its own</td></tr>
+    </table>
+    <p>The drawer is a full-height flex column: the header is fixed, and below it the two panes each take the full remaining height (<code>min-h-0</code> + <code>overflow-auto</code>).
+    On a phone the panes stack: title and description, then the thread with its composer, and the metadata behind a <b>Details</b> button.</p>
+
+
+    <h2 id="l">L · Seeing what an agent is doing: questions, task lists, heartbeat</h2>
+
+    <h3>L1 · Questions with options</h3>
+    <p>An agent can ask a question that appears in the thread as a <strong>form card</strong>. A person fills it in and submits it, and the
+    answer comes back to the agent as structured data.</p>
+    <pre>Question (a message with kind: 'question')
+  title: string                      "Which database should the report use?"
+  body: RichText | null              optional context, Markdown
+  fields: QuestionField[]            1–10
+    { id, label, type: 'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date',
+      options?: { id, label, description? }[],   // single / multi
+      required?: boolean, default?, placeholder? }
+  allowComment: boolean              adds "Anything else?"
+  to: PrincipalId[] | null           who should answer (null = any person on the board)
+  blocking: boolean                  true: the ticket shows "Waiting for your answer"
+  status: 'open' | 'answered' | 'cancelled' | 'expired'
+  expiresAt: Millis | null
+  answer: { values: Record&lt;fieldId, value&gt;, comment?, by: Uid, at: Millis } | null</pre>
+    <ul>
+      <li><b>In the thread:</b> an open question is a card on the asker's side, with the form inside: radio buttons for single choice, checkboxes
+        for multiple choice, inputs for the rest, and a <b>Submit</b> button. Once answered, the card locks and shows the chosen values with
+        "Answered by Panth · 10:42", and the answer also appears as your reply bubble. A person with commenter rights or above can answer.
+        When <code>to</code> is set, only those people can answer, and the card says whom it is waiting for.</li>
+      <li><b>Visibility:</b> a blocking open question puts a <b>❓ Waiting for you</b> badge on the ticket card, the drawer header and My work, and
+        notifies the <code>to</code> people (or the assignees and watchers) through their normal channels as the event <code>question</code>.</li>
+      <li><b>The agent gets the answer</b> as an inbox event <code>answered</code> carrying the values, and can also read it with
+        <code>GET /v1/questions/{id}</code>. The agent can cancel its question, and an expired one locks as "Expired".</li>
+      <li>Commands: <code>questionAsk</code>, <code>questionAnswer</code>, <code>questionCancel</code>. The outbox handles Submit like any other write.</li>
+    </ul>
+
+    <h3>L2 · Task lists inside the ticket</h3>
+    <p>An agent publishes its plan as a checklist and ticks it off as it works.</p>
+    <pre>tickets/{t}/tasklists/{listId}
+  title: string                      "Plan: add CSV export"
+  owner: PrincipalId                 usually the agent
+  items: { id, title, status: 'todo' | 'doing' | 'done' | 'skipped' | 'failed', note?: string, updatedAt }[]   ≤ 100
+  position, createdAt, updatedAt, closedAt: Millis | null</pre>
+    <ul>
+      <li><b>Where it shows:</b> at the top of the right pane, above the fields. Each list has a progress bar ("4 / 7"), and the item being
+        worked on (<code>doing</code>) is highlighted with a spinner; failed items are red, with their note. The ticket card shows a
+        compact "4/7" chip.</li>
+      <li>Creating a list and finishing it each add a system line to the thread. Every change to an item does not, to keep the thread readable.</li>
+      <li>The owner (through its token) and editors can change a list. People may also tick items by hand.</li>
+      <li>Commands: <code>tasklistSet</code> (create or replace the whole list), <code>tasklistItemUpdate</code> (one item's status and
+        note), <code>tasklistDelete</code>.</li>
+    </ul>
+
+    <h3>L3 · Heartbeat: is the agent alive?</h3>
+    <p>The orchestrator sends a heartbeat <strong>every minute</strong> while it works, and a final one when its work ends.</p>
+    <pre>POST /v1/heartbeat   (MCP: heartbeat)
+  { ticket?: KEY,                    // omit = an agent-level beat, with no ticket
+    state: 'working' | 'idle' | 'done' | 'error',
+    message?: string,                // "Running tests (3/12)"  ≤ 200
+    progress?: number }              // 0–1, optional
+
+boards/{b}/agentStatus/{agentId}__{ticketId | '_'}
+  agentId, ticketId | null, state, message, progress, lastBeatAt, startedAt, endedAt</pre>
+    <p>Heartbeats go to their own small documents rather than the ticket, so a beat every minute doesn't retrigger the ticket's search
+    indexing or re-render every listener. The board listens to <code>agentStatus</code> once, and every card and drawer reads from that.
+    What the UI shows is computed from the state and the time since the last beat:</p>
+    <table>
+      <tr><th>Condition</th><th>Shown as</th></tr>
+      <tr><td>state <code>working</code>, last beat ≤ 75 s ago</td><td>🟢 a pulsing dot + "Working · Running tests (3/12)" on the ticket header and the agent's avatar; a green dot on the card</td></tr>
+      <tr><td>state <code>working</code>, last beat &gt; 75 s ago</td><td>🔴 "No signal for 3 min" in red. The orchestrator may have died. A scheduled sweep notifies the agent's owner after 5 minutes of silence (once per silence).</td></tr>
+      <tr><td>state <code>idle</code></td><td>🟡 "Idle · waiting for an answer" (usually after asking a blocking question)</td></tr>
+      <tr><td>state <code>done</code></td><td>⚪ "Finished · 10:42". Nothing is running on this ticket.</td></tr>
+      <tr><td>state <code>error</code></td><td>🔴 "Stopped with an error" plus the message</td></tr>
+      <tr><td>no status yet</td><td>nothing</td></tr>
+    </table>
+    <p>The <b>Agents</b> page shows each agent's agent-level status and its tickets currently being worked on. People &amp; roles shows the same dot
+    next to each agent. The token needs the scope <code>status:write</code>, which is part of the <em>Worker</em> preset.</p>
+
+    <h3>L4 · API additions</h3>
+    <pre>REST                                                    MCP
+POST /v1/tickets/{KEY}/questions   ask                   ask_question
+GET  /v1/questions/{id}            status + answer        get_question
+POST /v1/questions/{id}/cancel                            cancel_question
+PUT  /v1/tickets/{KEY}/tasklists/{listId}   set list      set_tasklist
+PATCH /v1/tickets/{KEY}/tasklists/{listId}/items/{itemId} update_task_item
+DELETE /v1/tickets/{KEY}/tasklists/{listId}               delete_tasklist
+POST /v1/heartbeat                                        heartbeat
+events: question_answered, question_cancelled (in the agent inbox)</pre>
+    <p>New scopes: <code>questions:write</code>, <code>tasklists:write</code> and <code>status:write</code>, all included in the <em>Worker</em> preset.</p>
+
+
+    <h2 id="m">M · The SDK your orchestrator imports</h2>
+    <p>Writing a client by hand for every orchestrator is the thing this app exists to avoid. So the app ships a small, typed JavaScript
+    SDK, hosted next to it, that turns every REST call and every MCP tool into a function.</p>
+
+    <h3>Where it lives</h3>
+    <pre>https://taskmanager-example.web.app/lib/               an index page: install lines per runtime, examples
+   /lib/v1/sdk.js          ESM bundle, no dependencies   (browsers, Deno, Bun)
+   /lib/v1/sdk.d.ts        one flat declaration file
+   /lib/v1/sdk.ts          the same SDK as a single TypeScript file (Deno and Bun type it natively)
+   /lib/v1/sdk.min.js
+   /lib/v1/tm-sdk-&lt;version&gt;.tgz  and  tm-sdk.tgz   npm install for Node
+   /lib/v1/openapi.json    a copy of the API description
+   /lib/latest/…           the newest build (never cached)</pre>
+    <p><code>/lib/v1/*</code> is immutable and cached for a year; <code>/lib/latest/*</code> is never cached.</p>
+
+    <h3>Type hints in every runtime</h3>
+    <p>A URL import only carries types if the server says where they are. All three mechanisms are used, so an editor and a compiler both find them:</p>
+    <table>
+      <tr><th>Runtime</th><th>Install</th><th>How types arrive</th></tr>
+      <tr><td><b>Node</b> (npm, pnpm, yarn, bun install)</td>
+        <td><code>npm i https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz</code><br>then <code>import { createClient } from '@tm/sdk'</code></td>
+        <td>The tarball's package.json carries <code>types</code>, <code>exports</code> (with a <code>types</code> condition) and the <code>.d.ts</code>.
+          It is a normal dependency, so tsc and every editor resolve it. Node cannot import over https, so this is the supported path —
+          pin a version with the versioned tarball name.</td></tr>
+      <tr><td><b>Deno</b></td>
+        <td><code>import { createClient } from 'https://…/lib/v1/sdk.ts'</code><br>or map it in <code>deno.json</code>:
+          <code>"imports": { "@tm/sdk": "https://…/lib/v1/sdk.ts" }</code></td>
+        <td>Importing the <code>.ts</code> gives Deno the real source, so types need nothing else. If you import <code>sdk.js</code> instead,
+          hosting sends <code>X-TypeScript-Types: /lib/v1/sdk.d.ts</code> and the file also starts with
+          <code>/// &lt;reference types="./sdk.d.ts" /&gt;</code> — Deno honours either.</td></tr>
+      <tr><td><b>Bun</b></td><td>the npm tarball, or the URL import like Deno</td><td>Same as above; Bun reads the triple-slash reference.</td></tr>
+      <tr><td><b>Browser / no build step</b></td><td><code>&lt;script type="module"&gt;</code> from <code>/lib/v1/sdk.js</code></td>
+        <td>Types are not needed at runtime; editors pick them up from the same <code>.d.ts</code> beside it.</td></tr>
+    </table>
+    <p>Content types are set deliberately: <code>.ts</code> and <code>.d.ts</code> as <code>application/typescript</code>, <code>.tgz</code> as
+    <code>application/gzip</code>, and <code>Access-Control-Allow-Origin: *</code> on <code>/lib/**</code> so a browser or Deno can fetch them.
+    The package is <code>@tm/sdk</code>, built from <code>sdk/</code> in this repo, and its types come from the same <code>@tm/shared</code>
+    schemas the server validates with, so a wrong field is a compile error rather than a 400.</p>
+
+    <h3>What it gives you</h3>
+    <pre>import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js'
+
+const tm = createClient({ token: process.env.TM_TOKEN })   // one board, one identity: the token decides
+
+const me = await tm.me()                    // principal, board, scopes; for an agent its systemPrompt
+const mine = await tm.tickets.list({ assignee: 'me', state: 'active' })
+const t    = await tm.tickets.get('ENG-42')
+
+await tm.tasklists.set('ENG-42', { title: 'Plan', items: ['Read the spec', 'Write it', 'Test it'] })
+await tm.tasklists.item('ENG-42', listId, itemId, { status: 'doing' })
+
+const report = await tm.files.upload('ENG-42', { name: 'report.html', text: html })
+await tm.messages.post('ENG-42', { markdown: 'Done — see the report.', attachments: [report.id] })
+
+const answer = await tm.questions.ask('ENG-42', {        // resolves when a person submits the form
+  title: 'Which database?', blocking: true,
+  fields: [{ id: 'db', label: 'Database', type: 'single', options: ['Postgres', 'SQLite'], required: true }],
+}).waitForAnswer({ timeoutMs: 30 * 60_000 })
+answer.values.db                                          // typed from the fields you passed
+
+const beat = tm.heartbeat.start({ ticket: 'ENG-42', message: 'Running tests' })  // every 60 s
+beat.update({ message: 'Writing the report', progress: 0.8 })
+await beat.done()                                          // or beat.error('…') — the UI stops showing "working"
+
+for await (const ev of tm.events.stream({ ack: true })) {  // SSE, reconnects, resumes from its cursor
+  if (ev.type === 'assigned') …
+}</pre>
+    <ul>
+      <li><b>Zero dependencies</b>, one <code>fetch</code> (injectable). Node 20+, Deno, Bun and browsers.</li>
+      <li><b>Errors are typed</b>: <code>TmError</code> with <code>code</code> ('forbidden', 'rate_limited', …), the HTTP status and the
+        problem+json body. Rate limits and 5xx retry with backoff, and every write carries an idempotency key, so a retry is still one change.</li>
+      <li><b>Helpers for orchestrators</b>: <code>tm.work(handler, { concurrency })</code> loops over the event stream, keeps a heartbeat alive
+        while the handler runs, marks it <code>done</code> at the end and <code>error</code> if it throws — a whole orchestrator in one call.</li>
+    </ul>
+
+    <h3>Bring your own MCP server</h3>
+    <p>Rather than handing an agent the whole MCP endpoint, an orchestrator can build the tool list it wants:</p>
+    <pre>import { createClient, mcpTools, registerTools } from '…/lib/v1/sdk.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
+const tools = mcpTools(tm, {
+  only: ['get_ticket', 'post_message', 'set_tasklist', 'update_task_item', 'ask_question', 'heartbeat'],
+  exclude: ['delete_tasklist'],
+  rename: { post_message: 'reply' },
+  describe: { reply: 'Reply to the ticket you are working on. Markdown.' },
+  defaults: { ticket: 'ENG-42' },        // fixed arguments the model never has to pass (and cannot change)
+  wrap: { reply: (call) => async (args) => call({ ...args, markdown: prefix + args.markdown }) },
+})
+
+registerTools(new McpServer({ name: 'my-orch', version: '1' }), tools)</pre>
+    <ul>
+      <li><code>mcpTools()</code> returns plain definitions — <code>{ name, description, inputSchema (JSON Schema), handler }</code> — so they
+        work with any MCP server implementation, not just the official SDK. <code>registerTools()</code> is a convenience for that one.</li>
+      <li>The token's own scopes still apply on the server: a tool you expose that the token may not call fails there. <code>mcpTools</code>
+        drops tools the token's scopes already forbid, so a model is never offered something that must fail.</li>
+    </ul>
+
+    <h3>What gets built</h3>
+    <ol>
+      <li><code>p4-sdk</code>: the <code>sdk/</code> package — client, helpers, MCP tool factory, flat <code>.d.ts</code>, bundles, tarball, unit tests against a mocked fetch and emulator tests against the real API</li>
+      <li><code>p4-hosting</code>: the build and deploy plumbing (artifacts into hosting under <code>/lib/**</code> with the right cache headers), the <code>/lib/</code> index page with examples, and a Plan › SDK docs page</li>
+      <li><code>p4-integration</code>: an orchestrator script written with the SDK, run end to end against the emulators (events → task list → question → files → heartbeat), a type-check of a sample consumer project, then a deploy</li>
+    </ol>
+
+
+    <h2 id="n">N · The same tools, for people</h2>
+    <p>Questions and task lists are not agent features — an agent was simply the first thing that could use them. Everything an agent can do
+    through the API, a person can do in the app. <b>The one exception is the heartbeat</b> (§L3): it is a signal from a running process, so it
+    stays agent-only and read-only in the UI.</p>
+
+    <h3>N1 · Asking a question from the composer</h3>
+    <ul>
+      <li>The composer gets an <b>Ask a question</b> action (in the toolbar and as <code>/ask</code>), open to anyone who may comment.</li>
+      <li>It opens a small builder: a <b>title</b>, optional <b>context</b> in Markdown, and <b>fields</b>. Add a field, pick its type
+        (single choice, multiple choice, text, long text, number, yes/no, date), name it, and for the choice types add options — each option
+        a line, reorderable, removable. Mark fields required. Up to 10.</li>
+      <li>Below that: <b>who should answer</b> (anyone on the board, or pick people and agents), <b>blocking</b> (shows ❓ Waiting on the
+        ticket), and <b>expires</b> (never, 1 hour, 1 day, 1 week).</li>
+      <li>A live preview shows the card as the thread will render it. <b>Ask</b> posts it through the outbox like any message.</li>
+      <li>Starting points, so nobody builds a form from nothing: <em>Yes / No</em>, <em>Pick one</em>, <em>Pick several</em>, <em>Free text</em>.</li>
+      <li>The asker (and board admins) can <b>cancel</b> an open question; anyone who may comment can answer, unless the question names people.
+        A person's question notifies exactly like an agent's.</li>
+    </ul>
+
+    <h3>N2 · Task lists people can write</h3>
+    <ul>
+      <li>The <b>Task lists</b> section in the right pane gets <b>+ New list</b>: a title and the items. Paste several lines and each becomes
+        an item — the fastest way to turn a plan into a checklist.</li>
+      <li>Per list: rename, add an item at the end, edit an item's text in place, drag to reorder, delete an item, delete the list.</li>
+      <li>Per item: click the status to cycle <code>todo → doing → done</code>, or use its menu for <code>skipped</code> and <code>failed</code>
+        (failed asks for a short note). The progress bar and the board card's <b>4/7</b> chip follow along.</li>
+      <li>Who may: editors and admins, and the list's owner — which is how an agent keeps ownership of its own plan while a person can still
+        tick an item off. Viewers and commenters see it read-only.</li>
+      <li>Every change goes through the outbox: it shows at once, rolls back if the server refuses.</li>
+    </ul>
+
+    <h3>N3 · What stays agent-only</h3>
+    <p>The heartbeat and the agent health dot (§L3). A person is not a process; there is nothing to signal. The UI keeps showing agent health
+    where an agent is involved.</p>
+
+
+    <h2 id="o">O · One page an orchestrator can be pointed at</h2>
+    <p>An agent joining your ecosystem should need one URL, not a tour of this site. So the app publishes its own integration context,
+    generated from the same sources the software runs on — no second copy to rot.</p>
+    <pre>https://taskmanager-example.web.app/llms.txt         the short index: what this is, the URLs, how to authenticate
+                                        /llms-full.txt    THE ONE PAGE — the whole operating context, Markdown, ~everything below
+                                        /integrate        the same thing as a readable web page, for humans
+                                        /integrate.json   a small machine manifest: api, mcp, sdk, openapi, llms URLs + version
+                                        /v1/openapi.json  the API description (already served)</pre>
+    <h3>What /llms-full.txt contains</h3>
+    <ol>
+      <li><b>What this software is</b>: boards hold tickets; a ticket has a key, fields, a thread, files, task lists and questions; people and
+        agents are both principals; there is no workspace above a board.</li>
+      <li><b>How an agent gets in</b>: a person makes an agent profile, adds it to a board, and creates a board-scoped token that acts as it.
+        Exactly what a token carries (board, identity, scopes) and what it can never do.</li>
+      <li><b>The three doors</b>: the SDK (recommended), REST, MCP — with when to use which.</li>
+      <li><b>The loop</b>: read the events feed (or stream), pick up work, publish a task list, heartbeat every minute, ask a question when
+        blocked, post results with files, mark done. Written as a complete, runnable example.</li>
+      <li><b>Reference</b>, generated: every REST endpoint with its inputs and outputs (from <code>/v1/openapi.json</code>), every MCP tool with
+        its schema (from the tool registry), every scope, every event type, every error code, the field types, and the states a ticket, a
+        question and a task-list item can be in.</li>
+      <li><b>Rules of the house</b>: idempotency keys, retries and backoff, rate limits, what is optimistic and what is not, file size limits,
+        Markdown and HTML handling, and the fact that nothing an agent does can exceed the role its token acts as.</li>
+      <li><b>Recipes</b>: triage a board, answer-driven work, long jobs with progress, posting an HTML report, reacting to an assignment.</li>
+      <li><b>Version and changelog</b>, so an agent can tell whether its knowledge is current.</li>
+    </ol>
+    <p>It is <b>generated</b> by <code>scripts/gen-integration.mjs</code> from the OpenAPI document, the MCP registry, the shared contracts and
+    the SDK's declaration file, with the prose kept beside it in one source file. The deploy fails if the published copy is out of date, the
+    same way the SDK artifacts are checked.</p>
+
+
+    <h2 id="p">P · The board card, and the width a task list wastes</h2>
+
+    <h3>P1 · Task lists use the pane</h3>
+    <p>Today an item's text wraps into a narrow column while the right half of the pane is empty: the drag handle, the check, the move arrows
+    and the ⋯ menu all hold their own width, and the text takes what is left.</p>
+    <ul>
+      <li>The item's text takes the <strong>full width</strong> of the pane. The controls are a hover toolbar over the row's right edge
+        (drag, ⋯) and only the status control keeps its place on the left. On touch, or with the keyboard, the toolbar is always visible.</li>
+      <li>The status control is a single click: <code>todo → doing → done</code>, with its menu for <em>skipped</em> and <em>failed</em>.</li>
+      <li>Move arrows go: dragging reorders, and the ⋯ menu keeps "Move up / Move down" for keyboards.</li>
+      <li>A done item is struck through but still readable — dimmed text, not a grey blur.</li>
+      <li>The progress bar spans the pane; the count sits at its end ("5 / 5").</li>
+      <li>An item's note (from a failed step) sits under it in full width, not squeezed beside it.</li>
+    </ul>
+
+    <h3>P2 · The card says what is happening</h3>
+    <p>A card is the only thing you see for a ticket you have not opened. It should answer: is anything new, who has it, is it late, is
+    something waiting on me. Empty facts are never drawn — a card with nothing to say stays two lines.</p>
+    <table>
+      <tr><th>Row</th><th>What it holds</th></tr>
+      <tr><td>Top</td><td><code>OCZ-1</code> (click to copy) · <b>unread count</b> as an accent badge (<code>💬 3</code> when there are messages you have not read, muted total when there are none) · ⚠ unsent · ❓ waiting for your answer · the agent health dot with a tooltip ("Working · Running tests")</td></tr>
+      <tr><td>Title</td><td>up to two lines</td></tr>
+      <tr><td>Meta</td><td>priority chip · tags · due date (red when overdue, amber today) · estimate · task-list progress (<code>5/5</code>) · attachments count · ⛔ when blocked by another ticket</td></tr>
+      <tr><td>Bottom right</td><td><b>assignees, editable in place</b>: click an avatar (or the + when empty) to open the picker and add or remove people and agents without opening the ticket. It saves through the outbox, so the card updates at once.</td></tr>
+    </table>
+    <ul>
+      <li>The unread count comes from the same read pointer the thread uses, so opening the ticket clears it everywhere.</li>
+      <li>The same card is used by the table's title cell and by My work, so all three agree.</li>
+      <li>Everything on the card is <em>read-only unless you may edit</em>: a viewer sees the assignees but no picker.</li>
+    </ul>
+
+
+    <h2 id="q">Q · Simpler: one click to a board, one bar of controls</h2>
+
+    <h3>Q1 · The sidebar is a list of boards</h3>
+    <p>No accordions. A board is one row; clicking it opens that board's default view. Everything else about a board lives on the board page.</p>
+    <pre>(picture) Panth Patel ▾
+⌘K Search
+Inbox 4
+My work
+— BOARDS
+● OCZ BOctupuz        •3      ← click = the default view
+● VDP VardayiniApp    •1
+All boards &amp; archived
++ New board
+— YOU
+Agents · Notifications · Tokens · Sign out</pre>
+    <ul>
+      <li>A board row shows its colour dot, key, name and its unread count. The current board is highlighted.</li>
+      <li>Views, People and Settings leave the sidebar entirely — they are on the board page.</li>
+      <li>Each person's default view is remembered per board (<code>prefs.lastViewId</code>), falling back to the board's default.</li>
+    </ul>
+
+    <h3>Q2 · One toolbar on the board page</h3>
+    <p>Two stacked bars become one row. Left: the view tabs. Right: the controls.</p>
+    <pre>VDP VardayiniApp ☆ | Board  Table  Calendar  Mine  +          🔎  Filter  Sort  Group  🔔 Mine  ⚙  + New</pre>
+    <ul>
+      <li><b>⚙ Settings</b> is the only door to board configuration, and <b>People &amp; roles is a section inside it</b> — not a separate destination.</li>
+      <li>Filter / Sort / Group stay as buttons that show their count when active ("Filter 2"); the "View" menu (save, rename, delete, make default) folds into the active tab's own menu.</li>
+      <li>The board's name is the page title; the star stays beside it.</li>
+    </ul>
+
+    <h3>Q3 · A new ticket starts in the first stage</h3>
+    <p>Creating a ticket with no stage puts it in <strong>the board's first stage by position</strong> — the leftmost column — not the first
+    stage that happens to be of category <code>todo</code>. That is what a person means by "add it to the board", and it matches where
+    the + New in a column already puts it. This applies to quick add, the full form, the API and the SDK.</p>
+
+    <h3>Q4 · Never render a board that is not loaded</h3>
+    <p>Board components assert <code>bs.board!</code>. While a board loads — and for the moment after switching boards — that value is
+    <code>null</code>, which throws <em>"Cannot read properties of null (reading 'stages')"</em> and blanks the page. The board page holds its
+    skeleton until the board, its views and its members are loaded, and every component takes a non-null board as a prop rather than asserting.
+    A board that fails to load (gone, or no access) shows a stated empty state, not a crash.</p>
+
+
+    <h2 id="r">R · An account token, and TaskManager inside Claude</h2>
+
+    <h3>R1 · "Virtual me": a token for the whole account</h3>
+    <p>Board tokens (§E) stay as they are. A third kind is added: an <b>account token</b>, which acts as you across <em>every board you are on</em> —
+    the app without the app.</p>
+    <table>
+      <tr><th>Kind</th><th>Acts as</th><th>Reaches</th></tr>
+      <tr><td>Board · me</td><td>you</td><td>one board</td></tr>
+      <tr><td>Board · agent</td><td>an agent of yours</td><td>one board</td></tr>
+      <tr><td><b>Account</b></td><td>you</td><td>every board you are on, <em>as it stands at each call</em> — lose access to a board and the token loses it too</td></tr>
+    </table>
+    <ul>
+      <li><b>Scopes still apply.</b> The same checkboxes, applied to every board, plus account-level ones: <code>boards:create</code>,
+        <code>boards:admin</code> (settings and people on boards where you are an admin), <code>agents:write</code> (create and edit your agent
+        profiles), <code>invites:write</code>. Preset: <b>Full account</b>.</li>
+      <li><b>What an account token can never do</b>, whatever its scopes: create or revoke tokens, grant or revoke OAuth access, change your
+        sign-in or security settings, delete or export your account. A token can never mint another token, so a leak cannot become permanent.</li>
+      <li><b>Creating one is deliberate</b>: a distinct "Account token" choice, a plain warning of what it can reach, an expiry that defaults to
+        90 days (never is possible, and says so in red), and the token shown once. The Tokens list marks account tokens clearly and shows
+        last use; revoking is one click.</li>
+      <li>Everything it does is attributed to you, with "via token &lt;name&gt;", exactly like a board token.</li>
+    </ul>
+
+    <h3>R2 · The API and MCP stop assuming one board</h3>
+    <ul>
+      <li>REST already has <code>/v1/boards</code>; with an account token every board-scoped path takes the board in the path or the key
+        (<code>/v1/boards/{KEY}/tickets</code>, <code>/v1/tickets/ENG-42</code> — a key already names its board). <code>/v1/me</code> reports
+        <code>kind: 'account'</code> and lists the boards reachable right now.</li>
+      <li>MCP tools gain an optional <code>board</code> argument, required only when the token is account-wide and the call does not name a
+        ticket key. <code>list_boards</code> becomes the natural first call. Board tokens behave exactly as before.</li>
+      <li>The SDK: <code>createClient({ token })</code> detects the kind. An account client exposes <code>tm.boards.list()</code> and
+        <code>tm.board('ENG')</code> returning the same board-scoped API you already know, so existing code keeps working.</li>
+    </ul>
+
+    <h3>R3 · Adding it to Claude</h3>
+    <p>A page at <code>/integrate/claude</code> (linked from Tokens and from <code>/lib/</code>) that covers three ways in, each copy-paste:</p>
+    <ol>
+      <li><b>Claude Desktop / claude.ai — custom connector (no token).</b> Add <code>https://taskmanager-example.web.app/mcp</code> as a custom
+        connector; the OAuth flow (§G) signs you in and asks which boards to allow. Screenshots of the consent screen, and how to revoke in
+        Account › Connected apps.</li>
+      <li><b>Claude Code — one command.</b>
+        <code>claude mcp add --transport http taskmanager https://taskmanager-example.web.app/mcp --header "Authorization: Bearer tm_live_…"</code>
+        using an account token, with the <code>--scope user</code> variant for every project, plus how to check with <code>/mcp</code>.</li>
+      <li><b>The plugin</b> — a downloadable bundle at <code>/lib/claude-plugin.zip</code> (and a plain folder at <code>/lib/claude-plugin/</code>):
+        a <code>.claude-plugin/plugin.json</code> that wires the MCP server, a <b>skill</b> carrying the integration context (§O) so Claude knows
+        the system without being told, and slash commands — <code>/tm-inbox</code>, <code>/tm-triage &lt;board&gt;</code>,
+        <code>/tm-new &lt;board&gt; &lt;title&gt;</code>, <code>/tm-ticket &lt;KEY&gt;</code>, <code>/tm-standup</code>. Install instructions for
+        the marketplace command and for a local folder.</li>
+    </ol>
+    <p>The page ends with <b>"the memory palace"</b>: a short, honest note on using this as Claude's long-term memory — a board per area,
+    tickets as durable notes, the thread as the running log, task lists as plans, and <code>#references</code> instead of restating context.
+    It includes a paste-ready snippet for a Claude project's instructions, and the one line that matters:
+    <em>"Read https://taskmanager-example.web.app/llms-full.txt first."</em></p>
+
+
+    <h2 id="s">S · Installable: TaskManager as a phone app</h2>
+    <p>The app should install on a phone from the browser and behave like an app once it does — its own icon, no browser chrome, and a
+    window that opens where you left off. It is a progressive web app; there is no store, no native build.</p>
+    <ul>
+      <li><b>Manifest</b>: name "TaskManager", short name "Tasks", <code>display: standalone</code>, portrait-primary, the app's own
+        background and theme colours (matching light and dark), <code>start_url: "/"</code> with a <code>source=pwa</code> marker so
+        installs are distinguishable, and <code>id</code> set so an update never installs twice.</li>
+      <li><b>Icons</b> generated from one source mark: 192, 256, 384 and 512&nbsp;px PNGs, a <b>maskable</b> 512 with safe padding (Android
+        shapes), an Apple touch icon (180), and the existing SVG favicon. No stretched screenshots-as-icons.</li>
+      <li><b>iOS</b>: <code>apple-mobile-web-app-capable</code>, status-bar style matching the theme, the touch icon, and a viewport with
+        <code>viewport-fit=cover</code>. Every fixed bar already respects the safe-area insets; the install path (Share › Add to Home Screen)
+        is explained in-app, since iOS gives no prompt.</li>
+      <li><b>Install prompt</b>: catch <code>beforeinstallprompt</code> and offer <b>Install</b> once, in the account menu — never a banner
+        over the board. Dismissing it is remembered; it never asks again on that device.</li>
+      <li><b>One service worker.</b> There are two today: SvelteKit's and Firebase Messaging's. Two workers at one scope fight over the
+        registration, so they merge into one — the app's worker imports the messaging one — and push keeps working exactly as it does now.</li>
+      <li><b>Offline</b>: the shell (HTML, JS, CSS, icons, fonts) is precached and served cache-first with a versioned cache that is cleaned
+        on activate. Data stays live-only: Firestore's own cache already makes the last board readable offline, and writes already queue in
+        the outbox (§K). An offline page appears only when there is no cached shell at all. A new version shows the existing "update"
+        toast rather than silently swapping under you.</li>
+      <li><b>Shortcuts</b> in the manifest: Inbox, My work, New ticket — long-press the icon on Android.</li>
+      <li><b>Proven, not assumed</b>: a Lighthouse installability check in CI (or a scripted check of the manifest, icons, worker scope and
+        offline response) so "installable" is a test, not a claim.</li>
+    </ul>
+
+    <h2 id="t">T · Local first: a refresh that shows the app, not a skeleton</h2>
+    <p>Today a reload waits: the root layout holds a skeleton until Firebase Auth restores the session from IndexedDB, and every store
+    starts at <code>loading: true</code>. Firestore's persistent cache already holds the data — the app just refuses to draw it until a
+    round trip it does not need has finished. The rule from here: <b>the last known state paints first, the server patches it.</b></p>
+    <ul>
+      <li><b>The session is remembered.</b> The last signed-in principal (uid, display name, photo, theme) is written to
+        <code>localStorage</code> on every change and read synchronously at boot, so the shell, the sidebar and the theme render on the
+        first frame. Auth still restores in the background; if it comes back signed OUT, the remembered state is dropped and the guard
+        redirects exactly as it does now. Nothing sensitive is stored — no tokens, no API keys.</li>
+      <li><b>Stores start from the cache.</b> A live store's first emission must be the cached snapshot when one exists
+        (<code>fromCache: true</code>), never a loading state. <code>loading</code> means "nothing to show yet", not "no server answer
+        yet": once cached data exists the UI is live, and the server's snapshot patches it in place.</li>
+      <li><b>Stale, and honest about it.</b> Cached-only data renders normally; the top progress bar (§K) is the single signal that a
+        refresh is in flight. No spinner over content already on screen, and no layout shift when the server snapshot lands.</li>
+      <li><b>What is remembered between visits</b>: the boards list, the last opened board with its views and stages, the ticket last
+        opened, and the inbox count. Firestore's IndexedDB cache does the heavy lifting; what the app adds is the pointer to
+        <em>which</em> of those to subscribe to before the server answers.</li>
+      <li><b>Bounded.</b> The remembered pointer is per account (keyed by uid) and cleared on sign-out together with the Firestore cache,
+        so a shared device never shows the previous person's boards.</li>
+      <li><b>Proven</b>: a test that boots the app twice with the network cut — the second boot renders the board — and a recorded
+        first-contentful-paint measurement on reload.</li>
+    </ul>
+
+    <h2 id="u">U · The app on a phone</h2>
+    <p>§S made TaskManager installable; this makes it usable once installed. Every screen is checked at 320–430&nbsp;px through
+    <code>/qa/mobile.html</code>, a QA harness that runs the live app inside phone-sized iframes on the app's own origin (so the frames
+    are signed in), rather than by resizing the browser.</p>
+    <ul>
+      <li><b>The ticket drawer becomes the screen.</b> Below the two-pane breakpoint the drawer is full width; the two panes stack into
+        one scroller and the reply box stays pinned above the safe area. A drawer wider than the viewport — content clipped off the right
+        edge — is the bug this section exists to kill.</li>
+      <li><b>One thing at a time.</b> Board columns scroll horizontally, one stage per screen; the board toolbar collapses to search plus
+        an overflow rather than two rows of controls at 360&nbsp;px.</li>
+      <li><b>Nothing is unreachable.</b> No horizontal page scroll anywhere, no control under the safe-area inset, and every tap target at
+        least 40&nbsp;px. Dialogs, pickers and menus fit the viewport and scroll inside themselves.</li>
+      <li><b>Proven</b>: a phone-width e2e pass over the main routes at 390×844 asserting no horizontal overflow and no element wider than
+        the viewport.</li>
+    </ul>
+
+    <h2 id="v">V · A notification is a pointer, not a chore</h2>
+    <p>Six unread notifications for conversations I had just read: opening a ticket moved my read pointer (the card stopped looking
+    unread) but the inbox rows that told me about it stayed bold, so the bell kept counting things I had already seen.</p>
+    <ul>
+      <li><b>Opening a ticket reads its notifications.</b> While a ticket is open, every unread inbox row that points at THAT ticket is
+        marked read — including rows that arrive while it is open, because I am watching the thread they are about.</li>
+      <li><b>Nothing else is touched.</b> Rows for other tickets stay unread, and an invitation is an action rather than a pointer, so it
+        waits for an answer however many tickets I open.</li>
+      <li><b>It costs nothing extra.</b> The rows come from the bell's own shared <code>inboxUnread</code> listener, and the write shows
+        up locally at once (Firestore latency compensation), so the count drops as the drawer opens rather than after a round trip.</li>
+      <li><b>Proven</b>: two mentions on two tickets, one of them opened — that ticket's row is read, the other is still waiting, and the
+        bell reads "1 unread".</li>
+    </ul>
+
+    <h2 id="w">W · What it costs, and the shape that makes it nearly free</h2>
+    <p><b>Measured, 23–26 Sep 2026</b> (₹38.95 over two days; Cloud Functions ₹33.42, Firestore ₹5.17, and 95k Firestore reads on the 25th
+    against 1.9k writes — a 50:1 read-to-write ratio on an app nobody but one person and two agents was using).</p>
+    <table>
+      <tr><th>Where</th><th>Measured</th><th>Why</th></tr>
+      <tr><td><code>api</code> function</td><td>11,963 billable vCPU&#8209;s of 13,775 (87%), 41,515 requests in 3 days</td>
+        <td>Cloud Run bills CPU for the WHOLE request, waiting on I/O included. Each call costs ~250&nbsp;ms: an
+        <code>apiKeys</code> collection-group query + board + agent reads, then two cross-region RTDB rate-limit transactions, then the
+        actual work.</td></tr>
+      <tr><td>Orchestrator polling</td><td>8,822 × <code>GET /v1/tickets</code> + 8,815 × <code>GET /v1/events</code> = 88% of all requests</td>
+        <td>Two loops, every ~30&nbsp;s each, each a FULL scan (<code>limit=200</code>, no <code>updated_since</code>; <code>unacked=1</code>,
+        no cursor) whether or not anything changed.</td></tr>
+      <tr><td>Firestore reads</td><td>95k/day</td>
+        <td>A board open fans out into a dozen listeners — board, views, members, prefs, tickets, a board-wide tasklists
+        collection-group, a 200-doc questions collection-group, agent statuses, AND one unread-messages query PER CARD (≤21 docs each).
+        Every write re-triggers several of them, in every open tab.</td></tr>
+      <tr><td>Heartbeats</td><td>1,440 writes per agent per day</td>
+        <td>Each is a Firestore transaction on <code>agentStatus</code> through a function, and then one read in every open client.</td></tr>
+      <tr><td>Sweeps</td><td><code>agentSilenceSweep</code> 4,261 runs / 3 days</td><td>Every minute, forever, to notice silence.</td></tr>
+    </table>
+    <p><b>The target</b>: 50 boards × 10 live tickets, always on, for ≤ ₹50/month. That means the steady state has to sit INSIDE the free
+    daily quota (50k reads, 20k writes) and keep functions off the read path entirely. The shape that gets there:</p>
+    <ol>
+      <li><b>One document per ticket.</b> <code>boards/{b}/tickets/{t}</code> carries the fields, the rollup signals (message count, last
+        message, open question, task-list progress, file count, blocked), the task lists themselves, the recent messages, the recent
+        activity and the file list. A board open is ONE query returning ten documents; opening a ticket costs NOTHING extra, because the
+        card already read it. Overflow spills forward into <code>boards/{b}/tickets/{t}/data/{NNN}</code> — 000, 001, … — each page a chunk
+        of older messages, fetched only when someone scrolls back; the ticket doc holds the page count and the oldest inline timestamp.
+        The 1&nbsp;MB limit is generous: a page is cut at ~700&nbsp;KB so a write always fits.</li>
+      <li><b>Unread with no query.</b> The card compares <code>signals.lastMessageAt</code> with my read pointer, and counts the inline
+        recent messages newer than it. The per-card unread listener — the single worst read amplifier — disappears.</li>
+      <li><b>Liveness lives in the Realtime Database</b>, which bills bandwidth, not operations: agent heartbeat, who is viewing, who is
+        typing, and a per-board <code>rev</code> counter the command layer bumps on every write. A heartbeat becomes ~100 bytes instead of
+        a Firestore transaction plus a read in every open tab, and "stopped reporting" is computed from <code>at</code> where it is read,
+        so <code>agentSilenceSweep</code> stops running every minute.</li>
+      <li><b>Agents wake, they do not poll.</b> The SDK holds one streaming connection to the RTDB <code>rev</code>/wake path (the RTDB REST
+        stream is plain SSE — no Firebase SDK needed in Deno) and only calls REST when something actually changed, with
+        <code>updated_since</code> / <code>cursor</code> so the answer is the delta, not the world. An idle orchestrator costs nothing.
+        Polling stays supported, but the SDK's own loop backs off to a minute when idle.</li>
+      <li><b>The client reads deltas, not screens.</b> Every board query is <code>updatedAt &gt; lastSynced</code> against the persistent
+        cache, so a refresh pays for what changed, not for what is on screen. Firestore charges per document RETURNED: an unchanged board
+        costs one read.</li>
+      <li><b>The function gets cheap per call</b>: the resolved API key is cached in the instance for a minute (revocation takes up to that
+        long, which is the trade), the rate limiter counts in memory and only reconciles with the RTDB occasionally, and
+        <code>cpu: 0.5</code> halves the vCPU-second rate for work that is nearly all I/O wait.</li>
+    </ol>
+    <p><b>The budget it buys</b>, at 50 boards × 10 live tickets: ~2k writes/day (free), ~5k reads/day (free), RTDB traffic in the low
+    megabytes (free), and functions only on writes — a few hundred vCPU-seconds a day. Call it ₹10–20/month, with the free quota absorbing
+    the rest.</p>
+
+    <h2 id="x">X · Whose app this is: the allow list, and what it costs</h2>
+    <p>TaskManager is <b>private</b>. Sign-up is open in the sense that anyone can sign in with Google — but only accounts on the allow
+    list can DO anything. the configured address (<code>TM_ADMIN_EMAIL</code>) is the admin and is on the list by definition; the admin adds and removes
+    everyone else from a <b>Users</b> module in the account area, beside Agents.</p>
+    <ul>
+      <li><b>Allowed or not, nothing in between.</b> An account that is not allowed signs in, lands on a plain "ask the owner for access"
+        screen, and can reach nothing else: no boards, no tickets, no API, no MCP. The rules enforce it, not the UI — an allowed list in
+        <code>_config/allow</code> (server-owned, like the signing secrets) and a mirrored flag on <code>users/{uid}.allowed</code> so the
+        rules can read it in one hop.</li>
+      <li><b>The admin is the owner, not a role.</b> One admin address, set in configuration, never editable from inside the app. The
+        Users module lists who is allowed, when they were added and when they last signed in, and lets the admin add an address (before
+        that person has ever signed in) or take access away. Taking access away ends their sessions' usefulness on the next request.</li>
+      <li><b>No rate limits.</b> The only callers are the owner, the handful of accounts they allow, and their own agents. A limiter here
+        protects nothing and has already stopped an orchestrator mid-run, so it is off (<code>TM_RATE_LIMITS=1</code> brings it back if
+        this ever stops being private). Costs are controlled by the shape of the app (§W), not by refusing its owner's own traffic.</li>
+      <li><b>What it costs, in the app.</b> The Users module also answers "what am I spending?" without opening the Firebase console:
+        this month's Firestore reads / writes / deletes, function invocations and vCPU-seconds, RTDB bandwidth, storage and hosting
+        egress — each against its free daily quota — with an estimated bill from a price table kept beside the code. The numbers come
+        from the Cloud Monitoring API (the functions' own service account, <code>roles/monitoring.viewer</code>), cached for an hour, so
+        looking costs almost nothing. It is an ESTIMATE and says so; the console remains the invoice.</li>
+      <li><b>A budget line worth seeing</b>: today's reads and writes against the free daily quota (50k / 20k), because that is the number
+        that decides whether this month costs ₹0 or ₹600.</li>
+    </ul>
+
+    <h2 id="y">Y · What a turn costs: the price on the ticket, the ticket, the board and the day</h2>
+    <p>Measured on the OCZ board, 24–26 Sep 2026: one ticket (OCZ-5) reached <b>$402</b> over nine runs, and nothing in the app
+    said so. The orch already reads <code>total_cost_usd</code> off every <code>claude -p</code> result line and only writes it to a
+    local log. Money spent on a ticket is a fact about the ticket, so it goes where the ticket's other facts go: the thread, the card,
+    the board, and a chart.</p>
+    <h3 id="y1">Y1 · A turn is a message with a receipt</h3>
+    <ul>
+      <li><b>One run of the agent is one turn.</b> The orch starts <code>claude -p</code> once per turn (fresh, rework, an answer, a
+        comment, a carry-on) and the process exits with one result line. When it exits, the orch posts <b>one message</b> on the
+        ticket — the turn receipt — carrying a <code>run</code> field beside the Markdown:
+        <pre>run: {
+  n: 3,                       // the orch's run counter on this ticket
+  outcome: 'review' | 'waiting' | 'blocked' | 'failed' | 'stopped' | 'timeout',
+  costUsd: 1.24,              // THIS turn
+  sessionUsd: 21.10,          // the session's running total, as Claude reports it
+  durationMs: 743000, apiTurns: 46, model: 'claude-fable-5-1',
+  usage: { input, output, cacheRead, cacheWrite } | null
+}</pre>
+        The body is the same thing in words — <i>Turn 3 · review · $1.24 · 12 min</i> — so REST clients, e-mail digests and search
+        see it without knowing the field.</li>
+      <li><b>Per turn, not per session.</b> Claude Code reports <code>total_cost_usd</code> <em>cumulatively</em> across a resumed
+        session (OCZ-5 run 8: one API turn, zero output tokens, the same $392.83 as run 7). The orch keeps the last reported session
+        total in its state and posts the <b>difference</b>. A run that dies without a result line has no receipt; its money shows up in
+        the next turn's difference, which is honest — it was spent on this ticket.</li>
+      <li><b>Only the orch posts receipts.</b> The <code>run</code> field is accepted on <code>POST /v1/tickets/{KEY}/messages</code>
+        (and the MCP <code>post_message</code>, the SDK's <code>tm.messages.post</code>) from any token with <code>comments:write</code>;
+        the app's composer never sends it. The thread renders a message with <code>run</code> as a compact receipt row, not a bubble.</li>
+    </ul>
+    <h3 id="y2">Y2 · The sums live where the card reads</h3>
+    <ul>
+      <li><b>The ticket</b> carries <code>cost: { usd, runs }</code>, a counter incremented by <code>messagePost</code> in the same
+        write as the message. It is NOT part of <code>signals</code>: signals are recomputed from the document, and the receipts that
+        spilled into data pages are not in the document any more. The drawer header shows it (<i>$402.27 · 9 turns</i>); the card
+        shows it beside the other signals once it is non-zero.</li>
+      <li><b>The board</b> carries <code>cost: { usd, runs }</code> for its lifetime, incremented in the same transaction. The board
+        bar shows the total; the Boards home tile shows it under the counts.</li>
+      <li><b>The day</b> is <code>boards/{b}/stats/{yyyy-mm-dd}</code>:
+        <code>{ day, costUsd, runs, tickets: { [ticketKey]: { usd, runs } }, updatedAt }</code>, also written in that transaction.
+        The day is cut in <code>Asia/Kolkata</code> (one owner, one clock; a constant in <code>@tm/shared</code>, not a setting),
+        so "today" on the chart is the owner's today. Readable by anyone who can read the board; written only by the command layer.</li>
+      <li><b>Nothing is scanned.</b> Three counters and one day row per write; the chart reads at most 90 small documents. No
+        collection-group query, no trigger, nothing that §W would have to pay for.</li>
+    </ul>
+    <h3 id="y3">Y3 · Analytics: one board, day by day</h3>
+    <ul>
+      <li><b>A section of board settings</b> (<code>/b/KEY/settings/analytics</code>), reachable from the board bar's cost chip.
+        It was first a sidebar child under the open board, and that row appearing and moving as the selection changed read as the
+        list re-sorting itself — the sidebar stays a flat list of boards. It is a page a phone can use: stat tiles across the top (total, this month, last 7 days, today,
+        per finished ticket), then a bar chart of cost per day for the range (30 / 90 days, default 30), then the tickets of the range
+        ranked by spend with their turn counts — each row opens the ticket.</li>
+      <li><b>Drawn, not imported.</b> The chart is inline SVG in the house style (the usage panel's sparkline already is); a chart
+        library would be the app's biggest dependency for one picture. Bars are the day's cost, the hover/tap shows the day and its
+        tickets, an empty day is an empty slot, and the y-axis picks its own round steps.</li>
+      <li><b>It reads Firestore directly</b> (the day rows, live), like every other screen: a receipt landing on a ticket moves the
+        bar while the page is open.</li>
+    </ul>
+
+    <h2 id="z">Z · Workspaces: every orch in one place, driven from a board</h2>
+    <p>Two repositories carry a hand-written copy of the same orchestrator (<code>bOctupuz/orch</code> and <code>web-03/orch</code>),
+    already diverging: one learnt to survive the daily request budget, the other to carry on after a run ends short. A third project
+    would mean a third copy. The orchestrator is one program; what differs between projects is <b>configuration</b> — the repo, the
+    board, the token, how many agents, which permission mode, the rules that bite in that tree. So the program lives once, in this
+    repository, and each project is a folder of configuration next to it. The folder is what a board can edit.</p>
+    <h3 id="z1">Z1 · The layout</h3>
+    <pre>workspaces/
+  ws.mjs               the CLI and the supervisor:  node ws.mjs up | down | status | health | logs | restart | new | validate
+  lib/orch.mjs         the runtime — ONE process per workspace, started by the supervisor
+  lib/tm.mjs           the REST client (fetch, no dependencies) and the wake stream
+  lib/brief.md         the brief every agent gets, with the workspace's own section spliced in
+  lib/config.mjs       reads and validates a workspace
+  .env                 TM_ACCOUNT_TOKEN — what `ws new` creates boards and agents with (never given to an agent)
+  &lt;name&gt;/
+    workspace.json     { name, repo, board, agent, enabled, maxAgents, maxRunMin, permissionMode, model, autoResume, env }
+    .env               TM_TOKEN for this board, and anything the agents need in their environment
+    brief.md           this project's rules for an unattended agent (the old "This repository" section)
+    state/  logs/      the runtime's own files: state.json, status.json, briefs, run logs — gitignored</pre>
+    <ul>
+      <li><b>The orch is the same program on every board.</b> It merges the two forks: the request budget and the queued-answer
+        heartbeat from bOctupuz, the bounded carry-on after a short run from web-03, the turn receipt of §Y, and one new thing —
+        it <b>wakes instead of polling</b>. It opens the Realtime Database stream that <code>GET /v1/live</code> hands out (plain SSE,
+        no Firebase SDK) and reads the board only when the board's rev moved, with a ten-minute safety poll. §W measured the old
+        30-second poll at 88% of all requests; this is the fix at the source.</li>
+      <li><b>State is per workspace</b>, in the workspace folder, never in the project's tree — a project repo no longer carries an
+        <code>orch/</code> directory at all. The agents still run with the project as their working directory, so their Claude
+        sessions, memory and CLAUDE.md are the project's.</li>
+      <li><b>The supervisor is the thing that runs.</b> <code>ws up</code> starts it detached; it starts one orch per enabled
+        workspace, restarts a crashed one with a backoff, and <b>watches the workspace files</b>: a change to a
+        <code>workspace.json</code>, <code>.env</code> or <code>brief.md</code> restarts that workspace's orch (SIGTERM, so a running
+        agent is resumed by the new process, exactly as <code>orchctl restart</code> did); a change under <code>lib/</code> restarts
+        them all; a new folder with a valid <code>workspace.json</code> is started; <code>enabled: false</code> stops one.
+        <code>ws install</code> writes a launchd agent so it survives a reboot.</li>
+    </ul>
+    <h3 id="z2">Z2 · The ORCH board is a workspace whose repo is the workspaces folder</h3>
+    <ul>
+      <li><b>No second program.</b> The board <code>ORCH</code> is handled by the same runtime, configured with
+        <code>repo: workspaces/</code>. A ticket there ("give bOctupuz two agents", "add a workspace for the bindery repo", "the
+        web-03 brief should forbid starting que") becomes a Claude session working in the workspaces folder, whose brief explains the
+        layout, the CLI and the rule that the supervisor applies every file it changes. It edits configuration; it never starts
+        processes. The supervisor notices and restarts what changed; the agent reports what it changed on the ticket.</li>
+      <li><b>Creating a workspace is <code>ws new</code>.</b> With the account token in <code>workspaces/.env</code> it creates the
+        agent profile (<code>POST /v1/agents</code>), the board from the kanban template (<code>POST /v1/boards</code> — it has the
+        To do / In progress / Review / Done stages the runtime needs), puts the agent on the board as an editor
+        (<code>POST /v1/boards/{KEY}/agents</code>), and writes the folder with a skeleton brief. Those three endpoints are new and
+        <b>account-token only</b>: they are the REST face of <code>agentCreate</code>, <code>boardCreate</code> and
+        <code>boardAgentSet</code>, which the app door already exposes to a signed-in person.</li>
+      <li><b>The token is the one step that stays with a person</b> — a token can never mint a token (§R1), and that rule is
+        worth more than the convenience. The ORCH agent ends a "new workspace" ticket with a blocking question: <i>mint a Worker token
+        for agent X on board Y (Account › Tokens) and paste it here</i>. The answer resumes the session, which writes it to the
+        workspace's <code>.env</code>; the supervisor starts the orch. The token passes through the tracker once, on a private board;
+        anyone who would rather not can write the line by hand and answer "done".</li>
+      <li><b>What the phone can now do</b>: open a ticket on any project board and watch an agent work it, ask for a change to how
+        agents work on that project, or ask for a new project — from the same app, with the same drawer. The editor on the laptop is
+        for reading what the agents did, and even that is on the ticket.</li>
+    </ul>
+    <h3 id="z3">Z3 · Migration and decisions</h3>
+    <ul>
+      <li><b>bOctupuz and web-03 move first.</b> Each gets a workspace folder with its token, its brief section, its
+        <code>state.json</code> (the session ids survive, so tickets in Review keep their conversations) and its settings; the old
+        orch is stopped, the new one started; the <code>orch/</code> directory in each repo is left in place until the workspace has run
+        a ticket, then deleted.</li>
+      <li><b>Decision D-Z1</b>: one supervisor process, orchs as children. Children, not threads, so a crash in one board's orch never
+        takes another's down, and so a restart on a config change is a process boundary, not a hot-reload puzzle.</li>
+      <li><b>Decision D-Z2</b>: the runtime keeps zero dependencies (the reasoning in the web-03 README stands: a thing whose only job
+        is to still be running at three in the morning has no install step).</li>
+      <li><b>Decision D-Z3</b>: no worktree per ticket yet. Agents on one board share the project's checkout as before; the brief carries
+        the discipline. A worktree per ticket is a workspace option to add when a board needs it, not a default.</li>
+      <li><b>Decision D-Y1</b>: the cost day is cut in the owner's timezone by a constant, not a board setting. There is one owner.</li>
+    </ul>
+
+    <h2>J · What gets built, in order</h2>
+    <p>This is on the build dashboard as phase 2:</p>
+    <ol>
+      <li><code>p2-contracts</code>: principal and agent types, <code>agents</code>, <code>agentInbox</code>, apiKey v2, the new commands, REST and MCP schemas, file kinds, and <code>can()</code> with agents and the new scopes</li>
+      <li>In parallel:
+        <ul>
+          <li><code>p2-agents-backend</code>: agent commands, <code>boardAgentSet</code>, and assignment and mentions for agents</li>
+          <li><code>p2-api</code>: board-scoped tokens, REST, MCP</li>
+          <li><code>p2-web-agents</code>: the Agents pages, the tokens UI, and principals in pickers</li>
+          <li><code>p2-web-thread</code>: the conversation view and the file viewer</li>
+        </ul>
+      </li>
+      <li>Also in parallel, <code>p2-docs</code> brings the DB, Backend, Screens and Flows pages up to date</li>
+      <li><code>p2-ux</code>: section K (motion, loaders, the outbox, and the drawer layout), after the frontend steps</li>
+      <li><b>Phase 17</b> (sections Y and Z): the turn receipt and the cost rollups, the Analytics view, the account endpoints, and the <code>workspaces/</code> runtime that replaces the per-repo orchs</li>
+      <li><b>Phase 16</b> (section X): the allow list, the Users module and the cost panel; no rate limits</li>
+      <li><b>Phase 15</b> (section W): the cheap shape — one document per ticket, liveness in the RTDB, deltas not screens</li>
+      <li><b>Phase 14</b> (section V): opening a ticket reads its notifications</li>
+      <li><b>Phase 13</b> (sections T and U): local-first boot — <code>p13-local-first</code> — and the phone pass, <code>p13-mobile</code></li>
+      <li><b>Phase 12</b> (section S): installable PWA — <code>p12-pwa</code></li>
+      <li><b>Phase 10</b> (section R): the account token and the Claude plugin — <code>p10-account-token</code> → <code>p10-claude</code></li>
+      <li><b>Phase 9</b> (section Q): simpler navigation, first-stage default, no null-board crash — <code>p9-simplify</code></li>
+      <li><b>Phase 8</b> (section P): denser cards, task lists that use the pane — <code>p8-cards</code></li>
+      <li><b>Phase 7</b> (section O): the integration context page — <code>p7-integration-guide</code></li>
+      <li><b>Phase 5</b> (section N): questions and task lists people can create — <code>p5-human-tools</code> → <code>p5-integration</code></li>
+      <li><b>Phase 4</b> (section M): the hosted SDK — <code>p4-sdk</code> → <code>p4-hosting</code> → <code>p4-integration</code></li>
+      <li><b>Phase 3</b> (section L), after phase 2 is integrated: <code>p3-contracts</code> → in parallel <code>p3-backend</code>, <code>p3-api</code>, <code>p3-web</code> → <code>p3-integration</code>, then a deploy</li>
+      <li><code>p2-integration</code>: end-to-end tests of the whole loop (agent profile → board → token → MCP/REST reads its assigned ticket → posts Markdown and uploads an HTML report → the UI previews both), and then a deploy</li>
+    </ol>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@tm/sdk · TaskManager</title>
+    <meta
+      name="description"
+      content="The typed, zero-dependency JavaScript SDK for the TaskManager API — install lines for Node, Deno, Bun and the browser."
+    />
+    <link rel="icon" href="/favicon.svg" />
+    <!--
+      A STATIC PAGE ON PURPOSE. This is the first thing an orchestrator author
+      reads, often from a terminal-adjacent browser with the SPA not loaded and
+      sometimes with no session at all. It is a plain file in frontend/static/,
+      so it is served straight from hosting with no JavaScript bundle, no auth
+      and no framework — the SPA's `**` rewrite never gets a chance to answer.
+      The only script here fills in the live version from /lib/v1/sdk.json and
+      wires the copy buttons; everything reads correctly without it.
+    -->
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f6f3;
+        --surface: #ffffff;
+        --surface-2: #f1efeb;
+        --line: #e3e0da;
+        --line-strong: #cfcac2;
+        --text: #1f1d1a;
+        --muted: #6b6560;
+        --subtle: #9a938c;
+        --accent: #3f5fe0;
+        --accent-soft: #e7ebfc;
+        --code-bg: #1c1b19;
+        --code-fg: #ece9e4;
+        --mono:
+          ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --bg: #151413;
+          --surface: #1c1b19;
+          --surface-2: #252320;
+          --line: #2f2c29;
+          --line-strong: #423e3a;
+          --text: #ece9e4;
+          --muted: #a39d96;
+          --subtle: #78726c;
+          --accent: #7089f5;
+          --accent-soft: #252c4a;
+          --code-bg: #0f0e0d;
+          --code-fg: #ece9e4;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          16px/1.6 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 3.5rem 1.25rem 6rem;
+      }
+      header.top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.75rem;
+      }
+      h1 {
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .pill {
+        font: 500 0.78rem/1 var(--mono);
+        padding: 0.32rem 0.5rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid var(--line);
+      }
+      .lede {
+        font-size: 1.1rem;
+        color: var(--muted);
+        max-width: 46rem;
+        margin: 0.9rem 0 0;
+      }
+      h2 {
+        font-size: 1.22rem;
+        letter-spacing: -0.01em;
+        margin: 3rem 0 0.75rem;
+        padding-top: 1.75rem;
+        border-top: 1px solid var(--line);
+      }
+      h3 {
+        font-size: 0.95rem;
+        margin: 1.75rem 0 0.5rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      p {
+        max-width: 46rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font: 0.88em var(--mono);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.08em 0.32em;
+      }
+      /* Tabs: radio inputs, so the page works with no JavaScript at all. */
+      .tabs {
+        margin-top: 1rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .tabs > input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .tabbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-2);
+      }
+      .tabbar label {
+        cursor: pointer;
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--muted);
+        border: 1px solid transparent;
+      }
+      .tabbar label:hover {
+        color: var(--text);
+      }
+      .panel {
+        display: none;
+        padding: 1.1rem 1.15rem 1.35rem;
+      }
+      .panel > :first-child {
+        margin-top: 0;
+      }
+      #t-node:checked ~ .tabbar label[for='t-node'],
+      #t-deno:checked ~ .tabbar label[for='t-deno'],
+      #t-bun:checked ~ .tabbar label[for='t-bun'],
+      #t-web:checked ~ .tabbar label[for='t-web'] {
+        background: var(--surface);
+        color: var(--text);
+        border-color: var(--line-strong);
+      }
+      #t-node:checked ~ #p-node,
+      #t-deno:checked ~ #p-deno,
+      #t-bun:checked ~ #p-bun,
+      #t-web:checked ~ #p-web {
+        display: block;
+      }
+      .tabbar label:focus-within,
+      .tabs > input:focus-visible + .tabbar label {
+        outline: 2px solid var(--accent);
+      }
+      pre {
+        position: relative;
+        margin: 0.75rem 0;
+        padding: 0.9rem 1rem;
+        background: var(--code-bg);
+        color: var(--code-fg);
+        border-radius: 10px;
+        overflow-x: auto;
+        font: 0.84rem/1.6 var(--mono);
+      }
+      pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+        font-size: inherit;
+        color: inherit;
+      }
+      .copy {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        font:
+          600 0.72rem/1 ui-sans-serif,
+          system-ui,
+          sans-serif;
+        color: #cfcac2;
+        background: rgb(255 255 255 / 0.08);
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: 6px;
+        padding: 0.32rem 0.5rem;
+        cursor: pointer;
+      }
+      .copy:hover {
+        background: rgb(255 255 255 / 0.16);
+        color: #fff;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+        display: block;
+        overflow-x: auto;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--subtle);
+      }
+      td code {
+        white-space: nowrap;
+      }
+      ul {
+        max-width: 46rem;
+      }
+      li {
+        margin: 0.35rem 0;
+      }
+      footer {
+        margin-top: 3.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+        color: var(--subtle);
+        font-size: 0.85rem;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .note {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        border-radius: 8px;
+        padding: 0.8rem 1rem;
+        margin: 1.25rem 0;
+        font-size: 0.92rem;
+        max-width: 46rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <h1>@tm/sdk</h1>
+        <span class="pill" id="version">version …</span>
+      </header>
+      <p class="lede">
+        The typed, zero-dependency JavaScript client for the TaskManager API — every
+        <code>/v1</code> route as a function, an orchestrator loop in one call, and an MCP tool
+        factory. Node 20+, Deno, Bun and browsers.
+      </p>
+
+      <div class="note">
+        <b>Pointing an agent at this?</b> Give it
+        <a href="/llms-full.txt"><code>/llms-full.txt</code></a> — the whole operating context in
+        one file (what this software is, how to get a token, the three doors, a runnable
+        orchestrator, the full generated reference and the rules of the house). The same thing as a
+        readable page is at <a href="/integrate">/integrate</a>, a short index at
+        <a href="/llms.txt">/llms.txt</a>, and a machine manifest at
+        <a href="/integrate.json">/integrate.json</a>.
+      </div>
+
+      <div class="note">
+        <b>Using Claude?</b> <a href="/integrate/claude">/integrate/claude</a> is the setup page —
+        TaskManager as a custom connector (OAuth, no token), as one
+        <code>claude mcp add</code> command, or as the downloadable
+        <a href="/lib/claude-plugin.zip">Claude Code plugin</a>, which brings a skill that already
+        knows this API and the <code>/tm-inbox</code>, <code>/tm-triage</code>,
+        <code>/tm-new</code>, <code>/tm-ticket</code> and <code>/tm-standup</code> commands. The
+        plugin's files are readable at
+        <a href="/lib/claude-plugin/README.md">/lib/claude-plugin/</a>.
+      </div>
+
+      <h2>Install</h2>
+      <p>
+        Pick your runtime. Everything under <code>/lib/v1/</code> is pinned and cached for a year;
+        <code>/lib/latest/</code> is the same build under a moving name and is never cached.
+      </p>
+
+      <div class="tabs">
+        <input type="radio" name="rt" id="t-node" checked />
+        <input type="radio" name="rt" id="t-deno" />
+        <input type="radio" name="rt" id="t-bun" />
+        <input type="radio" name="rt" id="t-web" />
+        <div class="tabbar" role="tablist">
+          <label for="t-node">Node</label>
+          <label for="t-deno">Deno</label>
+          <label for="t-bun">Bun</label>
+          <label for="t-web">Browser</label>
+        </div>
+
+        <div class="panel" id="p-node">
+          <p>
+            Node cannot import over https, so install the tarball — a normal dependency, which is
+            what makes
+            <code>tsc</code> and every editor resolve its types.
+          </p>
+          <pre><code>npm i https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz</code></pre>
+          <p>Pin a build by using its versioned name instead:</p>
+          <pre><code data-version-url="tgz">npm i https://taskmanager-example.web.app/lib/v1/tm-sdk-1.0.0.tgz</code></pre>
+          <pre><code>import { createClient } from '@tm/sdk';
+
+const tm = createClient({ token: process.env.TM_TOKEN });
+console.log(await tm.me());</code></pre>
+        </div>
+
+        <div class="panel" id="p-deno">
+          <p>
+            Import the TypeScript file and Deno types it from the real source — nothing else to
+            configure.
+          </p>
+          <pre><code>import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+const tm = createClient({ token: Deno.env.get('TM_TOKEN')! });
+console.log(await tm.me());</code></pre>
+          <p>Or give it a bare name in <code>deno.json</code>:</p>
+          <pre><code>{
+  "imports": {
+    "@tm/sdk": "https://taskmanager-example.web.app/lib/v1/sdk.ts"
+  }
+}</code></pre>
+          <p>
+            Importing <code>sdk.js</code> works just as well: hosting sends
+            <code>X-TypeScript-Types: /lib/v1/sdk.d.ts</code> and the bundle starts with
+            <code>/// &lt;reference types="./sdk.d.ts" /&gt;</code>. Deno honours either.
+          </p>
+        </div>
+
+        <div class="panel" id="p-bun">
+          <p>Bun takes the npm tarball …</p>
+          <pre><code>bun add https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz</code></pre>
+          <p>… or the URL import, like Deno — it reads the same triple-slash reference:</p>
+          <pre><code>import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+const tm = createClient({ token: Bun.env.TM_TOKEN! });
+console.log(await tm.me());</code></pre>
+        </div>
+
+        <div class="panel" id="p-web">
+          <p>
+            No build step: the bundle is ESM with no dependencies and <code>/lib/**</code> is served
+            with <code>Access-Control-Allow-Origin: *</code>.
+          </p>
+          <pre><code>&lt;script type="module"&gt;
+  import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js';
+
+  const tm = createClient({ token: TM_TOKEN });
+  console.log(await tm.me());
+&lt;/script&gt;</code></pre>
+          <div class="note">
+            A board token acts as you (or as one of your agents) with its full scopes. Never ship
+            one to a public page — the browser build is for internal tools, extensions and
+            notebooks.
+          </div>
+        </div>
+      </div>
+
+      <h2>A worked example</h2>
+      <p>
+        One token means one board and one identity, so nothing below takes a board. Get a token in
+        the app under
+        <b>Account › Tokens</b>.
+      </p>
+      <pre><code>import { createClient } from '@tm/sdk';
+
+const tm = createClient({ token: process.env.TM_TOKEN });
+
+const me = await tm.me();                       // principal, board, role, scopes
+const mine = await tm.tickets.list({ assignee: 'me', state: 'active' });
+
+// Publish the plan, then tick it off as you go.
+const list = await tm.tasklists.set('ENG-42', {
+  title: 'Plan',
+  items: ['Read the spec', 'Write it', 'Test it'],
+});
+await tm.tasklists.item('ENG-42', list.id, list.items[0].id, { status: 'doing' });
+
+// Ask a person something and wait for the answer.
+const answer = await tm.questions
+  .ask('ENG-42', {
+    title: 'Which database?',
+    fields: [{ id: 'db', label: 'Database', type: 'single', options: ['Postgres', 'SQLite'], required: true }],
+  })
+  .waitForAnswer({ timeoutMs: 30 * 60_000 });
+answer.values.db;                               // typed from the fields you passed
+
+// Attach the report and say so.
+const report = await tm.files.upload('ENG-42', { name: 'report.html', text: html });
+await tm.messages.post('ENG-42', { markdown: 'Done — see the report.', attachments: [report.id] });</code></pre>
+
+      <h3>The whole orchestrator</h3>
+      <p>
+        <code>tm.work()</code> streams the agent inbox, runs your handler per event, keeps a
+        heartbeat alive while it runs (so the ticket says “Working …”), marks it done or error, and
+        acks the event only after the handler returned — a crash replays it.
+      </p>
+      <pre><code>await tm.work(
+  async ({ ticket, beat, tm }) => {
+    await beat?.update({ message: 'Reading the ticket' });
+    const t = await tm.tickets.get(ticket);
+    await tm.messages.post(ticket, { markdown: `On it: ${t.title}` });
+  },
+  { concurrency: 2, filter: ['assigned', 'mentioned'] },
+);</code></pre>
+
+      <h3>Your own MCP server</h3>
+      <p>
+        Rather than handing an agent the whole <code>/mcp</code> endpoint, build the tool list you
+        want. <code>mcpTools()</code> returns plain
+        <code>{ name, description, inputSchema, handler }</code> definitions, so they drop into any
+        MCP server, and it silently drops the tools your token's scopes already forbid.
+      </p>
+      <pre><code>import { createClient, mcpTools, registerTools } from '@tm/sdk';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+const tools = await mcpTools(tm, {
+  only: ['get_ticket', 'post_message', 'set_tasklist', 'update_task_item', 'ask_question', 'heartbeat'],
+  rename: { post_message: 'reply' },
+  describe: { reply: 'Reply to the ticket you are working on. Markdown.' },
+  defaults: { ticket: 'ENG-42' },   // pinned: the model never passes it and cannot change it
+});
+
+registerTools(new McpServer({ name: 'my-orch', version: '1' }), tools);</code></pre>
+
+      <h2>What is hosted here</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>What it is</th>
+            <th>Content-Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="/lib/claude-plugin.zip">claude-plugin.zip</a></td>
+            <td>
+              the Claude Code plugin: MCP server, skill and slash commands (<a
+                href="/lib/claude-plugin/README.md"
+                >unpacked</a
+              >)
+            </td>
+            <td><code>application/zip</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/sdk.js">sdk.js</a></td>
+            <td>ESM bundle, no dependencies</td>
+            <td><code>text/javascript</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/sdk.min.js">sdk.min.js</a></td>
+            <td>the same, minified</td>
+            <td><code>text/javascript</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/sdk.ts">sdk.ts</a></td>
+            <td>the whole SDK as one TypeScript file (Deno and Bun type it natively)</td>
+            <td><code>application/typescript</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/sdk.d.ts">sdk.d.ts</a></td>
+            <td>one flat declaration file — no imports, so a URL import can use it</td>
+            <td><code>application/typescript</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/tm-sdk.tgz">tm-sdk.tgz</a></td>
+            <td>the npm tarball (also under <code>tm-sdk-&lt;version&gt;.tgz</code>)</td>
+            <td><code>application/gzip</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/openapi.json">openapi.json</a></td>
+            <td>OpenAPI 3.1 for <code>/v1</code>, as of this build</td>
+            <td><code>application/json</code></td>
+          </tr>
+          <tr>
+            <td><a href="/lib/v1/sdk.json">sdk.json</a></td>
+            <td>what this build is: version, byte sizes, SHA-256 of every file</td>
+            <td><code>application/json</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Versioning and caching</h3>
+      <ul>
+        <li>
+          <code>/lib/v1/*</code> — <code>Cache-Control: public, max-age=31536000, immutable</code>.
+          The <code>v1</code> is the API's wire version, not the package's: the files under it are
+          replaced in place on every deploy, so pin a build with the versioned tarball name when a
+          byte-for-byte build matters.
+        </li>
+        <li>
+          <code>/lib/latest/*</code> — the same files, <code>Cache-Control: no-store</code>. Always
+          the newest build.
+        </li>
+        <li>
+          A breaking change to the wire format gets a new prefix (<code>/lib/v2/</code>);
+          <code>/lib/v1/</code> keeps working.
+        </li>
+        <li>Every file is served with <code>Access-Control-Allow-Origin: *</code>.</li>
+      </ul>
+
+      <h2>More</h2>
+      <ul class="links">
+        <li><a href="/v1/openapi.json">/v1/openapi.json</a> — the live API description</li>
+        <li>
+          <a href="/lib/v1/openapi.json">/lib/v1/openapi.json</a> — the copy pinned to this build
+        </li>
+        <li><a href="/lib/v1/sdk.d.ts">/lib/v1/sdk.d.ts</a> — the full typed surface</li>
+        <li>
+          <a href="/llms-full.txt">/llms-full.txt</a> — the whole integration context, for an agent
+        </li>
+        <li><a href="/integrate">/integrate</a> — the same, as a readable page</li>
+        <li><a href="/integrate.json">/integrate.json</a> — the machine manifest</li>
+        <li>
+          <a href="/integrate/claude">/integrate/claude</a> — connector,
+          <code>claude mcp add</code>, and the plugin
+        </li>
+        <li>
+          <a href="/lib/claude-plugin.zip">/lib/claude-plugin.zip</a> — the Claude Code plugin
+          bundle
+        </li>
+        <li><a href="/">the app</a> — Account › Tokens for a board or account token</li>
+      </ul>
+      <div class="note">
+        The SDK reference (every method, the orchestrator loop, the MCP tool factory and the cache
+        rules) lives with the design documents, which are not published: run
+        <code>pnpm docs</code> in the repo and open <code>http://127.0.0.1:4321/plan/sdk</code>.
+      </div>
+
+      <footer>
+        <span id="built">TaskManager · @tm/sdk</span>
+      </footer>
+    </div>
+
+    <script type="module">
+      // The page is correct without any of this; it only makes it exact.
+      const $ = (s) => document.querySelector(s);
+
+      try {
+        const res = await fetch('/lib/v1/sdk.json', { cache: 'no-store' });
+        if (res.ok) {
+          const m = await res.json();
+          $('#version').textContent = `v${m.version}`;
+          $('#built').textContent = `TaskManager · @tm/sdk ${m.version} · built ${new Date(
+            m.generated,
+          )
+            .toISOString()
+            .slice(0, 10)}`;
+          for (const el of document.querySelectorAll('[data-version-url="tgz"]'))
+            el.textContent = el.textContent.replace(
+              /tm-sdk-[\d.]+\.tgz/,
+              `tm-sdk-${m.version}.tgz`,
+            );
+        } else {
+          $('#version').textContent = 'not deployed yet';
+        }
+      } catch {
+        $('#version').textContent = 'offline';
+      }
+
+      // A copy button on every snippet.
+      for (const pre of document.querySelectorAll('pre')) {
+        const btn = document.createElement('button');
+        btn.className = 'copy';
+        btn.type = 'button';
+        btn.textContent = 'Copy';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(pre.querySelector('code').textContent);
+            btn.textContent = 'Copied';
+          } catch {
+            btn.textContent = 'Press ⌘C';
+          }
+          setTimeout(() => (btn.textContent = 'Copy'), 1500);
+        });
+        pre.append(btn);
+      }
+    </script>
+  </body>
+</html>

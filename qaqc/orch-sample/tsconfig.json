@@ -1,0 +1,21 @@
+{
+  // A consumer's own settings, not this repo's: strict, NodeNext (so the
+  // tarball's `exports` map with its `types` condition is what resolves) and
+  // `skipLibCheck: false`, so the SDK's own flat sdk.d.ts is checked too.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

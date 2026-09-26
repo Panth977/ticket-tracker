@@ -1,0 +1,22 @@
+{
+  "name": "taskmanager",
+  "version": "1.1.0",
+  "description": "TaskManager inside Claude Code: your boards, tickets and threads as MCP tools, with a skill that knows the system and slash commands for the daily loop.",
+  "author": {
+    "name": "TaskManager",
+    "url": "https://taskmanager-example.web.app"
+  },
+  "homepage": "https://taskmanager-example.web.app/integrate/claude",
+  "repository": "https://taskmanager-example.web.app/lib/claude-plugin/",
+  "license": "UNLICENSED",
+  "keywords": ["taskmanager", "tickets", "boards", "issues", "mcp", "memory"],
+  "mcpServers": {
+    "taskmanager": {
+      "type": "http",
+      "url": "https://taskmanager-example.web.app/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TM_TOKEN}"
+      }
+    }
+  }
+}

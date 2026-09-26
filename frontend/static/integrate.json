@@ -1,0 +1,820 @@
+{
+  "name": "TaskManager",
+  "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
+  "version": "1.1.0",
+  "apiVersion": "v1",
+  "updated": "2026-09-26",
+  "contentSha256": "10904deb0b1cc60fa42543688cef627f87ff9d35cf6759f8c23a9ab42d6bee22",
+  "app": "https://taskmanager-example.web.app",
+  "apiBase": "https://taskmanager-example.web.app/v1",
+  "mcpUrl": "https://taskmanager-example.web.app/mcp",
+  "openapiUrl": "https://taskmanager-example.web.app/v1/openapi.json",
+  "llmsUrl": "https://taskmanager-example.web.app/llms.txt",
+  "llmsFullUrl": "https://taskmanager-example.web.app/llms-full.txt",
+  "integrateUrl": "https://taskmanager-example.web.app/integrate",
+  "claude": {
+    "guideUrl": "https://taskmanager-example.web.app/integrate/claude",
+    "connectorUrl": "https://taskmanager-example.web.app/mcp",
+    "pluginZipUrl": "https://taskmanager-example.web.app/lib/claude-plugin.zip",
+    "pluginDirUrl": "https://taskmanager-example.web.app/lib/claude-plugin/",
+    "pluginName": "taskmanager",
+    "mcpAddCommand": "claude mcp add --transport http taskmanager https://taskmanager-example.web.app/mcp --header \"Authorization: Bearer $TM_TOKEN\""
+  },
+  "sdk": {
+    "index": "https://taskmanager-example.web.app/lib/",
+    "esm": "https://taskmanager-example.web.app/lib/v1/sdk.js",
+    "esmMin": "https://taskmanager-example.web.app/lib/v1/sdk.min.js",
+    "ts": "https://taskmanager-example.web.app/lib/v1/sdk.ts",
+    "types": "https://taskmanager-example.web.app/lib/v1/sdk.d.ts",
+    "tarball": "https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz",
+    "manifest": "https://taskmanager-example.web.app/lib/v1/sdk.json",
+    "openapi": "https://taskmanager-example.web.app/lib/v1/openapi.json",
+    "latest": "https://taskmanager-example.web.app/lib/latest/sdk.js"
+  },
+  "auth": {
+    "scheme": "Bearer",
+    "header": "Authorization: Bearer tm_live_…",
+    "tokenPrefix": "tm_live_",
+    "howToGetOne": "https://taskmanager-example.web.app/account/tokens — a person makes an agent, adds it to a board, and creates a board-scoped token that acts as it.",
+    "boardScoped": true,
+    "idempotencyHeader": "Idempotency-Key"
+  },
+  "scopes": [
+    {
+      "name": "board:read",
+      "label": "Read the board (stages, fields, tags)"
+    },
+    {
+      "name": "members:read",
+      "label": "See the people and agents on the board"
+    },
+    {
+      "name": "tickets:read",
+      "label": "Read tickets"
+    },
+    {
+      "name": "tickets:create",
+      "label": "Create tickets"
+    },
+    {
+      "name": "tickets:update",
+      "label": "Edit tickets (title, description, fields, dates, tags, links)"
+    },
+    {
+      "name": "tickets:move",
+      "label": "Move tickets between stages"
+    },
+    {
+      "name": "tickets:assign",
+      "label": "Assign and unassign tickets"
+    },
+    {
+      "name": "tickets:state",
+      "label": "Archive and restore tickets"
+    },
+    {
+      "name": "comments:read",
+      "label": "Read ticket threads"
+    },
+    {
+      "name": "comments:write",
+      "label": "Post, edit, pin and react in threads"
+    },
+    {
+      "name": "files:read",
+      "label": "Read and download files"
+    },
+    {
+      "name": "files:write",
+      "label": "Upload files"
+    },
+    {
+      "name": "questions:write",
+      "label": "Ask questions in a thread and cancel them"
+    },
+    {
+      "name": "tasklists:write",
+      "label": "Publish and update task lists on a ticket"
+    },
+    {
+      "name": "status:write",
+      "label": "Send heartbeats (what the agent is doing now)"
+    },
+    {
+      "name": "events:read",
+      "label": "Read and acknowledge the event inbox"
+    }
+  ],
+  "adminScopes": [
+    {
+      "name": "board:admin",
+      "label": "Change board settings (admins only)"
+    },
+    {
+      "name": "webhooks:manage",
+      "label": "Manage webhooks (admins only)"
+    }
+  ],
+  "scopePresets": {
+    "readOnly": [
+      "board:read",
+      "members:read",
+      "tickets:read",
+      "comments:read",
+      "files:read",
+      "events:read"
+    ],
+    "worker": [
+      "board:read",
+      "members:read",
+      "tickets:read",
+      "comments:read",
+      "files:read",
+      "events:read",
+      "comments:write",
+      "files:write",
+      "tickets:move",
+      "tickets:update",
+      "questions:write",
+      "tasklists:write",
+      "status:write"
+    ],
+    "everything": [
+      "board:read",
+      "members:read",
+      "tickets:read",
+      "tickets:create",
+      "tickets:update",
+      "tickets:move",
+      "tickets:assign",
+      "tickets:state",
+      "comments:read",
+      "comments:write",
+      "files:read",
+      "files:write",
+      "questions:write",
+      "tasklists:write",
+      "status:write",
+      "events:read"
+    ],
+    "fullAccount": [
+      "board:read",
+      "members:read",
+      "tickets:read",
+      "tickets:create",
+      "tickets:update",
+      "tickets:move",
+      "tickets:assign",
+      "tickets:state",
+      "comments:read",
+      "comments:write",
+      "files:read",
+      "files:write",
+      "questions:write",
+      "tasklists:write",
+      "status:write",
+      "events:read",
+      "boards:create",
+      "boards:admin",
+      "agents:write",
+      "invites:write"
+    ]
+  },
+  "events": [
+    {
+      "type": "assigned",
+      "means": "you were put on a ticket — the usual trigger to start work"
+    },
+    {
+      "type": "unassigned",
+      "means": "you were taken off it; stop"
+    },
+    {
+      "type": "mentioned",
+      "means": "a message names you (@your-agent-name)"
+    },
+    {
+      "type": "comment",
+      "means": "a new message on a ticket you are on"
+    },
+    {
+      "type": "stage",
+      "means": "the ticket moved to another stage"
+    },
+    {
+      "type": "updated",
+      "means": "title, fields, dates, tags or links changed"
+    },
+    {
+      "type": "created",
+      "means": "a ticket you watch was created"
+    },
+    {
+      "type": "question_answered",
+      "means": "somebody submitted the form you asked — `event.question.values` is here"
+    },
+    {
+      "type": "question_cancelled",
+      "means": "your question was cancelled or expired; stop waiting"
+    }
+  ],
+  "notifyEvents": [
+    "assigned",
+    "mentioned",
+    "comment",
+    "stage",
+    "updated",
+    "created",
+    "dueSoon",
+    "overdue",
+    "state",
+    "invited",
+    "question",
+    "agentSilence"
+  ],
+  "errorCodes": [
+    {
+      "code": "invalid",
+      "status": 400,
+      "means": "the input failed validation, or names something not on the board"
+    },
+    {
+      "code": "unauthenticated",
+      "status": 401,
+      "means": "no / bad / revoked / expired token — do not retry"
+    },
+    {
+      "code": "forbidden",
+      "status": 403,
+      "means": "the role or the scope says no — do not retry"
+    },
+    {
+      "code": "not_found",
+      "status": 404,
+      "means": "gone, or on a board you cannot read (existence is never leaked)"
+    },
+    {
+      "code": "conflict",
+      "status": 409,
+      "means": "a state conflict: key taken, stale update, ticket not active"
+    },
+    {
+      "code": "gone",
+      "status": 410,
+      "means": "it existed and is gone (an expired invite, a cancelled question)"
+    },
+    {
+      "code": "too_large",
+      "status": 413,
+      "means": "over the body or attachment limit"
+    },
+    {
+      "code": "unprocessable",
+      "status": 422,
+      "means": "well-formed, but a board rule refuses it (a stage’s `requires`)"
+    },
+    {
+      "code": "rate_limited",
+      "status": 429,
+      "means": "back off — `Retry-After` says how long (the SDK does this for you)"
+    },
+    {
+      "code": "internal",
+      "status": 500,
+      "means": "a bug on our side; retry with backoff"
+    },
+    {
+      "code": "unavailable",
+      "status": 503,
+      "means": "a dependency is down; safe to retry"
+    }
+  ],
+  "rest": [
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "scopes": [],
+      "summary": "Who this token is (agent: name, description, system prompt)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/board",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "Stages, priorities, tags, fields, members"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/boards",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "Boards this credential may act on (an account token: every board you are on right now)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/boards/{KEY}",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "One board: stages, priorities, tags, fields, members"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/boards",
+      "scopes": [
+        "boards:create"
+      ],
+      "summary": "Create a board (account token); you become its admin"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/boards/{KEY}/agents",
+      "scopes": [
+        "agents:write",
+        "boards:admin"
+      ],
+      "summary": "Put an agent you own on a board with a role, change it, or remove it (account token)"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "scopes": [
+        "agents:write"
+      ],
+      "summary": "Create an agent profile (account token)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/boards/{KEY}/tickets",
+      "scopes": [
+        "tickets:read"
+      ],
+      "summary": "List tickets on a named board"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/boards/{KEY}/tickets",
+      "scopes": [
+        "tickets:create"
+      ],
+      "summary": "Create a ticket on a named board"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tickets",
+      "scopes": [
+        "tickets:read"
+      ],
+      "summary": "List tickets"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets",
+      "scopes": [
+        "tickets:create"
+      ],
+      "summary": "Create a ticket"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tickets/{KEY}",
+      "scopes": [
+        "tickets:read"
+      ],
+      "summary": "A ticket with links, pinned messages, files"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tickets/{KEY}",
+      "scopes": [
+        "tickets:update",
+        "tickets:move",
+        "tickets:assign"
+      ],
+      "summary": "Update a ticket"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/move",
+      "scopes": [
+        "tickets:move"
+      ],
+      "summary": "Move to a stage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/state",
+      "scopes": [
+        "tickets:state"
+      ],
+      "summary": "Archive or restore"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/assignees",
+      "scopes": [
+        "tickets:assign"
+      ],
+      "summary": "Add or remove assignees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tickets/{KEY}/messages",
+      "scopes": [
+        "comments:read"
+      ],
+      "summary": "The thread, Markdown bodies"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/messages",
+      "scopes": [
+        "comments:write"
+      ],
+      "summary": "Post a Markdown message with file attachments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tickets/{KEY}/files",
+      "scopes": [
+        "files:read"
+      ],
+      "summary": "Every file on the ticket"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/files",
+      "scopes": [
+        "files:write"
+      ],
+      "summary": "Upload a file (multipart or JSON text / base64)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/files/{fileId}",
+      "scopes": [
+        "files:read"
+      ],
+      "summary": "File metadata + signed URL; ?content=1 for text"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events",
+      "scopes": [
+        "events:read"
+      ],
+      "summary": "The inbox feed (cursor)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events/stream",
+      "scopes": [
+        "events:read"
+      ],
+      "summary": "The inbox as Server-Sent Events"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/events/ack",
+      "scopes": [
+        "events:read"
+      ],
+      "summary": "Acknowledge events"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/live",
+      "scopes": [
+        "events:read"
+      ],
+      "summary": "A short-lived Realtime Database credential: wake on rev/{board} and your inbox instead of polling"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tickets/{KEY}/questions",
+      "scopes": [
+        "questions:write"
+      ],
+      "summary": "Ask a question as a form card in the thread"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/questions/{id}",
+      "scopes": [
+        "comments:read"
+      ],
+      "summary": "A question: its status and, once given, the answer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/questions/{id}/cancel",
+      "scopes": [
+        "questions:write"
+      ],
+      "summary": "Cancel a question you asked"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tickets/{KEY}/tasklists",
+      "scopes": [
+        "tickets:read"
+      ],
+      "summary": "The ticket's task lists"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/tickets/{KEY}/tasklists/{listId}",
+      "scopes": [
+        "tasklists:write"
+      ],
+      "summary": "Create or replace a task list"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tickets/{KEY}/tasklists/{listId}/items/{itemId}",
+      "scopes": [
+        "tasklists:write"
+      ],
+      "summary": "Update one item's status or note"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/tickets/{KEY}/tasklists/{listId}",
+      "scopes": [
+        "tasklists:write"
+      ],
+      "summary": "Delete a task list"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/heartbeat",
+      "scopes": [
+        "status:write"
+      ],
+      "summary": "Say what you are doing (every minute, and when work ends)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/status",
+      "scopes": [
+        "members:read"
+      ],
+      "summary": "What every agent on the board is doing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/search",
+      "scopes": [
+        "tickets:read"
+      ],
+      "summary": "Search tickets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/webhooks",
+      "scopes": [
+        "webhooks:manage"
+      ],
+      "summary": "List webhooks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/webhooks",
+      "scopes": [
+        "webhooks:manage"
+      ],
+      "summary": "Create a webhook"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/webhooks/{id}",
+      "scopes": [
+        "webhooks:manage"
+      ],
+      "summary": "Update a webhook"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/webhooks/{id}",
+      "scopes": [
+        "webhooks:manage"
+      ],
+      "summary": "Delete a webhook"
+    }
+  ],
+  "mcpTools": [
+    {
+      "name": "whoami",
+      "description": "Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.",
+      "readOnly": true,
+      "scopes": []
+    },
+    {
+      "name": "list_boards",
+      "description": "Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.",
+      "readOnly": true,
+      "scopes": [
+        "board:read"
+      ]
+    },
+    {
+      "name": "get_board",
+      "description": "The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).",
+      "readOnly": true,
+      "scopes": [
+        "board:read"
+      ]
+    },
+    {
+      "name": "list_my_tickets",
+      "description": "Tickets assigned to you, most recently updated first.",
+      "readOnly": true,
+      "scopes": [
+        "tickets:read"
+      ]
+    },
+    {
+      "name": "search_tickets",
+      "description": "Find tickets by text, assignee, stage, state or dates.",
+      "readOnly": true,
+      "scopes": [
+        "tickets:read"
+      ]
+    },
+    {
+      "name": "get_ticket",
+      "description": "A ticket with fields, links, pinned messages, files and its last messages (Markdown).",
+      "readOnly": true,
+      "scopes": [
+        "tickets:read"
+      ]
+    },
+    {
+      "name": "get_messages",
+      "description": "Page through a ticket's thread (Markdown bodies, attachments with file ids).",
+      "readOnly": true,
+      "scopes": [
+        "comments:read"
+      ]
+    },
+    {
+      "name": "create_ticket",
+      "description": "Create a ticket.",
+      "readOnly": false,
+      "scopes": [
+        "tickets:create"
+      ]
+    },
+    {
+      "name": "update_ticket",
+      "description": "Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.",
+      "readOnly": false,
+      "scopes": [
+        "tickets:update",
+        "tickets:move",
+        "tickets:assign"
+      ]
+    },
+    {
+      "name": "move_ticket",
+      "description": "Move a ticket to another stage.",
+      "readOnly": false,
+      "scopes": [
+        "tickets:move"
+      ]
+    },
+    {
+      "name": "assign_ticket",
+      "description": "Add or remove assignees (people or agents).",
+      "readOnly": false,
+      "scopes": [
+        "tickets:assign"
+      ]
+    },
+    {
+      "name": "post_message",
+      "description": "Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "readOnly": false,
+      "scopes": [
+        "comments:write"
+      ]
+    },
+    {
+      "name": "upload_file",
+      "description": "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.",
+      "readOnly": false,
+      "scopes": [
+        "files:write"
+      ]
+    },
+    {
+      "name": "read_file",
+      "description": "Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.",
+      "readOnly": true,
+      "scopes": [
+        "files:read"
+      ]
+    },
+    {
+      "name": "link_tickets",
+      "description": "Link two tickets: blocks, relates or duplicates.",
+      "readOnly": false,
+      "scopes": [
+        "tickets:update"
+      ]
+    },
+    {
+      "name": "get_events",
+      "description": "Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.",
+      "readOnly": true,
+      "scopes": [
+        "events:read"
+      ]
+    },
+    {
+      "name": "ack_events",
+      "description": "Acknowledge inbox events by id, or everything up to a cursor.",
+      "readOnly": false,
+      "scopes": [
+        "events:read"
+      ]
+    },
+    {
+      "name": "ask_question",
+      "description": "Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.",
+      "readOnly": false,
+      "scopes": [
+        "questions:write"
+      ]
+    },
+    {
+      "name": "get_question",
+      "description": "A question you asked: its status and, once given, the answer values.",
+      "readOnly": true,
+      "scopes": [
+        "comments:read"
+      ]
+    },
+    {
+      "name": "cancel_question",
+      "description": "Cancel a question you asked — the card locks and nobody is chased for it.",
+      "readOnly": false,
+      "scopes": [
+        "questions:write"
+      ]
+    },
+    {
+      "name": "set_tasklist",
+      "description": "Publish your plan as a checklist on the ticket (create or replace the whole list).",
+      "readOnly": false,
+      "scopes": [
+        "tasklists:write"
+      ]
+    },
+    {
+      "name": "update_task_item",
+      "description": "Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.",
+      "readOnly": false,
+      "scopes": [
+        "tasklists:write"
+      ]
+    },
+    {
+      "name": "delete_tasklist",
+      "description": "Remove a task list from the ticket.",
+      "readOnly": false,
+      "scopes": [
+        "tasklists:write"
+      ]
+    },
+    {
+      "name": "heartbeat",
+      "description": "Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.",
+      "readOnly": false,
+      "scopes": [
+        "status:write"
+      ]
+    }
+  ],
+  "limits": {
+    "uploadBytes": 26214400,
+    "tasklistItems": 100,
+    "questionFields": 10,
+    "heartbeatIntervalMs": 60000,
+    "heartbeatStaleMs": 75000,
+    "requestsPerMinute": 60,
+    "requestsPerDay": 10000
+  },
+  "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-09-26"
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-09-26"
+    }
+  ]
+}

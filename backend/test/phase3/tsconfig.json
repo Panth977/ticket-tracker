@@ -1,0 +1,8 @@
+{
+  // Typechecks the phase-3 suites and their helpers (vitest does not):
+  //   npx tsc -p test/phase3
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../.." },
+  "include": ["../../src", "../harness", ".", "../tickets", "../agents", "../notify"],
+  "exclude": []
+}

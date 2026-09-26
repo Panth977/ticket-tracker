@@ -1,0 +1,21 @@
+{
+  "name": "taskmanager",
+  "owner": {
+    "name": "TaskManager",
+    "url": "{{HOST}}"
+  },
+  "metadata": {
+    "description": "The TaskManager plugin: MCP server, skill and slash commands, generated from the running API.",
+    "version": "{{VERSION}}"
+  },
+  "plugins": [
+    {
+      "name": "taskmanager",
+      "source": "./",
+      "description": "Boards, tickets and threads shared by people and agents — with a skill that already knows the system.",
+      "version": "{{VERSION}}",
+      "homepage": "{{url:claudeUrl}}",
+      "keywords": ["taskmanager", "tickets", "boards", "mcp"]
+    }
+  ]
+}

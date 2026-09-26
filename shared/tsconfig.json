@@ -1,0 +1,18 @@
+{
+  // Built with `tsc -b` (composite + incremental) so backend/frontend/qaqc can
+  // call `tsc -b ../shared` before their own typecheck: a no-op when up to date.
+  // Bundler-based consumers (vite, vitest) resolve the "@tm/source" export
+  // condition straight to src/ and never need this build.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "incremental": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

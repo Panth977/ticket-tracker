@@ -1,0 +1,29 @@
+{
+  "name": "@tm/qaqc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Security-rules tests, Playwright e2e and emulator seed data.",
+  "scripts": {
+    "build": "echo 'qaqc: nothing to build'",
+    "typecheck": "tsc -b ../shared && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests --project unit",
+    "test:emu": "vitest run --passWithNoTests --project rules",
+    "test:rules": "PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node ../scripts/lock.mjs emulators -- firebase emulators:exec --config rules/firebase.rules.json --project demo-taskmanager --only firestore,storage,database 'vitest run --passWithNoTests --project rules'",
+    "e2e": "playwright test",
+    "playwright:install": "playwright install chromium",
+    "seed": "tsx seed/seed.ts"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@playwright/test": "^1.63.0",
+    "@tm/shared": "workspace:*",
+    "@types/node": "^22.20.4",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

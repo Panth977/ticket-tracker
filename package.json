@@ -1,0 +1,48 @@
+{
+  "name": "taskmanager",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm -r build && node scripts/gen-integration.mjs",
+    "integrate:gen": "node scripts/gen-integration.mjs",
+    "integrate:check": "node scripts/gen-integration.mjs --check",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:emu": "pnpm --filter @tm/shared build && pnpm --filter @tm/backend build && PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node scripts/lock.mjs emulators -- firebase emulators:exec --project demo-taskmanager --only auth,firestore,database,storage,functions,tasks 'pnpm -r --workspace-concurrency=1 test:emu'",
+    "emulators": "pnpm --filter @tm/shared build && pnpm --filter @tm/backend build && PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" firebase emulators:start --project demo-taskmanager",
+    "lint": "eslint .",
+    "format": "prettier --write shared backend frontend qaqc --ignore-path .gitignore",
+    "docs": "node docs/serve.mjs",
+    "docs:check": "node docs/check.mjs",
+    "seed": "pnpm --filter @tm/qaqc seed",
+    "e2e": "pnpm --filter @tm/qaqc e2e",
+    "sdk:build": "pnpm --filter @tm/shared build && pnpm --filter @tm/sdk build",
+    "sdk:test": "pnpm --filter @tm/sdk test",
+    "sdk:fixtures": "pnpm --filter @tm/sdk build && pnpm --filter @tm/sdk fixtures",
+    "lib:stage": "node scripts/deploy-lib.mjs",
+    "lib:check": "PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node scripts/lock.mjs emulators -- node scripts/deploy-lib-check.mjs",
+    "orch:sample": "node qaqc/orch-sample/check.mjs",
+    "deploy:prod": "node scripts/deploy.mjs",
+    "deploy:functions:build": "node scripts/deploy-functions.mjs --verify",
+    "ws": "node workspaces/ws.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.23.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.8",
+    "prettier-plugin-svelte": "^4.1.1",
+    "sharp": "^0.35.4",
+    "svelte": "^5.57.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1"
+  },
+  "license": "MIT"
+}

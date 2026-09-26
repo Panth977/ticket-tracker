@@ -1,0 +1,378 @@
+/**
+ * A real orchestrator, written with nothing but the hosted SDK
+ * (docs/plan/agents.html §M, and §L for what a person sees while it runs).
+ *
+ * It is the whole loop an agent lives in:
+ *
+ *   tm.work()        WAITS to be woken (§W — one held Realtime Database
+ *                    connection, no traffic at all while the inbox is empty),
+ *                    then asks /v1/events for the delta it has not seen and
+ *                    hands each event to the handler below, keeping a
+ *                    heartbeat alive for as long as the handler runs — that
+ *                    is the 🟢 dot in the app — and marking the run done (or
+ *                    error) and acking at the end
+ *   tasklists        the plan, published before the work starts and ticked
+ *                    off item by item (§L2)
+ *   questions        one blocking question, and the run waits for a person
+ *                    to answer it in the browser (§L1)
+ *   files + messages report.md and report.html uploaded and posted as one
+ *                    message with both attached
+ *
+ * Nothing here is test scaffolding: this is what an orchestrator looks like.
+ * qaqc/e2e/ui/sdk-orchestrator.spec.ts runs this exact file against the
+ * emulators while a browser answers the question.
+ *
+ *   TM_TOKEN            required — a Worker token that acts as an agent
+ *   TM_BASE_URL         the app's origin (default: the hosted build)
+ *   TM_MAX_EVENTS       stop after N events (default 1; 0 = run forever)
+ *   TM_CURSOR           resume the inbox from this event id
+ *   TM_ANSWER_TIMEOUT_MS / TM_ANSWER_POLL_MS   how long to wait for an answer
+ *   TM_HEARTBEAT_MS     beat interval (default 60 s, what the UI expects)
+ *   TM_POLL             '1' forces the polling fallback instead of the stream
+ *   TM_MIN_POLL_MS / TM_MAX_POLL_MS   the backoff when polling is all there is
+ *
+ * WHAT THIS COSTS WHILE IT WAITS: nothing. An orchestrator that polls every
+ * 30 seconds is the most expensive thing on this platform — two such loops
+ * were measured at 88 % of every request the API served, almost all of them
+ * answering "no". `tm.work()` holds one connection to the RTDB node the
+ * command layer bumps and only calls REST when something actually changed.
+ * Where that connection cannot be opened it polls, but on a backoff: seconds
+ * while work is arriving, a minute when idle.
+ */
+import { pathToFileURL } from 'node:url';
+import {
+  createClient,
+  isTmError,
+  type TaskItemInput,
+  type Tasklist,
+  type TicketDetail,
+  type TypedAnswer,
+  type WorkContext,
+  type WorkSummary,
+} from '@tm/sdk';
+
+/** One JSON line per step: readable in a terminal, parseable by the e2e run. */
+function log(step: string, detail: Record<string, unknown> = {}): void {
+  console.log(JSON.stringify({ step, at: new Date().toISOString(), ...detail }));
+}
+
+const num = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  const n = raw === undefined || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/**
+ * The plan, with ids of its own. Ids are what make a task list stable: the
+ * same id may be ticked off later, or replaced, without becoming a new item.
+ */
+const PLAN: readonly TaskItemInput[] = [
+  { id: 'read', title: 'Read the ticket' },
+  { id: 'ask', title: 'Ask how the report should look' },
+  { id: 'write', title: 'Write report.md and report.html' },
+  { id: 'post', title: 'Post the report on the ticket' },
+];
+
+/** The question the work genuinely depends on — so it is `blocking` (§L1). */
+const QUESTION_FIELDS = [
+  {
+    id: 'format',
+    label: 'How much detail?',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'summary', label: 'Summary', description: 'the headlines only' },
+      { id: 'full', label: 'Full detail', description: 'every message and file' },
+    ],
+  },
+  { id: 'ship', label: 'Move it to Review when the report is up?', type: 'boolean' },
+] as const;
+
+type Answer = TypedAnswer<typeof QUESTION_FIELDS>;
+
+// ── what it writes ──────────────────────────────────────────────────────────
+
+function reportMarkdown(ticket: TicketDetail, answer: Answer): string {
+  const full = answer.values.format === 'full';
+  return [
+    `# Report · ${ticket.key}`,
+    '',
+    `**${ticket.title}** — ${ticket.stage.name}, ${ticket.assignees.length} assignee(s).`,
+    '',
+    `Written at the request of ${answer.by.name} (${full ? 'full detail' : 'summary'}).`,
+    '',
+    '## What the ticket says',
+    '',
+    ticket.description_md?.trim() || '_no description_',
+    ...(full
+      ? [
+          '',
+          '## Thread',
+          '',
+          '| Author | Said |',
+          '| --- | --- |',
+          ...(ticket.messages ?? []).map(
+            (m) => `| ${m.author.name} | ${m.body_md.replace(/\n+/g, ' ').slice(0, 80)} |`,
+          ),
+        ]
+      : []),
+    '',
+    ...(answer.comment ? ['## Also asked for', '', answer.comment, ''] : []),
+    `Generated by the orch-sample orchestrator.`,
+  ].join('\n');
+}
+
+function reportHtml(ticket: TicketDetail, answer: Answer): string {
+  const full = answer.values.format === 'full';
+  // The app previews HTML in a sandboxed iframe that allows scripts, so a
+  // report may compute part of itself — this one counts its own rows.
+  return `<!doctype html><html><body>
+<h1>Report · ${ticket.key}</h1>
+<p id="mode">${full ? 'Full detail' : 'Summary'}</p>
+<table id="rows">
+  <tr><th>Stage</th><td>${ticket.stage.name}</td></tr>
+  <tr><th>Messages</th><td>${ticket.counts.messages}</td></tr>
+  <tr><th>Files</th><td>${ticket.counts.files}</td></tr>
+</table>
+<p id="out">counting…</p>
+<script>document.getElementById('out').textContent =
+  'rows: ' + document.querySelectorAll('#rows tr').length;</script>
+</body></html>`;
+}
+
+// ── the handler tm.work() calls for each event ──────────────────────────────
+
+export async function handleAssignment({
+  ticket,
+  event,
+  tm,
+  beat,
+  signal,
+}: WorkContext): Promise<void> {
+  if (!ticket) {
+    log('skipped', { reason: 'no ticket on this event', event: event.type });
+    return;
+  }
+  log('picked-up', { event: event.type, ticket, summary: event.summary });
+
+  // 1 · read the ticket ─────────────────────────────────────────────────────
+  await beat?.update({ message: 'Reading the ticket', progress: 0.05 });
+  const detail = await tm.tickets.get(ticket, { messages: 20, signal });
+
+  // 2 · publish the plan, before doing any of it (§L2) ──────────────────────
+  let list: Tasklist = await tm.tasklists.set(
+    ticket,
+    { listId: 'plan', title: `Plan: ${detail.title}`, items: PLAN },
+    { signal },
+  );
+  log('plan', { listId: list.id, items: list.items.length });
+
+  /** Tick one item and keep the list we hold in step with the server's. */
+  const tick = async (
+    id: string,
+    status: TaskItemInput['status'],
+    note?: string,
+  ): Promise<void> => {
+    list = await tm.tasklists.item(
+      ticket,
+      list.id,
+      id,
+      { status, ...(note ? { note } : {}) },
+      { signal },
+    );
+    log('task', { id, status, progress: list.progress });
+  };
+
+  await tick('read', 'doing');
+  await tick('read', 'done');
+
+  // 3 · the question the rest of the work depends on (§L1) ──────────────────
+  await beat?.update({ message: 'Asking how the report should look', progress: 0.3 });
+  await tick('ask', 'doing');
+  const asking = tm.questions.ask(
+    ticket,
+    {
+      title: `How should the report for ${detail.key} look?`,
+      body: 'I can write the headlines, or everything that happened on the ticket.',
+      fields: QUESTION_FIELDS,
+      allowComment: true,
+      blocking: true,
+    },
+    { signal },
+  );
+  const question = await asking;
+  log('asked', { questionId: question.id, messageId: question.message_id });
+
+  // Waiting for a person is `idle`, not `working`: the app says
+  // "🟡 Idle · waiting for an answer" rather than pretending to be busy (§L3).
+  await beat?.update({ state: 'idle', message: 'Waiting for an answer' });
+
+  let answer: Answer;
+  try {
+    answer = await asking.waitForAnswer({
+      timeoutMs: num('TM_ANSWER_TIMEOUT_MS', 30 * 60_000),
+      pollMs: num('TM_ANSWER_POLL_MS', 5_000),
+      signal,
+    });
+  } catch (e) {
+    // 'timeout' (nobody answered) and 'gone' (cancelled or expired) are both
+    // ordinary outcomes for an orchestrator, not crashes: say so on the
+    // ticket, leave the plan showing where it stopped, and end the run.
+    if (isTmError(e) && (e.code === 'timeout' || e.code === 'gone')) {
+      await tick(
+        'ask',
+        'failed',
+        e.code === 'timeout' ? 'nobody answered in time' : 'the question was cancelled',
+      );
+      await tick('write', 'skipped');
+      await tick('post', 'skipped');
+      await tm.messages.post(
+        ticket,
+        { markdown: `I stopped waiting for an answer (${e.code}). Ask me again when you know.` },
+        { signal },
+      );
+      log('unanswered', { questionId: question.id, code: e.code });
+      return;
+    }
+    throw e;
+  }
+  log('answered', { values: answer.values, by: answer.by.name, comment: answer.comment });
+  await beat?.update({ state: 'working', message: 'Writing the report', progress: 0.6 });
+  await tick(
+    'ask',
+    'done',
+    `${answer.values.format === 'full' ? 'Full detail' : 'Summary'}, asked by ${answer.by.name}`,
+  );
+
+  // 4 · the two documents (§I: the app previews both natively) ──────────────
+  await tick('write', 'doing');
+  const md = await tm.files.upload(
+    ticket,
+    { name: 'report.md', text: reportMarkdown(detail, answer) },
+    { signal },
+  );
+  const html = await tm.files.upload(
+    ticket,
+    { name: 'report.html', text: reportHtml(detail, answer) },
+    { signal },
+  );
+  await tick('write', 'done');
+  log('uploaded', { md: md.file_id, html: html.file_id, kinds: [md.kind, html.kind] });
+
+  // 5 · one message carrying both ───────────────────────────────────────────
+  await tick('post', 'doing');
+  await beat?.update({ message: 'Posting the report', progress: 0.9 });
+  const message = await tm.messages.post(
+    ticket,
+    {
+      markdown: [
+        '## Report ready',
+        '',
+        'Both formats are attached:',
+        '',
+        '- `report.md`',
+        '- `report.html`',
+      ].join('\n'),
+      attachments: [md.id, html.id],
+    },
+    { signal },
+  );
+  await tick('post', 'done');
+
+  if (answer.values.ship) {
+    // Only if a person asked for it — the answer decides, not the agent.
+    const moved = await tm.tickets.move(ticket, 'Review', { signal }).catch((e: unknown) => {
+      log('move-refused', { error: isTmError(e) ? e.code : String(e) });
+      return null;
+    });
+    if (moved) log('moved', { stage: moved.stage.name });
+  }
+
+  // 6 · close the plan: the same list, marked finished (§L2) ────────────────
+  list = await tm.tasklists.set(
+    ticket,
+    {
+      listId: list.id,
+      title: list.title,
+      items: list.items.map((i) => ({
+        id: i.id,
+        title: i.title,
+        status: i.status,
+        ...(i.note ? { note: i.note } : {}),
+      })),
+      closed: true,
+    },
+    { signal },
+  );
+  log('finished', { ticket, messageId: message.id, progress: list.progress });
+  // tm.work() sends the final `done` beat and acks the event from here.
+}
+
+// ── the process ─────────────────────────────────────────────────────────────
+
+export async function main(): Promise<number> {
+  const token = process.env.TM_TOKEN;
+  if (!token) {
+    console.error(
+      'TM_TOKEN is required — make a Worker token in Account › Tokens that acts as your agent.',
+    );
+    return 2;
+  }
+  const baseUrl = process.env.TM_BASE_URL;
+  const tm = createClient({
+    token,
+    ...(baseUrl ? { baseUrl } : {}),
+    userAgent: 'tm-orch-sample/1.0',
+  });
+
+  // Ctrl-C stops the loop politely: the handler's `signal` fires, the beat
+  // stops, and work() returns what it managed to do.
+  const stop = new AbortController();
+  for (const sig of ['SIGINT', 'SIGTERM'] as const)
+    process.on(sig, () => stop.abort(new Error(`${sig}`)));
+
+  const me = await tm.me();
+  log('hello', {
+    sdk: tm.version,
+    principal: me.principal.name,
+    kind: me.principal.kind,
+    board: me.board?.key ?? null,
+    scopes: me.scopes.length,
+    hasSystemPrompt: Boolean(me.principal.system_prompt),
+  });
+
+  const max = num('TM_MAX_EVENTS', 1);
+  const cursor = process.env.TM_CURSOR;
+  const summary: WorkSummary = await tm.work(handleAssignment, {
+    // Being assigned a ticket, or mentioned on one, is what starts a run.
+    filter: ['assigned', 'mentioned'],
+    concurrency: 1,
+    // The default transport: wake on the RTDB, fetch the delta (§W). The
+    // alternative, 'stream', holds a Cloud Run request open for its whole
+    // life and is billed for every second of it.
+    transport: 'watch',
+    watch: {
+      ...(process.env.TM_POLL === '1' ? { poll: true } : {}),
+      minPollMs: num('TM_MIN_POLL_MS', 2_000),
+      maxPollMs: num('TM_MAX_POLL_MS', 60_000),
+      onDegrade: (reason) => log('watch-degraded', { reason }),
+    },
+    heartbeat: { everyMs: num('TM_HEARTBEAT_MS', 60_000) },
+    ...(max > 0 ? { max } : {}),
+    ...(cursor ? { cursor } : {}),
+    signal: stop.signal,
+    onError: (error, event) =>
+      log('handler-failed', {
+        event: event.id,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+  });
+
+  log('summary', { ...summary });
+  return summary.failed > 0 ? 1 : 0;
+}
+
+/* Run when this file is the entry point, importable when it is not. */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = await main();
+}

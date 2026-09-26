@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Architecture · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture" class="on">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Architecture</h1>
+    <p class="lede">A private, multi-board ticket tracker, on Firebase with a Svelte front end. Anyone can sign up and create boards, and the board is the only boundary: you invite people to it by email. It has custom fields, saved views,
+    deadlines, ticket keys and linked tickets. Every ticket has a full conversation thread with <code>@people</code>,
+    <code>#tickets</code>, pins, and attachments. Notifications go out in the app, as browser push, by email, and on WhatsApp.
+    The same operations are open to scripts over REST and to AI agents over MCP. This page describes the design end to end.
+    The <a href="/app/db">App</a> and <a href="/platform/db">Platform</a> tabs define every collection, function, and screen it mentions.</p>
+
+    <h2>What is being built</h2>
+    <table>
+      <tr><th>You asked for</th><th>Where it lives</th></tr>
+      <tr><td>Multiple boards</td><td><a href="/app/db#schema-boards">boards</a>, each with its own key (<code>ENG</code>), stages, fields and access</td></tr>
+      <tr><td>Ticket IDs</td><td><code>ENG-42</code>, allocated in a transaction by <a href="/app/backend#proxyFunctions-allocatekey">allocateKey</a>, indexed in <a href="/app/db#schema-keys">keys</a> so old links survive a move</td></tr>
+      <tr><td>Related tickets</td><td>No subtasks. Tickets relate through <code>#references</code> (stored both ways: <code>refs</code> and <code>referencedBy</code>) and links (blocks / blocked by / relates / duplicates, written on both tickets)</td></tr>
+      <tr><td>Extra fields</td><td><a href="/app/db#types-fielddef">FieldDef</a> on the board and values in <code>ticket.fields[fieldId]</code>. There are 17 types.</td></tr>
+      <tr><td>Custom views</td><td><a href="/app/db#schema-views">views</a>: kanban, table, calendar, timeline. Each view has a filter tree, sort, group-by and swimlanes, and can be personal or shared.</td></tr>
+      <tr><td>Deadlines</td><td><code>startAt</code>/<code>dueAt</code>, per-person commitments, and <a href="/app/backend#services-deadlinesweep">deadlineSweep</a> every 15 minutes</td></tr>
+      <tr><td>Invite users</td><td><a href="/app/backend#services-invitecreate">inviteCreate</a> / <a href="/app/backend#services-inviteaccept">inviteAccept</a>. An invite is to one email, for one board, with one role. The person can sign up with that address and accept.</td></tr>
+      <tr><td><code>@</code> and <code>#</code> mentions</td><td>TipTap nodes carrying a uid or a ticketId, not parsed text. The <code>#</code> picker searches Typesense.</td></tr>
+      <tr><td>Conversation thread</td><td><a href="/app/db#schema-messages">messages</a> in rich text, with pins, attachments, quote-reply, reactions, edit, and tombstone delete</td></tr>
+      <tr><td>Notifications on app, browser, email, WhatsApp</td><td>One router, <a href="/app/backend#proxyFunctions-notify">notify</a>, writes the in-app inbox and enqueues <a href="/platform/backend#services-deliver">deliver</a>, which sends through FCM, Resend and the Meta Cloud API</td></tr>
+      <tr><td>Third-party API</td><td><a href="/platform/backend#services-rest">REST /v1</a> with API keys or OAuth, plus <a href="/platform/backend#services-webhookdispatch">signed webhooks</a></td></tr>
+      <tr><td>MCP</td><td><a href="/platform/backend#services-mcp">/mcp</a> over Streamable HTTP, with OAuth 2.1 and dynamic client registration</td></tr>
+      <tr><td>Agents (phase 2)</td><td><a href="/app/db#schema-agents">agents</a>: a profile you own — name, picture, system prompt — made on the <a href="/app/screens#screens-agents">Agents</a> page. A board admin who owns one adds it with <a href="/app/backend#services-boardagentset">boardAgentSet</a> (no invite), and from then on it is a <a href="/app/db#types-principalid">principal</a> like a person: assigned, @mentioned, watching, authoring messages. It gets an event inbox, <a href="/app/db#schema-agentinbox">agentInbox</a>, instead of push or email. The whole loop is <a href="/platform/flows#flows-an-orchestrator-works-a-ticket">An orchestrator works a ticket</a>; the spec is <a href="/plan/agents">Agents</a>.</td></tr>
+      <tr><td>Tokens for orchestrators (phase 2)</td><td><a href="/platform/db#schema-apikeys">apiKeys</a> v2: one board per token, acting as you or as one of your agents on that board, with fine-grained <a href="/platform/db#types-scope">scopes</a>. The same token opens <a href="/platform/backend#services-rest">REST /v1</a> (tickets, Markdown messages, file upload, the event feed and its SSE stream) and <a href="/platform/backend#services-mcp">MCP</a> (whoami, get_events, post_message, upload_file, read_file …).</td></tr>
+      <tr><td>A conversation that opens files (phase 2)</td><td>Messages render GitHub-flavoured Markdown. Attachments show as <a href="/app/screens#components-attachment-card">preview cards</a> and open in the <a href="/app/screens#components-file-viewer">File viewer</a>: images, video, audio, Markdown, HTML in a sandboxed frame, PDF, code and CSV — or in a tab of their own at <a href="/app/screens#screens-file">/f/…</a>.</td></tr>
+      <tr><td>Account management</td><td><a href="/app/screens#screens-account">Account</a>: profile picture, display name, security, channels, connected apps, tokens, export, delete</td></tr>
+    </table>
+
+    <h2>The shape of it</h2>
+    <div class="scroller">
+    <svg viewBox="-40 0 1000 560" class="arch" role="img" aria-label="System diagram: four kinds of caller reach one api function through four doors; the commands write Firestore, Storage, the Realtime Database and enqueue Cloud Tasks; the Svelte app reads Firestore directly and live">
+      <style>
+        .arch { width: 100%; min-width: 760px; height: auto; }
+        .arch .box { fill: #fffdf8; stroke: #1f1a14; stroke-width: 1.2; }
+        .arch .hot { fill: #fdf1e2; }
+        .arch .store { fill: #eef5ee; }
+        .arch .q { fill: #e8f4f4; }
+        .arch .ext { fill: #f3f1ee; stroke-dasharray: 4 3; }
+        .arch text { font-family: "Archivo Narrow", "Arial Narrow", system-ui, sans-serif; font-size: 13px; fill: #1f1a14; }
+        .arch .t { font-weight: 700; font-size: 14.5px; }
+        .arch .s { font-size: 12px; fill: #6b6259; }
+        .arch .m { font-family: "JetBrains Mono", Menlo, monospace; font-size: 11.5px; }
+        .arch .blue { fill: #2f6fed; font-size: 12px; }
+        .arch .ln { stroke: #1f1a14; stroke-width: 1.1; fill: none; marker-end: url(#ah); }
+        .arch .rd { stroke: #2f6fed; stroke-width: 1.4; fill: none; marker-end: url(#ahb); stroke-dasharray: 5 3; }
+      </style>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#1f1a14"/></marker>
+        <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#2f6fed"/></marker>
+      </defs>
+
+      <rect class="box" x="20" y="20" width="200" height="74" rx="6"/>
+      <text class="t" x="34" y="44">Svelte app</text>
+      <text class="s" x="34" y="63">SvelteKit SPA on Firebase Hosting</text>
+      <text class="s" x="34" y="80">service worker · IndexedDB cache</text>
+
+      <rect class="box ext" x="240" y="20" width="170" height="74" rx="6"/>
+      <text class="t" x="254" y="44">Scripts, Zapier</text>
+      <text class="s" x="254" y="63">REST · API key or OAuth</text>
+
+      <rect class="box ext" x="430" y="20" width="170" height="74" rx="6"/>
+      <text class="t" x="444" y="44">MCP clients</text>
+      <text class="s" x="444" y="63">Claude, Cursor, …</text>
+      <text class="s" x="444" y="80">OAuth 2.1 + PKCE</text>
+
+      <rect class="box ext" x="620" y="20" width="320" height="74" rx="6"/>
+      <text class="t" x="634" y="44">Providers calling in</text>
+      <text class="s" x="634" y="63">email and WhatsApp replies · GitHub · Slack</text>
+      <text class="s" x="634" y="80">website feedback widget (intake)</text>
+
+      <rect class="box hot" x="20" y="146" width="920" height="118" rx="8"/>
+      <rect class="box" x="36" y="162" width="160" height="34" rx="4"/><text class="m" x="48" y="184">/api · user token</text>
+      <rect class="box" x="206" y="162" width="170" height="34" rx="4"/><text class="m" x="218" y="184">/v1 · apiKey | oauth</text>
+      <rect class="box" x="386" y="162" width="130" height="34" rx="4"/><text class="m" x="398" y="184">/mcp · oauth</text>
+      <rect class="box" x="526" y="162" width="150" height="34" rx="4"/><text class="m" x="538" y="184">/hooks · signed</text>
+      <path class="ln" d="M676 179 H700"/>
+      <rect class="box" x="702" y="162" width="222" height="34" rx="4"/><text class="m" x="714" y="184">commands: can · validate · tx</text>
+      <text class="t" x="36" y="226">Cloud Function api (2nd gen, on Cloud Run): four doors, one command layer</text>
+      <text class="s" x="36" y="248">ticketCreate · ticketUpdate · messagePost · boardUpdate … are written once and reached from every door</text>
+
+      <rect class="box store" x="20" y="316" width="220" height="96" rx="6"/>
+      <text class="t" x="34" y="340">Firestore</text>
+      <text class="s" x="34" y="359">boards › tickets › messages</text>
+      <text class="s" x="34" y="376">messages · users · inbox · views</text>
+      <text class="s" x="34" y="393">clients may read, not write</text>
+
+      <rect class="box store" x="256" y="316" width="150" height="96" rx="6"/>
+      <text class="t" x="270" y="340">Cloud Storage</text>
+      <text class="s" x="270" y="359">attachments, avatars</text>
+      <text class="s" x="270" y="376">direct upload + rules</text>
+
+      <rect class="box store" x="422" y="316" width="150" height="96" rx="6"/>
+      <text class="t" x="436" y="340">Realtime DB</text>
+      <text class="s" x="436" y="359">presence, typing</text>
+      <text class="s" x="436" y="376">rate-limit counters</text>
+
+      <rect class="box store" x="588" y="316" width="150" height="96" rx="6"/>
+      <text class="t" x="602" y="340">Typesense</text>
+      <text class="s" x="602" y="359">full text, # picker</text>
+      <text class="s" x="602" y="376">scoped search keys</text>
+
+      <rect class="box q" x="754" y="316" width="186" height="96" rx="6"/>
+      <text class="t" x="768" y="340">Cloud Tasks</text>
+      <text class="s" x="768" y="359">deliver · webhooks</text>
+      <text class="s" x="768" y="376">export · delete</text>
+      <text class="s" x="768" y="393">+ Scheduler: sweeps</text>
+
+      <rect class="box" x="20" y="466" width="500" height="74" rx="6"/>
+      <text class="t" x="34" y="490">Firestore triggers: derived data only</text>
+      <text class="s" x="34" y="509">onTicketWritten → Typesense, board counts</text>
+      <text class="s" x="34" y="526">onAttachmentFinalized → thumbnails</text>
+
+      <rect class="box ext" x="600" y="466" width="340" height="74" rx="6"/>
+      <text class="t" x="614" y="490">Out to the world</text>
+      <text class="s" x="614" y="509">FCM push · Resend email · Meta WhatsApp</text>
+      <text class="s" x="614" y="526">webhook receivers · Slack — every attempt logged</text>
+
+      <path class="ln" d="M112 94 V160"/>
+      <path class="ln" d="M325 94 V160"/>
+      <path class="ln" d="M515 94 L455 160"/>
+      <path class="ln" d="M780 94 L605 160"/>
+
+      <path class="rd" d="M20 60 C -20 60, -20 360, 18 360"/>
+      <text class="blue" x="-26" y="300" transform="rotate(-90 -26 300)">live reads (onSnapshot)</text>
+
+      <path class="ln" d="M130 264 V314"/>
+      <path class="ln" d="M330 264 V314"/>
+      <path class="ln" d="M496 264 V314"/>
+      <path class="ln" d="M846 264 V314"/>
+      <path class="ln" d="M846 412 V464"/>
+      <path class="ln" d="M130 412 V464"/>
+      <path class="ln" d="M470 466 L640 414"/>
+    </svg>
+    </div>
+    <p>There are three rules. Everything else on this page follows from them.</p>
+    <ol>
+      <li><strong>Reads go straight to Firestore, live.</strong> The Svelte app subscribes with <code>onSnapshot</code>
+        and security rules decide what it can see. This is how a card moves on everyone's screen as it is dragged,
+        which TeamTrack could not do: it refetched on focus and two seconds after your own edit.</li>
+      <li><strong>Writes go through one command layer.</strong> Clients never write Firestore directly. The only
+        exceptions are a person's own read pointers, devices and inbox flags. Every mutation is a function in
+        <code>functions/src/commands</code>. The Svelte app, REST, MCP and the inbound hooks all call the same
+        functions. Nearly every write has a second thing to keep in step: the key counter, the activity row, the
+        the other end of a link or reference, notifications, webhooks, the search index. That logic is written once.</li>
+      <li><strong>Side effects are queued, not awaited.</strong> A command commits its transaction and returns. It
+        then enqueues delivery and webhooks on Cloud Tasks, which retries, rate-limits and deduplicates them.
+        TeamTrack fired email from inside the request handler, so a slow mail server slowed the request and a
+        crash lost the mail.</li>
+    </ol>
+
+    <h2>The board is everything</h2>
+    <p><strong>There is nothing above a board.</strong> There is no workspace, no organisation, no app-wide role and no directory.
+    Anyone can sign up. Anyone can <a href="/app/backend#services-boardcreate">create a board</a> and becomes its admin.
+    The admin <a href="/app/backend#services-invitecreate">invites people by email</a> with a role. Once someone
+    <a href="/app/backend#services-inviteaccept">accepts</a>, they are on that board: they can be assigned tickets,
+    @mentioned and notified there, and nowhere else. A person's boards are exactly the ones they created or accepted.</p>
+    <table>
+      <tr><th>Layer</th><th>Roles</th><th>What it decides</th></tr>
+      <tr><td>Board</td><td><code>admin · editor · commenter · viewer</code></td><td>Everything. Each person has their own role on each board. An admin invites, removes and re-roles people; editors create and edit; commenters talk and move tickets within their per-person <a href="/app/db#types-stagegrant">StageGrant</a>; viewers read.</td></tr>
+      <tr><td>Token scope</td><td><a href="/platform/db#types-scope">Scope</a></td><td>Only narrows. An API token or MCP grant can never do more than the principal it acts as — the person, or (phase 2) the agent, whose own board role can() checks: <code>scopes ∩ can()</code>.</td></tr>
+    </table>
+    <p>A board holds <code>access: { [uid]: BoardRole }</code>, which is the authority the rules read, and <code>readerUids</code>, its keys,
+    because Firestore can only prove a list query with <code>array-contains</code>. So "my boards" is
+    <code>where(readerUids, array-contains, me)</code>, and every rule is one <code>get()</code> on the board.
+    <a href="/app/db#schema-members">boards/{b}/members</a> shows the same people for display: the @mention list and the assignee picker.
+    <a href="/app/db#schema-invites">Invites</a> sit at the top level, because an invitee has to see "what have I been invited to"
+    before they can read the board. <strong>Write</strong> permissions are enforced in
+    <a href="/app/backend#proxyFunctions-can">can()</a>: one lookup, <code>board.access[uid]</code>, with a unit test for every branch.</p>
+    <p>Board keys like <code>ENG</code> are <strong>claimed across the whole app, first come first served</strong>
+    (<a href="/app/db#schema-boardkeys">boardKeys</a>), the same way a username is. That is what lets <code>#ENG-42</code> and
+    <code>/t/ENG-42</code> mean one ticket without saying whose board it is.</p>
+    <div class="warn"><strong>Stored as a uid, shown as a name and an email.</strong> There are no handles or usernames.
+    Every assignee, mention, author, role and read pointer is a uid. On screen a person is their <em>display name</em> and
+    <em>email</em>, with their <em>profile picture</em>. The <code>@</code> picker matches either the name or the email, and two people named Priya are
+    told apart by the email under each name. Both are looked up from the uid, so a rename shows up everywhere at once.<br><br> TeamTrack keyed assignees, read pointers and
+    notification prefs by email address, and assigned work to teams (<code>"Team &gt; a@b.com"</code>). A change of address was a data migration,
+    and a team rename cascaded across every ticket. Here an assignee is a uid, a role belongs to a uid, and an email is only a contact detail on <code>users/{uid}</code>.</div>
+
+    <h2>The data, at a glance</h2>
+    <pre>users/{uid}                display name, email, picture, whatsapp, notify.channels
+  devices/{id}             FCM tokens
+  inbox/{id}               in-app notifications (including invitations)
+  reads/{ticketId}         unread pointer
+  apiKeys/{id}             board tokens, hashed; acting as you or as one of your agents
+agents/{ag_…}              name, picture, system prompt     ← phase 2; private to its owner
+agentInbox/{ag_…}/events   assigned, mentioned, comment …   ← phase 2; read through a token
+invites/{id}               boardId, email, role, tokenHash   ← where(email == mine)
+boardKeys/{ENG}            → boardId                        ← board keys are app-wide
+keys/{ENG-42}              → { ticketId, boardId }          ← # links, redirects
+boards/{boardId}           key, stages, priorities, tags, fields[], access{uid→role}, readerUids
+  members/{id}             kind, role, name, email, picture ← the board's people AND agents: @ and assignee picker
+  prefs/{uid}              notify mode, watching            ← one doc per person (rules can't hide a map key)
+  views/{viewId}           type, filter, sort, groupBy, columns
+  webhooks/{id}  ·  integrations/{provider}
+  tickets/{ticketId}       key, title, stageId, assigneeUids, dueAt, fields{}, links, refs, rank
+    messages/{id}          RichText, attachments, pinnedAt, reactions, via
+    activity/{id}          changes {from,to}, actor, via</pre>
+    <p>Tickets are a <strong>subcollection of their board</strong>. The board screen reads a single collection, and its rule needs a single <code>get()</code>.
+    <strong>My work</strong> uses a collection-group query, <code>where(assigneeUids, array-contains, me)</code>, and its rule
+    can be proven from the query alone. See <a href="/app/db#schema-tickets">tickets</a> for the indexes.</p>
+
+    <h2>The client</h2>
+    <table>
+      <tr><th>Concern</th><th>Choice</th></tr>
+      <tr><td>Framework</td><td>SvelteKit 2 with Svelte 5 runes and <code>adapter-static</code> as an SPA on Firebase Hosting. There is no SSR: everything is behind sign-in and the data is live.</td></tr>
+      <tr><td>State</td><td>One store per live query (<code>board(id)</code>, <code>tickets(boardId)</code>, <code>thread(ticketId)</code>), reference-counted. The listener closes when the last component using it unmounts.</td></tr>
+      <tr><td>View engine</td><td>A board loads its <em>active</em> tickets once and keeps them live. Filtering, sorting and grouping are pure functions of <code>(tickets, view, me)</code> computed in the browser, so switching views needs no request. Beyond about 5,000 active tickets a board switches to server-paged queries plus Typesense. See <a href="/plan/decisions">Decisions</a>.</td></tr>
+      <tr><td>Writes</td><td><code>command(name, input)</code> sends a POST to <code>/api/{name}</code> with the ID token. It applies an optimistic patch to the store and rolls back with a toast on refusal. Each request carries a <code>clientId</code> for idempotency.</td></tr>
+      <tr><td>Offline</td><td>Firestore's persistent IndexedDB cache makes a reload instant and the last board readable offline. Writes are never queued offline: while offline the app says so and disables editing. Queued commands conflict too easily to be worth it here.</td></tr>
+      <tr><td>Rich text</td><td>TipTap (ProseMirror) with custom <code>mention</code>, <code>ticketRef</code> and slash-command extensions. Drafts are saved per ticket in IndexedDB.</td></tr>
+      <tr><td>Drag and drop</td><td>A drop writes one document: <code>{ stageId, rank }</code> with a <a href="/app/backend#proxyFunctions-rank">fractional index</a>.</td></tr>
+      <tr><td>URL</td><td>The URL holds the state: board, view, open ticket (<code>?ticket=ENG-42</code>) and unsaved filter edits. This was the best habit in TeamTrack, and it is kept.</td></tr>
+      <tr><td>Push</td><td>An FCM service worker. Permission is requested the first time something is assigned to you, not on first load.</td></tr>
+      <tr><td>Keyboard</td><td><code>C</code> new ticket, <code>/</code> search, <code>⌘K</code> palette, <code>j/k</code> in lists, <code>e</code> archive in the inbox, <code>⌘↵</code> send</td></tr>
+    </table>
+
+    <h2>Navigation: the sidebar is the map</h2>
+    <p>Every screen is reachable from the <a href="/app/screens#components-sidebar">Sidebar</a> in at most two clicks. Nothing is hidden behind a toolbar icon.</p>
+    <pre>(picture) Panth Patel ▾    → Profile · Notifications · Channels · Security · Connected apps · Tokens · Data · Sign out
+⌘K Search                  → tickets, boards, commands
+Inbox 3                    → notifications, invitations, mentions
+My work                    → across every board: assigned · created · watching
+Invitations 1              → only while one is pending
+— Boards
+★ ENG Engineering •2 ▾     → Board · Table · Mine · + view      (the board's saved views)
+      People 6             → who is on it, roles, invites
+      Settings             → admins only
+  OPS Operations ▸
+  All boards &amp; archived
++ New board
+— You: Notifications · Personal tokens · Sign out</pre>
+    <p>A board's own toolbar keeps only what acts on the view you're looking at: view tabs, filter, group, search, your 🔔 mode, and + New.
+    A ticket opens as a drawer (<code>?ticket=ENG-42</code>) or as a page (<code>/t/ENG-42</code>) from any link, email or notification.
+    On a phone the sidebar is a drawer behind ☰.</p>
+
+    <h2>Threads, mentions and attachments</h2>
+    <p>A message body is a <a href="/app/db#types-richtext">RichText</a>: the editor's JSON document, plus three fields the
+    <em>server</em> derives from it: plain <code>text</code>, <code>mentions</code> (uids) and <code>refs</code> (ticketIds).
+    A mention is a node that carries a uid and <em>renders</em> the person's current display name, so renaming someone never breaks it. TeamTrack
+    stored <code>[@Name](mailto:…)</code> links in Markdown.</p>
+    <ul>
+      <li><strong>@</strong> searches the people on the board. A mentioned person is always notified, whatever their board preference.</li>
+      <li><strong>#</strong> searches Typesense by key and by title words, so <code>#login</code> finds ENG-42. The linked ticket gets a system line saying it was mentioned in ENG-40.</li>
+      <li><strong>Pin</strong> is available to editors and above. Pins float at the top of the thread, and pinning writes a system line, because a pin records a decision.</li>
+      <li><strong>Attachments</strong> upload straight to Storage while you type, then the message names their paths. Images get a WebP thumbnail. The limit is 50&nbsp;MB per file. An upload that is never attached is removed after 24 hours.</li>
+      <li><strong>Formatting</strong>: bold, italic, strike, code, code blocks, lists, checklists, quotes, links and headings. There is no raw HTML. Markdown from REST, MCP or email is converted into the same document on the way in; since phase 2 the Markdown source is kept too, and the thread renders it as GitHub-flavoured Markdown.</li>
+      <li><strong>Files agents write</strong> (phase 2): an agent uploads <code>plan.md</code> or <code>report.html</code> as text, then names the file in its message. Every file opens natively in the <a href="/app/screens#components-file-viewer">File viewer</a>; HTML runs in <code>sandbox="allow-scripts allow-popups allow-forms"</code>, never with <code>allow-same-origin</code>.</li>
+    </ul>
+
+    <h2>Custom fields and views</h2>
+    <p>Field <em>definitions</em> live on the board, and <em>values</em> live on each ticket under the field's id. Renaming a field
+    rewrites one definition and no tickets. Removing a field archives it and keeps the values. A stage can
+    <code>require</code> fields before a ticket may enter it. This is TeamTrack's "no Done without a Solution" rule,
+    now general and enforced on the server.</p>
+    <p>A <a href="/app/db#schema-views">view</a> is data: type, a filter tree with <code>and</code>/<code>or</code>
+    groups and tokens like <code>me</code> and <code>thisWeek</code>, sort, group-by, swimlanes, columns and date fields.
+    Views are personal or shared. TeamTrack had a <code>views</code> key that nothing read, and kept table layout in
+    each browser's localStorage.</p>
+
+    <h2>Notifications</h2>
+    <div class="warn"><strong>Each person decides, from their own profile.</strong> Account › Notifications holds a grid of
+    event × channel (in app, push, email, WhatsApp), quiet hours, the digest, and how long before a due date to be reminded.
+    Account › Channels is where you enable push on a browser and link a WhatsApp number. The only per-board choice is also yours:
+    the 🔔 on a board's bar sets <em>Everything / Mine / Muted</em>. No board and no admin can turn a channel on or off
+    for someone else. TeamTrack's owner-managed mode is gone.</div>
+    <pre>command commits
+  └─ notify(event, ticket, ctx)
+       who?     watchers ∪ assignees ∪ board   (mentions: exactly those named)
+       filter   prefs/{uid}: mode all|mine|muted, events[], stageIds[]   ← set by that person only
+                watching overrides; the actor never notifies themselves
+       write    users/{uid}/inbox  (collapsed by ticket+event)     → bell, live
+       enqueue  deliver {uid, groupKey}  named per minute         → one push for five comments
+deliver (Cloud Tasks)
+  already read in the app?          → suppressed
+  quiet hours?                      → rescheduled
+  channels = user.notify.channels[event]
+    push      FCM → every device; stale tokens deleted; tag=ticketId replaces the last push
+    email     Resend; Reply-To routes the reply back into the thread; one mail thread per ticket
+    whatsapp  opted in only; free text inside Meta's 24h window, approved template outside;
+              buttons [Mark done] [Snooze] come back through /hooks/whatsapp
+  every attempt → deliveries/{id}   ("why didn't I get it" is a row, not a log line)</pre>
+    <p>Email and WhatsApp are <strong>two-way</strong>. Replying to a notification email posts to the thread, and so
+    does replying on WhatsApp. Both are attributed <code>via email</code> / <code>via whatsapp</code>.
+    <a href="/app/backend#services-deadlinesweep">deadlineSweep</a> and <a href="/app/backend#services-digestsend">digestSend</a>
+    are the only notifications that no person's action causes.</p>
+
+    <h2>The platform: REST, webhooks, MCP</h2>
+    <ul>
+      <li><strong>REST</strong> (<code>/v1</code>): resources named by key (<code>/v1/tickets/ENG-42</code>) and fields named by name. It has an
+        <code>Idempotency-Key</code> header, problem+json errors, and cursor pagination. The OpenAPI document is generated from the
+        same zod schemas the commands validate with.</li>
+      <li><strong>Auth</strong>: tokens, stored hashed and shown once. Since phase 2 each token is for exactly one board and acts either as you or as one of your agents on that board; its changes read "Panth via token &lt;name&gt;" or "Builder (agent) via token &lt;name&gt;". Third-party apps use OAuth 2.1.</li>
+      <li><strong>Webhooks</strong>: signed with <code>HMAC(secret, t.body)</code>, retried 8 times over about 24 hours, and disabled after 20
+        consecutive failures. Every attempt is visible in settings.</li>
+      <li><strong>MCP</strong>: a stateless Streamable HTTP server at <code>/mcp</code>. Discovery, dynamic client registration
+        and PKCE follow the MCP authorization spec, so a person adds one URL and approves. The tools are read and write
+        with <em>no delete</em>. Every change shows as "<em>Panth via Claude (MCP)</em>".</li>
+      <li><strong>Intake</strong>: TeamTrack's reporting API, kept. A board can take tickets from a website widget
+        using a slug and secret with rate limits, or by email-to-board. The secret is now hashed.</li>
+      <li><strong>Integrations</strong>: GitHub (a key in a branch or PR links it and a merge can move it), Slack (a board activity channel),
+        and a calendar subscription (a read-only ICS feed of your deadlines).</li>
+    </ul>
+
+    <h2>Accounts and security</h2>
+    <table>
+      <tr><th>Area</th><th>Plan</th></tr>
+      <tr><td>Sign-in</td><td>Firebase Auth with Identity Platform: Google, Microsoft, email link, and optional password. TOTP two-factor in phase 3. Anyone can sign up. A new account sees nothing until it creates a board or accepts an invite.</td></tr>
+      <tr><td>Profile</td><td>Profile picture (Google's photo copied in at sign-up, or an upload, cropped to 256&nbsp;px), display name, time zone (for deadlines, digests and quiet hours), theme. Email is the sign-in identity; changing it goes through Firebase's verify-new-email flow.</td></tr>
+      <tr><td>Sessions</td><td>"Sign out everywhere" calls <code>revokeRefreshTokens</code>, and the API checks for revocation on every call</td></tr>
+      <tr><td>Connected apps</td><td>Lists OAuth grants and personal tokens. Each can be revoked.</td></tr>
+      <tr><td>Channels</td><td>Browser push devices, WhatsApp number (OTP-verified, explicit opt-in), email preferences</td></tr>
+      <tr><td>Data</td><td>Export (a zip, emailed). Delete: memberships end, the profile becomes "Deleted user", and messages stay because they are part of other people's conversations.</td></tr>
+      <tr><td>Hardening</td><td>App Check on <code>/api</code>. Rules tested in CI against the emulator. Webhook URLs are checked against private IP ranges (SSRF). Provider tokens are kept in Secret Manager. Rate limits apply to every public door.</td></tr>
+    </table>
+
+    <h2>Repository</h2>
+    <pre>taskmanager/
+  apps/web/                SvelteKit SPA
+    src/lib/stores/        live-query stores, command()
+    src/lib/views/         filter / sort / group engine  (pure, unit-tested)
+    src/lib/editor/        TipTap + mention, ticketRef, slash
+    src/routes/            (see App › Screens)
+  functions/
+    src/commands/          one file per command — THE business logic
+    src/doors/             app.ts · rest.ts · mcp.ts · hooks/*.ts  (thin adapters)
+    src/jobs/              deliver, webhookDispatch, deadlineSweep, digestSend, housekeeping
+    src/triggers/          onUserCreated, onTicketWritten, onAttachmentFinalized
+  packages/shared/         zod schemas, types, can(), rich-text schema, filter AST
+  firestore.rules · storage.rules · database.rules.json · firestore.indexes.json
+  tests/rules/             @firebase/rules-unit-testing
+  tests/e2e/               Playwright against the emulators
+  docs/                    this</pre>
+    <p><code>packages/shared</code> is the reason both halves agree. The same zod schema validates a command on the
+    server and types the call in the browser. The same <code>can()</code> hides a button the server would refuse,
+    and the same filter engine runs a view in the browser and a <code>search_tickets</code> call over MCP.</p>
+
+    <h2>Environments and delivery</h2>
+    <table>
+      <tr><th></th><th>dev</th><th>staging</th><th>prod</th></tr>
+      <tr><td>Firebase project</td><td>emulators (local)</td><td><code>taskmanager-stg</code></td><td><code>taskmanager-prod</code></td></tr>
+      <tr><td>Deploy</td><td>—</td><td>every merge to <code>main</code></td><td>tagged release</td></tr>
+      <tr><td>Email / WhatsApp</td><td>captured to a local inbox</td><td>test sender, sandbox WABA number</td><td>live</td></tr>
+    </table>
+    <p>CI runs typecheck, unit tests (<code>can()</code>, the view engine, the rich-text parser), rules tests, and Playwright
+    against emulators, then deploys with <code>firebase deploy --only …</code> on GitHub Actions.</p>
+
+    <h2>Where the limits are</h2>
+    <table>
+      <tr><th>Limit</th><th>Number</th><th>What happens there</th></tr>
+      <tr><td>New tickets per board</td><td>~1/s sustained (board doc counter)</td><td>Bulk import allocates a range in one write</td></tr>
+      <tr><td>Active tickets loaded per board</td><td>~5,000</td><td>Server-paged queries plus Typesense for views</td></tr>
+      <tr><td>Message thread</td><td>unbounded</td><td>Paged 50 at a time; pins are a separate query</td></tr>
+      <tr><td>Firestore document</td><td>1&nbsp;MiB</td><td>Description and message bodies are capped at 200&nbsp;KB. Big content belongs in an attachment.</td></tr>
+      <tr><td>Rules <code>get()</code></td><td>1 per board read</td><td>This is why <code>readerUids</code> is denormalised</td></tr>
+      <tr><td>WhatsApp</td><td>templates must be pre-approved; per-message cost</td><td>Off by default and opt-in per person. Only deadline and assignment events use it by default.</td></tr>
+    </table>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

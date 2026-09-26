@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>From TeamTrack · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference" class="on">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>From TeamTrack</h1>
+    <p class="lede">What an earlier in-house tracker ("TeamTrack": a Svelte admin over a Deno API) taught us, at both the big-picture and the detailed level. A lot
+    of this design is TeamTrack kept on purpose, and the rest is TeamTrack's known gaps, fixed.</p>
+
+    <h2>The big picture: concept by concept</h2>
+    <table>
+      <tr><th>TeamTrack</th><th>Here</th><th>Verdict</th></tr>
+      <tr><td>Team owns a board; viewer teams invited</td><td>Boards only; each <em>person</em> is invited to a board by email and given a role on it</td><td>Replaced: no teams</td></tr>
+      <tr><td>Team id = team name, rename cascades</td><td>No teams, so nothing to rename</td><td>Dropped</td></tr>
+      <tr><td>People are emails; <code>"Team &gt; email"</code> assignee strings</td><td>Uids; <code>assigneeUids</code>, people assigned directly</td><td>Fixed</td></tr>
+      <tr><td>admin / editor / viewer from team membership + per-team {create, edit, status, delete}</td><td>admin / editor / commenter / viewer, per person</td><td>Simplified</td></tr>
+      <tr><td><code>move_permissions</code> per team, <code>assigned_only</code></td><td><a href="/app/db#types-stagegrant">StageGrant</a> per person</td><td>Kept, per person</td></tr>
+      <tr><td><code>TICKET_PREFIX</code> + <code>NEXT_NO</code></td><td><code>key</code> + <code>nextNumber</code>, plus a <code>keys/</code> index</td><td>Kept, and made redirectable</td></tr>
+      <tr><td>STATUS active / archived / cancelled, restore is admin-only</td><td><a href="/app/db#types-ticketstate">TicketState</a></td><td>Kept as is</td></tr>
+      <tr><td>Stages matched by name ("done", "closed")</td><td><a href="/app/db#types-stagecategory">StageCategory</a> on every stage</td><td>Fixed</td></tr>
+      <tr><td>Folders (<code>categories</code>)</td><td>A select field plus group-by, or tabs in a view</td><td>Generalised</td></tr>
+      <tr><td>Device ID, Org, Module, Issue Logger (hard-coded)</td><td>Custom fields, templates, stage <code>requires</code></td><td>Generalised</td></tr>
+      <tr><td>Pickup dates per person</td><td><code>commitments</code></td><td>Kept</td></tr>
+      <tr><td>Description as the first pinned message</td><td>A real <code>description</code> field; pins stay for decisions</td><td>Changed</td></tr>
+      <tr><td>Conversations in Markdown; <code>conv_log</code> and <code>read_state</code> on the ticket</td><td>RichText; <code>lastMessageAt</code> plus <code>users/{uid}/reads</code></td><td>Fixed: reading no longer writes the ticket</td></tr>
+      <tr><td>Activity log, best-effort after the change</td><td>Written in the same transaction</td><td>Fixed</td></tr>
+      <tr><td>NOTIFY_PREF: mode, teams, subscribed, events, stage_ids; owner-managed option</td><td><a href="/app/db#schema-prefs">prefs</a>, set only by the person themselves; the 'My teams' mode and owner-managed prefs are gone. Channels live in each person's profile.</td><td>Kept, and made personal</td></tr>
+      <tr><td>In-app notifications over SSE; email opt-in per board; fire-and-forget</td><td>Firestore inbox (live) + a queue for push, email and WhatsApp</td><td>Extended</td></tr>
+      <tr><td>Email threading with a phantom root Message-ID</td><td>The same trick, plus Reply-To back into the thread</td><td>Kept, and made two-way</td></tr>
+      <tr><td>Reporting API (slug + secret + rate limits)</td><td><a href="/platform/db#schema-intakes">intakes</a></td><td>Kept; secret hashed</td></tr>
+      <tr><td>Bulk actions; transfer with a mapping</td><td><a href="/app/backend#services-ticketbulk">ticketBulk</a>. <b>Transfer is dropped</b> — a ticket belongs to the board it was created on; link or reference one instead.</td><td>Partly dropped</td></tr>
+      <tr><td>Board / Table / Timeline, filters in the URL</td><td>Six view types, saved views, filters still in the URL until saved</td><td>Extended</td></tr>
+    </table>
+
+    <h2>The detail: behaviours worth copying</h2>
+    <ul>
+      <li><strong>The URL is the state.</strong> <code>?ticket=</code>, the view, and every filter. Anything you can see, you can link to.</li>
+      <li><strong>Server-side authorisation on every call</strong>: load the board, resolve the role, assert a minimum. Role maths lives in a pure, unit-tested module (<code>_tt-role.ts</code> → <code>can()</code>).</li>
+      <li><strong>A mention always notifies</strong>, whatever the person's mode, and never twice (it is removed from the comment recipients).</li>
+      <li><strong>Never notify the actor.</strong></li>
+      <li><strong>Removing a stage in use asks where its tickets go.</strong> Here that becomes the server's <code>remap</code>, returning 409 without one.</li>
+      <li><strong>Tags created on the fly; the same name counts as the same tag.</strong></li>
+      <li><strong>A limited mover's bulk action skips what they cannot move</strong> and reports it, instead of failing the whole batch.</li>
+      <li><strong>Secrets are never sent to non-admins</strong>, and a general settings save cannot overwrite them. Here the secret is not stored in readable form at all.</li>
+      <li><strong>A "Saving…" toast only after 250&nbsp;ms</strong>, counted across in-flight writes.</li>
+      <li><strong>Real names cached in IndexedDB</strong>. This becomes unnecessary here, because members are denormalised and live.</li>
+      <li>Floating, minimisable chat windows (Gmail-style) for keeping several threads open. This is worth keeping in phase 3.</li>
+    </ul>
+
+    <h2>The detail: gaps this design closes</h2>
+    <table>
+      <tr><th>Gap in TeamTrack</th><th>Closed by</th></tr>
+      <tr><td>Tickets and comments are not live; refetch on focus and 2&nbsp;s after your own edit</td><td>Firestore listeners on the board and the thread</td></tr>
+      <tr><td>The timeline is fake: every bar is 5 days ending on the due date</td><td><code>startAt</code> → <code>dueAt</code>, draggable, with dependency arrows</td></tr>
+      <tr><td>No manual ordering within a column</td><td>A fractional <code>rank</code></td></tr>
+      <tr><td>No saved views; table layout in localStorage</td><td><a href="/app/db#schema-views">views</a></td></tr>
+      <tr><td>Group by folder only</td><td>Group by any field, plus swimlanes</td></tr>
+      <tr><td>Only the first page of comments and activity loads</td><td>Paged listeners</td></tr>
+      <tr><td>No edit, delete, reactions or quote-reply on messages</td><td><a href="/app/backend#services-messageedit">messageEdit</a>, <a href="/app/backend#services-messagereact">messageReact</a>, <code>replyTo</code></td></tr>
+      <tr><td>No way to relate tickets beyond a <code>#</code> link in Markdown</td><td>Links on both tickets, and <code>referencedBy</code> backlinks. Subtasks are left out on purpose.</td></tr>
+      <tr><td>No custom fields</td><td><a href="/app/db#types-fielddef">FieldDef</a></td></tr>
+      <tr><td>The issue-logger "close" rule is enforced only in the browser</td><td>Stage <code>requires</code>, enforced in the command</td></tr>
+      <tr><td>Board settings PATCH replaces the whole object, so concurrent saves are lost</td><td>Per-section patches</td></tr>
+      <tr><td>Attachments as base64 JSON through the API; 413s</td><td>Direct upload to Storage with progress</td></tr>
+      <tr><td>Overview notes, clocks and calendar are stored per browser</td><td>Dropped. My Work and the ICS feed replace what they were for.</td></tr>
+      <tr><td>Only in-app and email notifications</td><td>Push, WhatsApp, digests, quiet hours, a delivery log</td></tr>
+      <tr><td>No API except the reporting endpoint; no MCP</td><td>REST, webhooks, OAuth, MCP</td></tr>
+      <tr><td>Phone layout is table-only</td><td>Responsive list and board views; a PWA with push</td></tr>
+    </table>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

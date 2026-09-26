@@ -1,0 +1,15 @@
+packages:
+  - shared
+  - backend
+  - frontend
+  - qaqc
+  - sdk
+
+# Native builds some deps need (sharp for image thumbnails, esbuild for vite,
+# protobufjs for firebase-admin / @google-cloud/tasks).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - protobufjs
+  - '@firebase/util'
+  - re2

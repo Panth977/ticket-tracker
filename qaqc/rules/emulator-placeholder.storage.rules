@@ -1,0 +1,4 @@
+rules_version = '2';
+// Placeholder so the Storage emulator starts under firebase.rules.json.
+// Every test loads the real backend/storage.rules through the emulator API.
+service firebase.storage { match /b/{bucket}/o { match /{all=**} { allow read, write: if false; } } }

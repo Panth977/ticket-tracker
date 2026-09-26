@@ -1,0 +1,121 @@
+rules_version = '2';
+
+// TaskManager — Cloud Storage security rules.
+//
+// Source of truth: app/db.json `attachments` (and its avatar / export notes).
+//
+// UPLOAD DIRECT, ATTACH THROUGH A COMMAND. The browser uploads an attachment
+// straight to Storage (with progress); messagePost / ticketCreate /
+// ticketUpdate then names the path and the command checks the object exists
+// and sits under that ticket's prefix. An upload nobody attached is swept
+// after 24h. Objects are never overwritten or deleted by a client.
+//
+// Board roles are read from Firestore with firestore.get() — the same
+// boards/{boardId}.access map the Firestore rules use.
+//
+// READS DO NOT COME THROUGH HERE ANY MORE (phase 11). The app asks the API for
+// a file — GET /api/files/url, which checks can(read) on the board and answers
+// a short-lived signed URL (or streams the bytes back itself) — because the
+// cross-service firestore.get() below CANNOT BE RELIED ON: when that lookup
+// fails the rule does not evaluate to false, it ERRORS, and an error is a 403.
+// Reproduced against the emulators: an attachment whose board document the
+// lookup could not resolve gave "Null value error" at the boardDoc() line →
+// storage/unauthorized, while an avatar (rule: plain signedIn(), no
+// firestore.get) loaded in the same session — exactly the shape of the
+// production failure on agent-uploaded files.
+//
+// The read rule stays as it is on purpose: it is now DEFENCE IN DEPTH only,
+// and its failure mode is to deny, which is safe. Loosening it to signedIn()
+// (the avatar rule, which demonstrably works) would hand every signed-in
+// account any attachment whose exact object path it learned, and buy nothing —
+// no client reads Storage directly any more. Write rules are untouched: the
+// browser still uploads straight to Storage, and `create` is what guards that.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // PHASE 16 (§X) — THE ALLOW LIST. This tracker is private: an account that
+    // is not on the list may write nothing, here included. The list lives in
+    // `_config/allow` (server-owned); every person carries the answer on their
+    // own profile as `users/{uid}.allowed`, which is what this reads —
+    // firestore.rules explains why ABSENT reads as allowed and only an
+    // explicit `false` refuses.
+    //
+    // This is a CROSS-SERVICE lookup, whose failure mode is an error and so a
+    // 403 (see the note at the top of this file). It therefore guards WRITES
+    // only — the paths where refusing wrongly costs an upload, never a read —
+    // and asks exists() first, so a profile that is not there yet is not a
+    // refusal. Attachment uploads need a board ROLE, which an account that is
+    // not allowed can never be given, so they are covered already.
+    function notRefused(uid) {
+      return !firestore.exists(/databases/(default)/documents/users/$(uid))
+        || firestore.get(/databases/(default)/documents/users/$(uid)).data.get('allowed', true) != false;
+    }
+
+    function boardDoc(boardId) {
+      return firestore.get(/databases/(default)/documents/boards/$(boardId)).data;
+    }
+
+    function canReadBoard(boardId) {
+      return signedIn() && request.auth.uid in boardDoc(boardId).readerUids;
+    }
+
+    // Anyone who may put words on the board may attach a file to them:
+    // admin and editor (descriptions, new tickets) and commenter (a comment
+    // with a file — messagePost needs only can(comment)). Viewers read only.
+    function canWriteBoard(boardId) {
+      return signedIn()
+        && boardDoc(boardId).access.get(request.auth.uid, null) in ['admin', 'editor', 'commenter'];
+    }
+
+    // boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName}
+    // (and the thumb_400.webp that onAttachmentFinalized writes beside it).
+    match /boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName} {
+      allow read: if canReadBoard(boardId);
+      // `resource == null`: an attachment is written once. (The emulator
+      // routes an overwrite through `create`, so say it explicitly.)
+      allow create: if resource == null
+        && canWriteBoard(boardId)
+        && request.resource.size < 50 * 1024 * 1024
+        // Thumbnails are written by the server only; a client-supplied one
+        // would be shown in place of the real image.
+        && fileName != 'thumb_400.webp';
+      allow update, delete: if false;
+    }
+
+    // Profile picture: users/{uid}/avatar/{millis}.webp, 256px.
+    match /users/{uid}/avatar/{file} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && notRefused(uid)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // An agent's picture (agents.html §B): users/{ownerUid}/agents/{agentId}/avatar/{millis}.webp.
+    // Only the owner uploads under their own prefix — before or after the
+    // profile exists (agentCreate takes a client-chosen agentId for this);
+    // agentUpdate checks the path belongs to that agent. Shown on boards, so
+    // any signed-in person may read it, like a person's avatar.
+    match /users/{uid}/agents/{agentId}/avatar/{file} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && notRefused(uid)
+        && agentId.matches('ag_[A-Za-z0-9]{16}')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // exports/{uid}/{jobId}.zip — written by accountExport, handed out as a
+    // 7-day signed URL (which bypasses rules). No client access.
+    match /exports/{uid}/{file} {
+      allow read, write: if false;
+    }
+  }
+}

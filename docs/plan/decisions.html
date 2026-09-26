@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Decisions · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions" class="on">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Decisions</h1>
+    <p class="lede">These are the choices that are expensive to reverse. Each one lists the alternative that was
+    turned down and why. If you disagree with one, leave a note on the card it touches (App or Platform tab, Comment in the bottom right) so it gets
+    argued before it gets built.</p>
+
+    <h2>D1 · Writes through commands, not client writes</h2>
+    <table>
+      <tr><th>Chosen</th><td>Clients read Firestore directly. Every write is a POST to <code>/api/{command}</code>, and rules deny writes except for a person's own pointers.</td></tr>
+      <tr><th>Rejected</th><td>Clients write Firestore under rules, and triggers do the side effects.</td></tr>
+      <tr><th>Why</th><td>Nearly every write has a second document to keep in step: the key counter, activity, the other end of a link, notifications, webhooks. Rules cannot express "a commenter may change <code>stageId</code> only between the stages in their grant, and only on tickets assigned to them" in a way that can be maintained. REST and MCP need the same logic anyway. With client writes, every rule would exist twice, once in <code>firestore.rules</code> and once in the API, and the two would drift.</td></tr>
+      <tr><th>Cost</th><td>A write takes about 150–400&nbsp;ms instead of about 50&nbsp;ms. Optimistic updates hide this. Cold starts are covered by <code>minInstances: 1</code> on <code>api</code> in production.</td></tr>
+    </table>
+
+    <h2>D2 · One function, four doors</h2>
+    <table>
+      <tr><th>Chosen</th><td>One 2nd-gen HTTPS function <code>api</code> (Hono router) that serves <code>/api</code>, <code>/v1</code>, <code>/mcp</code>, <code>/oauth</code> and <code>/hooks</code>.</td></tr>
+      <tr><th>Rejected</th><td>One Cloud Function per endpoint, or a separate Cloud Run service for MCP.</td></tr>
+      <tr><th>Why</th><td>Sixty functions means sixty cold starts, sixty deploy units and sixty minimum-instance bills. One service with concurrency 80 stays warm on the traffic from the app alone, so REST and MCP calls ride on warm instances. It can still be split later along the door boundaries, which are already separate files.</td></tr>
+    </table>
+
+    <h2>D3 · Tickets as a subcollection of their board</h2>
+    <table>
+      <tr><th>Chosen</th><td><code>boards/{b}/tickets/{t}</code>, plus a collection-group query for My Work</td></tr>
+      <tr><th>Rejected</th><td>Top-level <code>tickets</code> with a <code>boardId</code> field.</td></tr>
+      <tr><th>Why</th><td>A top-level collection needs a rule that <code>get()</code>s the ticket's board, and a list query cannot prove that per document. The query would have to filter on <code>boardId</code> anyway. With a subcollection, the board is in the path, so the rule is one <code>get()</code>. For the collection group, the rule <code>auth.uid in resource.data.assigneeUids</code> follows from the query itself.</td></tr>
+      <tr><th>Cost</th><td>A ticket cannot move between boards — there is no transfer feature (dropped by decision D13). Relate tickets across boards with a link or a <code>#reference</code> instead.</td></tr>
+    </table>
+
+    <h2>D4 · The ticket id is not the ticket key</h2>
+    <table>
+      <tr><th>Chosen</th><td>A generated immutable <code>ticketId</code>, a <code>key</code> field, and a <a href="/app/db#schema-keys">keys</a> index that keeps old keys as redirects</td></tr>
+      <tr><th>Rejected</th><td>The key as the document id, which is what TeamTrack does with <code>TICKET_ID</code>.</td></tr>
+      <tr><th>Why</th><td>Keys change when a ticket moves. Links in emails, WhatsApp messages, GitHub PRs and other tickets' <code>#refs</code> must keep working after that.</td></tr>
+    </table>
+
+    <h2>D5 · Load the board, compute the view in the browser</h2>
+    <table>
+      <tr><th>Chosen</th><td>One live query per board over its <em>active</em> tickets. Filter, sort, group-by and swimlanes are pure functions in <code>packages/shared</code>.</td></tr>
+      <tr><th>Rejected</th><td>One Firestore query per view.</td></tr>
+      <tr><th>Why</th><td>Firestore cannot OR across fields, cannot filter on range and inequality over two fields, and needs a composite index for every combination. User-defined views with custom fields would need thousands of indexes. In the browser, switching views is instant and costs no reads.</td></tr>
+      <tr><th>Ceiling</th><td>About 5,000 active tickets per board, or about 5&nbsp;MB. Past that, a board is flagged <code>large</code> and views run through Typesense (filterable on every field) with paging. Archived tickets are never loaded by default.</td></tr>
+    </table>
+
+    <h2>D6 · Rich text is ProseMirror JSON, not Markdown or HTML</h2>
+    <table>
+      <tr><th>Chosen</th><td>The TipTap document is stored as-is. The server derives <code>text</code>, <code>mentions</code> and <code>refs</code> and validates it against the schema.</td></tr>
+      <tr><th>Rejected</th><td>Markdown, which TeamTrack used, or sanitised HTML.</td></tr>
+      <tr><th>Why</th><td>Mentions and ticket references become typed nodes with ids, so renames do not break them. There is no parser disagreement between the editor and the renderer, and no HTML to sanitise. Markdown remains the <em>exchange</em> format at the edges (REST, MCP, email) and is converted on the way in and out.</td></tr>
+    </table>
+
+    <h2>D7 · Notifications: inbox now, channels queued</h2>
+    <table>
+      <tr><th>Chosen</th><td>The inbox row is written after commit. Channel delivery goes through Cloud Tasks with a per-minute dedupe key, and each attempt is logged in <code>deliveries</code>.</td></tr>
+      <tr><th>Rejected</th><td>Sending from the handler, as TeamTrack did, or a Firestore <code>outbox</code> collection with a trigger.</td></tr>
+      <tr><th>Why</th><td>Cloud Tasks gives retries, rate limits per provider, delayed delivery (for quiet hours) and deduplication by task name. These are the four things an outbox trigger would have to reimplement. The one-minute window is what turns five comments into one push.</td></tr>
+    </table>
+
+    <h2>D8 · Search is Typesense</h2>
+    <table>
+      <tr><th>Chosen</th><td>Typesense (Cloud to start; self-hosted on a small VM if cost matters), synced by <code>onTicketWritten</code>, queried from the browser with per-user scoped keys</td></tr>
+      <tr><th>Alternatives</th><td>Algolia, which is the same shape but costs more per record. Firestore <code>keywords[]</code> arrays can do prefix search on title words only. Vertex AI Search is too heavy.</td></tr>
+      <tr><th>Why</th><td>The <code>#</code> picker and ⌘K need prefix search on any word and infix search on keys (<code>42</code> should find ENG-42). A scoped key embeds a <code>boardId:[…]</code> filter, so the browser can never see results from boards it cannot read.</td></tr>
+    </table>
+
+    <h2>D9 · MCP on OAuth, not API keys</h2>
+    <table>
+      <tr><th>Chosen</th><td>OAuth 2.1 with PKCE, dynamic client registration, and protected-resource metadata, as the MCP authorization spec expects</td></tr>
+      <tr><th>Rejected</th><td>Pasting an API key into the MCP client.</td></tr>
+      <tr><th>Why</th><td>This is the only way a person adds the server with one URL and a consent click, in Claude and other clients. The grant is per person, can be revoked in Account › Connected apps, and every change it makes is attributed <code>via MCP</code>. API keys still work for MCP in headless setups.</td></tr>
+    </table>
+
+    <h2>D10 · Roles belong to people, not teams</h2>
+    <table>
+      <tr><th>Chosen</th><td><code>admin · editor · commenter · viewer</code>, granted to each person on each board, plus a per-person <a href="/app/db#types-stagegrant">StageGrant</a>. Tickets are assigned to people. Invites are to people.</td></tr>
+      <tr><th>Rejected</th><td>TeamTrack's model: a team owns a board, other teams are invited, roles come from team membership, and per-team <code>{create, edit, status, delete}</code> flags adjust them. Assignment was to a team or to <code>"Team &gt; email"</code>.</td></tr>
+      <tr><th>Why</th><td>Teams were an indirection between a person and what they may do. Changing one person meant changing a team, and the privilege flags existed to undo that. With one role per person per board there is nothing to union, <code>can()</code> is a single lookup, a rename cascades nowhere, and "who can see this board" is a list you can read. If groups are ever needed, they can come back later as a way to <em>add many people at once</em>, never as a holder of roles.</td></tr>
+    </table>
+
+    <h2>D11 · Presence and typing in the Realtime Database</h2>
+    <table>
+      <tr><th>Chosen</th><td>RTDB <code>presence/</code> and <code>typing/</code> with <code>onDisconnect()</code></td></tr>
+      <tr><th>Why</th><td>Firestore has no disconnect hook. A 30-second heartbeat per open tab written to Firestore would be most of the bill.</td></tr>
+    </table>
+
+    <h2>D11a · The board is everything: no workspace, no organisation</h2>
+    <table>
+      <tr><th>Chosen</th><td>Open sign-up. Anyone creates boards and invites people to a board by email with a role. There are no app-level roles, no directory and no settings document. Board keys are claimed app-wide.</td></tr>
+      <tr><th>Rejected</th><td>Multi-tenant workspaces (<code>workspaces/{ws}/…</code>), and a single organisation with an owner and app roles (<code>config/org</code>, <code>members/{uid}</code>).</td></tr>
+      <tr><th>Why</th><td>This is a personal tool. The unit people share is a board, so that is the only boundary. A workspace adds a path prefix and a tenant check to every rule. An organisation layer adds a second role nobody needs. With neither, there is one role per person per board, and <code>can()</code> is one lookup.</td></tr>
+      <tr><th>Cost</th><td>There is no company-wide directory: <code>@</code> only finds people on the same board, which is also a privacy property. Board keys can collide between strangers, so the second person to want <code>ENG</code> has to pick another key.</td></tr>
+    </table>
+
+    <h2>D14 · Cancel deletes; there is no "cancelled" state</h2>
+    <table>
+      <tr><th>Chosen</th><td>A ticket is <b>active</b> or <b>archived</b>. The ⋯ menu offers Archive (reversible, out of the way) and Delete (permanent, one confirmation, no reason). The per-board "allow permanent delete" setting stays, so a board can offer Archive only.</td></tr>
+      <tr><th>Rejected</th><td>The reference tracker's third state, <code>cancelled</code> — read-only, hidden by default, with an optional reason recorded in the activity and the notification.</td></tr>
+      <tr><th>Why</th><td>Asked for directly, and correct: archive already means "keep it, out of the way". A second read-only state meant the same thing with a different word, and the reason it recorded was written onto a ticket nobody was going to open. Keep it, park it, or it is gone.</td></tr>
+      <tr><th>Note</th><td>A board may still have a <em>stage</em> in the cancelled category (a "Won't do" column). That is where the work stands on the board, which is a different question from whether the ticket exists.</td></tr>
+    </table>
+
+    <h2>D13 · No moving a ticket between boards</h2>
+    <table>
+      <tr><th>Chosen</th><td>A ticket lives on the board it was created on. To connect work on another board, link the tickets or <code>#reference</code> them.</td></tr>
+      <tr><th>Rejected</th><td>Transfer (copy the ticket, its thread, activity and files to another board, re-key it and redirect the old key), which the reference tracker had and phase 1 built.</td></tr>
+      <tr><th>Why</th><td>Asked for directly: it is machinery — option mapping per field, dropped assignees, a queued copy job, key redirects — for something that happens rarely in a personal tool, and it is the most dangerous write in the system.</td></tr>
+      <tr><th>Cost</th><td>A ticket filed on the wrong board has to be closed and filed again; the new one can reference the old.</td></tr>
+    </table>
+
+    <h2>D12 · Email: Resend. WhatsApp: Meta Cloud API directly.</h2>
+    <table>
+      <tr><th>Chosen</th><td>Resend for outbound mail and inbound parse. Meta's WhatsApp Cloud API, without a BSP.</td></tr>
+      <tr><th>Alternatives</th><td>SendGrid or SES (both are fine; the provider sits behind a <code>sendEmail()</code> port). Twilio or Gupshup for WhatsApp, which add a markup and a second dashboard.</td></tr>
+      <tr><th>Watch out</th><td>WhatsApp templates must be approved before launch, need a verified business, and every message outside the 24-hour window is billed. That is why WhatsApp is strictly opt-in and limited to deadline and assignment events by default.</td></tr>
+    </table>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

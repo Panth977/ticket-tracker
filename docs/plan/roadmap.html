@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Roadmap · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap" class="on">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Roadmap</h1>
+    <p class="lede">The build is ordered so that each phase ships something usable and the next phase only adds to it.
+    Sizes assume two full-stack developers. They show relative size and are not promises.</p>
+
+    <h2>Phase 0 · Foundations <span class="lost">— ~2 weeks</span></h2>
+    <ul>
+      <li>Monorepo (<code>apps/web</code>, <code>functions</code>, <code>packages/shared</code>), pnpm, TypeScript strict, ESLint and Prettier</li>
+      <li>Firebase projects for dev (emulators), staging and prod. CI with typecheck, unit tests, rules tests, and deploy on merge.</li>
+      <li>The <code>api</code> function skeleton: Hono, the <code>user</code> middleware, <code>command()</code> with zod, idempotency by <code>clientId</code></li>
+      <li>SvelteKit shell: sign-in (Google and email link), <a href="/app/screens#components-shell">Shell</a>, and the live-query store pattern</li>
+      <li><a href="/app/backend#proxyFunctions-can">can()</a> with its test table, and the rules test harness</li>
+    </ul>
+    <p class="warn"><strong>Exit:</strong> a signed-in person sees an empty sidebar on staging. A rules test fails the build when it should.</p>
+
+    <h2>Phase 1 · A tracker you can use <span class="lost">— ~5 weeks</span></h2>
+    <ul>
+      <li>Open sign-up, the Welcome screen (profile picture, display name, time zone); boards with app-wide keys; invites to a board by email with a role (sent through Resend), accept and decline, People &amp; roles</li>
+      <li>Boards: create from a template, key, stages with categories, priorities, tags, a role per person on each board</li>
+      <li>Tickets: create with a key from <a href="/app/backend#proxyFunctions-allocatekey">allocateKey</a>, update, drag with a rank, archive, cancel and restore, delete behind an opt-in</li>
+      <li>Views: kanban and table only, with a fixed filter bar (not saved yet)</li>
+      <li>Ticket drawer: fields, description (TipTap), activity</li>
+      <li>Backups before real data: a daily scheduled Firestore export to a bucket, kept 30 days, plus one rehearsed restore</li>
+      <li>The sidebar as the whole navigation (boards with their views, People, Settings; the Account menu)</li>
+      <li>My Work, due dates, Quick add</li>
+    </ul>
+    <p class="warn"><strong>Exit:</strong> the team moves off TeamTrack for one real board, and two people dragging cards see each other live.</p>
+
+    <h2>Phase 2 · Conversation and notifications <span class="lost">— ~4 weeks</span></h2>
+    <ul>
+      <li>The thread: messages, <code>@</code> mentions, <code>#</code> refs (Typesense goes live here), attachments with thumbnails, pins, quote-reply, reactions, edit and delete, unread counts, "seen by"</li>
+      <li><a href="/app/backend#proxyFunctions-notify">notify</a>: inbox and bell, board preferences (TeamTrack's four modes plus events and stages), watch</li>
+      <li><a href="/platform/backend#services-deliver">deliver</a>: FCM web push and email, reply-by-email into the thread, digest, quiet hours</li>
+      <li><a href="/app/backend#services-deadlinesweep">deadlineSweep</a> (due soon and overdue), commitments</li>
+      <li>Presence and typing</li>
+    </ul>
+    <p class="warn"><strong>Exit:</strong> a mention reaches a phone as a push within 5 seconds, and replying to the email lands in the thread.</p>
+
+    <h2>Phase 3 · Make it yours <span class="lost">— ~4 weeks</span></h2>
+    <ul>
+      <li>Custom fields: all types except formula, with required fields and stage <code>requires</code></li>
+      <li>Saved views, personal and shared: the filter builder, group by any field, swimlanes, column layout</li>
+      <li>Calendar and a real timeline with start and due dates, dragging, and <code>blocks</code> arrows; ticket links</li>
+      <li>Links (blocks / relates / duplicates) and "Referenced by", with the ⛔ blocked badge and timeline arrows; bulk actions</li>
+      <li>⌘K palette, keyboard map; board templates Blank, Kanban and Bug tracker, and copying an existing board for anything else</li>
+      <li>Account: 2FA, sessions, export, delete</li>
+    </ul>
+
+    <h2>Phase 4 · The platform <span class="lost">— ~4 weeks</span></h2>
+    <ul>
+      <li>REST <code>/v1</code> with OpenAPI, API keys and bot members, rate limits</li>
+      <li>Webhooks with signing, retries and a delivery log</li>
+      <li>OAuth 2.1 server with dynamic registration and a consent screen</li>
+      <li><a href="/platform/backend#services-mcp">MCP server</a>: the tools, resources and prompts, tested in Claude and at least one other client</li>
+      <li>Intake: the website widget (porting <code>tt.ts</code>) and email-to-board</li>
+    </ul>
+    <p class="warn"><strong>Exit:</strong> "Claude, what's overdue on ENG, and split ENG-42 into three linked tickets" works end to end, and the thread shows it came through MCP.</p>
+
+    <h2>Phase 5 · Channels and integrations <span class="lost">— ~3 weeks, plus Meta approval lead time</span></h2>
+    <ul>
+      <li>WhatsApp: number linking by OTP, templates submitted <em>at the start of phase 3</em> (approval takes days to weeks), buttons, inbound replies</li>
+      <li>GitHub app: keys in branches and PRs, move on merge</li>
+      <li>Slack: board activity to a channel, link unfurls</li>
+      <li>ICS calendar feed</li>
+    </ul>
+
+    <h2>Phase 6 · Hardening and scale <span class="lost">— ongoing</span></h2>
+    <ul>
+      <li>App Check, abuse limits, audit export, malware scanning of attachments</li>
+      <li>Large-board mode (views through Typesense), load test of 50 people on one board</li>
+      <li>Formula fields, automations ("when moved to QA, assign @qa"), recurring tickets</li>
+      <li>Phone: the sidebar as a ☰ drawer, one-column board and table, a full-screen ticket drawer, shipped as a PWA. A native app only if iOS push forces it.</li>
+    </ul>
+
+    <h2>Migrating from TeamTrack</h2>
+    <p>A one-off script in <code>tools/migrate-teamtrack</code>, run against Postgres:</p>
+    <table>
+      <tr><th>TeamTrack</th><th>→</th><th>Here</th></tr>
+      <tr><td><code>TT_TEAMS</code> (id = name, emails)</td><td class="arrow">→</td><td>not migrated as teams. Every email becomes a board invite, one per board they were on, and its uid is resolved when that person first signs in.</td></tr>
+      <tr><td><code>TT_BOARDS</code> owning + viewer teams</td><td class="arrow">→</td><td>expanded to people: owning-team owners → admin, its members → editor, viewer-team members → commenter (or editor where the team had <code>edit</code>), each with their team's <code>move_permissions</code> copied as a personal StageGrant</td></tr>
+      <tr><td><code>TICKET_ID</code> <code>CLNT-12</code></td><td class="arrow">→</td><td>the same key, and <code>nextNumber</code> carried over, so every old reference still resolves</td></tr>
+      <tr><td><code>SETTINGS.categories</code> (folders)</td><td class="arrow">→</td><td>a <code>select</code> field named Folder, plus a shared view grouped by it</td></tr>
+      <tr><td>Device ID, Org, Module, Device stage, issue types</td><td class="arrow">→</td><td>custom fields on those boards; issue type and sub-issue become two select fields</td></tr>
+      <tr><td>conversations (Markdown)</td><td class="arrow">→</td><td>messages converted to ProseMirror; <code>[@Name](mailto:)</code> resolved to mention nodes; the pinned description becomes <code>ticket.description</code></td></tr>
+      <tr><td><code>ASSIGNED_TEAM_IDS</code></td><td class="arrow">→</td><td><code>"Team &gt; email"</code> becomes that person. A whole-team assignment becomes every member of the team at migration time.</td></tr>
+      <tr><td>attachments (URLs)</td><td class="arrow">→</td><td>copied into Storage under the ticket</td></tr>
+      <tr><td><code>NOTIFY_PREFS</code></td><td class="arrow">→</td><td>prefs/{uid} one-to-one; <code>subscribed</code> becomes <code>watching</code></td></tr>
+      <tr><td>reporting (slug, secret)</td><td class="arrow">→</td><td>intakes/{slug}, secret re-hashed, so existing widgets keep working</td></tr>
+    </table>
+
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>
