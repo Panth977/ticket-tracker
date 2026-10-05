@@ -7,7 +7,7 @@
 version:           1.6.0
 api:               v1
 updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    05ad8677cb104b6a9392f755b5d567b8c8271137308b11e43fa9e34a06f4496e
+content-sha256:    48531fb4afd82ad138ca9b1d5ddbebff3f3ccf7707301b2ddd429ee8a48fcf3a
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -3659,6 +3659,17 @@ declare function createClientBase(options: ClientOptions): {
      */
     board: (o?: RequestOptions) => Promise<Board>;
     /**
+     * aggregates.html: one aggregate field's totals per period bucket (daily /
+     * weekly / monthly as the field says), oldest first. `field` is an id or a
+     * label (default: the board's first active field); `from` / `to` are
+     * bucket keys ('2026-10-01', '2026-W38', '2026-09'), inclusive.
+     */
+    aggregates: (q?: {
+        field?: string;
+        from?: string;
+        to?: string;
+    }, o?: RequestOptions) => Promise<AggBuckets>;
+    /**
      * Every board this credential may act on — exactly one for a board token,
      * and for an ACCOUNT token every board you are on RIGHT NOW (§R2), read
      * at this call rather than remembered.
@@ -4001,9 +4012,9 @@ export interface McpToolsOptions {
 }
 ```
 
-Exported values: `codeForStatus`, `TmError`, `isTmError`, `retryAfterMs`, `errorFromResponse`, `DEFAULT_BASE_URL`, `normalizeBaseUrl`, `randomId`, `queryString`, `backoffMs`, `Http`, `readSse`, `parseFrame`, `crc32`, `fromBase64`, `isZip`, `zipPath`, `zipFiles`, `readDirectory`, `realPathOrNull`, `DEFAULT_MIN_POLL_MS`, `DEFAULT_MAX_POLL_MS`, `DEFAULT_BACKSTOP_MS`, `livePaths`, `pathsFor`, `revisionOf`, `createWatcher`, `serverTime`, `encodeDataValue`, `decodeDataValue`, `ARTIFACT_DATA_LIMITS`, `ARTIFACT_RESERVED_COLLECTIONS`, `dataPath`, `formatDataWhere`, `dataListQuery`, `createArtifactData`, `VERSION`, `ARTIFACT_LIMITS`, `ARTIFACT_SOURCE_SKIP_DIRS`, `ARTIFACT_SOURCE_MAX_FILE_BYTES`, `toBase64`, `runBody`, `AskHandle`, `HEARTBEAT_INTERVAL_MS`, `createClient`, `workLoop`, `MCP_TOOL_DEFS`, `MCP_TOOL_NAMES`, `toolAllowed`, `mcpTools`, `toCallResult`, `registerTools`.
+Exported values: `codeForStatus`, `TmError`, `isTmError`, `retryAfterMs`, `errorFromResponse`, `DEFAULT_BASE_URL`, `normalizeBaseUrl`, `randomId`, `queryString`, `backoffMs`, `Http`, `readSse`, `parseFrame`, `crc32`, `fromBase64`, `isZip`, `zipPath`, `zipFiles`, `readDirectory`, `realPathOrNull`, `DEFAULT_MIN_POLL_MS`, `DEFAULT_MAX_POLL_MS`, `DEFAULT_BACKSTOP_MS`, `livePaths`, `pathsFor`, `revisionOf`, `createWatcher`, `serverTime`, `encodeDataValue`, `decodeDataValue`, `ARTIFACT_DATA_LIMITS`, `ARTIFACT_RESERVED_COLLECTIONS`, `dataPath`, `formatDataWhere`, `dataListQuery`, `createArtifactData`, `VERSION`, `aggBody`, `ARTIFACT_LIMITS`, `ARTIFACT_SOURCE_SKIP_DIRS`, `ARTIFACT_SOURCE_MAX_FILE_BYTES`, `toBase64`, `runBody`, `AskHandle`, `HEARTBEAT_INTERVAL_MS`, `createClient`, `workLoop`, `MCP_TOOL_DEFS`, `MCP_TOOL_NAMES`, `toolAllowed`, `mcpTools`, `toCallResult`, `registerTools`.
 
-Exported types: `Iso`, `Scope`, `PrincipalKind`, `BoardRole`, `TicketState`, `StageCategory`, `Via`, `LinkType`, `FileKind`, `Principal`, `Actor`, `Member`, `Stage`, `Option`, `FieldDef`, `BoardRef`, `Cost`, `Board`, `Agent`, `TicketLink`, `Ticket`, `TicketDetail`, `Attachment`, `TmFile`, `UploadedFile`, `FileWithContent`, `MessageKind`, `QuestionFieldType`, `QuestionStatus`, `QuestionValue`, `QuestionFieldOption`, `QuestionField`, `QuestionAnswer`, `Question`, `RunOutcome`, `RunUsage`, `RunReceipt`, `Message`, `TaskItemStatus`, `TaskItem`, `Tasklist`, `AgentState`, `AgentHealth`, `AgentStatus`, `EventType`, `TmEvent`, `Me`, `TokenKind`, `Page`, `EventPage`, `SearchHit`, `WebhookEvent`, `Webhook`, `ArtifactRole`, `ArtifactBuild`, `ArtifactAgentAccess`, `ArtifactMember`, `Artifact`, `ArtifactDetail`, `ArtifactSource`, `ArtifactShareResult`, `TmErrorCode`, `Problem`, `TmErrorInit`, `FetchLike`, `RetryOptions`, `RequestOptions`, `HttpOptions`, `QueryValue`, `QueryParam`, `RawRequest`, `SseFrame`, `ZipEntry`, `ReadDirectoryOptions`, `WatchSource`, `WatchReason`, `WatchSignal`, `LiveCredential`, `WatchTarget`, `WatchOptions`, `Watcher`, `WatchDeps`, `ServerTimeSentinel`, `ArtifactDataWhereOp`, `ArtifactDataWhere`, `ArtifactDataDoc`, `ArtifactDataListQuery`, `ArtifactDataPage`, `ArtifactDataWrite`, `ArtifactDataWriteResult`, `ArtifactDataFile`, `ArtifactDataFileUrl`, `ArtifactDataOptions`, `ArtifactData`, `ClientOptions`, `PrincipalRef`, `TicketFilter`, `TicketInput`, `CreateTicketInput`, `RunReceiptInput`, `PostMessageInput`, `CreateAgentInput`, `CreateBoardInput`, `BoardAgentInput`, `UploadInput`, `QuestionFieldInput`, `AskInput`, `AnswerValue`, `AnswerValues`, `TypedAnswer`, `TaskItemInput`, `SetTasklistInput`, `HeartbeatInput`, `EventQuery`, `StreamOptions`, `CreateArtifactInput`, `UpdateArtifactInput`, `ArtifactFile`, `ArtifactBuildInput`, `PublishArtifactOptions`, `ShareArtifactInput`, `WaitForAnswerOptions`, `Beat`, `TmClientBase`, `BoardsAccessor`, `BoardAccessor`, `TmClient`, `WorkContext`, `WorkHandler`, `WorkOptions`, `WorkSummary`, `WorkDeps`, `JsonSchema`, `McpTool`, `McpToolName`, `McpToolsOptions`, `McpCallResult`, `AnyMcpServer`.
+Exported types: `Iso`, `Scope`, `PrincipalKind`, `BoardRole`, `TicketState`, `StageCategory`, `Via`, `LinkType`, `FileKind`, `Principal`, `Actor`, `Member`, `IndicatorIcon`, `Indicator`, `StageRef`, `Stage`, `Option`, `FieldDef`, `BoardRef`, `Cost`, `AggPeriod`, `AggField`, `AggCounters`, `MessageAgg`, `AggBuckets`, `Board`, `Agent`, `TicketLink`, `Ticket`, `TicketDetail`, `Attachment`, `TmFile`, `UploadedFile`, `FileWithContent`, `MessageKind`, `QuestionFieldType`, `QuestionStatus`, `QuestionValue`, `QuestionFieldOption`, `QuestionField`, `QuestionAnswer`, `Question`, `RunOutcome`, `RunUsage`, `RunReceipt`, `Message`, `TaskItemStatus`, `TaskItem`, `Tasklist`, `AgentState`, `AgentHealth`, `AgentStatus`, `EventType`, `TmEvent`, `Me`, `TokenKind`, `Page`, `EventPage`, `SearchHit`, `WebhookEvent`, `Webhook`, `ArtifactRole`, `ArtifactBuild`, `ArtifactAgentAccess`, `ArtifactMember`, `Artifact`, `ArtifactDetail`, `ArtifactSource`, `ArtifactShareResult`, `TmErrorCode`, `Problem`, `TmErrorInit`, `FetchLike`, `RetryOptions`, `RequestOptions`, `HttpOptions`, `QueryValue`, `QueryParam`, `RawRequest`, `SseFrame`, `ZipEntry`, `ReadDirectoryOptions`, `WatchSource`, `WatchReason`, `WatchSignal`, `LiveCredential`, `WatchTarget`, `WatchOptions`, `Watcher`, `WatchDeps`, `ServerTimeSentinel`, `ArtifactDataWhereOp`, `ArtifactDataWhere`, `ArtifactDataDoc`, `ArtifactDataListQuery`, `ArtifactDataPage`, `ArtifactDataWrite`, `ArtifactDataWriteResult`, `ArtifactDataFile`, `ArtifactDataFileUrl`, `ArtifactDataOptions`, `ArtifactData`, `ClientOptions`, `PrincipalRef`, `TicketFilter`, `TicketInput`, `CreateTicketInput`, `RunReceiptInput`, `PostMessageInput`, `AggEntryInput`, `CreateAgentInput`, `CreateBoardInput`, `BoardAgentInput`, `UploadInput`, `QuestionFieldInput`, `AskInput`, `AnswerValue`, `AnswerValues`, `TypedAnswer`, `TaskItemInput`, `SetTasklistInput`, `HeartbeatInput`, `EventQuery`, `StreamOptions`, `CreateArtifactInput`, `UpdateArtifactInput`, `ArtifactFile`, `ArtifactBuildInput`, `PublishArtifactOptions`, `ShareArtifactInput`, `WaitForAnswerOptions`, `Beat`, `TmClientBase`, `BoardsAccessor`, `BoardAccessor`, `TmClient`, `WorkContext`, `WorkHandler`, `WorkOptions`, `WorkSummary`, `WorkDeps`, `JsonSchema`, `McpTool`, `McpToolName`, `McpToolsOptions`, `McpCallResult`, `AnyMcpServer`.
 
 #### Building your own MCP server from the SDK
 
@@ -4606,17 +4617,21 @@ artifacts: {
 export interface CreateArtifactInput {
     /** ≤ 80 characters. */
     name: string;
-    /** ≤ 500 characters. */
+    /** ≤ 2000 characters: what it is for (agents read it). */
     description?: string | null;
-    /** One emoji. */
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon?: string | null;
+    /** The artifact's mark (default: a palette colour). */
+    indicator?: Indicator;
 }
 
 /** `artifacts.update()` — owner only. Send only what changes. */
 export interface UpdateArtifactInput {
     name?: string;
     description?: string | null;
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon?: string | null;
+    indicator?: Indicator;
     /** Viewers may read the artifact's data but not write it. */
     readOnly?: boolean;
     /** Archive (no data writes, off the sidebar) or restore. */
@@ -4692,7 +4707,10 @@ export interface Artifact {
     id: string;
     name: string;
     description: string | null;
+    /** LEGACY: the typed emoji, if any. Read `indicator`. */
     icon: string | null;
+    /** indicators.html: the artifact's mark. */
+    indicator: Indicator;
     /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
     url: string;
     /**

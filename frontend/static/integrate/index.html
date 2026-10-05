@@ -108,7 +108,7 @@
         <span>version 1.6.0</span>
         <span>api v1</span>
         <span>updated 2026-10-05</span>
-        <span>sha256 05ad8677cb10…</span>
+        <span>sha256 48531fb4afd8…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -2201,6 +2201,17 @@ declare function createClientBase(options: ClientOptions): {
      */
     board: (o?: RequestOptions) =&gt; Promise&lt;Board&gt;;
     /**
+     * aggregates.html: one aggregate field's totals per period bucket (daily /
+     * weekly / monthly as the field says), oldest first. `field` is an id or a
+     * label (default: the board's first active field); `from` / `to` are
+     * bucket keys ('2026-10-01', '2026-W38', '2026-09'), inclusive.
+     */
+    aggregates: (q?: {
+        field?: string;
+        from?: string;
+        to?: string;
+    }, o?: RequestOptions) =&gt; Promise&lt;AggBuckets&gt;;
+    /**
      * Every board this credential may act on — exactly one for a board token,
      * and for an ACCOUNT token every board you are on RIGHT NOW (§R2), read
      * at this call rather than remembered.
@@ -2532,8 +2543,8 @@ export interface McpTool {
     /** Keep every tool, whatever the scopes say. */
     skipScopeFilter?: boolean;
 }</code></pre></figure>
-<p>Exported values: <code>codeForStatus</code>, <code>TmError</code>, <code>isTmError</code>, <code>retryAfterMs</code>, <code>errorFromResponse</code>, <code>DEFAULT_BASE_URL</code>, <code>normalizeBaseUrl</code>, <code>randomId</code>, <code>queryString</code>, <code>backoffMs</code>, <code>Http</code>, <code>readSse</code>, <code>parseFrame</code>, <code>crc32</code>, <code>fromBase64</code>, <code>isZip</code>, <code>zipPath</code>, <code>zipFiles</code>, <code>readDirectory</code>, <code>realPathOrNull</code>, <code>DEFAULT_MIN_POLL_MS</code>, <code>DEFAULT_MAX_POLL_MS</code>, <code>DEFAULT_BACKSTOP_MS</code>, <code>livePaths</code>, <code>pathsFor</code>, <code>revisionOf</code>, <code>createWatcher</code>, <code>serverTime</code>, <code>encodeDataValue</code>, <code>decodeDataValue</code>, <code>ARTIFACT_DATA_LIMITS</code>, <code>ARTIFACT_RESERVED_COLLECTIONS</code>, <code>dataPath</code>, <code>formatDataWhere</code>, <code>dataListQuery</code>, <code>createArtifactData</code>, <code>VERSION</code>, <code>ARTIFACT_LIMITS</code>, <code>ARTIFACT_SOURCE_SKIP_DIRS</code>, <code>ARTIFACT_SOURCE_MAX_FILE_BYTES</code>, <code>toBase64</code>, <code>runBody</code>, <code>AskHandle</code>, <code>HEARTBEAT_INTERVAL_MS</code>, <code>createClient</code>, <code>workLoop</code>, <code>MCP_TOOL_DEFS</code>, <code>MCP_TOOL_NAMES</code>, <code>toolAllowed</code>, <code>mcpTools</code>, <code>toCallResult</code>, <code>registerTools</code>.</p>
-<p>Exported types: <code>Iso</code>, <code>Scope</code>, <code>PrincipalKind</code>, <code>BoardRole</code>, <code>TicketState</code>, <code>StageCategory</code>, <code>Via</code>, <code>LinkType</code>, <code>FileKind</code>, <code>Principal</code>, <code>Actor</code>, <code>Member</code>, <code>Stage</code>, <code>Option</code>, <code>FieldDef</code>, <code>BoardRef</code>, <code>Cost</code>, <code>Board</code>, <code>Agent</code>, <code>TicketLink</code>, <code>Ticket</code>, <code>TicketDetail</code>, <code>Attachment</code>, <code>TmFile</code>, <code>UploadedFile</code>, <code>FileWithContent</code>, <code>MessageKind</code>, <code>QuestionFieldType</code>, <code>QuestionStatus</code>, <code>QuestionValue</code>, <code>QuestionFieldOption</code>, <code>QuestionField</code>, <code>QuestionAnswer</code>, <code>Question</code>, <code>RunOutcome</code>, <code>RunUsage</code>, <code>RunReceipt</code>, <code>Message</code>, <code>TaskItemStatus</code>, <code>TaskItem</code>, <code>Tasklist</code>, <code>AgentState</code>, <code>AgentHealth</code>, <code>AgentStatus</code>, <code>EventType</code>, <code>TmEvent</code>, <code>Me</code>, <code>TokenKind</code>, <code>Page</code>, <code>EventPage</code>, <code>SearchHit</code>, <code>WebhookEvent</code>, <code>Webhook</code>, <code>ArtifactRole</code>, <code>ArtifactBuild</code>, <code>ArtifactAgentAccess</code>, <code>ArtifactMember</code>, <code>Artifact</code>, <code>ArtifactDetail</code>, <code>ArtifactSource</code>, <code>ArtifactShareResult</code>, <code>TmErrorCode</code>, <code>Problem</code>, <code>TmErrorInit</code>, <code>FetchLike</code>, <code>RetryOptions</code>, <code>RequestOptions</code>, <code>HttpOptions</code>, <code>QueryValue</code>, <code>QueryParam</code>, <code>RawRequest</code>, <code>SseFrame</code>, <code>ZipEntry</code>, <code>ReadDirectoryOptions</code>, <code>WatchSource</code>, <code>WatchReason</code>, <code>WatchSignal</code>, <code>LiveCredential</code>, <code>WatchTarget</code>, <code>WatchOptions</code>, <code>Watcher</code>, <code>WatchDeps</code>, <code>ServerTimeSentinel</code>, <code>ArtifactDataWhereOp</code>, <code>ArtifactDataWhere</code>, <code>ArtifactDataDoc</code>, <code>ArtifactDataListQuery</code>, <code>ArtifactDataPage</code>, <code>ArtifactDataWrite</code>, <code>ArtifactDataWriteResult</code>, <code>ArtifactDataFile</code>, <code>ArtifactDataFileUrl</code>, <code>ArtifactDataOptions</code>, <code>ArtifactData</code>, <code>ClientOptions</code>, <code>PrincipalRef</code>, <code>TicketFilter</code>, <code>TicketInput</code>, <code>CreateTicketInput</code>, <code>RunReceiptInput</code>, <code>PostMessageInput</code>, <code>CreateAgentInput</code>, <code>CreateBoardInput</code>, <code>BoardAgentInput</code>, <code>UploadInput</code>, <code>QuestionFieldInput</code>, <code>AskInput</code>, <code>AnswerValue</code>, <code>AnswerValues</code>, <code>TypedAnswer</code>, <code>TaskItemInput</code>, <code>SetTasklistInput</code>, <code>HeartbeatInput</code>, <code>EventQuery</code>, <code>StreamOptions</code>, <code>CreateArtifactInput</code>, <code>UpdateArtifactInput</code>, <code>ArtifactFile</code>, <code>ArtifactBuildInput</code>, <code>PublishArtifactOptions</code>, <code>ShareArtifactInput</code>, <code>WaitForAnswerOptions</code>, <code>Beat</code>, <code>TmClientBase</code>, <code>BoardsAccessor</code>, <code>BoardAccessor</code>, <code>TmClient</code>, <code>WorkContext</code>, <code>WorkHandler</code>, <code>WorkOptions</code>, <code>WorkSummary</code>, <code>WorkDeps</code>, <code>JsonSchema</code>, <code>McpTool</code>, <code>McpToolName</code>, <code>McpToolsOptions</code>, <code>McpCallResult</code>, <code>AnyMcpServer</code>.</p>
+<p>Exported values: <code>codeForStatus</code>, <code>TmError</code>, <code>isTmError</code>, <code>retryAfterMs</code>, <code>errorFromResponse</code>, <code>DEFAULT_BASE_URL</code>, <code>normalizeBaseUrl</code>, <code>randomId</code>, <code>queryString</code>, <code>backoffMs</code>, <code>Http</code>, <code>readSse</code>, <code>parseFrame</code>, <code>crc32</code>, <code>fromBase64</code>, <code>isZip</code>, <code>zipPath</code>, <code>zipFiles</code>, <code>readDirectory</code>, <code>realPathOrNull</code>, <code>DEFAULT_MIN_POLL_MS</code>, <code>DEFAULT_MAX_POLL_MS</code>, <code>DEFAULT_BACKSTOP_MS</code>, <code>livePaths</code>, <code>pathsFor</code>, <code>revisionOf</code>, <code>createWatcher</code>, <code>serverTime</code>, <code>encodeDataValue</code>, <code>decodeDataValue</code>, <code>ARTIFACT_DATA_LIMITS</code>, <code>ARTIFACT_RESERVED_COLLECTIONS</code>, <code>dataPath</code>, <code>formatDataWhere</code>, <code>dataListQuery</code>, <code>createArtifactData</code>, <code>VERSION</code>, <code>aggBody</code>, <code>ARTIFACT_LIMITS</code>, <code>ARTIFACT_SOURCE_SKIP_DIRS</code>, <code>ARTIFACT_SOURCE_MAX_FILE_BYTES</code>, <code>toBase64</code>, <code>runBody</code>, <code>AskHandle</code>, <code>HEARTBEAT_INTERVAL_MS</code>, <code>createClient</code>, <code>workLoop</code>, <code>MCP_TOOL_DEFS</code>, <code>MCP_TOOL_NAMES</code>, <code>toolAllowed</code>, <code>mcpTools</code>, <code>toCallResult</code>, <code>registerTools</code>.</p>
+<p>Exported types: <code>Iso</code>, <code>Scope</code>, <code>PrincipalKind</code>, <code>BoardRole</code>, <code>TicketState</code>, <code>StageCategory</code>, <code>Via</code>, <code>LinkType</code>, <code>FileKind</code>, <code>Principal</code>, <code>Actor</code>, <code>Member</code>, <code>IndicatorIcon</code>, <code>Indicator</code>, <code>StageRef</code>, <code>Stage</code>, <code>Option</code>, <code>FieldDef</code>, <code>BoardRef</code>, <code>Cost</code>, <code>AggPeriod</code>, <code>AggField</code>, <code>AggCounters</code>, <code>MessageAgg</code>, <code>AggBuckets</code>, <code>Board</code>, <code>Agent</code>, <code>TicketLink</code>, <code>Ticket</code>, <code>TicketDetail</code>, <code>Attachment</code>, <code>TmFile</code>, <code>UploadedFile</code>, <code>FileWithContent</code>, <code>MessageKind</code>, <code>QuestionFieldType</code>, <code>QuestionStatus</code>, <code>QuestionValue</code>, <code>QuestionFieldOption</code>, <code>QuestionField</code>, <code>QuestionAnswer</code>, <code>Question</code>, <code>RunOutcome</code>, <code>RunUsage</code>, <code>RunReceipt</code>, <code>Message</code>, <code>TaskItemStatus</code>, <code>TaskItem</code>, <code>Tasklist</code>, <code>AgentState</code>, <code>AgentHealth</code>, <code>AgentStatus</code>, <code>EventType</code>, <code>TmEvent</code>, <code>Me</code>, <code>TokenKind</code>, <code>Page</code>, <code>EventPage</code>, <code>SearchHit</code>, <code>WebhookEvent</code>, <code>Webhook</code>, <code>ArtifactRole</code>, <code>ArtifactBuild</code>, <code>ArtifactAgentAccess</code>, <code>ArtifactMember</code>, <code>Artifact</code>, <code>ArtifactDetail</code>, <code>ArtifactSource</code>, <code>ArtifactShareResult</code>, <code>TmErrorCode</code>, <code>Problem</code>, <code>TmErrorInit</code>, <code>FetchLike</code>, <code>RetryOptions</code>, <code>RequestOptions</code>, <code>HttpOptions</code>, <code>QueryValue</code>, <code>QueryParam</code>, <code>RawRequest</code>, <code>SseFrame</code>, <code>ZipEntry</code>, <code>ReadDirectoryOptions</code>, <code>WatchSource</code>, <code>WatchReason</code>, <code>WatchSignal</code>, <code>LiveCredential</code>, <code>WatchTarget</code>, <code>WatchOptions</code>, <code>Watcher</code>, <code>WatchDeps</code>, <code>ServerTimeSentinel</code>, <code>ArtifactDataWhereOp</code>, <code>ArtifactDataWhere</code>, <code>ArtifactDataDoc</code>, <code>ArtifactDataListQuery</code>, <code>ArtifactDataPage</code>, <code>ArtifactDataWrite</code>, <code>ArtifactDataWriteResult</code>, <code>ArtifactDataFile</code>, <code>ArtifactDataFileUrl</code>, <code>ArtifactDataOptions</code>, <code>ArtifactData</code>, <code>ClientOptions</code>, <code>PrincipalRef</code>, <code>TicketFilter</code>, <code>TicketInput</code>, <code>CreateTicketInput</code>, <code>RunReceiptInput</code>, <code>PostMessageInput</code>, <code>AggEntryInput</code>, <code>CreateAgentInput</code>, <code>CreateBoardInput</code>, <code>BoardAgentInput</code>, <code>UploadInput</code>, <code>QuestionFieldInput</code>, <code>AskInput</code>, <code>AnswerValue</code>, <code>AnswerValues</code>, <code>TypedAnswer</code>, <code>TaskItemInput</code>, <code>SetTasklistInput</code>, <code>HeartbeatInput</code>, <code>EventQuery</code>, <code>StreamOptions</code>, <code>CreateArtifactInput</code>, <code>UpdateArtifactInput</code>, <code>ArtifactFile</code>, <code>ArtifactBuildInput</code>, <code>PublishArtifactOptions</code>, <code>ShareArtifactInput</code>, <code>WaitForAnswerOptions</code>, <code>Beat</code>, <code>TmClientBase</code>, <code>BoardsAccessor</code>, <code>BoardAccessor</code>, <code>TmClient</code>, <code>WorkContext</code>, <code>WorkHandler</code>, <code>WorkOptions</code>, <code>WorkSummary</code>, <code>WorkDeps</code>, <code>JsonSchema</code>, <code>McpTool</code>, <code>McpToolName</code>, <code>McpToolsOptions</code>, <code>McpCallResult</code>, <code>AnyMcpServer</code>.</p>
 <h4 id="building-your-own-mcp-server-from-the-sdk"><a class="anchor" href="#building-your-own-mcp-server-from-the-sdk" aria-label="Link to this section">#</a>Building your own MCP server from the SDK</h4>
 <p>Rather than handing an agent the whole MCP endpoint, build the tool list you want:</p>
 <figure class="code" data-lang="ts"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>import { createClient, mcpTools, registerTools } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
@@ -2878,17 +2889,21 @@ artifacts: {
 export interface CreateArtifactInput {
     /** ≤ 80 characters. */
     name: string;
-    /** ≤ 500 characters. */
+    /** ≤ 2000 characters: what it is for (agents read it). */
     description?: string | null;
-    /** One emoji. */
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon?: string | null;
+    /** The artifact's mark (default: a palette colour). */
+    indicator?: Indicator;
 }
 
 /** `artifacts.update()` — owner only. Send only what changes. */
 export interface UpdateArtifactInput {
     name?: string;
     description?: string | null;
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon?: string | null;
+    indicator?: Indicator;
     /** Viewers may read the artifact's data but not write it. */
     readOnly?: boolean;
     /** Archive (no data writes, off the sidebar) or restore. */
@@ -2964,7 +2979,10 @@ export interface Artifact {
     id: string;
     name: string;
     description: string | null;
+    /** LEGACY: the typed emoji, if any. Read `indicator`. */
     icon: string | null;
+    /** indicators.html: the artifact's mark. */
+    indicator: Indicator;
     /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
     url: string;
     /**
