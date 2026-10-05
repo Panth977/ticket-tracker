@@ -92,7 +92,8 @@ export const apiKeyCreate = defineCommand({
         ctx.addIssue({
           code: 'custom',
           path: ['scopes'],
-          message: "An agent token has no scopes to choose — the agent's role on each board decides",
+          message:
+            "An agent token has no scopes to choose — the agent's role on each board decides",
         });
       return;
     }
@@ -160,7 +161,8 @@ export const apiKeyCreate = defineCommand({
 export const apiKeyRevoke = defineCommand({
   name: 'apiKeyRevoke',
   source: 'platform',
-  permission: "Owner only (never a token, never an agent); revokedAt = now, revokedReason 'owner'. Revoking twice is ok.",
+  permission:
+    "Owner only (never a token, never an agent); revokedAt = now, revokedReason 'owner'. Revoking twice is ok.",
   errors: ['not_found'],
   req: req({ keyId: z.string().min(1) }),
   res: OkResSchema,

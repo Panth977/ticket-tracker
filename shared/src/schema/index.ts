@@ -33,6 +33,7 @@ import {
 import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
 import { SidebarPrefsSchema, WorkspaceSchema } from './workspace.js';
+import { MemoryNodeSchema, MemorySchema } from '../memory/schema.js';
 import {
   ApiKeySchema,
   DeviceSchema,
@@ -114,6 +115,11 @@ export const DOC_SCHEMAS = {
   workspaces: WorkspaceSchema,
   /** users/{uid}/ui/sidebar */
   sidebarPrefs: SidebarPrefsSchema,
+  // memory (docs/plan/memory.html)
+  /** memories/{memoryId} */
+  memories: MemorySchema,
+  /** memories/{memoryId}/nodes/{nodeId} */
+  memoryNodes: MemoryNodeSchema,
 } as const satisfies Record<string, z.ZodTypeAny>;
 export type DocName = keyof typeof DOC_SCHEMAS;
 export type DocOf<N extends DocName> = z.infer<(typeof DOC_SCHEMAS)[N]>;

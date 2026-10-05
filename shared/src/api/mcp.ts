@@ -71,7 +71,9 @@ const DataDocPath = z
   .string()
   .min(1)
   .max(1024)
-  .describe("A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])");
+  .describe(
+    "A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])",
+  );
 
 export const McpToolShapes = {
   whoami: {},
@@ -344,13 +346,14 @@ export const McpToolShapes = {
       .describe(
         "Filters, each [field, op, value]; op is one of < <= == != >= > array-contains in not-in array-contains-any. e.g. [['status','==','open']]",
       ),
-    order_by: z
-      .string()
+    order_by: z.string().min(1).max(600).optional().describe("'field' or 'field,desc'"),
+    limit: z
+      .number()
+      .int()
       .min(1)
-      .max(600)
+      .max(LIST_LIMIT_MAX)
       .optional()
-      .describe("'field' or 'field,desc'"),
-    limit: z.number().int().min(1).max(LIST_LIMIT_MAX).optional().describe('Default 100, at most 500'),
+      .describe('Default 100, at most 500'),
     start_after: z
       .string()
       .min(1)
@@ -365,7 +368,10 @@ export const McpToolShapes = {
       .describe(
         'The document, as JSON. A timestamp is { "$date": "2026-09-30T05:30:00Z" }; the server\'s clock is { "$serverTime": true }.',
       ),
-    merge: z.boolean().optional().describe('true merges into the stored document instead of replacing it'),
+    merge: z
+      .boolean()
+      .optional()
+      .describe('true merges into the stored document instead of replacing it'),
   },
   artifact_data_batch: {
     id: ArtifactRef,
@@ -536,7 +542,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   artifact_create: {
     description:
-      "Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.",
+      'Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.',
     readOnly: false,
     scopes: ['artifacts:write'],
   },

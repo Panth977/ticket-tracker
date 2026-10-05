@@ -8,6 +8,7 @@
  * keys/{KEY}. A stale boardId (the ticket was deleted) answers 404.
  */
 import { z } from 'zod';
+import { MEMORY_REFS_MAX, MemoryRefSchema } from '../memory/schema.js';
 import {
   BoardIdSchema,
   FieldValueSchema,
@@ -59,6 +60,12 @@ export const ticketCreate = defineCommand({
     fields: z.record(z.string(), FieldValueSchema).optional(),
     /** Storage paths already uploaded under this ticket's prefix. */
     attachments: z.array(StoragePathSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
+    /**
+     * memory.html §E: memory files to attach BY REFERENCE (no upload). The
+     * memory must be granted to this board; each becomes a ticket.files row
+     * with source 'memory'.
+     */
+    memoryRefs: z.array(MemoryRefSchema).max(MEMORY_REFS_MAX).optional(),
     /**
      * Who reported it from outside (intake widget, email-to-board). Only the
      * intake actor may set it (INTAKE_ACTOR, via intake | email); anyone else → 400.
@@ -222,6 +229,12 @@ export const messagePost = defineCommand({
        * carry files and an empty body (the handler requires one or the other).
        */
       fileIds: z.array(z.string().min(1).max(128)).max(MAX_ATTACHMENTS_PER_CALL).optional(),
+      /**
+       * memory.html §E: memory files to attach BY REFERENCE (no upload). The
+       * memory must be granted to this board; each becomes a ticket.files row
+       * with source 'memory'.
+       */
+      memoryRefs: z.array(MemoryRefSchema).max(MEMORY_REFS_MAX).optional(),
       /**
        * Phase 17 (agents.html §Y1): the TURN RECEIPT an orchestrator posts when
        * one run of an agent ends. Stored on the message, and in the SAME

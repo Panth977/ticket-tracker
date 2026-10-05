@@ -15,6 +15,7 @@ import * as tickets from './tickets.js';
 import * as users from './users.js';
 import * as workspaces from './workspaces.js';
 import * as artifacts from '../artifacts/commands.js';
+import * as memory from '../memory/commands.js';
 
 export * from './define.js';
 export * from './boards.js';
@@ -107,6 +108,20 @@ export const COMMANDS = {
   workspaceUpdate: workspaces.workspaceUpdate,
   workspaceDelete: workspaces.workspaceDelete,
   sidebarHide: workspaces.sidebarHide,
+  // memory (docs/plan/memory.html)
+  memoryCreate: memory.memoryCreate,
+  memoryUpdate: memory.memoryUpdate,
+  memoryDelete: memory.memoryDelete,
+  memoryShare: memory.memoryShare,
+  memoryGrantSet: memory.memoryGrantSet,
+  memoryList: memory.memoryList,
+  memoryTree: memory.memoryTree,
+  memoryFileRead: memory.memoryFileRead,
+  memoryFileWrite: memory.memoryFileWrite,
+  memoryFilePut: memory.memoryFilePut,
+  memoryFolderCreate: memory.memoryFolderCreate,
+  memoryMove: memory.memoryMove,
+  memoryNodeDelete: memory.memoryNodeDelete,
 } as const satisfies { [K in string]: CommandSpec<K> };
 
 export type Commands = typeof COMMANDS;

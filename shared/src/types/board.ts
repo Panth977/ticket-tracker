@@ -218,6 +218,13 @@ export const AttachmentSchema = z.object({
   thumbPath: StoragePathSchema.optional(),
   /** A principal: a person or an agent (via its token). */
   uploadedBy: PrincipalIdSchema,
+  /**
+   * memory.html §E: a REFERENCE to a memory file, not a copy. `path` is then
+   * the virtual memoryRefPath(memoryId, nodeId), which the file door resolves
+   * to the node's current version. (Ids are checked by MemoryRefSchema where
+   * they enter; plain strings here keep types/ free of memory/.)
+   */
+  memory: z.object({ memoryId: z.string(), nodeId: z.string() }).optional(),
 });
 export type Attachment = z.infer<typeof AttachmentSchema>;
 

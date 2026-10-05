@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Memory · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/memory" class="on">Memory</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+      <article class="mg">
+        <h1>Memory</h1>
+        <p class="lede">
+          A memory is a bucket of files you keep online: notes in Markdown, screenshots, videos, an
+          APK, a spec, a logo. It is a concept of its own, next to boards and artifacts, with its
+          own people. Inside it is a tree of folders and files that you browse as a tree or as
+          folders, preview, and edit as code. What makes it more than a drive is <b>reuse</b>: a
+          ticket can point at a memory file instead of carrying its own copy, an artifact's page can
+          read (or write) one, and an agent can work in one over MCP. Files put on a ticket stay on
+          that ticket forever; files kept in a memory are managed — edited, moved, replaced, deleted
+          — in one place, and every ticket that points at them sees the current version.
+        </p>
+
+        <h2 id="a">A · What a memory is</h2>
+        <ul>
+          <li>
+            <b>A named bucket</b> (<code>memories/{memoryId}</code>): name, description, an emoji,
+            its people, and the boards and artifacts it has been granted to. Created at the root
+            like a board or an artifact, listed in the sidebar under <b>Memory</b>, hideable from
+            the sidebar, and bundleable into a workspace (agents.html §AB).
+          </li>
+          <li>
+            <b>A tree of nodes</b> (<code>memories/{memoryId}/nodes/{nodeId}</code>): a node is a
+            <code>folder</code> or a <code>file</code>, with a <code>parentId</code> (null at the
+            root), a <code>name</code>, and its full
+            <code>path</code> (<code>docs/brand/logo.svg</code>) kept on the node so the tree, the
+            breadcrumb and a lookup by path cost one listener and no joins. Paths are unique inside
+            a memory; a move or rename of a folder rewrites the <code>path</code> of everything
+            under it in the same batch.
+          </li>
+          <li>
+            <b>The bytes live in Storage by file id</b>:
+            <code>memories/{memoryId}/{fileId}/{fileName}</code>. A node points at its current
+            <code>fileId</code>. Saving a new version (an edit in code mode, a re-upload, an agent's
+            write) writes a NEW file id and then deletes the old object, so a reader never sees a
+            half-written file and a cached URL can never serve the wrong version.
+          </li>
+          <li>
+            <b>Anything goes in</b>: text, Markdown, code, images, video, audio, PDF, APK, zip. The
+            mime type is taken from the upload (or the extension), and the app decides how to
+            preview it.
+          </li>
+        </ul>
+
+        <h2 id="b">B · People</h2>
+        <table>
+          <tr>
+            <th>Role</th>
+            <th>May</th>
+          </tr>
+          <tr>
+            <td>owner</td>
+            <td>
+              everything, including share, grant to boards and artifacts, rename and delete the
+              memory. Exactly one, the creator.
+            </td>
+          </tr>
+          <tr>
+            <td>editor</td>
+            <td>read, upload, edit, create folders, move, rename and delete files and folders.</td>
+          </tr>
+          <tr>
+            <td>viewer</td>
+            <td>browse, preview, download.</td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <b>Sharing is by email</b>, like an artifact: <code>memoryShare</code> with a role, null
+            removes; an address without an account becomes an invite.
+          </li>
+          <li>
+            <b>Agents are not shared on a memory directly.</b> An agent reaches a memory through a
+            board it is on (§D). That keeps one place — the board — deciding what an agent may
+            touch.
+          </li>
+          <li>
+            Being on a board gives nothing in a memory, unless the memory is granted to that board
+            (§D).
+          </li>
+        </ul>
+
+        <h2 id="c">C · Limits</h2>
+        <table>
+          <tr>
+            <td>name of a node</td>
+            <td>1–255 characters, no <code>/</code>, not <code>.</code> or <code>..</code></td>
+          </tr>
+          <tr>
+            <td>path</td>
+            <td>≤ 1024 characters, ≤ 32 levels</td>
+          </tr>
+          <tr>
+            <td>nodes per memory</td>
+            <td>10,000</td>
+          </tr>
+          <tr>
+            <td>one file, uploaded from the app</td>
+            <td>1 GB (straight to Storage)</td>
+          </tr>
+          <tr>
+            <td>one file, written through the API / MCP / driver</td>
+            <td>10 MB inline (text or base64)</td>
+          </tr>
+          <tr>
+            <td>memories per person (owned)</td>
+            <td>100</td>
+          </tr>
+          <tr>
+            <td>grants per memory</td>
+            <td>20 boards, 20 artifacts</td>
+          </tr>
+        </table>
+
+        <h2 id="d">D · Grants: a memory used by a board or an artifact</h2>
+        <p>
+          A grant is stored on the memory: <code>memories/{m}.boards[boardId]</code> and
+          <code>memories/{m}.artifacts[artifactId]</code>, each <code>'read' | 'write'</code>. It is
+          set with <code>memoryGrantSet</code> from <b>board settings › Memory</b> or
+          <b>artifact settings › Memory</b> (the memory's own settings list them too). Setting one
+          needs BOTH sides: the caller owns the memory, and is an admin of the board (or the owner
+          of the artifact). Like an artifact's board access (artifacts.html §K), a grant is a
+          <b>ceiling</b>; what a particular person or agent can then do is bounded by their own
+          role.
+        </p>
+        <table>
+          <tr>
+            <th>Grant</th>
+            <th>Who</th>
+            <th>May</th>
+          </tr>
+          <tr>
+            <td>board 'read'</td>
+            <td>every member of the board, people and agents</td>
+            <td>
+              browse the memory, preview and download its files, attach them to tickets on that
+              board
+            </td>
+          </tr>
+          <tr>
+            <td>board 'write'</td>
+            <td>editors and admins of the board (people and agents)</td>
+            <td>
+              also upload, edit, create folders, move and delete — through the API, MCP or the
+              attach picker. Commenters and viewers still only read.
+            </td>
+          </tr>
+          <tr>
+            <td>artifact 'read' / 'write'</td>
+            <td>the artifact's page, acting as the viewer</td>
+            <td>
+              read (and write) through <code>BackendDriver.memory</code>, only as far as the VIEWER
+              themselves can reach the memory — by a role on it, or through a board grant they are
+              on.
+            </td>
+          </tr>
+        </table>
+        <p>
+          <code>memoryReach()</code> (shared/src/memory/schema.ts) is the one function that answers
+          "what may this principal do here", from the memory document, the principal's own role and
+          their roles on the granted boards. Every handler, the file door and the driver broker call
+          it.
+        </p>
+
+        <h2 id="e">E · Memory files on tickets</h2>
+        <ul>
+          <li>
+            <b>A reference, not a copy.</b> <code>messagePost</code>, <code>ticketCreate</code> and
+            <code>ticketUpdate</code> take <code>memoryRefs: [{ memoryId, nodeId }]</code>. Each
+            becomes a row in <code>ticket.files</code> with <code>source: 'memory'</code>,
+            <code>memory: { memoryId, nodeId }</code> and the virtual path
+            <code>memories/{memoryId}/nodes/{nodeId}</code>. Nothing is uploaded; the ticket's
+            storage does not grow.
+          </li>
+          <li>
+            <b>Attaching needs the grant</b>: the memory must be granted to the ticket's board (read
+            or write), and the caller must be able to comment there. The picker in the composer
+            lists exactly the memories granted to the board.
+          </li>
+          <li>
+            <b>Viewing resolves the live node.</b> The file door (<code>/api/files/url</code>,
+            agents.html §I) turns the virtual path into the node's CURRENT Storage object, so an
+            edited file shows its new version on every ticket that points at it. Access: the viewer
+            can read the board AND the memory is still granted to that board — or the viewer reaches
+            the memory directly. A node that was deleted, or a grant that was removed, shows "No
+            longer in memory".
+          </li>
+          <li>
+            Deleting a ticket never touches the memory; deleting a memory file leaves the reference
+            row (it reads as gone).
+          </li>
+        </ul>
+
+        <h2 id="f">F · The app</h2>
+        <ul>
+          <li>
+            <b>Sidebar › Memory</b>: one row per memory (🧠 or its emoji), hideable like boards and
+            artifacts; "All memory" lists them, archived included. <code>/m</code> is the list,
+            <code>/m/{memoryId}</code> the memory, <code>/m/{memoryId}?path=docs/a.md</code> a file
+            in it, <code>/m/{memoryId}/settings/{general|people|access}</code> its settings.
+          </li>
+          <li>
+            <b>Two views</b>, toggled in the header and remembered per browser: <b>Tree</b> (an
+            explorer tree on the left, the open file on the right) and <b>Folders</b> (a breadcrumb
+            and the current folder's contents as tiles with thumbnails; a click on a folder goes in,
+            on a file opens it).
+          </li>
+          <li>
+            <b>A file has two modes</b>: <b>Preview</b> — Markdown rendered, images, video, audio,
+            PDF, text with highlighting, and for anything else (an APK, a zip) its facts and a
+            Download button — and <b>Code</b> — the file as text in a code editor, editable by
+            editors, saved with ⌘S or Save (<code>memoryFileWrite</code>; a new version). A binary
+            file in Code mode shows its facts and <i>Replace…</i> instead of bytes.
+          </li>
+          <li>
+            <b>Uploads</b>: drop files or whole folders onto the tree or a folder, or <i>Upload</i>.
+            The browser uploads straight to Storage (progress per file), then
+            <code>memoryFilePut</code> registers each node. New file and New folder are in the same
+            menu. Rename, Move to…, Copy path, Download and Delete are on every node's menu.
+          </li>
+          <li>
+            <b>Board settings › Memory</b> and <b>Artifact settings › Memory</b>: the memories I
+            own, each with none / read / write.
+          </li>
+          <li>
+            <b>Workspaces</b>: a workspace bundles memories too (<code>memoryIds</code>); entering
+            one through it keeps the workspace crumb and switcher.
+          </li>
+        </ul>
+
+        <h2 id="g">G · API</h2>
+        <p>
+          Scopes <code>memory:read</code> and <code>memory:write</code> (consent group "Memory"). An
+          account token or an OAuth grant reaches the memories its person reaches; an agent token
+          reaches only those granted to a board the agent is on. Every node is named by
+          <code>path</code> (or <code>nodeId</code>); writing a path creates its missing parent
+          folders.
+        </p>
+        <table>
+          <tr>
+            <th>Command</th>
+            <th>What</th>
+          </tr>
+          <tr>
+            <td>
+              <code>memoryCreate</code> / <code>memoryUpdate</code> / <code>memoryDelete</code>
+            </td>
+            <td>the bucket (delete is queued: Storage, nodes, then the document)</td>
+          </tr>
+          <tr>
+            <td><code>memoryShare</code></td>
+            <td>a person's role, by email</td>
+          </tr>
+          <tr>
+            <td><code>memoryGrantSet</code></td>
+            <td>a board's or an artifact's access (§D)</td>
+          </tr>
+          <tr>
+            <td><code>memoryList</code></td>
+            <td>the memories I reach (optionally: those granted to one board or artifact)</td>
+          </tr>
+          <tr>
+            <td><code>memoryTree</code></td>
+            <td>
+              every node under a folder (default: all), for a reader who is not on the memory itself
+            </td>
+          </tr>
+          <tr>
+            <td><code>memoryFileRead</code></td>
+            <td>a file's text (≤ 1 MB, else truncated) or a signed URL</td>
+          </tr>
+          <tr>
+            <td><code>memoryFileWrite</code></td>
+            <td>create or replace a file inline: text or base64, ≤ 10 MB</td>
+          </tr>
+          <tr>
+            <td><code>memoryFilePut</code></td>
+            <td>register a file the app uploaded to Storage itself</td>
+          </tr>
+          <tr>
+            <td>
+              <code>memoryFolderCreate</code>, <code>memoryMove</code>,
+              <code>memoryNodeDelete</code>
+            </td>
+            <td>folders, rename / move, delete (recursive)</td>
+          </tr>
+        </table>
+        <p>
+          MCP: every command above is a tool (the bridge, agents.html §AB's neighbour), plus
+          <code>show_memory</code> in chat. REST: <code>GET /v1/memories</code>,
+          <code>GET /v1/memories/{id}/tree</code>, and the raw bytes at
+          <code>GET|PUT /v1/memories/{id}/files/{path}</code> for files over the inline limit.
+        </p>
+
+        <h2 id="h">H · BackendDriver.memory</h2>
+        <pre>
+BackendDriver.memory.list()                       → DriverMemory[]  (granted to this artifact, that the viewer reaches)
+BackendDriver.memory.tree(memoryId)               → DriverMemoryNode[]
+BackendDriver.memory.read(memoryId, path)         → string            (text files)
+BackendDriver.memory.url(memoryId, path)          → string            (a short-lived URL for &lt;img&gt;, &lt;video&gt;, fetch)
+BackendDriver.memory.write(memoryId, path, text | Blob)   needs 'write' on the grant AND the viewer's own write
+BackendDriver.memory.mkdir(memoryId, path) · remove(memoryId, path)</pre>
+
+        <h2 id="i">I · Decisions</h2>
+        <ul>
+          <li>
+            <b>D-M1 · Tree in Firestore, bytes in Storage.</b> One listener draws the whole tree
+            (10k nodes at most, each a few hundred bytes); Storage listing would need a call per
+            folder and cannot hold empty folders or a rename.
+          </li>
+          <li>
+            <b>D-M2 · A new version is a new object.</b> Overwriting in place would let a cached URL
+            serve a mix, and a failed write would corrupt the only copy. The old object is deleted
+            after the node points at the new one.
+          </li>
+          <li>
+            <b>D-M3 · Tickets point at the node, not the version.</b> That is the point of keeping
+            it in memory: fix the screenshot once. A ticket that must freeze a version should upload
+            a copy, as before.
+          </li>
+          <li>
+            <b>D-M4 · Agents through boards only.</b> A third place to put an agent would be a third
+            place to forget to remove it.
+          </li>
+        </ul>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

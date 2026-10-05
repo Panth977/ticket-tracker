@@ -336,17 +336,28 @@ describe('request schemas', () => {
     const ok = r.parse({ name: 'Builder', kind: 'agent', actsAs: agent });
     expect(ok.scopes).toBeUndefined();
     expect(ok.boardId).toBeUndefined();
-    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, keepOthers: true }).success).toBe(true);
-    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, expiresInDays: 90 }).success).toBe(true);
+    expect(
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, keepOthers: true }).success,
+    ).toBe(true);
+    expect(
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, expiresInDays: 90 }).success,
+    ).toBe(true);
     // boardId null is "no board", the same as leaving it out.
-    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: null }).success).toBe(true);
+    expect(
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: null }).success,
+    ).toBe(true);
     // an agent token names an agent …
     expect(r.safeParse({ name: 'Builder', kind: 'agent' }).success).toBe(false);
-    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: { kind: 'user' } }).success).toBe(false);
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: { kind: 'user' } }).success).toBe(
+      false,
+    );
     // … no board, and no scopes to choose
-    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: 'b' }).success).toBe(false);
     expect(
-      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, scopes: ['board:read'] }).success,
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: 'b' }).success,
+    ).toBe(false);
+    expect(
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, scopes: ['board:read'] })
+        .success,
     ).toBe(false);
     // keepOthers is about rotating an agent's tokens: meaningless anywhere else
     expect(
@@ -376,7 +387,9 @@ describe('request schemas', () => {
     expect(r.safeParse({ ...p, role: 'viewer' }).success).toBe(true);
     expect(r.safeParse({ ...p, role: null }).success).toBe(true);
     expect(r.safeParse(p).success).toBe(false);
-    expect(r.safeParse({ ...p, role: 'viewer', agentAccess: { build: true, data: 'none' } }).success).toBe(false);
+    expect(
+      r.safeParse({ ...p, role: 'viewer', agentAccess: { build: true, data: 'none' } }).success,
+    ).toBe(false);
   });
 
   it('agent commands', () => {

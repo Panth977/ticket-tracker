@@ -60,6 +60,9 @@ export const COLLECTIONS = {
   viewers: 'viewers',
   /** §AB: users/{uid}/workspaces/{id} — a person's own bundles of boards and artifacts. */
   workspaces: 'workspaces',
+  /** Memory (memory.html §A): memories/{id} and memories/{id}/nodes/{nodeId}. */
+  memories: 'memories',
+  nodes: 'nodes',
   /** §AB: users/{uid}/ui/{doc} — the person's own UI state ('sidebar'). */
   ui: 'ui',
   /** Command idempotency records: _idem/{uid}_{clientId}, 24h TTL. */
@@ -108,6 +111,12 @@ export const paths = {
   workspace: (uid: string, workspaceId: string) =>
     `${C.users}/${seg(uid)}/${C.workspaces}/${seg(workspaceId)}`,
   sidebarPrefs: (uid: string) => `${C.users}/${seg(uid)}/${C.ui}/sidebar`,
+  /** memory.html §A */
+  memories: () => C.memories,
+  memory: (memoryId: string) => `${C.memories}/${seg(memoryId)}`,
+  memoryNodes: (memoryId: string) => `${C.memories}/${seg(memoryId)}/${C.nodes}`,
+  memoryNode: (memoryId: string, nodeId: string) =>
+    `${C.memories}/${seg(memoryId)}/${C.nodes}/${seg(nodeId)}`,
 
   // top-level
   invites: () => C.invites,

@@ -497,6 +497,37 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     updatedAt: T0,
   },
   sidebarPrefs: { hiddenBoardIds: [BOARD_ID], hiddenArtifactIds: [], updatedAt: T0 },
+  memories: {
+    name: 'Brand kit',
+    description: 'Logos, screenshots and the style guide',
+    icon: null,
+    ownerUid: UID_ASHA,
+    access: { [UID_ASHA]: 'owner' },
+    memberUids: [UID_ASHA],
+    boards: { [BOARD_ID]: 'read' },
+    artifacts: {},
+    boardIds: [BOARD_ID],
+    stats: { files: 1, folders: 1, bytes: 2048 },
+    archivedAt: null,
+    createdAt: T0,
+    updatedAt: T0,
+  },
+  memoryNodes: {
+    kind: 'file',
+    parentId: 'node_folder1',
+    name: 'logo.svg',
+    path: 'logos/logo.svg',
+    file: {
+      fileId: 'file_abc123',
+      storagePath: 'memories/memory_brand1/file_abc123/logo.svg',
+      mime: 'image/svg+xml',
+      size: 2048,
+    },
+    createdAt: T0,
+    createdBy: UID_ASHA,
+    updatedAt: T0,
+    updatedBy: UID_ASHA,
+  },
 };
 
 /** Phase 3: the question card in the thread (a message with kind 'question'). */
@@ -594,4 +625,6 @@ export const invalidFixtures: { [N in DocName]: unknown } = {
   artifactKv: { value: 1 },
   workspaces: { ...fixtures.workspaces, color: 'indigo' },
   sidebarPrefs: { hiddenBoardIds: 'board_eng', hiddenArtifactIds: [], updatedAt: T0 },
+  memories: { ...fixtures.memories, boards: { [BOARD_ID]: 'admin' } },
+  memoryNodes: { ...fixtures.memoryNodes, path: '/abs/path' },
 };

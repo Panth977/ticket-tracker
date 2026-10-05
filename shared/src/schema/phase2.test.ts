@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNT_SCOPES,
   ARTIFACT_SCOPES,
+  MEMORY_SCOPES,
   ADMIN_SCOPES,
   AGENT_TOKEN_SCOPES,
   AgentIdSchema,
@@ -166,21 +167,36 @@ describe('API keys v2', () => {
     expect(ApiKeySchema.safeParse(k).success).toBe(true);
     expect(apiKeyKind(ApiKeySchema.parse(k))).toBe('agent');
     // order does not matter, the set does
-    expect(ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES].reverse() }).success).toBe(true);
+    expect(
+      ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES].reverse() }).success,
+    ).toBe(true);
     // converted from a board token (§AA6): its old board rides along
     expect(ApiKeySchema.safeParse({ ...k, defaultBoardId: 'board_eng' }).success).toBe(true);
     expect(ApiKeySchema.safeParse({ ...k, defaultBoardId: null }).success).toBe(true);
-    expect(ApiKeySchema.safeParse({ ...k, revokedAt: 5, revokedReason: 'rotated' }).success).toBe(true);
+    expect(ApiKeySchema.safeParse({ ...k, revokedAt: 5, revokedReason: 'rotated' }).success).toBe(
+      true,
+    );
     // never a board, never a person, never a narrower or wider scope list
     expect(ApiKeySchema.safeParse({ ...k, boardId: 'board_eng' }).success).toBe(false);
-    expect(ApiKeySchema.safeParse({ ...k, actsAs: { kind: 'user', id: 'uid_asha' } }).success).toBe(false);
+    expect(ApiKeySchema.safeParse({ ...k, actsAs: { kind: 'user', id: 'uid_asha' } }).success).toBe(
+      false,
+    );
     expect(ApiKeySchema.safeParse({ ...k, scopes: ['board:read'] }).success).toBe(false);
-    expect(ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES, 'boards:create'] }).success).toBe(false);
+    expect(
+      ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES, 'boards:create'] }).success,
+    ).toBe(false);
     // defaultBoardId belongs to agent tokens only
-    expect(ApiKeySchema.safeParse({ ...fixtures.apiKeys, defaultBoardId: 'board_eng' }).success).toBe(false);
+    expect(
+      ApiKeySchema.safeParse({ ...fixtures.apiKeys, defaultBoardId: 'board_eng' }).success,
+    ).toBe(false);
   });
-  it('§AA1 AGENT_TOKEN_SCOPES = every board scope + the 2 admin + the 2 artifact scopes, no account scope', () => {
-    expect([...AGENT_TOKEN_SCOPES]).toEqual([...TOKEN_SCOPES, ...ADMIN_SCOPES, ...ARTIFACT_SCOPES]);
+  it('§AA1 AGENT_TOKEN_SCOPES = every board scope + the 2 admin + the 2 artifact + the 2 memory scopes, no account scope', () => {
+    expect([...AGENT_TOKEN_SCOPES]).toEqual([
+      ...TOKEN_SCOPES,
+      ...ADMIN_SCOPES,
+      ...ARTIFACT_SCOPES,
+      ...MEMORY_SCOPES,
+    ]);
     expect(AGENT_TOKEN_SCOPES.some(isAccountScope)).toBe(false);
     expect(isAgentTokenScopes([...AGENT_TOKEN_SCOPES])).toBe(true);
     expect(isAgentTokenScopes([...TOKEN_SCOPES])).toBe(false);
@@ -190,7 +206,9 @@ describe('API keys v2', () => {
     expect(ApiKeySchema.safeParse(old).success).toBe(true);
     expect(apiKeyKind(old)).toBe('board');
     expect(ApiKeySchema.safeParse({ ...old, kind: 'board' }).success).toBe(true);
-    expect(ApiKeySchema.safeParse({ ...old, revokedAt: 5, revokedReason: 'agentRemoved' }).success).toBe(true);
+    expect(
+      ApiKeySchema.safeParse({ ...old, revokedAt: 5, revokedReason: 'agentRemoved' }).success,
+    ).toBe(true);
   });
   it('apiKeyActive', () => {
     const k = { revokedAt: null, expiresAt: null };
@@ -201,13 +219,13 @@ describe('API keys v2', () => {
 });
 
 describe('scope vocabulary', () => {
-  it('16 token scopes in form order + 2 admin + 4 account + 2 artifact (13 phase 2, 3 phase 3, 4 phase 10)', () => {
+  it('16 token scopes in form order + 2 admin + 4 account + 2 artifact + 2 memory (13 phase 2, 3 phase 3, 4 phase 10)', () => {
     expect(TOKEN_SCOPES).toHaveLength(16);
     expect(ADMIN_SCOPES).toHaveLength(2);
     // §R1 added the account scopes; they live at the END so the form's
     // checkbox order (TOKEN_SCOPES) is untouched.
     expect(ACCOUNT_SCOPES).toHaveLength(4);
-    expect(SCOPES).toHaveLength(24);
+    expect(SCOPES).toHaveLength(26);
     expect(SCOPES.slice(0, 16)).toEqual([...TOKEN_SCOPES]);
     expect(SCOPE_PRESETS.everything).toEqual([...TOKEN_SCOPES]);
     // Every preset draws only on the vocabulary; only 'fullAccount' (an
@@ -217,7 +235,12 @@ describe('scope vocabulary', () => {
         expect(SCOPES).toContain(s);
         if (name !== 'fullAccount') expect(TOKEN_SCOPES).toContain(s);
       }
-    expect(SCOPE_PRESETS.fullAccount).toEqual([...TOKEN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES]);
+    expect(SCOPE_PRESETS.fullAccount).toEqual([
+      ...TOKEN_SCOPES,
+      ...ACCOUNT_SCOPES,
+      ...ARTIFACT_SCOPES,
+      ...MEMORY_SCOPES,
+    ]);
     for (const s of ACCOUNT_SCOPES) expect(isAccountScope(s)).toBe(true);
     for (const s of TOKEN_SCOPES) expect(isAccountScope(s)).toBe(false);
   });

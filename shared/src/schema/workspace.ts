@@ -31,6 +31,8 @@ export const WorkspaceSchema = z.object({
   /** In the order the person put them. */
   boardIds: z.array(BoardIdSchema).max(WORKSPACE_ITEMS_MAX),
   artifactIds: z.array(ArtifactRefIdSchema).max(WORKSPACE_ITEMS_MAX),
+  /** memory.html §F — absent on workspaces made before Memory = none. */
+  memoryIds: z.array(ArtifactRefIdSchema).max(WORKSPACE_ITEMS_MAX).optional(),
   /** Sidebar order among the person's workspaces (ascending). */
   position: z.number(),
   createdAt: MillisSchema,
@@ -43,6 +45,8 @@ export type WorkspaceWithId = Workspace & { id: string };
 export const SidebarPrefsSchema = z.object({
   hiddenBoardIds: z.array(BoardIdSchema),
   hiddenArtifactIds: z.array(ArtifactRefIdSchema),
+  /** memory.html §F — absent before Memory = none hidden. */
+  hiddenMemoryIds: z.array(ArtifactRefIdSchema).optional(),
   updatedAt: MillisSchema,
 });
 export type SidebarPrefs = z.infer<typeof SidebarPrefsSchema>;

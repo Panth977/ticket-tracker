@@ -73,7 +73,24 @@ export const ARTIFACT_SCOPES = [
   /** Create, publish, roll back, share, delete (owner/editor as the role allows). */
   'artifacts:write',
 ] as const;
-export const SCOPES = [...TOKEN_SCOPES, ...ADMIN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES] as const;
+/**
+ * MEMORY (docs/plan/memory.html §G). An account token / OAuth grant reaches
+ * the memories its person reaches; an agent token only those granted to a
+ * board the agent is on (memoryReach decides, D-M4).
+ */
+export const MEMORY_SCOPES = [
+  /** List, browse and read memory files. */
+  'memory:read',
+  /** Create memories; upload, edit, move and delete files (as the role allows). */
+  'memory:write',
+] as const;
+export const SCOPES = [
+  ...TOKEN_SCOPES,
+  ...ADMIN_SCOPES,
+  ...ACCOUNT_SCOPES,
+  ...ARTIFACT_SCOPES,
+  ...MEMORY_SCOPES,
+] as const;
 /**
  * §AA1 — WHAT EVERY AGENT TOKEN CARRIES, and it is not a choice. An agent
  * token (ApiKey kind 'agent') says WHO the agent is and nothing else, so its
@@ -89,6 +106,7 @@ export const AGENT_TOKEN_SCOPES = [
   ...TOKEN_SCOPES,
   ...ADMIN_SCOPES,
   ...ARTIFACT_SCOPES,
+  ...MEMORY_SCOPES,
 ] as const satisfies readonly (typeof SCOPES)[number][];
 /** Is this scope list EXACTLY the agent token's (any order, no duplicates needed)? */
 export function isAgentTokenScopes(scopes: readonly string[]): boolean {
@@ -104,6 +122,7 @@ export type TokenScope = (typeof TOKEN_SCOPES)[number];
 export type AdminScope = (typeof ADMIN_SCOPES)[number];
 export type AccountScope = (typeof ACCOUNT_SCOPES)[number];
 export type ArtifactScope = (typeof ARTIFACT_SCOPES)[number];
+export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 export const isAccountScope = (s: string): s is AccountScope =>
   (ACCOUNT_SCOPES as readonly string[]).includes(s);
 
@@ -135,6 +154,9 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   // Artifacts (artifacts.html §C4): account tokens, and agent tokens for the artifacts that agent is on.
   'artifacts:read': 'Read artifacts and download their source',
   'artifacts:write': 'Create, publish and share artifacts',
+  // Memory (memory.html §G).
+  'memory:read': 'Browse and read your memory files',
+  'memory:write': 'Create memories, and upload, edit and delete their files',
 };
 
 const READ_ONLY: readonly Scope[] = [
@@ -161,7 +183,7 @@ export const SCOPE_PRESETS = {
   ],
   everything: [...TOKEN_SCOPES],
   /** §R1: every board checkbox, on every board, plus the account-level ones. */
-  fullAccount: [...TOKEN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES],
+  fullAccount: [...TOKEN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES, ...MEMORY_SCOPES],
 } as const satisfies Record<string, readonly Scope[]>;
 export type ScopePreset = keyof typeof SCOPE_PRESETS;
 export const SCOPE_PRESET_LABELS: Record<ScopePreset, string> = {

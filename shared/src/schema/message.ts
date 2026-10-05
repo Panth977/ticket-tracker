@@ -37,7 +37,14 @@ export const CostCounterSchema = z.object({
 });
 export type CostCounter = z.infer<typeof CostCounterSchema>;
 
-export const RUN_OUTCOMES = ['review', 'waiting', 'blocked', 'failed', 'stopped', 'timeout'] as const;
+export const RUN_OUTCOMES = [
+  'review',
+  'waiting',
+  'blocked',
+  'failed',
+  'stopped',
+  'timeout',
+] as const;
 export const RunOutcomeSchema = z.enum(RUN_OUTCOMES);
 export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
@@ -161,7 +168,7 @@ export const TicketFileSchema = AttachmentSchema.extend({
    * MCP upload_file) and not (yet) posted in a message; messagePost's fileIds
    * then attaches it (source → 'message', messageId set).
    */
-  source: z.enum(['description', 'message', 'upload']),
+  source: z.enum(['description', 'message', 'upload', 'memory']),
   /** Jump to where it was posted. */
   messageId: z.string().nullable(),
   createdAt: MillisSchema,

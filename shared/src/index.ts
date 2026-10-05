@@ -10,6 +10,7 @@
  *   api/       public (toPublic) shapes, /v1 REST, MCP tools, intake, webhooks
  *   artifacts/ artifacts (docs/plan/artifacts.html): schema, commands, the driver
  *              protocol and the path fence
+ *   memory/    memory (docs/plan/memory.html): buckets of files, grants, refs
  *   ports/     adapter interfaces (email, push, WhatsApp, search, queue …)
  *
  * Fixtures live at '@tm/shared/schema/fixtures' (not re-exported here).
@@ -26,3 +27,4 @@ export * from './api/index.js';
 export * from './ports/index.js';
 export * from './logic/index.js';
 export * from './artifacts/index.js';
+export * from './memory/index.js';

@@ -30,6 +30,8 @@ export const workspaceCreate = defineCommand({
     color: Color.optional(),
     boardIds: Ids(BoardIdSchema).optional(),
     artifactIds: Ids(ArtifactRefIdSchema).optional(),
+    /** memory.html §F: memories bundled too. */
+    memoryIds: Ids(ArtifactRefIdSchema).optional(),
   }),
   res: z.object({ workspaceId: WorkspaceIdSchema }),
 });
@@ -49,11 +51,13 @@ export const workspaceUpdate = defineCommand({
     /** Replace the whole list (its order is the sidebar's) … */
     boardIds: Ids(BoardIdSchema).optional(),
     artifactIds: Ids(ArtifactRefIdSchema).optional(),
+    memoryIds: Ids(ArtifactRefIdSchema).optional(),
     /** … or attach / detach a few (applied after a replacement, if both are given). */
     add: z
       .object({
         boardIds: Ids(BoardIdSchema).optional(),
         artifactIds: Ids(ArtifactRefIdSchema).optional(),
+        memoryIds: Ids(ArtifactRefIdSchema).optional(),
       })
       .strict()
       .optional(),
@@ -61,6 +65,7 @@ export const workspaceUpdate = defineCommand({
       .object({
         boardIds: Ids(BoardIdSchema).optional(),
         artifactIds: Ids(ArtifactRefIdSchema).optional(),
+        memoryIds: Ids(ArtifactRefIdSchema).optional(),
       })
       .strict()
       .optional(),
@@ -89,7 +94,12 @@ export const sidebarHide = defineCommand({
   req: req({
     boardId: BoardIdSchema.optional(),
     artifactId: ArtifactRefIdSchema.optional(),
+    /** memory.html §F */
+    memoryId: ArtifactRefIdSchema.optional(),
     hidden: z.boolean(),
-  }).refine((r) => !!r.boardId !== !!r.artifactId, 'Give exactly one of boardId or artifactId'),
+  }).refine(
+    (r) => [r.boardId, r.artifactId, r.memoryId].filter((x) => x !== undefined).length === 1,
+    'Give exactly one of boardId, artifactId or memoryId',
+  ),
   res: OkResSchema,
 });
