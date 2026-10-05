@@ -7,7 +7,7 @@
 version:           1.5.0
 api:               v1
 updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    8645d16e2764e61833573ddaf8ab07ac1732b3363704cd69dbc3de9c05e68bb6
+content-sha256:    51c7c9989fb0a8f6b2b6e0793e1d9b586dd042f0bb36545a920d35cba5719e24
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -3590,7 +3590,9 @@ declare function createClientBase(options: ClientOptions): {
         }>;
         /**
          * Put a file on a ticket. `text` makes .md / .html documents trivial;
-         * `bytes` (or `base64`) carries anything else, up to 25 MB.
+         * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
+         * are stored in the board's attachment memory (or `memoryId`) and the
+         * ticket references that memory file.
          */
         upload: (key: string, input: UploadInput, o?: RequestOptions) => Promise<UploadedFile>;
         /** A file's metadata and a signed download URL (valid 15 minutes). */

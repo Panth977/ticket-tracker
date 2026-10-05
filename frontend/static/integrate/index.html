@@ -108,7 +108,7 @@
         <span>version 1.5.0</span>
         <span>api v1</span>
         <span>updated 2026-10-05</span>
-        <span>sha256 8645d16e2764…</span>
+        <span>sha256 51c7c9989fb0…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -2193,7 +2193,9 @@ declare function createClientBase(options: ClientOptions): {
         }&gt;;
         /**
          * Put a file on a ticket. `text` makes .md / .html documents trivial;
-         * `bytes` (or `base64`) carries anything else, up to 25 MB.
+         * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
+         * are stored in the board's attachment memory (or `memoryId`) and the
+         * ticket references that memory file.
          */
         upload: (key: string, input: UploadInput, o?: RequestOptions) =&gt; Promise&lt;UploadedFile&gt;;
         /** A file's metadata and a signed download URL (valid 15 minutes). */
