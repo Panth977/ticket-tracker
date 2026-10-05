@@ -17,6 +17,7 @@
 <script lang="ts">
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
+  import { untrack } from 'svelte';
   import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
@@ -123,13 +124,18 @@
   // agent — changes its path (and every path under a moved folder), never its
   // id. So when ?path= stops naming anything but the node we had open is still
   // there under a new path, go there instead of saying it is gone.
-  let openId = $state<string | null>(null);
+  /** What ?path= showed last: the node, and the path it was at. */
+  let shown = $state<{ id: string; path: string } | null>(null);
   $effect(() => {
-    if (openNode) openId = openNode.id;
-    else if (!path) openId = null;
+    if (openNode) shown = { id: openNode.id, path: openNode.path };
+    else if (!path) shown = null;
   });
+  // Follow only when THIS path stopped naming the node it showed — not after
+  // navigating to a path that is not there yet (an upload still landing).
   const movedTo = $derived(
-    path && !openNode && openId ? (nodes.find((n) => n.id === openId)?.path ?? null) : null,
+    path && !openNode && shown && shown.path === path
+      ? (nodes.find((n) => n.id === shown!.id)?.path ?? null)
+      : null,
   );
   $effect(() => {
     if (movedTo !== null) go(movedTo, { replace: true });
@@ -164,13 +170,19 @@
     return () => removeEventListener('beforeunload', warn);
   });
 
-  // ── the tree's folds: the path to what is open is always unfolded ──────────
+  // ── the tree's folds: OPENING something unfolds the path to it ─────────────
+  // Only when what is open changes — not whenever the folds do, or a folder on
+  // that path could never be folded again (it sprang back open).
   let expanded = $state<Set<string>>(new Set());
+  const openKey = $derived(openNode ? `${openNode.kind}:${openNode.path}` : '');
   $effect(() => {
-    const need = openNode
-      ? [...ancestorsOf(openNode.path), ...(openNode.kind === 'folder' ? [openNode.path] : [])]
-      : [];
-    if (need.some((p) => !expanded.has(p))) expanded = new Set([...expanded, ...need]);
+    const key = openKey;
+    if (!key) return;
+    const [kind, p] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    const need = [...ancestorsOf(p), ...(kind === 'folder' ? [p] : [])];
+    untrack(() => {
+      if (need.some((x) => !expanded.has(x))) expanded = new Set([...expanded, ...need]);
+    });
   });
   const flip = (set: ReadonlySet<string>, x: string) =>
     new Set(set.has(x) ? [...set].filter((y) => y !== x) : [...set, x]);

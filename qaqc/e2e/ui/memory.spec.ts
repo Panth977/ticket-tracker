@@ -334,3 +334,27 @@ test('M6: the open file follows a move of its folder (from anywhere)', async ({ 
   await page.waitForURL(/path=b%2Fd\.md$/);
   await expect(page.getByText('Not in this memory')).toHaveCount(0);
 });
+
+test('M7: the open folder and its parents can be folded', async ({ page }) => {
+  const ada = await newPerson('Ada');
+  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Folds' });
+  await call(ada, 'memoryFileWrite', { memoryId, path: 'a/b/c.md', text: '# C' });
+  await signIn(page, ada.email, `/m/${memoryId}?path=a%2Fb`);
+  await page.getByRole('button', { name: 'Tree' }).click();
+  const tree = page.getByRole('tree', { name: 'Files' });
+  await expect(tree.locator('[data-node="a/b/c.md"]')).toBeVisible();
+
+  // fold the open folder itself: it stays folded
+  await tree.getByRole('button', { name: 'Fold b' }).click();
+  await expect(tree.locator('[data-node="a/b/c.md"]')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(tree.locator('[data-node="a/b/c.md"]')).toHaveCount(0);
+  // and its parent
+  await tree.getByRole('button', { name: 'Fold a' }).click();
+  await expect(tree.locator('[data-node="a/b"]')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(tree.locator('[data-node="a/b"]')).toHaveCount(0);
+  // opening something again unfolds the way to it
+  await page.goto(`/m/${memoryId}?path=a%2Fb%2Fc.md`);
+  await expect(tree.locator('[data-node="a/b/c.md"]')).toBeVisible();
+});

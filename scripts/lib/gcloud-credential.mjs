@@ -41,17 +41,37 @@ export function gcloudClients(project, requireFrom) {
   const fromAdmin = createRequire.call(null, requireFrom.adminEntry);
   const { Firestore, FieldValue } = fromAdmin('@google-cloud/firestore');
   const { Storage } = fromAdmin('@google-cloud/storage');
-  const { OAuth2Client } = createRequire.call(
-    null,
-    fromAdmin.resolve('@google-cloud/firestore'),
-  )('google-auth-library');
-  const authClient = new OAuth2Client();
-  authClient.quotaProjectId = project;
-  authClient.refreshHandler = async () => {
-    const t = await cred.getAccessToken();
-    return { access_token: t.access_token, expiry_date: Date.now() + t.expires_in * 1000 };
+  // One OAuth2Client per library: each Cloud library ships its own
+  // google-auth-library, and checks the client against ITS classes.
+  const account = process.env.TM_GCLOUD_ACCOUNT;
+  const token = () =>
+    execFileSync('gcloud', ['auth', 'print-access-token', '--account', account], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'inherit'],
+    }).trim();
+  const clientFor = (lib) => {
+    const { OAuth2Client } = createRequire.call(
+      null,
+      fromAdmin.resolve(lib),
+    )('google-auth-library');
+    const c = new OAuth2Client();
+    c.quotaProjectId = project;
+    c.refreshHandler = async () => ({
+      access_token: token(),
+      expiry_date: Date.now() + 3000 * 1000,
+    });
+    // Seeded now: a client with no credentials yet can be taken for anonymous.
+    c.setCredentials({ access_token: token(), expiry_date: Date.now() + 3000 * 1000 });
+    return c;
   };
-  const db = new Firestore({ projectId: project, authClient, preferRest: true });
-  const storage = new Storage({ projectId: project, authClient });
+  const db = new Firestore({
+    projectId: project,
+    authClient: clientFor('@google-cloud/firestore'),
+    preferRest: true,
+  });
+  const storage = new Storage({
+    projectId: project,
+    authClient: clientFor('@google-cloud/storage'),
+  });
   return { db, storage, FieldValue };
 }
