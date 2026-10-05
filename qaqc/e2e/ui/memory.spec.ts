@@ -4,6 +4,9 @@
  *   M1  create a memory, a folder, upload a Markdown file into it; preview
  *       renders it; Code mode edits and saves a new version (⌘S)
  *   M2  Tree ⇄ Folders; rename, move to…, delete from a node's menu
+ *   M5  right-click menus (new / delete file and folder, on a node and on the
+ *       empty space), a rename with '/' that moves, the upload dialog's path
+ *       field, and the drop target lighting up while a node is dragged
  *   M3  the list page is cards; hiding takes it out of the sidebar's root
  *   M4  a workspace bundles it: the card is there (no hide / show on a
  *       workspace page), and opening it keeps "Workspace ›" and the switcher
@@ -64,7 +67,7 @@ test('M1–M4: a memory — upload, preview, edit as code, views, rename / move 
   await page.getByRole('button', { name: 'Add' }).click();
   await page.getByRole('menuitem', { name: 'New folder' }).click();
   const named = page.getByRole('dialog', { name: 'New folder' });
-  await named.getByLabel('Name').fill('docs');
+  await named.getByLabel('Name or path').fill('docs');
   await named.getByRole('button', { name: 'Create' }).click();
   await page.waitForURL(/path=docs$/);
   await expect(nodeEl(page, 'docs')).toBeVisible();
@@ -80,6 +83,10 @@ test('M1–M4: a memory — upload, preview, edit as code, views, rename / move 
     mimeType: 'text/markdown',
     buffer: Buffer.from('# Hello memory\n\nFirst version.\n'),
   });
+  // it asks where first: one path field, the open folder filled in
+  const up = page.getByRole('dialog', { name: 'Upload a file' });
+  await expect(up.getByLabel('Path')).toHaveValue('/docs/readme.md');
+  await up.getByRole('button', { name: 'Upload' }).click();
   await expect(nodeEl(page, 'docs/readme.md')).toBeVisible({ timeout: 20_000 });
   const first = await eventually('the node', () => nodeByPath(memoryId, 'docs/readme.md'));
   const firstFileId = first.file!.fileId;
@@ -116,9 +123,9 @@ test('M1–M4: a memory — upload, preview, edit as code, views, rename / move 
   await expect(page.locator('[data-folder-view="docs"]')).toBeVisible();
   await expect(nodeEl(page, 'docs/readme.md')).toBeVisible();
 
-  await menuAction(page, 'docs/readme.md', 'Rename');
+  await menuAction(page, 'docs/readme.md', 'Rename F2');
   const rename = page.getByRole('dialog', { name: /Rename/ });
-  await rename.getByLabel('Name').fill('intro.md');
+  await rename.getByLabel('Name or path').fill('intro.md');
   await rename.getByRole('button', { name: 'Rename' }).click();
   await expect(nodeEl(page, 'docs/intro.md')).toBeVisible();
 
@@ -132,7 +139,7 @@ test('M1–M4: a memory — upload, preview, edit as code, views, rename / move 
   await expect(nodeEl(page, 'docs/intro.md')).toHaveCount(0);
 
   await page.locator('[data-breadcrumb]').getByRole('button', { name: 'Brand kit' }).click();
-  await menuAction(page, 'archive', 'Delete');
+  await menuAction(page, 'archive', 'Delete folder');
   await page
     .getByRole('dialog', { name: /Delete archive/ })
     .getByRole('button', { name: 'Delete' })
@@ -209,4 +216,101 @@ test('C1: artifacts are cards, and an artifact has the board’s title dropdown 
     .click();
   await page.waitForURL(/\/x\/[A-Za-z0-9_-]+$/);
   expect(page.url()).not.toContain(artifactId);
+});
+
+test('M5: right-click, rename with /, the upload path, and the drop target', async ({ page }) => {
+  const ada = await newPerson('Ada');
+  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Notes' });
+  await call(ada, 'memoryFileWrite', { memoryId, path: 'docs/a.md', text: '# A' });
+  await call(ada, 'memoryFolderCreate', { memoryId, path: 'archive' });
+  await signIn(page, ada.email, `/m/${memoryId}`);
+  await page.getByRole('button', { name: 'Tree' }).click();
+  await expect(nodeEl(page, 'docs')).toBeVisible();
+
+  // ── right-click the empty space: new folder, at the top level ─────────────
+  await page.locator('[data-drop-root]').click({ button: 'right', position: { x: 40, y: 200 } });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  const nf = page.getByRole('dialog', { name: 'New folder' });
+  await nf.getByLabel('Name or path').fill('drafts/2026');
+  await expect(nf.locator('[data-resolved-path]')).toContainText('/drafts/2026');
+  await nf.getByRole('button', { name: 'Create' }).click();
+  await eventually('nested folder', async () =>
+    (await nodeByPath(memoryId, 'drafts/2026')) ? true : null,
+  );
+
+  // ── right-click a folder: new file inside it ──────────────────────────────
+  await nodeEl(page, 'docs').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New file', exact: true }).click();
+  const nfile = page.getByRole('dialog', { name: 'New file' });
+  await nfile.getByLabel('Name or path').fill('b.md');
+  await nfile.getByRole('button', { name: 'Create' }).click();
+  await eventually('new file', async () =>
+    (await nodeByPath(memoryId, 'docs/b.md')) ? true : null,
+  );
+
+  // ── rename with '/': it moves, creating the folder ─────────────────────────
+  await nodeEl(page, 'docs/a.md').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const rn = page.getByRole('dialog', { name: /Rename/ });
+  await rn.getByLabel('Name or path').fill('old/a-v1.md');
+  await expect(rn.locator('[data-resolved-path]')).toContainText('/docs/old/a-v1.md');
+  await rn.getByRole('button', { name: 'Rename' }).click();
+  await eventually('renamed into a new folder', async () =>
+    (await nodeByPath(memoryId, 'docs/old/a-v1.md')) ? true : null,
+  );
+  // a clash is caught in the dialog
+  await nodeEl(page, 'docs/b.md').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await rn.getByLabel('Name or path').fill('/archive');
+  await expect(rn.getByText('A folder with that name is already there')).toBeVisible();
+  await rn.getByRole('button', { name: 'Cancel' }).click();
+
+  // ── right-click a file: delete it ─────────────────────────────────────────
+  await nodeEl(page, 'docs/b.md').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Delete file' }).click();
+  await page
+    .getByRole('dialog', { name: /Delete b\.md/ })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await eventually('deleted', async () =>
+    (await nodeByPath(memoryId, 'docs/b.md')) ? null : true,
+  );
+
+  // ── upload: the path field renames and places it ─────────────────────────
+  await page.locator('[data-drop-root]').click({ button: 'right', position: { x: 40, y: 200 } });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menuitem', { name: 'Upload files…' }).click();
+  await (
+    await chooser
+  ).setFiles([
+    { name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') },
+    { name: 'todo.txt', mimeType: 'text/plain', buffer: Buffer.from('x') },
+  ]);
+  const up = page.getByRole('dialog', { name: 'Upload 2 files' });
+  await expect(up.getByLabel('Path for logo.svg')).toHaveValue('/logo.svg');
+  await up.getByLabel('Path for logo.svg').fill('/brand/mark.svg');
+  await up.getByLabel('Path for todo.txt').fill('/archive');
+  await expect(up.getByText('A folder is already at that path')).toBeVisible();
+  await up.getByRole('button', { name: "Don't upload todo.txt" }).click();
+  await up.getByRole('button', { name: 'Upload' }).click();
+  await eventually('uploaded where asked', async () =>
+    (await nodeByPath(memoryId, 'brand/mark.svg')) ? true : null,
+  );
+
+  // ── drag: the folder it would land in lights up, then takes it ────────────
+  await expect(nodeEl(page, 'brand/mark.svg')).toBeVisible();
+  const src = nodeEl(page, 'brand/mark.svg');
+  const dst = nodeEl(page, 'archive');
+  await src.hover();
+  await page.mouse.down();
+  const box = (await dst.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+  await expect(page.locator('li[data-drop-target]')).toHaveCount(1);
+  await expect(page.locator('li[data-drop-target] > [data-node="archive"]')).toBeVisible();
+  await expect(page.locator('[data-drag-label]')).toContainText('into /archive');
+  await page.mouse.up();
+  await eventually('dropped into archive', async () =>
+    (await nodeByPath(memoryId, 'archive/mark.svg')) ? true : null,
+  );
+  await expect(page.locator('[data-drop-target]')).toHaveCount(0);
 });

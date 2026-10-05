@@ -17,6 +17,7 @@ export { default as IconButton } from './IconButton.svelte';
 export { default as Input } from './Input.svelte';
 export { default as Kbd } from './Kbd.svelte';
 export { default as Menu } from './Menu.svelte';
+export { default as ContextMenu } from './ContextMenu.svelte';
 export { default as PersonChip } from './PersonChip.svelte';
 export { default as Popover } from './Popover.svelte';
 export { default as Select } from './Select.svelte';

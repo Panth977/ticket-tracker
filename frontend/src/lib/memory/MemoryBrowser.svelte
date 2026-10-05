@@ -9,8 +9,10 @@
              full width under the same breadcrumb
 
   Uploads: drop files or folders anywhere (into the folder you are in, or the
-  folder you drop on), or the Upload menu. Every change is a command; the
-  node listener redraws.
+  folder you drop on — it lights up, drag.svelte.ts), or pick them with Add,
+  which asks for each file's path first (UploadDialog). Right-click anything
+  (or the empty space) for its menu. Every change is a command; the node
+  listener redraws.
 -->
 <script lang="ts">
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
@@ -28,6 +30,7 @@
     FolderInput,
     FolderPlus,
     FolderTree,
+    FolderUp,
     Home,
     LayoutGrid,
     Lock,
@@ -43,17 +46,28 @@
   import { auth } from '$lib/firebase/auth.svelte';
   import { downloadFile } from '$lib/files/source';
   import { routes } from '$lib/layout/routes';
-  import { Button, Dialog, EmptyState, IconButton, Menu, Skeleton, toast } from '$lib/ui';
+  import {
+    Button,
+    ContextMenu,
+    Dialog,
+    EmptyState,
+    IconButton,
+    Menu,
+    Skeleton,
+    toast,
+  } from '$lib/ui';
   import type { MenuItem } from '$lib/ui/types';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import { switcherFor } from '$lib/workspaces/switcherStore';
   import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
   import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
-  import { copyPath, createFile, createFolder, deleteNodes, moveNode, renameNode } from './actions';
+  import { copyPath, createFile, createFolder, deleteNodes, moveNode } from './actions';
+  import { memoryDrag } from './drag.svelte';
   import FilePane from './FilePane.svelte';
   import FolderView from './FolderView.svelte';
   import MoveDialog from './MoveDialog.svelte';
   import NameDialog from './NameDialog.svelte';
+  import UploadDialog from './UploadDialog.svelte';
   import {
     canManage,
     canWrite,
@@ -73,7 +87,6 @@
     crumbs,
     findByPath,
     freeName,
-    joinMemoryPath,
     memoryParentPath,
     movedPath,
     subtreeStats,
@@ -175,18 +188,17 @@
   const namingFolder = $derived(
     naming ? (naming.kind === 'rename' ? memoryParentPath(naming.node.path) : naming.folder) : '',
   );
-  const takenNames = $derived(childrenOf(nodes, namingFolder).map((n) => n.name));
 
-  async function submitName(name: string): Promise<boolean> {
+  /** `p` is the full path the dialog resolved (a typed '/' makes folders). */
+  async function submitName(p: string): Promise<boolean> {
     const n = naming;
     if (!n) return false;
     if (n.kind === 'rename') {
-      const to = await renameNode(memoryId, n.node, name);
+      const to = await moveNode(memoryId, n.node, p);
       if (to && (path === n.node.path || path.startsWith(n.node.path + '/')))
         go(to + path.slice(n.node.path.length));
       return !!to;
     }
-    const p = joinMemoryPath(n.folder, name);
     if (n.kind === 'folder') {
       const ok = await createFolder(memoryId, p);
       if (ok) go(p);
@@ -241,10 +253,24 @@
   // ── uploads ────────────────────────────────────────────────────────────────
   let fileInput: HTMLInputElement | undefined = $state();
   let dirInput: HTMLInputElement | undefined = $state();
-  let uploadInto = '';
+  let uploadInto = $state('');
+  // Picked files first say where they go (UploadDialog); drops go straight in.
+  let picked = $state<{ file: File; relative: string }[]>([]);
+  let pickedFolder = $state(false);
+  let uploadOpen = $state(false);
   function pickFiles(into: string, dir = false) {
     uploadInto = into;
     (dir ? dirInput : fileInput)?.click();
+  }
+  function askWhere(list: { file: File; relative: string }[], dir: boolean) {
+    if (!writable || !list.length) return;
+    picked = list;
+    pickedFolder = dir;
+    uploadOpen = true;
+  }
+  async function uploadTo(list: { file: File; path: string }[]) {
+    const done = await Promise.all(list.map((f) => memoryUploads.add(memoryId, f.path, f.file)));
+    if (list.length === 1 && done[0] && view === 'tree') go(list[0]!.path);
   }
   async function uploadList(into: string, list: { file: File; relative: string }[]) {
     if (!writable || !list.length) return;
@@ -273,10 +299,29 @@
     const n = nodes.find((x) => x.id === nodeId);
     if (!n || memoryParentPath(n.path) === target) return;
     if (n.kind === 'folder' && (target === n.path || target.startsWith(n.path + '/'))) return;
-    const to = await moveNode(memoryId, n, movedPath(n, target));
-    if (to) toast.success(`Moved to ${target || 'the top level'}`);
+    const dest = movedPath(n, target);
+    if (findByPath(nodes, dest)) {
+      toast.error(`${n.name} is already in ${target || 'the top level'}`);
+      return;
+    }
+    const to = await moveNode(memoryId, n, dest);
+    if (to) {
+      toast.success(`Moved to ${target || 'the top level'}`);
+      if (path === n.path || path.startsWith(n.path + '/')) go(to + path.slice(n.path.length));
+    }
   }
-  let pageOver = $state(false);
+  function dropOn(e: DragEvent, target: string) {
+    const got = memoryDrag.take(e, target, writable);
+    if (!got) return;
+    if ('nodeId' in got) void dropNode(got.nodeId, target);
+    else void dropFiles(target, got.files);
+  }
+  const dragLabel = $derived.by(() => {
+    const t = memoryDrag.over;
+    if (t === null) return null;
+    const where = t ? `/${t}` : 'the top level';
+    return memoryDrag.node ? `Move ${memoryDrag.node.name} into ${where}` : `Upload into ${where}`;
+  });
 
   // The page fills the window under the app's own top bar (as an artifact does).
   let pageEl: HTMLDivElement | undefined = $state();
@@ -293,6 +338,26 @@
   });
 
   // ── menus ──────────────────────────────────────────────────────────────────
+  /** New / upload in `f` — the Add menu, a folder's menu and the empty space's. */
+  function addIn(f: string, first = false): MenuItem[] {
+    if (!writable) return [];
+    return [
+      {
+        label: 'New file',
+        icon: FilePlus,
+        separator: !first,
+        onSelect: () => askName({ kind: 'file', folder: f }),
+      },
+      {
+        label: 'New folder',
+        icon: FolderPlus,
+        onSelect: () => askName({ kind: 'folder', folder: f }),
+      },
+      { label: 'Upload files…', icon: Upload, separator: true, onSelect: () => pickFiles(f) },
+      { label: 'Upload a folder…', icon: FolderUp, onSelect: () => pickFiles(f, true) },
+    ];
+  }
+
   function itemsFor(n: Node): MenuItem[] {
     const isFolder = n.kind === 'folder';
     const items: MenuItem[] = [{ label: 'Open', icon: Eye, onSelect: () => open(n) }];
@@ -302,26 +367,14 @@
         icon: Code2,
         onSelect: () => go(n.path, { mode: 'code' }),
       });
-    if (writable && isFolder)
-      items.push(
-        {
-          label: 'New file here',
-          icon: FilePlus,
-          separator: true,
-          onSelect: () => askName({ kind: 'file', folder: n.path }),
-        },
-        {
-          label: 'New folder here',
-          icon: FolderPlus,
-          onSelect: () => askName({ kind: 'folder', folder: n.path }),
-        },
-        { label: 'Upload here…', icon: Upload, onSelect: () => pickFiles(n.path) },
-      );
+    // A folder adds inside itself; a file, beside itself.
+    items.push(...addIn(isFolder ? n.path : memoryParentPath(n.path)));
     if (writable)
       items.push(
         {
           label: 'Rename',
           icon: Pencil,
+          kbd: 'F2',
           separator: true,
           onSelect: () => askName({ kind: 'rename', node: n }),
         },
@@ -346,7 +399,7 @@
       });
     if (writable)
       items.push({
-        label: 'Delete',
+        label: isFolder ? 'Delete folder' : 'Delete file',
         icon: Trash2,
         danger: true,
         separator: true,
@@ -355,17 +408,32 @@
     return items;
   }
 
-  const addItems = $derived<MenuItem[]>([
-    { label: 'Upload files…', icon: Upload, onSelect: () => pickFiles(folder) },
-    { label: 'Upload a folder…', icon: FolderInput, onSelect: () => pickFiles(folder, true) },
-    {
-      label: 'New file',
-      icon: FilePlus,
-      separator: true,
-      onSelect: () => askName({ kind: 'file', folder }),
-    },
-    { label: 'New folder', icon: FolderPlus, onSelect: () => askName({ kind: 'folder', folder }) },
-  ]);
+  const addItems = $derived<MenuItem[]>(addIn(folder, true));
+
+  // ── right-click and keys ───────────────────────────────────────────────────
+  let ctx: ContextMenu | undefined = $state();
+  /** A node's menu, or (null) the menu of the place: `area` ('' = the top level). */
+  function context(e: MouseEvent, n: Node | null, area: string) {
+    const items = n ? itemsFor(n) : addIn(area, true);
+    if (!n && items.length)
+      items.push({
+        label: 'Copy path',
+        icon: Copy,
+        separator: true,
+        onSelect: () => copyPath(area || '/'),
+      });
+    void ctx?.show(e, items);
+  }
+  function key(e: KeyboardEvent, n: Node) {
+    if (!writable) return;
+    if (e.key === 'F2') {
+      e.preventDefault();
+      askName({ kind: 'rename', node: n });
+    } else if (e.key === 'Delete' || (e.key === 'Backspace' && (e.metaKey || e.ctrlKey))) {
+      e.preventDefault();
+      askDelete(selected.has(n.id) ? selectedNodes : [n]);
+    }
+  }
 
   const countOf = (f: Node) => subtreeStats(nodes, f.path).files;
   const folderChildren = $derived(childrenOf(nodes, folder));
@@ -391,23 +459,12 @@
   <div
     bind:this={pageEl}
     style:height="calc(100dvh - {top}px)"
-    class="flex min-h-0 flex-col bg-bg {pageOver
-      ? 'outline-2 -outline-offset-2 outline-accent outline-dashed'
-      : ''}"
+    class="flex min-h-0 flex-col bg-bg"
     data-memory-page={memoryId}
     data-view={view}
-    ondragover={(e) => {
-      if (!writable || !e.dataTransfer?.types.includes('Files')) return;
-      e.preventDefault();
-      pageOver = true;
-    }}
-    ondragleave={(e) => e.currentTarget === e.target && (pageOver = false)}
-    ondrop={(e) => {
-      pageOver = false;
-      if (!writable || !e.dataTransfer?.types.includes('Files')) return;
-      e.preventDefault();
-      void dropFiles(folder, e.dataTransfer);
-    }}
+    ondragover={(e) => memoryDrag.hover(e, folder, writable)}
+    ondragleave={(e) => memoryDrag.leave(e)}
+    ondrop={(e) => dropOn(e, folder)}
     role="none"
   >
     <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
@@ -491,16 +548,31 @@
       >
         <button
           type="button"
-          class="flex items-center gap-1 rounded px-1 text-muted hover:text-text"
+          class="flex items-center gap-1 rounded px-1 {memoryDrag.over === ''
+            ? 'bg-accent-soft text-text ring-1 ring-accent'
+            : 'text-muted hover:text-text'}"
+          ondragover={(e) => memoryDrag.hover(e, '', writable)}
+          ondrop={(e) => dropOn(e, '')}
+          oncontextmenu={(e) => context(e, null, '')}
           onclick={() => go('')}><Home size={14} aria-hidden="true" /> {mem.name}</button
         >
         {#each crumbs(openNode?.path ?? '') as c (c.path)}
           <ChevronRight size={13} class="shrink-0 text-subtle" aria-hidden="true" />
+          {@const crumbNode = findByPath(nodes, c.path)}
           <button
             type="button"
-            class="rounded px-1 {c.path === openNode?.path
-              ? 'font-medium text-text'
-              : 'text-muted hover:text-text'}"
+            class="rounded px-1 {memoryDrag.over === c.path
+              ? 'bg-accent-soft text-text ring-1 ring-accent'
+              : c.path === openNode?.path
+                ? 'font-medium text-text'
+                : 'text-muted hover:text-text'}"
+            ondragover={(e) =>
+              crumbNode?.kind === 'folder'
+                ? memoryDrag.hover(e, c.path, writable)
+                : memoryDrag.hover(e, memoryParentPath(c.path), writable)}
+            ondrop={(e) =>
+              dropOn(e, crumbNode?.kind === 'folder' ? c.path : memoryParentPath(c.path))}
+            oncontextmenu={(e) => crumbNode && context(e, crumbNode, c.path)}
             onclick={() => go(c.path)}>{c.name}</button
           >
         {/each}
@@ -545,6 +617,8 @@
             {selected}
             {writable}
             {itemsFor}
+            oncontext={(e, n) => context(e, n, '')}
+            onkey={key}
             onopen={open}
             ontoggle={toggle}
             onselect={select}
@@ -563,7 +637,14 @@
               >
             </div>
             {#key openFile.id}
-              <FilePane {memoryId} node={openFile} {writable} bind:mode bind:dirty />
+              <FilePane
+                {memoryId}
+                node={openFile}
+                {writable}
+                bind:mode
+                bind:dirty
+                onrename={() => askName({ kind: 'rename', node: openFile })}
+              />
             {/key}
           {:else}
             {@render breadcrumb()}
@@ -575,6 +656,8 @@
                 {selected}
                 {writable}
                 {itemsFor}
+                oncontext={(e, n) => context(e, n, folder)}
+                onkey={key}
                 onopen={open}
                 onselect={select}
                 ondropfiles={(f, dt) => void dropFiles(f, dt)}
@@ -590,7 +673,14 @@
         {#if openFile}
           <div class="min-h-0 flex-1">
             {#key openFile.id}
-              <FilePane {memoryId} node={openFile} {writable} bind:mode bind:dirty />
+              <FilePane
+                {memoryId}
+                node={openFile}
+                {writable}
+                bind:mode
+                bind:dirty
+                onrename={() => askName({ kind: 'rename', node: openFile })}
+              />
             {/key}
           </div>
         {:else}
@@ -602,6 +692,8 @@
               {selected}
               {writable}
               {itemsFor}
+              oncontext={(e, n) => context(e, n, folder)}
+              onkey={key}
               onopen={open}
               onselect={select}
               ondropfiles={(f, dt) => void dropFiles(f, dt)}
@@ -621,7 +713,7 @@
     data-upload-input
     onchange={(e) => {
       const el = e.currentTarget as HTMLInputElement;
-      void uploadList(uploadInto, filesFromInput(el.files));
+      askWhere(filesFromInput(el.files), false);
       el.value = '';
     }}
   />
@@ -634,7 +726,7 @@
     data-upload-folder-input
     onchange={(e) => {
       const el = e.currentTarget as HTMLInputElement;
-      void uploadList(uploadInto, filesFromInput(el.files));
+      askWhere(filesFromInput(el.files), true);
       el.value = '';
     }}
   />
@@ -652,12 +744,30 @@
       : naming?.kind === 'folder'
         ? freeName(nodes, namingFolder, 'New folder')
         : freeName(nodes, namingFolder, 'untitled.md')}
-    description={naming && naming.kind !== 'rename'
-      ? `In ${naming.folder || 'the top level'}`
-      : undefined}
-    taken={takenNames}
+    folder={namingFolder}
+    {nodes}
+    node={naming?.kind === 'rename' ? naming.node : null}
     onsubmit={submitName}
   />
+  <UploadDialog
+    bind:open={uploadOpen}
+    folder={uploadInto}
+    {picked}
+    asFolder={pickedFolder}
+    {nodes}
+    onsubmit={(list) => void uploadTo(list)}
+  />
+  <ContextMenu bind:this={ctx} />
+  {#if dragLabel}
+    <div
+      class="pointer-events-none fixed z-[70] max-w-80 truncate rounded-md bg-accent px-2 py-1 text-xs font-medium text-white shadow-pop"
+      style:left="{memoryDrag.x + 14}px"
+      style:top="{memoryDrag.y + 16}px"
+      data-drag-label
+    >
+      {dragLabel}
+    </div>
+  {/if}
   <MoveDialog bind:open={movingOpen} node={moving} {nodes} onsubmit={submitMove} />
   <Dialog
     bind:open={deletingOpen}

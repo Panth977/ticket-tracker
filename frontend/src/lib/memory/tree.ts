@@ -110,6 +110,54 @@ export function nameProblem(name: string): string | null {
 }
 
 /**
+ * What someone typed in a name field → the node's full path. '/' separates
+ * folders (they are created as needed): 'drafts/notes.md' typed in `docs` is
+ * 'docs/drafts/notes.md'; a leading '/' starts from the top ('/notes.md' is
+ * 'notes.md'). null when it is not a usable path.
+ */
+export function resolveTypedPath(input: string, folder: string): string | null {
+  const t = input.trim();
+  if (!t || t === '/') return null;
+  const fromTop = t.startsWith('/') || t.startsWith('\\');
+  const p = normalizeMemoryPath(fromTop ? t : joinMemoryPath(folder, t));
+  return p || null;
+}
+
+/** Why `input` cannot be a path here (a typed name or path), or null. */
+export function typedPathProblem(input: string, folder: string): string | null {
+  const t = input.trim();
+  if (!t || t === '/') return 'Give it a name';
+  for (const seg of t.replace(/\\/g, '/').split('/')) {
+    const s = seg.trim();
+    if (!s) continue;
+    if (s === '.' || s === '..') return "'.' and '..' aren't allowed";
+    if (s.length > 255) return 'A name is at most 255 characters';
+  }
+  return resolveTypedPath(t, folder) === null ? "That path can't be used" : null;
+}
+
+/**
+ * Why `node` (or a new node, when null) cannot go to `to`, or null: something
+ * else is there, a file is in the way of a folder, or a folder would move
+ * inside itself.
+ */
+export function placeProblem(nodes: readonly Node[], to: string, node: Node | null): string | null {
+  if (node && to === node.path) return null;
+  if (node?.kind === 'folder' && memoryPathWithin(to, node.path))
+    return 'A folder cannot go inside itself';
+  const there = findByPath(nodes, to);
+  if (there && there.id !== node?.id)
+    return there.kind === 'folder'
+      ? 'A folder with that name is already there'
+      : 'A file with that name is already there';
+  for (const a of crumbs(memoryParentPath(to))) {
+    const n = findByPath(nodes, a.path);
+    if (n?.kind === 'file') return `${a.path} is a file, not a folder`;
+  }
+  return null;
+}
+
+/**
  * Where a dropped / picked file goes: `folder` + its relative path inside the
  * dropped folder (webkitRelativePath, or the drag's fullPath), normalised.
  * null when the result is not a valid path.

@@ -13,6 +13,9 @@ import {
   freeName,
   movedPath,
   nameProblem,
+  placeProblem,
+  resolveTypedPath,
+  typedPathProblem,
   subtreeStats,
   uploadTarget,
   type Node,
@@ -136,5 +139,29 @@ describe('store helpers', () => {
     expect(memorySettingsFor('owner').map((s) => s.id)).toEqual(['general', 'people', 'access']);
     expect(memorySettingsFor('viewer').map((s) => s.id)).toEqual(['access']);
     expect(memorySettingsFor(null)).toEqual([]);
+  });
+});
+
+describe('typed names may be paths (rename / new / upload)', () => {
+  it("resolves '/' as folders, a leading '/' from the top", () => {
+    expect(resolveTypedPath('notes.md', 'docs')).toBe('docs/notes.md');
+    expect(resolveTypedPath('drafts/notes.md', 'docs')).toBe('docs/drafts/notes.md');
+    expect(resolveTypedPath('/notes.md', 'docs')).toBe('notes.md');
+    expect(resolveTypedPath(' a // b ', '')).toBe('a/b');
+    expect(resolveTypedPath('/', 'docs')).toBeNull();
+  });
+  it('says what is wrong with a typed path', () => {
+    expect(typedPathProblem('', 'docs')).toBe('Give it a name');
+    expect(typedPathProblem('a/../b', '')).toMatch(/aren't allowed/);
+    expect(typedPathProblem('a/b.md', 'docs')).toBeNull();
+  });
+  it('refuses clashes, files in the way and a folder into itself', () => {
+    const nodes = [node('docs', 'folder'), node('docs/a.md'), node('x.md')];
+    const docs = nodes[0]!;
+    expect(placeProblem(nodes, 'docs/a.md', null)).toMatch(/file with that name/);
+    expect(placeProblem(nodes, 'x.md/y.md', null)).toMatch(/is a file/);
+    expect(placeProblem(nodes, 'docs/sub/docs', docs)).toMatch(/inside itself/);
+    expect(placeProblem(nodes, 'docs', docs)).toBeNull();
+    expect(placeProblem(nodes, 'archive/docs', docs)).toBeNull();
   });
 });

@@ -5,7 +5,6 @@
  */
 import { command } from '$lib/api';
 import { toast } from '$lib/ui';
-import { joinMemoryPath, memoryParentPath } from '@tm/shared';
 
 export async function createFolder(memoryId: string, path: string): Promise<boolean> {
   try {
@@ -32,15 +31,6 @@ export async function createFile(memoryId: string, path: string): Promise<boolea
   } catch {
     return false;
   }
-}
-
-/** Rename in place: same folder, new name. Returns the new path. */
-export async function renameNode(
-  memoryId: string,
-  node: { id: string; path: string },
-  name: string,
-): Promise<string | null> {
-  return moveNode(memoryId, node, joinMemoryPath(memoryParentPath(node.path), name.trim()));
 }
 
 export async function moveNode(

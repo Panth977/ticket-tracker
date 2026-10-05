@@ -7,7 +7,7 @@
   binary file in Code mode shows its facts and Replace… instead of bytes.
 -->
 <script lang="ts">
-  import { Download, Eye, Code2, Save, Upload, Loader2, FileWarning } from 'lucide-svelte';
+  import { Download, Eye, Code2, Save, Upload, Loader2, FileWarning, Pencil } from 'lucide-svelte';
   import {
     MEMORY_INLINE_MAX_BYTES,
     formatBytes,
@@ -33,8 +33,17 @@
     mode: FileMode;
     /** Unsaved edits in Code mode — the page guards navigation with it. */
     dirty?: boolean;
+    /** Rename (or move, with '/') this file. */
+    onrename?: () => void;
   }
-  let { memoryId, node, writable, mode = $bindable(), dirty = $bindable(false) }: Props = $props();
+  let {
+    memoryId,
+    node,
+    writable,
+    mode = $bindable(),
+    dirty = $bindable(false),
+    onrename,
+  }: Props = $props();
 
   const file = $derived(node.file);
   const viewerFile = $derived<ViewerFile | null>(
@@ -144,7 +153,24 @@
 
 <div class="flex size-full min-h-0 flex-col" data-memory-file={node.path}>
   <div class="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-    <span class="min-w-0 flex-1 truncate text-sm font-medium" title={node.path}>{node.name}</span>
+    <span class="flex min-w-0 flex-1 items-center gap-1">
+      {#if writable && onrename}
+        <button
+          type="button"
+          class="group flex min-w-0 items-center gap-1 rounded px-1 -mx-1 text-sm font-medium hover:bg-surface-2"
+          title="Rename /{node.path}"
+          data-rename-file
+          onclick={onrename}
+          ><span class="truncate">{node.name}</span><Pencil
+            size={12}
+            class="shrink-0 text-subtle opacity-0 group-hover:opacity-100"
+            aria-hidden="true"
+          /></button
+        >
+      {:else}
+        <span class="truncate text-sm font-medium" title={node.path}>{node.name}</span>
+      {/if}
+    </span>
     {#if dirty}<span class="text-xs text-warning" data-dirty>Unsaved</span>{/if}
     {#if file}
       <span class="hidden text-xs text-subtle sm:inline"

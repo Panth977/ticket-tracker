@@ -1,32 +1,45 @@
 <!--
-  One name, typed: New file, New folder, Rename (memory.html §F). The checks
-  are the same as the server's (tree.nameProblem); the parent runs the command
-  and says whether to close.
+  One name — or a path — typed: New file, New folder, Rename (memory.html §F).
+  '/' separates folders, created as needed: "drafts/notes.md" typed in docs is
+  docs/drafts/notes.md, and a leading '/' starts from the top. So a rename can
+  move too. The checks are the server's (tree.typedPathProblem, placeProblem);
+  the parent runs the command with the resolved full path and says whether to
+  close.
 -->
 <script lang="ts">
+  import { CornerDownRight } from 'lucide-svelte';
   import Button from '$lib/ui/Button.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import Input from '$lib/ui/Input.svelte';
-  import { nameProblem } from './tree';
+  import {
+    memoryParentPath,
+    placeProblem,
+    resolveTypedPath,
+    typedPathProblem,
+    type Node,
+  } from './tree';
 
   interface Props {
     open: boolean;
     title: string;
     action: string;
     initial?: string;
-    /** Shown under the title: where it goes. */
-    description?: string;
-    /** Names already in the folder (a clash is caught before the round trip). */
-    taken?: readonly string[];
-    onsubmit: (name: string) => Promise<boolean>;
+    /** The folder a bare name lands in ('' = the top level). */
+    folder: string;
+    /** Every node of the memory (a clash is caught before the round trip). */
+    nodes: readonly Node[];
+    /** The node being renamed (null for a new one). */
+    node?: Node | null;
+    onsubmit: (path: string) => Promise<boolean>;
   }
   let {
     open = $bindable(false),
     title,
     action,
     initial = '',
-    description,
-    taken = [],
+    folder,
+    nodes,
+    node = null,
     onsubmit,
   }: Props = $props();
 
@@ -49,36 +62,56 @@
     }
   });
 
+  const target = $derived(resolveTypedPath(name, folder));
   const problem = $derived(
-    nameProblem(name) ??
-      (name.trim() !== initial && taken.includes(name.trim())
-        ? 'Something with that name is already here'
-        : null),
+    typedPathProblem(name, folder) ?? (target ? placeProblem(nodes, target, node) : null),
   );
+  /** Say where it goes once that is not simply "here, with this name". */
+  const elsewhere = $derived(!!target && memoryParentPath(target) !== folder);
+  const unchanged = $derived(!!node && target === node.path);
 
   async function submit() {
     touched = true;
-    if (problem || busy) return;
+    if (problem || busy || !target) return;
+    if (unchanged) {
+      open = false;
+      return;
+    }
     busy = true;
     try {
-      if (await onsubmit(name.trim())) open = false;
+      if (await onsubmit(target)) open = false;
     } finally {
       busy = false;
     }
   }
 </script>
 
-<Dialog bind:open {title} size="sm" {description}>
+<Dialog
+  bind:open
+  {title}
+  size="sm"
+  description={`In ${folder || 'the top level'} · use / for folders`}
+>
   <form id="memory-name" onsubmit={(e) => (e.preventDefault(), submit())}>
     <Input
-      label="Name"
+      label="Name or path"
       bind:value={name}
       bind:ref={input}
-      maxlength={255}
+      maxlength={1024}
       autocomplete="off"
+      spellcheck={false}
       error={touched ? (problem ?? undefined) : undefined}
       oninput={() => (touched = true)}
     />
+    {#if target && elsewhere && !problem}
+      <p class="mt-2 flex items-center gap-1.5 text-xs text-muted" data-resolved-path>
+        <CornerDownRight size={13} class="shrink-0" aria-hidden="true" />
+        <span class="truncate"
+          >{node ? 'Moves to' : 'Goes in'}
+          <span class="font-medium text-text">/{target}</span></span
+        >
+      </p>
+    {/if}
   </form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>

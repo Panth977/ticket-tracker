@@ -263,8 +263,27 @@
           <li>
             <b>Uploads</b>: drop files or whole folders onto the tree or a folder, or <i>Upload</i>.
             The browser uploads straight to Storage (progress per file), then
-            <code>memoryFilePut</code> registers each node. New file and New folder are in the same
-            menu. Rename, Move to…, Copy path, Download and Delete are on every node's menu.
+            <code>memoryFilePut</code> registers each node. Files picked with <i>Upload</i> first
+            ask where they go: one field per file holding its full path, folder and name together
+            (<code>/docs/brand/logo.svg</code>, the open folder filled in); a picked folder gets one
+            field for the folder it becomes. A path where a file is replaces it; one where a folder
+            is is refused.
+          </li>
+          <li>
+            <b>Menus</b>: Rename (F2), Move to…, Copy path, Download and Delete (Del) are on every
+            node's menu, and New file / New folder / Upload in its folder. The same menu opens on a
+            <b>right-click</b> — on a node, or on the empty space for the folder itself. A name
+            field takes a <b>path</b>: <code>/</code> separates folders, created as needed, and a
+            leading <code>/</code> starts from the top — so <code>old/a.md</code> as a rename of
+            <code>docs/a.md</code> moves it to <code>docs/old/a.md</code>. The open file's name is a
+            rename button too.
+          </li>
+          <li>
+            <b>Dragging</b> a node (or files from the desktop) lights up the folder a drop would
+            land in, wherever it shows: its whole subtree in the tree, its tile, its breadcrumb,
+            the folder view. Over a file, that is the file's folder; a folded folder unfolds after a
+            moment; a pill by the pointer says <i>Move … into /path</i>. A folder never lights up
+            for itself or what is inside it, nor for the folder the node is already in.
           </li>
           <li>
             <b>Board settings › Memory</b> and <b>Artifact settings › Memory</b>: the memories I

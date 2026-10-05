@@ -1,8 +1,10 @@
 <!--
   FOLDERS view (memory.html §F): the current folder's contents as tiles —
   folders first, images with a thumbnail. A click on a folder goes in, on a
-  file opens it. ⌘/Ctrl-click selects; drop files (or a tile) onto a folder
-  tile to put them there, or onto the empty space for the folder itself.
+  file opens it. ⌘/Ctrl-click selects. Right-click a tile for its menu, or the
+  empty space for this folder's. Drop files (or a tile) onto a folder tile to
+  put them there — the tile lights up — or anywhere else for this folder
+  itself, which lights up as a whole (drag.svelte.ts).
 -->
 <script lang="ts">
   import { Folder, MoreHorizontal } from 'lucide-svelte';
@@ -12,6 +14,7 @@
   import { fileUrl } from '$lib/files/source';
   import Menu from '$lib/ui/Menu.svelte';
   import type { MenuItem } from '$lib/ui/types';
+  import { memoryDrag } from './drag.svelte';
   import type { Node } from './tree';
 
   interface Props {
@@ -22,6 +25,9 @@
     selected: ReadonlySet<string>;
     writable: boolean;
     itemsFor: (node: Node) => MenuItem[];
+    /** Right-click: a node's menu, or (null) this folder's. */
+    oncontext: (e: MouseEvent, node: Node | null) => void;
+    onkey: (e: KeyboardEvent, node: Node) => void;
     onopen: (node: Node) => void;
     onselect: (node: Node) => void;
     ondropfiles: (folder: string, dt: DataTransfer) => void;
@@ -34,24 +40,21 @@
     selected,
     writable,
     itemsFor,
+    oncontext,
+    onkey,
     onopen,
     onselect,
     ondropfiles,
     ondropnode,
   }: Props = $props();
 
-  const NODE_MIME = 'application/x-memory-node';
-  let over = $state<string | null>(null);
-
   function drop(e: DragEvent, target: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    over = null;
-    if (!writable || !e.dataTransfer) return;
-    const id = e.dataTransfer.getData(NODE_MIME);
-    if (id) ondropnode(id, target);
-    else ondropfiles(target, e.dataTransfer);
+    const got = memoryDrag.take(e, target, writable);
+    if (!got) return;
+    if ('nodeId' in got) ondropnode(got.nodeId, target);
+    else ondropfiles(target, got.files);
   }
+  const here = $derived(memoryDrag.over === folder);
 
   /** A thumbnail URL per image node, fetched once per version. */
   const thumbs = $state<Record<string, string | null>>({});
@@ -66,16 +69,13 @@
 </script>
 
 <div
-  class="min-h-full rounded-lg p-1 {over === folder ? 'bg-accent-soft' : ''}"
-  ondragover={(e) => {
-    if (!writable) return;
-    e.preventDefault();
-    over = folder;
-  }}
-  ondragleave={(e) => e.currentTarget === e.target && (over = null)}
+  class="min-h-full rounded-lg p-1 {here ? 'bg-accent-soft ring-2 ring-accent ring-inset' : ''}"
+  ondragover={(e) => memoryDrag.hover(e, folder, writable)}
   ondrop={(e) => drop(e, folder)}
+  oncontextmenu={(e) => oncontext(e, null)}
   role="none"
   data-folder-view={folder}
+  data-drop-target={here || undefined}
 >
   {#if !children.length}
     <p class="p-8 text-center text-sm text-muted">
@@ -87,30 +87,30 @@
         {@const isFolder = n.kind === 'folder'}
         {@const Icon = KIND_ICON[kindOf({ name: n.name, mime: n.file?.mime ?? '' })]}
         {@const thumb = n.file ? thumbs[n.file.storagePath] : null}
+        {@const target = isFolder && memoryDrag.over === n.path}
         <li
           class="group relative flex flex-col overflow-hidden rounded-xl border bg-surface transition-colors
             {selected.has(n.id)
             ? 'border-accent ring-1 ring-accent'
-            : over === n.path
-              ? 'border-accent bg-accent-soft'
-              : 'border-line hover:border-line-strong hover:bg-surface-2'}"
+            : target
+              ? 'border-accent bg-accent-soft ring-2 ring-accent'
+              : 'border-line hover:border-line-strong hover:bg-surface-2'}
+            {memoryDrag.node?.id === n.id ? 'opacity-50' : ''}"
           data-node={n.path}
           data-kind={n.kind}
+          data-drop-target={target || undefined}
           draggable={writable}
-          ondragstart={(e) => e.dataTransfer?.setData(NODE_MIME, n.id)}
-          ondragover={(e) => {
-            if (!writable || !isFolder) return;
-            e.preventDefault();
-            e.stopPropagation();
-            over = n.path;
-          }}
-          ondragleave={() => over === n.path && (over = null)}
-          ondrop={(e) => isFolder && drop(e, n.path)}
+          ondragstart={(e) => memoryDrag.start(e, n)}
+          ondragend={() => memoryDrag.end()}
+          ondragover={(e) => memoryDrag.hover(e, isFolder ? n.path : folder, writable)}
+          ondrop={(e) => drop(e, isFolder ? n.path : folder)}
+          oncontextmenu={(e) => oncontext(e, n)}
         >
           <button
             type="button"
             class="flex flex-1 flex-col text-left focus-visible:outline-2 focus-visible:outline-accent"
             onclick={(e) => (e.metaKey || e.ctrlKey ? onselect(n) : onopen(n))}
+            onkeydown={(e) => onkey(e, n)}
           >
             <span class="grid aspect-[4/3] place-items-center overflow-hidden bg-surface-2">
               {#if thumb}
