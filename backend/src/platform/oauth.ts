@@ -8,7 +8,9 @@
  *   refresh  30d, ROTATED on every use. The used one is kept (marked usedAt)
  *            until it expires, so presenting it again is recognised as REUSE —
  *            a stolen token racing the real client — and the WHOLE GRANT is
- *            revoked (theft detection, OAuth 2.1 §4.3.1).
+ *            revoked (theft detection, OAuth 2.1 §4.3.1). Within
+ *            REFRESH_RETRY_GRACE_MS of its use it is a retry instead (a
+ *            client's parallel or repeated refresh) and gets a fresh pair.
  *
  * Tokens are stored only as sha256 (oauthTokens/{sha256(token)}); the grant
  * (users/{uid}/oauthGrants/{grantId}) is the revocation switch: grantRevoke
@@ -39,12 +41,17 @@ export class OAuthError extends Error {
   }
 }
 
-export const TOKEN_PREFIX = { access: 'tmo_', refresh: 'tmr_', code: 'tmc_' } as const;
+/** How long a rotated refresh token may still be presented as a retry rather than as reuse. */
+export const REFRESH_RETRY_GRACE_MS = 60_000;
+
+export const TOKEN_PREFIX ={ access: 'tmo_', refresh: 'tmr_', code: 'tmc_' } as const;
 
 /** Stored token row plus server-only bookkeeping. */
 export type TokenRow = OAuthToken & { usedAt?: number; createdAt?: number };
 
 const tokenRef = (token: string) => db().doc(paths.oauthToken(sha256hex(token)));
+
+const IGNORED_SCOPES = new Set(['openid', 'profile', 'email', 'offline_access']);
 
 /**
  * The `scope` parameter → the phase-2 vocabulary. Phase-1 names ('boards:read',
@@ -52,7 +59,10 @@ const tokenRef = (token: string) => db().doc(paths.oauthToken(sha256hex(token)))
  * (normalizeScopes); unknown names are invalid_scope.
  */
 export function parseScopes(s: string | null | undefined): Scope[] {
-  const want = (s ?? '').split(/[\s,+]+/).filter(Boolean);
+  // Generic OAuth/OIDC scopes some clients always add: they ask for nothing here, so they are not an error.
+  const want = (s ?? '')
+    .split(/[\s,+]+/)
+    .filter((x) => x && !IGNORED_SCOPES.has(x));
   const { scopes, unknown } = normalizeScopes(want);
   if (unknown.length) throw new OAuthError('invalid_scope', `Unknown scope: ${unknown.join(', ')}`);
   return scopes;
@@ -251,7 +261,10 @@ export async function refresh(opts: {
       throw new OAuthError('invalid_grant', 'Unknown refresh token');
     if (row.clientId !== opts.clientId)
       throw new OAuthError('invalid_grant', 'Token was issued to another client');
-    if (row.usedAt !== undefined) {
+    // A client that refreshes twice at once, or retries after losing the response,
+    // presents the same token seconds apart: that is not theft.
+    const retry = row.usedAt !== undefined && opts.now - row.usedAt <= REFRESH_RETRY_GRACE_MS;
+    if (row.usedAt !== undefined && !retry) {
       // THEFT DETECTION: an already-rotated refresh token came back.
       reused = { uid: row.uid, grantId: row.grantId };
       return null;
@@ -264,7 +277,7 @@ export async function refresh(opts: {
     const asked = opts.scope ? parseScopes(opts.scope) : had;
     if (asked.some((x) => !had.includes(x)))
       throw new OAuthError('invalid_scope', 'A refresh cannot add scopes');
-    tx.update(ref, { usedAt: opts.now });
+    if (!retry) tx.update(ref, { usedAt: opts.now });
     return mintPair(
       tx,
       { uid: row.uid, grantId: row.grantId, clientId: row.clientId, scopes: asked },

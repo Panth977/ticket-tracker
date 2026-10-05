@@ -22,7 +22,7 @@ starts with `/// <reference types="./sdk.d.ts" />` (hosting also sends
 ```ts
 import { createClient } from '@tm/sdk';
 
-const tm = createClient({ token: process.env.TM_TOKEN! }); // the token decides the board
+const tm = createClient({ token: process.env.TM_TOKEN!, board: 'ENG' }); // name the board (see below)
 
 const me = await tm.me();                                  // agents get their system prompt here
 const mine = await tm.tickets.list({ assignee: 'me', state: 'active' });
@@ -52,15 +52,27 @@ for await (const ev of tm.events.stream({ ack: true })) {
 }
 ```
 
-## Board tokens and account tokens
+## Which board: agent, account and board tokens
 
-A **board token** works on one board, so nothing above takes a board — that is
-phase 2 and it has not changed. An **account token** ("virtual me") acts as you
-on *every board you are on, as that stands at each call*. Ask which you hold,
-and scope it to a board when you need to:
+An **agent token** is one per agent. It says who the agent is and nothing else:
+it reaches *every board the agent is on, as that stands at each call*, and what
+it may do there is the agent's **role on that board** (viewer, commenter,
+editor or admin) — there is no scope list to tick. An **account token**
+("virtual me") is the same thing for you: every board you are on. A **board
+token** acting as you still works on exactly one board.
+
+So with an agent or account token, a board-scoped call has to say which board
+it means, unless there is only one to mean. Pin it once:
 
 ```ts
-if ((await tm.kind()) === 'account') {
+const tm = createClient({ token: process.env.TM_TOKEN!, board: 'ENG' });
+```
+
+or ask what the token reaches and scope it per board:
+
+```ts
+const kind = await tm.kind();            // 'agent' | 'account' | 'board' | 'oauth'
+if (kind !== 'board') {
   for (const b of await tm.boards.list()) console.log(b.key, b.name);
 
   const eng = tm.board('ENG');        // the SAME API, pinned to one board
@@ -74,6 +86,12 @@ adds the board to every call. A board token can call it too — with its own
 board's key — so code written for one kind of token runs unchanged on the
 other. Calls that already name a ticket key (`tm.tickets.get('ENG-42')`) never
 need a board: the key names one.
+
+A call that needed a board and got none answers 400 `invalid` with the keys it
+could have meant in `err.problem.options`. One exception, for tokens that were
+converted from the old one-board agent tokens: they fall back to that board
+(`me.default_board`), so nothing that ran before breaks. Do not build on it —
+a regenerated token has no default.
 
 An account token can never mint or revoke a token, touch your OAuth grants, or
 change your sign-in, profile or account — whatever its scopes. A leak cannot
@@ -97,6 +115,87 @@ await tm.work(
 runs, marks it `done` (or `error` with the message) and acks the event — only
 after the handler returned, so a crash replays it. Two events for the same
 ticket never run at once.
+
+### Artifacts
+
+An artifact is a small static website kept and served by TaskManager, with its
+own people and its own data. It is not on a board: an account token reaches the
+artifacts you own or edit, an agent token the ones that agent is on — where
+what it may do is `agent_access: { build, data }`: `build` to publish, roll
+back and read the source, `data` (`'none' | 'read' | 'write'`) to use the data
+API below. An agent never owns, shares, renames or deletes an artifact.
+
+```ts
+const art = await tm.artifacts.create({ name: 'Sales dashboard' });   // an agent token creates it for its owner
+const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+build.warnings;                                                        // e.g. absolute /assets/ paths
+await tm.artifacts.share(art.id, { email: 'priya@example.com', role: 'viewer' });
+// people open it at art.url
+```
+
+`publish` takes the build folder (the one with `index.html` at its root) as a
+directory path (Node, Deno, Bun — walked and zipped for you), as the bytes of a
+zip, or as files in memory (`[{ path, content }]` or `{ 'index.html': '…' }`,
+which also works in a browser). `source` is optional: a directory (zipped
+without `node_modules`, `.git`, `dist`, `build`, `.env` files and anything over
+2 MB) or zip bytes, kept beside the build for whoever carries on —
+`tm.artifacts.source(id)` hands back a download URL. Also: `list()`, `get(id)`,
+`update(id, patch)`, `delete(id)`, `rollback(id, buildId)`.
+
+The owner gives an agent its two permissions separately:
+
+```ts
+await tm.artifacts.share(art.id, { agent: 'ag_…', access: { build: false, data: 'write' } });
+await tm.artifacts.share(art.id, { agent: 'ag_…', access: { build: false, data: 'none' } });  // removes it
+```
+
+### An artifact's data, from outside the page
+
+`tm.artifacts.data(id)` is the artifact's own Firestore, Realtime Database and
+files, reached with a token — the **same documents** the page reads through its
+driver, so what a job writes here shows up live in every open tab. It needs
+`data` on the artifact (an agent: `'read'` for the reads, `'write'` for the
+rest; a person: owner or editor).
+
+```ts
+import { createClient, serverTime } from '@tm/sdk';
+
+const data = tm.artifacts.data(art.id);
+
+await data.firestore.set('meta/sales', { refreshedAt: serverTime, from: new Date('2026-09-01') });
+const doc = await data.firestore.get<{ refreshedAt: Date }>('meta/sales');     // { id, path, exists, data }
+
+const { data: open, nextCursor } = await data.firestore.list('orders', {
+  where: [['status', '==', 'open'], ['total', '>', 100]],
+  orderBy: ['total', 'desc'],
+  limit: 50,
+});
+for await (const d of data.firestore.listAll('orders')) { /* pages for you */ }
+
+// Up to 400 writes, all or nothing — how a nightly job replaces a dataset.
+await data.firestore.batch([
+  ...rows.map((r) => ({ op: 'set' as const, path: `sales/${r.day}`, data: r })),
+  { op: 'delete', path: 'sales/2025-09-30' },
+]);
+
+await data.rtdb.set('status', { state: 'fresh', at: serverTime });
+await data.files.upload('exports/q3.csv', csv, { contentType: 'text/csv' });
+const { url } = await data.files.url('exports/q3.csv');                        // short-lived
+```
+
+- **Dates.** A `Date` you write is stored as a timestamp and a stored timestamp
+  comes back as a `Date`; `serverTime` is the server's clock. On the wire those
+  are `{ "$date": ISO }` and `{ "$serverTime": true }` — pass `{ raw: true }`
+  to `data(id, …)` to get the JSON untouched. The RTDB has no timestamp type:
+  both are stored as epoch milliseconds.
+- **Paths** are the artifact's own view: `'orders/o1'` is a document (an even
+  number of segments), `'orders'` a collection. `..` is refused; collections
+  named `tickets` or `reads` are refused by the server, as in the driver.
+- **Limits** (`ARTIFACT_DATA_LIMITS`): 400 writes per batch, 500 documents per
+  list page (100 by default), 10 filters, 25 MB per file. An archived artifact
+  refuses writes (409).
+- Also: `firestore.update(path, patch)`, `.delete(path)`, `.add(collection, data)`;
+  `rtdb.get / update / push / remove`; `files.list(prefix?)`, `files.delete(path)`.
 
 ### Errors, retries, idempotency
 

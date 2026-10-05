@@ -98,25 +98,41 @@ export function assertActive(board: Pick<Board, 'archivedAt'>): void {
 }
 
 /**
- * readerUids / editorUids are DERIVED from access — never written independently.
- * Agents ('ag_…') hold roles in `access` but never sign in to Firebase, so they
- * are never readers: the rules and the RTDB mirror only ever see people.
+ * readerUids / editorUids / agentIds are DERIVED from access — never written
+ * independently. Agents ('ag_…') hold roles in `access` but never sign in to
+ * Firebase, so they are never readers: the rules and the RTDB mirror only ever
+ * see people.
+ *
+ * §AA1 — agentIds is the agents' half of the same derivation: every agent
+ * with any role. No rule reads it (KEPT: an agent is still never in
+ * readerUids); it exists so "every board this agent is on" is one query
+ * (`agentIds array-contains`), which is how an agent token finds its boards.
+ * EVERY writer of `access` spreads this whole object, so the three lists can
+ * never drift from the map.
  */
 export function deriveAccess(access: Record<Uid, BoardRole>): {
   readerUids: Uid[];
   editorUids: Uid[];
+  agentIds: string[];
 } {
-  const uids = Object.keys(access)
-    .filter((u) => !isAgentId(u))
-    .sort();
+  const ids = Object.keys(access).sort();
+  const uids = ids.filter((u) => !isAgentId(u));
   return {
     readerUids: uids,
     editorUids: uids.filter((u) => access[u] === 'admin' || access[u] === 'editor'),
+    agentIds: ids.filter((u) => isAgentId(u)),
   };
 }
 
+/**
+ * How many PEOPLE are admins. §AA2 CHANGED THIS: an agent may now hold
+ * 'admin', and an agent admin must never count as the board's last admin —
+ * it cannot manage people, so a board whose only admin is an agent would be
+ * a board nobody can administer. The "at least one admin" rules
+ * (boardAccessSet, accountDelete) therefore count people only.
+ */
 export const adminCount = (access: Record<Uid, BoardRole>): number =>
-  Object.values(access).filter((r) => r === 'admin').length;
+  Object.entries(access).filter(([id, r]) => r === 'admin' && !isAgentId(id)).length;
 
 /**
  * Mirror readerUids into RTDB boardReaders/{boardId} (presence / typing rules
@@ -328,7 +344,7 @@ export async function afterBoardDeleted(boardId: string, ctx: ServerCtx): Promis
 export function withoutPeople(
   board: Pick<Board, 'access' | 'stageGrants'>,
   uids: Uid[],
-): Pick<Board, 'access' | 'stageGrants' | 'readerUids' | 'editorUids'> {
+): Pick<Board, 'access' | 'stageGrants' | 'readerUids' | 'editorUids' | 'agentIds'> {
   const access = { ...board.access };
   const stageGrants = { ...board.stageGrants };
   for (const u of uids) {

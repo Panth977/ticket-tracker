@@ -101,9 +101,9 @@
         <a href="/integrate#2-how-an-agent-gets-in">token model</a> the rest of the API does.
       </p>
       <div class="stamp">
-        <span>version 1.1.0</span>
+        <span>version 1.3.0</span>
         <span>api v1</span>
-        <span>updated 2026-09-26</span>
+        <span>updated 2026-09-30</span>
         <span><a href="/integrate">integrate</a></span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="https://taskmanager-example.web.app/lib/claude-plugin.zip">claude-plugin.zip</a></span>
@@ -118,6 +118,7 @@
         <a href="#2-claude-code-one-command">2 · Claude Code — one command</a>
         <a href="#3-the-plugin">3 · The plugin</a>
         <a href="#what-claude-can-do-once-it-is-in">What Claude can do once it is in</a>
+        <a href="#building-artifacts">Building artifacts</a>
         <a href="#the-memory-palace">The memory palace</a>
         <a href="#when-something-is-wrong">When something is wrong</a>
       </nav>
@@ -128,6 +129,7 @@
 Claude Code                     claude mcp add …            an account token, one command
 Claude Code, all the trimmings  the plugin                  the MCP server + a skill + slash commands</code></pre></figure>
 <p>The connector route is the only one that needs no token at all: you sign in, tick the boards, and Claude holds the grant. The other two carry an <strong>account token</strong> — "virtual me", a credential that acts as you across every board you are on today, and loses a board the moment you do.</p>
+<p>(This page is about Claude acting <strong>as you</strong>. An <em>agent</em> — a separate member of your boards, with its own name on what it does — has one token of its own, generated on the agent's page at <a href="https://taskmanager-example.web.app/agents;">https://taskmanager-example.web.app/agents;</a> it works in the same header, and §2 of <a href="https://taskmanager-example.web.app/llms-full.txt">https://taskmanager-example.web.app/llms-full.txt</a> is its chapter.)</p>
 <p><strong>Make an account token first</strong> (routes 2 and 3 need one): <a href="https://taskmanager-example.web.app/account/tokens">https://taskmanager-example.web.app/account/tokens</a> → <strong>New token</strong> → <strong>Account token</strong>. Give it a name you will recognise in the list (<code>claude-code</code>, <code>claude-desktop</code>), leave the expiry at 90 days unless you have a reason, and choose the <strong>Full account</strong> preset — or tick fewer boxes, which only ever narrows what it can do.</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>what an account token reaches    every board you are on, as it stands at each call
 what it can never do             create or revoke tokens, grant or revoke OAuth access,
@@ -179,6 +181,10 @@ https://taskmanager-example.web.app/lib/claude-plugin/      the same files, to r
 .claude-plugin/marketplace.json     lets the folder itself be added as a marketplace
 skills/taskmanager/SKILL.md         the integration context: boards, tickets, threads, the rules
 skills/taskmanager/reference/…      llms-full.txt verbatim — the whole generated reference, offline
+skills/artifact/SKILL.md            how to build, run locally and publish an ARTIFACT (a small website
+                                    kept inside TaskManager, with its own data)
+skills/artifact/example/index.html  a complete single-file artifact, ready to publish
+skills/artifact/template/…          a Vite project with the three settings that matter already right
 commands/tm-inbox.md                /tm-inbox      what is waiting on you
 commands/tm-triage.md               /tm-triage     a board's untriaged tickets, one pass
 commands/tm-new.md                  /tm-new        a ticket from a sentence
@@ -201,32 +207,45 @@ unzip claude-plugin.zip            # → ./claude-plugin/</code></pre></figure>
 <p>The bundle is generated with the API it describes, so a stale copy is a copy that describes an older release. <code>https://taskmanager-example.web.app/integrate.json</code> carries the current <code>version</code> and <code>contentSha256</code>; when it moves, download the zip again and re-run <code>/plugin marketplace add</code> (or just restart Claude Code, which re-reads the folder).</p>
 <h2 id="what-claude-can-do-once-it-is-in"><a class="anchor" href="#what-claude-can-do-once-it-is-in" aria-label="Link to this section">#</a>What Claude can do once it is in</h2>
 <p>The same tools, whichever route you took — the connector, the command and the plugin all reach the one MCP endpoint:</p>
-<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>whoami            read   Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
-list_boards       read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
-get_board         read   The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
-list_my_tickets   read   Tickets assigned to you, most recently updated first.
-search_tickets    read   Find tickets by text, assignee, stage, state or dates.
-get_ticket        read   A ticket with fields, links, pinned messages, files and its last messages (Markdown).
-get_messages      read   Page through a ticket's thread (Markdown bodies, attachments with file ids).
-create_ticket     write  Create a ticket.
-update_ticket     write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
-move_ticket       write  Move a ticket to another stage.
-assign_ticket     write  Add or remove assignees (people or agents).
-post_message      write  Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
-upload_file       write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
-read_file         read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
-link_tickets      write  Link two tickets: blocks, relates or duplicates.
-get_events        read   Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
-ack_events        write  Acknowledge inbox events by id, or everything up to a cursor.
-ask_question      write  Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
-get_question      read   A question you asked: its status and, once given, the answer values.
-cancel_question   write  Cancel a question you asked — the card locks and nobody is chased for it.
-set_tasklist      write  Publish your plan as a checklist on the ticket (create or replace the whole list).
-update_task_item  write  Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
-delete_tasklist   write  Remove a task list from the ticket.
-heartbeat         write  Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.</code></pre></figure>
+<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>whoami               read   Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
+list_boards          read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
+get_board            read   The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+list_my_tickets      read   Tickets assigned to you, most recently updated first.
+search_tickets       read   Find tickets by text, assignee, stage, state or dates.
+get_ticket           read   A ticket with fields, links, pinned messages, files and its last messages (Markdown).
+get_messages         read   Page through a ticket's thread (Markdown bodies, attachments with file ids).
+create_ticket        write  Create a ticket.
+update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+move_ticket          write  Move a ticket to another stage.
+assign_ticket        write  Add or remove assignees (people or agents).
+post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
+link_tickets         write  Link two tickets: blocks, relates or duplicates.
+get_events           read   Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
+ack_events           write  Acknowledge inbox events by id, or everything up to a cursor.
+ask_question         write  Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
+get_question         read   A question you asked: its status and, once given, the answer values.
+cancel_question      write  Cancel a question you asked — the card locks and nobody is chased for it.
+set_tasklist         write  Publish your plan as a checklist on the ticket (create or replace the whole list).
+update_task_item     write  Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
+delete_tasklist      write  Remove a task list from the ticket.
+heartbeat            write  Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.
+artifact_list        read   The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.
+artifact_get         read   One artifact: its meta, its kept builds (newest first) and who it is shared with.
+artifact_create      write  Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.
+artifact_publish     write  Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).
+artifact_rollback    write  Make a kept build the current one (roll back, or forward again).
+artifact_share       write  Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.
+artifact_source      read   A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.
+artifact_data_get    read   Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { "$date": ISO }.
+artifact_data_list   read   List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).
+artifact_data_set    write  Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.
+artifact_data_batch  write  Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.</code></pre></figure>
 <p>Two things worth knowing before you ask for anything:</p>
-<ul><li><strong><code>board</code> is an argument now.</strong> With an account token or a connector grant, a call that does not name a ticket key needs to know which board it means, so <code>list_boards</code> is the natural first call and <code>board: 'ENG'</code> is how every other call says where. A ticket key already names its board, so <code>get_ticket ENG-42</code> needs nothing else.</li><li><strong>Nothing exceeds your own access.</strong> A tool call is checked against the boards the credential reaches <em>right now</em> and the role you hold on each. Claude cannot see a board you left, and it cannot do on a board something you could not do yourself.</li></ul>
+<ul><li><strong><code>board</code> is an argument.</strong> With an account token, a connector grant or an agent's token on several boards, a call that does not name a ticket key needs to know which board it means, so <code>list_boards</code> is the natural first call and <code>board: 'ENG'</code> is how every other call says where. A ticket key already names its board, so <code>get_ticket ENG-42</code> needs nothing else.</li><li><strong>Nothing exceeds your own access.</strong> A tool call is checked against the boards the credential reaches <em>right now</em> and the role you hold on each. Claude cannot see a board you left, and it cannot do on a board something you could not do yourself.</li></ul>
+<h2 id="building-artifacts"><a class="anchor" href="#building-artifacts" aria-label="Link to this section">#</a>Building artifacts</h2>
+<p>An <strong>artifact</strong> is a small website that lives inside TaskManager — a dashboard, a tracker, a poll — shared with the people you choose, with its own database behind one script tag. With the plugin installed, ask for one in plain words ("build me a shared packing list as a TaskManager artifact and share it with priya@example.com") and the <code>artifact</code> skill takes it from there: it writes the page, loads <code>https://taskmanager-example.web.app/backend-driver/v1/driver.js</code> for the backend, publishes it with <code>artifact_publish</code> and shares it with <code>artifact_share</code>. The token needs the <code>artifacts:read</code> and <code>artifacts:write</code> scopes, which the <strong>Full account</strong> preset includes (an agent's token always has them; what it may do on an artifact is the <code>{ build, data }</code> its owner gave it there). The same skill covers the artifact's <strong>data from outside the page</strong> — <code>artifact_data_get / list / set / batch</code> — so "refresh the numbers on the sales dashboard" is a data write, not a rebuild. Without the plugin the same <code>artifact_*</code> tools are there; point Claude at §8 of <a href="https://taskmanager-example.web.app/llms-full.txt">https://taskmanager-example.web.app/llms-full.txt</a> for the rest.</p>
 <h2 id="the-memory-palace"><a class="anchor" href="#the-memory-palace" aria-label="Link to this section">#</a>The memory palace</h2>
 <p>An honest note, because this is the use people arrive at on their own: a TaskManager board makes a good long-term memory for Claude, and a bad one for some things.</p>
 <p>It is good at durable, addressable notes that accumulate a history. It is not a vector store, it does not do semantic recall, and it will not remember anything nobody wrote down. What it gives you is better than that in one specific way: <strong>everything has a key, and a key survives the conversation.</strong></p>
@@ -261,9 +280,10 @@ How I want you to use it:
 Read https://taskmanager-example.web.app/llms-full.txt first.</code></pre></figure>
 <h2 id="when-something-is-wrong"><a class="anchor" href="#when-something-is-wrong" aria-label="Link to this section">#</a>When something is wrong</h2>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>/mcp says failed              the token: quotes lost by the shell, or not an account token
-401 unauthenticated           revoked, expired, or a board token used for another board
-403 forbidden                 the scope, or your role on that board — a scope never widens a role
-"which board?"                account-wide credential + no ticket key: pass board, or call list_boards
+401 unauthenticated           revoked, expired, regenerated since, or its agent was archived
+403 forbidden                 the scope, or your role on that board — a scope never widens a role.
+                              For an agent's token it is always the role: it has no scopes to add
+"which board?"                a credential on several boards + no ticket key: pass board, or call list_boards
 a board is missing            you are no longer on it; the credential follows your access, live
 the connector cannot be added claude.ai needs the https URL exactly: https://taskmanager-example.web.app/mcp</code></pre></figure>
 <p>Deeper than this page goes: <a href="https://taskmanager-example.web.app/integrate">https://taskmanager-example.web.app/integrate</a> is the whole operating context for people, and <a href="https://taskmanager-example.web.app/llms-full.txt">https://taskmanager-example.web.app/llms-full.txt</a> is the same thing as one Markdown file for a model. Every tool above, its arguments and its errors are listed there, generated from the running software.</p>

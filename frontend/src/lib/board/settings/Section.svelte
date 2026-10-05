@@ -56,8 +56,13 @@
     >
       {#if dirty}<span class="text-sm text-muted">Unsaved changes</span>{/if}
       <div class="ml-auto flex gap-2">
-        <Button variant="ghost" disabled={!dirty || busy} onclick={onreset}>Discard</Button>
-        <Button variant="primary" disabled={!dirty} loading={busy} onclick={onsave}
+        <!-- Called bare, never `onclick={onsave}`: a handler with an optional
+             parameter (Stages' and Options' `save(remap = {})`) would otherwise
+             get the PointerEvent as its payload. -->
+        <Button variant="ghost" disabled={!dirty || busy} onclick={() => onreset?.()}
+          >Discard</Button
+        >
+        <Button variant="primary" disabled={!dirty} loading={busy} onclick={() => onsave?.()}
           >{saveLabel}</Button
         >
       </div>

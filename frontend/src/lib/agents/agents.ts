@@ -8,11 +8,9 @@ import {
   AGENT_DESCRIPTION_MAX,
   AGENT_NAME_MAX,
   AGENT_SYSTEM_PROMPT_MAX,
-  apiKeyActive,
   newAgentId,
   paths,
   type Agent,
-  type ApiKey,
   type Board,
   type BoardRole,
 } from '@tm/shared';
@@ -70,18 +68,6 @@ export function boardsToAddAgent(
       (b) => b.archivedAt == null && b.access?.[me] === 'admin' && b.access?.[agentId] == null,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** My tokens acting as this agent, active first. */
-export function tokensOfAgent<
-  T extends Pick<ApiKey, 'actsAs' | 'revokedAt' | 'expiresAt' | 'createdAt'>,
->(keys: readonly T[], agentId: string, now = Date.now()): T[] {
-  return keys
-    .filter((k) => k.actsAs?.kind === 'agent' && k.actsAs.id === agentId)
-    .sort(
-      (a, b) =>
-        Number(apiKeyActive(b, now)) - Number(apiKeyActive(a, now)) || b.createdAt - a.createdAt,
-    );
 }
 
 export interface AgentDraft {

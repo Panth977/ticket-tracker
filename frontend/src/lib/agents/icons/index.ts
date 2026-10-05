@@ -1,10 +1,13 @@
 /**
  * The art behind an agent's `icon` id (shared types/agentIcons): brand marks
- * drawn here (one small inline SVG each, currentColor) and generic glyphs from
- * lucide. The id list itself lives in @tm/shared — the backend validates it,
- * this file only says what each id looks like.
+ * (the real logos, ./brands.ts, drawn by BrandMark.svelte in their own
+ * colours) and generic glyphs from lucide. The id list itself lives in
+ * @tm/shared — the backend validates it, this file only says what each id
+ * looks like.
  *
- *   agentIcon('claude')   → a component taking { size }; null for an unknown id
+ *   agentBrand('claude')  → the mark's art (paths, tile colours); null otherwise
+ *   agentIcon('bot')      → a component taking { size }; null for a brand or
+ *                           unknown id
  */
 import type { Component } from 'svelte';
 import {
@@ -42,27 +45,12 @@ import {
   Zap,
 } from 'lucide-svelte';
 import { AGENT_ICONS, isAgentIconId, type AgentIconId } from '@tm/shared';
-import ChatGPT from './ChatGPT.svelte';
-import Claude from './Claude.svelte';
-import Copilot from './Copilot.svelte';
-import Cursor from './Cursor.svelte';
-import Gemini from './Gemini.svelte';
-import Llama from './Llama.svelte';
-import Mistral from './Mistral.svelte';
+import { BRAND_ART, type BrandArt } from './brands';
 
+export type { BrandArt };
 export type AgentIconComponent = Component<{ size?: number; class?: string }>;
 
 const g = (c: unknown) => c as AgentIconComponent;
-
-const BRAND: Partial<Record<AgentIconId, AgentIconComponent>> = {
-  claude: Claude,
-  gemini: Gemini,
-  chatgpt: ChatGPT,
-  copilot: Copilot,
-  mistral: Mistral,
-  llama: Llama,
-  cursor: Cursor,
-};
 
 /**
  * Built on first use, not at import: the lucide bindings are only read when an
@@ -106,10 +94,15 @@ const generic = (): Partial<Record<AgentIconId, AgentIconComponent>> => ({
 });
 let GENERIC: Partial<Record<AgentIconId, AgentIconComponent>> | null = null;
 
-/** The component for an icon id, or null when the id is unknown (or empty). */
+/** The brand art for an icon id, or null when it is not a brand mark. */
+export function agentBrand(id: string | null | undefined): BrandArt | null {
+  return isAgentIconId(id) ? (BRAND_ART[id] ?? null) : null;
+}
+
+/** The lucide component for a generic icon id, or null (brand, unknown, empty). */
 export function agentIcon(id: string | null | undefined): AgentIconComponent | null {
   if (!isAgentIconId(id)) return null;
-  return BRAND[id] ?? (GENERIC ??= generic())[id] ?? null;
+  return (GENERIC ??= generic())[id] ?? null;
 }
 
 /** The label shown in the picker / tooltips for an icon id ('' when unknown). */

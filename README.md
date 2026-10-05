@@ -1,11 +1,12 @@
 # TaskManager
 
-A private ticket tracker for one person and the people (and AI agents) they invite,
-plus the orchestrator that turns a ticket into a headless Claude Code session.
+A private ticket tracker for one person and the people (and AI agents) they invite.
 
 Boards hold tickets. Tickets hold a thread, files, task lists and questions. Agents are
-first-class members of a board: they get a role, a token, a REST/MCP surface and, through
-the `workspaces/` runtime, a working directory where they do the ticket and report back.
+first-class members of a board: they get a role, a token and a REST/MCP surface, so an
+orchestrator (or Claude itself, as a connector) can pick up a ticket, do it and report back.
+Artifacts are small sandboxed web apps (dashboards, tools) that live next to your boards and
+can read and write their tickets.
 
 Everything runs on one Firebase project (Firestore, Functions, Storage, Realtime Database,
 Auth, Hosting) with a SvelteKit SPA in front. The whole thing runs locally on the emulators
@@ -17,17 +18,19 @@ with a single command.
 | --- | --- |
 | `shared/` | `@tm/shared` — zod schemas, the command contracts, rich-text logic, ports. Everything the backend and the app agree on. |
 | `backend/` | `@tm/backend` — Cloud Functions: one `api` function with four doors (app, REST `/v1`, MCP `/mcp`, OAuth), Firestore triggers, jobs, notifications, search. |
-| `frontend/` | `@tm/frontend` — the SvelteKit SPA and PWA: boards, table/calendar views, ticket threads, agents, account, analytics. |
+| `frontend/` | `@tm/frontend` — the SvelteKit SPA and PWA: boards, table/calendar views, ticket threads, agents, artifacts, workspaces, account, analytics. `frontend/mcp-ui/` is the board/ticket view rendered inside Claude chats (MCP Apps). |
+| `driver/` | `@tm/backend-driver` — `window.BackendDriver`, the API an artifact's page uses for its own data, files and (when granted) board tickets. |
 | `sdk/` | `@tm/sdk` — a dependency-free TypeScript client, built as one file and served by the deployment at `/lib/v1/`. |
 | `qaqc/` | Seed data, Firestore/Storage rules tests, Playwright suites (UI, API, phone), and an orchestrator sample that calls every SDK method. |
-| `workspaces/` | The orchestrator: one supervisor, one orch process per board, one headless Claude Code session per ticket. |
 | `scripts/` | Dev stack, deploy pipeline, the generator for `/llms.txt`, `/integrate` and the Claude plugin. |
 | `docs/` | The design docs (served HTML, `pnpm docs`): architecture, decisions, agents, SDK, run book. |
 | `infra/` | Storage CORS and the monitoring role, applied by hand. |
 
 ### Highlights
 
-- **Boards are the only boundary.** No org, no workspaces, no teams. Anyone allowed in can create a board and invite people to it by email with a role (admin, editor, commenter, viewer).
+- **Boards are the only boundary.** No org, no teams. Anyone allowed in can create a board and invite people to it by email with a role (admin, editor, commenter, viewer). A *workspace* is only your own sidebar grouping of boards and artifacts; it grants nothing.
+- **Claude as the client.** `/mcp` is an OAuth 2.1 custom connector: add it in the Claude app and every command the web app has is a tool, with boards and tickets rendered inline in the chat.
+- **Artifacts.** Publish a static site (a dashboard, a form) as an artifact; it runs sandboxed on a second Hosting site, keeps its own data and files, and reads or writes the tickets of the boards you grant it.
 - **One command layer.** The app, the REST API and the MCP server all execute the same commands (`backend/src/commands`), so nothing an agent can do is different from what a person can do.
 - **Agents are principals.** An agent has a profile and a system prompt; a token acts as the agent on one board; every change is attributed ("Owner via Claude (MCP)").
 - **Private by design.** Sign-in is open, but only addresses on the allow list can do anything. The admin is one configured address, never a role.
@@ -72,19 +75,7 @@ The run book with every environment variable, the Firebase console steps and the
 
 ## Give an agent a ticket
 
-`workspaces/` is the orchestrator. A workspace is a folder with `workspace.json` (which repo, which board, which agent, how many agents at once), `.env` (a Worker token for that agent) and `brief.md` (the project's rules for an unattended agent). The supervisor runs one orch per enabled workspace and restarts it when its files change.
-
-```sh
-cp workspaces/.env.example workspaces/.env          # TM_BASE (your deployment) + an account token
-node workspaces/ws.mjs new myproject --repo ~/src/myproject --board MYP --agent "Claude MyProject"
-# mint a Worker token for that agent in the app (Account › Tokens), put it in workspaces/myproject/.env
-node workspaces/ws.mjs up
-node workspaces/ws.mjs status
-```
-
-Assign a ticket on that board to the agent and move it to **To do**. The orch claims it, starts a headless Claude Code session in the repo with the tracker's MCP tools, publishes the agent's plan as a task list on the ticket, relays questions back and forth through the thread, posts a cost receipt per turn, and moves the ticket to **Review** when the agent reports done. Moving it back to **To do** resumes the same session as rework. See `workspaces/README.md`.
-
-The runtime has zero dependencies and is about a thousand lines: `workspaces/lib/orch.mjs` (the loop), `workspaces/lib/tm.mjs` (REST client and wake stream), `workspaces/lib/brief.md` (what every agent is told).
+An agent is a member of a board with its own token. Anything that speaks REST or MCP can work its tickets: claim one, post its plan as a task list, ask questions in the thread, move it to **Review**. `GET /v1/live` is a wake stream, so an orchestrator does not poll. `qaqc/orch-sample/` is a small orchestrator that exercises every SDK method; `docs/plan/agents.html` describes the full loop.
 
 ## Use it from code
 
@@ -110,7 +101,6 @@ Nothing in the repository names a project, a person or a secret. What you provid
 | `frontend/.env.production` | the Firebase web config, `PUBLIC_TM_ADMIN_EMAIL`, optional `PUBLIC_FCM_VAPID_KEY` |
 | `backend/.env.<project>` | region, URLs, `TM_ADMIN_EMAIL`, the names of the secrets to bind |
 | Secret Manager | provider credentials |
-| `workspaces/.env`, `workspaces/*/.env` | `TM_BASE`, the account token, one Worker token per workspace |
 
 The committed copies of the generated integration files (`frontend/static/llms*.txt`, `/integrate*`, the plugin) and the SDK's default base URL use the placeholder project `taskmanager-example`; a deploy regenerates them for yours.
 

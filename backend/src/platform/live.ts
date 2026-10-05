@@ -88,11 +88,28 @@ export async function exchangeCustomToken(
  * read: an agent's wake node plus its board's rev; a person's board token gets
  * its board's rev; an account token gets rev/{b} for every board it reaches
  * right now (resolved at this call, never cached — §R2).
+ *
+ * §AA1 — AN AGENT TOKEN. The rules open rev/{board} to an agent through ONE
+ * `board` claim (`auth.token.board === $boardId`); an agent is never in the
+ * boardReaders mirror. A §AA agent token has no board of its own, so the
+ * claim is the board a call that names none would get — the only board the
+ * agent is on, else its default board (a converted token, §AA6) — and `paths`
+ * lists rev/ for that board alone. An agent on several boards with no default
+ * gets its wake node only: that is what tells it "something is in your
+ * inbox", on whichever board it happened, and it is never board-scoped.
  */
 export async function liveCredential(ctx: ServerCtx): Promise<RestLiveRes> {
   const boards = await readableBoards(ctx, { includeArchived: false });
-  const boardId = ctx.boardIds?.length === 1 ? ctx.boardIds[0]! : null;
   const agent = isAgentId(ctx.actor);
+  const spans = ctx.boardIds === null || ctx.boardIds === undefined;
+  // §AA1: the one board an agent token can be given a claim for (see above).
+  const implied =
+    agent && spans
+      ? boards.length === 1
+        ? boards[0]!.id
+        : (boards.find((b) => b.id === ctx.defaultBoardId)?.id ?? null)
+      : null;
+  const boardId = ctx.boardIds?.length === 1 ? ctx.boardIds[0]! : implied;
   // A board token carries its board as a claim (the rules' `auth.token.board`);
   // a person is found through the boardReaders mirror and needs no claim.
   const claims: Record<string, string> = boardId ? { board: boardId } : {};
@@ -100,6 +117,8 @@ export async function liveCredential(ctx: ServerCtx): Promise<RestLiveRes> {
   const { idToken, expiresIn } = await exchangeCustomToken(custom);
   const paths: string[] = [];
   if (agent) paths.push(live.wake(ctx.actor));
-  for (const b of boards) if (!boardId || b.id === boardId) paths.push(live.rev(b.id));
+  // An agent can read rev/ only through its claim: list nothing it would be refused.
+  for (const b of boards)
+    if (agent && spans ? b.id === boardId : !boardId || b.id === boardId) paths.push(live.rev(b.id));
   return { database_url: databaseUrl(), auth: idToken, expires_in: expiresIn, paths };
 }

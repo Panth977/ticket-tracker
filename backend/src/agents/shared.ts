@@ -12,7 +12,9 @@
  *   fanOutAgentToMembers         name / avatar / icon / description → every members/{agentId}
  *
  * Agents never sign in: they are never in readerUids / editorUids (deriveAccess
- * leaves 'ag_' ids out) and never in the RTDB boardReaders mirror.
+ * leaves 'ag_' ids out) and never in the RTDB boardReaders mirror. §AA1: they
+ * ARE in the board's derived `agentIds`, which is how an agent token finds
+ * the boards its agent is on.
  */
 import {
   COLLECTIONS,
@@ -47,7 +49,11 @@ export const MAX_AGENTS_PER_OWNER = 50;
 
 export const agentRef = (agentId: string) => typedDoc('agents', paths.agent(agentId));
 
-/** Agent commands are app-only and person-only: an agent never manages agents. */
+/**
+ * Agent commands are person-only: an agent never manages agents. KEPT under
+ * §AA2 — being a board admin does not make an agent able to create, edit or
+ * archive agent profiles.
+ */
 export function requirePerson(ctx: Pick<ServerCtx, 'actor'>): Uid {
   if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot manage agents');
   return ctx.actor;
@@ -144,10 +150,20 @@ export async function fanOutAgentToMembers(
 }
 
 /**
- * Revoke the tokens that act as this agent — every one, or only those for
- * `boardId`. Tokens live under their creator; only the agent's owner can
- * create one acting as it (apiKeyCreate), so the owner's collection is where
- * to look. Already-revoked tokens keep their original reason.
+ * Revoke the tokens that act as this agent — every one (boardId null: the
+ * agent was archived), or only the LEGACY board tokens for `boardId` (the
+ * agent left that board).
+ *
+ * §AA1 — A §AA AGENT TOKEN BELONGS TO THE AGENT, NOT TO A BOARD: it has
+ * boardId null, so the per-board form never matches it and leaving one board
+ * leaves it alone (that board simply becomes a 404 for it). A converted
+ * token's defaultBoardId is not a board it is "for" either — it is only a
+ * default, and resolve.ts stops using it once the agent is off that board.
+ * Archiving the agent still revokes everything.
+ *
+ * Tokens live under their creator; only the agent's owner can create one
+ * acting as it (apiKeyCreate), so the owner's collection is where to look.
+ * Already-revoked tokens keep their original reason.
  */
 export async function revokeAgentTokens(
   ownerUid: Uid,
@@ -170,9 +186,10 @@ export async function revokeAgentTokens(
 /**
  * Take an agent off a board — THE removal path, shared by boardAgentSet
  * (role:null, any admin) and agentArchive (the owner, from every board).
- * In one transaction: access, stageGrants and members/{agentId}. Then, like a
- * removed person: off assignees and watchers of active tickets (its messages
- * stay), and its tokens for this board are revoked.
+ * In one transaction: access, stageGrants, agentIds and members/{agentId}.
+ * Then, like a removed person: off assignees and watchers of active tickets
+ * (its messages stay), and its LEGACY board tokens for this board are revoked
+ * — never its §AA1 agent token (see revokeAgentTokens).
  *
  * `gate` runs inside the transaction (permission checks). `removed` is false
  * when the agent was not on the board (nothing done).

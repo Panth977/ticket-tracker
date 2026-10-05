@@ -3,10 +3,11 @@
 The same token, the same commands, the same permission check behind all three. Pick by how your
 orchestrator is shaped, not by what it can reach — they can all reach everything.
 
-**One board or many.** Every door takes both kinds of credential (§2). A board token behaves exactly as
-it always has: it names no board, because it *is* one. An account token spans every board its owner is
-on, so each door has one way of saying which board a call means — a path segment in REST, the `board`
-argument in MCP, `tm.board('ENG')` in the SDK. A ticket key names its own board in all three.
+**One board or many.** Every door takes every kind of credential (§2). An agent token and an account
+token span every board their principal is on, so each door has one way of saying which board a call
+means — `?board=ENG` (or the path segment) in REST, the `board` argument in MCP,
+`createClient({ token, board: 'ENG' })` or `tm.board('ENG')` in the SDK. On exactly one board there is
+nothing to say; a ticket key names its own board in all three. A board token *is* its board.
 
 ```text
 door   use it when                                                       reference
@@ -52,14 +53,14 @@ import { createClient } from '{{url:sdk.esm}}';
 ```
 
 ```ts
-const tm = createClient({ token: process.env.TM_TOKEN });
-const me = await tm.me();                //  who, which kind, which boards: the token decides
+const tm = createClient({ token: process.env.TM_TOKEN, board: 'ENG' });   // name the board
+const me = await tm.me();                //  who, which kind, which boards it reaches
 ```
 
-`createClient()` detects the kind for you. With a board token, everything is where it always was. With
-an account token, `tm.kind()` says so, `tm.boards.list()` is what it reaches, and `tm.board('ENG')`
-returns the very same board-scoped API pinned to one key — so existing code keeps compiling and keeps
-working.
+`board` pins every call of that client to one board; leave it out when the agent is on exactly one.
+`tm.kind()` says which credential you hold, `tm.boards.list()` is what it reaches, and
+`tm.board('ENG')` returns the very same API pinned to another key without a request — so one process
+can work several boards with one token.
 
 The SDK also **builds MCP tools for you** (`mcpTools`, `registerTools`), so you can hand a model a
 curated subset — renamed, re-described, with fixed arguments it cannot change — instead of the whole
@@ -71,14 +72,15 @@ fail. See §5.4.
 Root: `{{url:apiBase}}`. Bearer token. JSON in, JSON out, `application/problem+json` on failure.
 Tickets are addressed by key. Every `POST`/`PUT`/`PATCH` accepts an `Idempotency-Key`.
 
-With an **account token**, a board-scoped path takes the board key in the path — `/v1/boards/ENG/tickets`
-— while anything addressed by ticket key stays as it is (`/v1/tickets/ENG-42`). `GET /v1/boards` lists
-what you can reach, and `GET /v1/me` reports `kind: 'account'` with those boards. With a board token the
-short paths keep working unchanged.
+With an **agent token** or an **account token** on several boards, a board-scoped call names the board:
+`?board=ENG` on the short path, or the key in the path — `/v1/boards/ENG/tickets`. Anything addressed by
+ticket key stays as it is (`/v1/tickets/ENG-42`). `GET /v1/boards` lists what you can reach, and
+`GET /v1/me` reports the `kind` with those boards. On exactly one board — and with a board token — the
+short paths work with nothing added.
 
 ```bash
 curl -s -H "Authorization: Bearer $TM_TOKEN" \
-  "{{url:apiBase}}/tickets?assignee=me&state=active"
+  "{{url:apiBase}}/tickets?board=ENG&assignee=me&state=active"
 ```
 
 The full machine-readable description is at `{{url:openapiUrl}}` (OpenAPI 3.1, generated from the
@@ -92,14 +94,14 @@ interactive clients. Tools the token's scopes do not allow are **hidden from `to
 refused if called anyway, so a model's tool list is always exactly what it may do.
 
 Every tool that works on a board takes an optional **`board`** argument (a key, `'ENG'`). It is required
-only when the credential spans several boards — an account token or an OAuth grant — *and* the call does
-not name a ticket key. `list_boards` is then the natural first call: it returns the keys the credential
-reaches right now. A board token implies its board and may leave the argument out, exactly as before.
+only when the credential spans several boards — an agent on several, an account token or an OAuth grant
+— *and* the call does not name a ticket key. `list_boards` is then the natural first call: it returns the
+keys the credential reaches right now. On exactly one board the argument may be left out.
 
 An MCP client that a person drives — Claude Desktop, Claude Code — is set up on its own page:
 {{url:claudeUrl}} (a custom connector over OAuth, one `claude mcp add` command, or the plugin at
 {{url:pluginZipUrl}}, which brings a skill and slash commands with it).
 
 Resources: `ticket://ENG-42` (the ticket and its thread as Markdown), `file://{fileId}`,
-`board://schema` (the token's own board) and `board://{key}/schema` for a credential that spans several.
+`board://schema` (the board a call that names none lands on) and `board://{key}/schema` for a credential that spans several.
 Prompts: `triage_board`, `standup_summary`.

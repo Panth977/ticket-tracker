@@ -1,13 +1,14 @@
 <!--
-  New token (agents.html §E, §R1):
-    Name · What it reaches: Me on one board | An agent on one board |
-    ACCOUNT TOKEN (me, on every board I'm on) · Permissions (checkboxes +
-    presets) · Expires.
-  What a token may do is its permissions ∩ what its principal's board role
-  allows, so a commenter agent can never move outside its stage grant, and an
-  account token is an admin only where you already are one.
-  Admin permissions are offered only to a board token acting as you, on a
-  board where you are admin; the ACCOUNT permissions only to an account token.
+  New token (agents.html §E, §R1, §AA5):
+    Name · What it reaches: Me on one board | ACCOUNT TOKEN (me, on every
+    board I'm on) · Permissions (checkboxes + presets) · Expires.
+  §AA5: "acts as an agent" is GONE from this form. An agent has one token, made
+  on the agent's own page; what it may do is its role on each board and its
+  permission on each artifact, not a checkbox list. The form points there.
+  What a token made here may do is its permissions ∩ what YOUR board role
+  allows, so an account token is an admin only where you already are one.
+  Admin permissions are offered only on a board where you are admin; the
+  ACCOUNT and ARTIFACT permissions only to an account token.
 -->
 <script lang="ts">
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
@@ -21,8 +22,7 @@
     type Scope,
     type ScopePreset,
   } from '@tm/shared';
-  import { Globe, TriangleAlert } from 'lucide-svelte';
-  import { myAgents, sortAgents } from '$lib/agents/agents';
+  import { Bot, Globe, TriangleAlert } from 'lucide-svelte';
   import { agentRoutes } from '$lib/agents/routes';
   import { auth } from '$lib/firebase/auth.svelte';
   import { PrincipalAvatar } from '$lib/people';
@@ -31,6 +31,8 @@
   import {
     ACCOUNT_SCOPE_SECTION,
     ACCOUNT_TOKEN_NEVER,
+    ARTIFACT_SCOPE_SECTION,
+    artifactScopesFit,
     choiceOf,
     EXPIRY_OPTIONS,
     expiryIsRisky,
@@ -57,15 +59,8 @@
   const choice = $derived(choiceOf(draft));
   const presets = $derived(presetsFor(draft.kind));
   const board = $derived(boards.find((b) => b.id === draft.boardId) ?? null);
-  const agentsQ = $derived(myAgents(me));
-  /** My agents on the chosen board (the board's access map holds agents too). */
-  const agentsHere = $derived(
-    board
-      ? sortAgents($agentsQ.data).filter((a) => a.archivedAt == null && board.access[a.id] != null)
-      : [],
-  );
   const adminHere = $derived(!!board && board.access[me] === 'admin');
-  const offerAdmin = $derived(!account && draft.actsAs === 'me' && adminHere);
+  const offerAdmin = $derived(!account && adminHere);
   const errors = $derived(tokenDraftErrors(draft));
   /* Which preset button looks pressed: compare the WHOLE list for an account
      token (its 'Full account' preset includes the account scopes), and only
@@ -77,19 +72,7 @@
   );
   const boardsIAmOn = $derived(boards.length);
 
-  // Keep the draft consistent as the board / principal change.
-  $effect(() => {
-    if (account) return;
-    if (
-      draft.actsAs === 'agent' &&
-      draft.agentId &&
-      !agentsHere.some((a) => a.id === draft.agentId) &&
-      !$agentsQ.loading
-    )
-      draft.agentId = agentsHere[0]?.id ?? null;
-    if (draft.actsAs === 'agent' && !draft.agentId && agentsHere[0])
-      draft.agentId = agentsHere[0].id;
-  });
+  // Keep the draft consistent as the board changes.
   $effect(() => {
     if (!offerAdmin && draft.scopes.some((s) => (ADMIN_SCOPES as readonly string[]).includes(s)))
       draft.scopes = draft.scopes.filter((s) => !(ADMIN_SCOPES as readonly string[]).includes(s));
@@ -107,20 +90,19 @@
     draft.scopes = [...SCOPE_PRESETS[p], ...admin] as Scope[];
   }
 
-  /** The three choices of §R1, as one control. */
+  /** The two choices (§R1, §AA5), as one control. */
   function pick(c: TokenChoice) {
     draft = withChoice(draft, c);
   }
   const boardOptions = $derived(
     boards.map((b) => ({ value: b.id, label: `${b.key} · ${b.name}` })),
   );
-  const agentOptions = $derived(agentsHere.map((a) => ({ value: a.id, label: a.name })));
 </script>
 
 <form id="token-form" class="flex flex-col gap-5" {onsubmit} novalidate data-token-form>
   <Input
     label="Name"
-    placeholder="orch-eng-builder"
+    placeholder="ci-release-notes"
     maxlength={80}
     bind:value={draft.name}
     error={touched ? errors.name : null}
@@ -145,23 +127,7 @@
         />
         <PrincipalAvatar id={me} size={20} /> Me, on one board
       </label>
-      <label
-        class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm {choice ===
-        'agent'
-          ? 'border-accent bg-accent-soft'
-          : 'border-line'}"
-      >
-        <input
-          type="radio"
-          name="tokenChoice"
-          value="agent"
-          checked={choice === 'agent'}
-          onchange={() => pick('agent')}
-          class="accent-[var(--tm-accent)]"
-        />
-        An agent, on one board
-      </label>
-      <!-- §R1 — the third choice: "virtual me". -->
+      <!-- §R1 — the other choice: "virtual me". -->
       <label
         class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm {choice ===
         'account'
@@ -214,33 +180,18 @@
       />
     {/if}
 
-    {#if !account && draft.actsAs === 'agent'}
-      {#if !board}
-        <p class="text-xs text-muted">Pick a board first.</p>
-      {:else if $agentsQ.loading}
-        <p class="text-xs text-muted">Loading your agents…</p>
-      {:else if !agentsHere.length}
-        <p class="text-xs text-danger">
-          None of your agents is on {board.name}.
-          <a class="text-accent hover:underline" href={agentRoutes.list()}>Add one to the board</a> first.
-        </p>
-      {:else}
-        <div class="flex items-end gap-2">
-          {#if draft.agentId}<PrincipalAvatar id={draft.agentId} size={32} />{/if}
-          <Select
-            class="flex-1"
-            label="Agent"
-            options={agentOptions}
-            bind:value={draft.agentId}
-            error={touched ? errors.agentId : null}
-          />
-        </div>
-        <p class="text-xs text-muted">
-          The token carries this agent’s identity: its changes are authored by the agent, and it
-          reads the agent’s inbox and system prompt.
-        </p>
-      {/if}
-    {/if}
+    <!--
+      §AA5 — where "An agent, on one board" used to be. Said here, because
+      this is where someone who made agent tokens before will look for it.
+    -->
+    <p class="flex items-start gap-1.5 text-xs text-muted" data-agent-token-pointer>
+      <Bot size={14} class="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>
+        A token for one of your agents? Each agent has one token of its own, generated on
+        <a class="text-accent hover:underline" href={agentRoutes.list()}>the agent’s page</a> — what it
+        may do is its role on each board and its permission on each artifact.
+      </span>
+    </p>
   </fieldset>
 
   <fieldset class="flex flex-col gap-3">
@@ -319,6 +270,27 @@
           {/each}
         </div>
       {/if}
+      {#if artifactScopesFit(draft)}
+        <!-- artifacts.html §C4 — account tokens only (an agent's token always carries them, §AA1). -->
+        <div class="flex flex-col gap-1.5" data-artifact-scopes>
+          <p class="text-xs font-semibold tracking-wide text-subtle uppercase">
+            {ARTIFACT_SCOPE_SECTION.title}
+          </p>
+          {#each ARTIFACT_SCOPE_SECTION.scopes as s (s)}
+            <Checkbox
+              checked={draft.scopes.includes(s)}
+              label={s}
+              description={SCOPE_LABELS[s]}
+              onchange={(e) =>
+                (draft.scopes = toggleScope(
+                  draft.scopes,
+                  s,
+                  (e.currentTarget as HTMLInputElement).checked,
+                ))}
+            />
+          {/each}
+        </div>
+      {/if}
     </div>
     {#if touched && errors.scopes}<p class="text-xs text-danger">{errors.scopes}</p>{/if}
     <p class="text-xs text-muted">
@@ -327,8 +299,7 @@
         Ticking <code>boards:admin</code>
         changes nothing on boards where you are not an admin.
       {:else}
-        A token can only narrow what {draft.actsAs === 'agent' ? 'the agent’s' : 'your'} role on the board
-        allows — never widen it.
+        A token can only narrow what your role on the board allows — never widen it.
       {/if}
     </p>
   </fieldset>

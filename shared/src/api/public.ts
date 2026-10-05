@@ -29,6 +29,7 @@ import { TaskItemStatusSchema } from '../schema/tasklist.js';
 import { AgentHealthSchema, AgentStateSchema } from '../schema/agentStatus.js';
 import { MessageKindSchema } from '../schema/ticket.js';
 import { RunOutcomeSchema } from '../schema/message.js';
+import { ArtifactAgentAccessSchema, ArtifactRoleSchema } from '../artifacts/schema.js';
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -414,3 +415,74 @@ export const PublicAgentStatusSchema = z.object({
   ended_at: Iso.nullable(),
 });
 export type PublicAgentStatus = z.infer<typeof PublicAgentStatusSchema>;
+
+// ───────────────────────── artifacts (docs/plan/artifacts.html §C1) ─────────────────────────
+
+/** One build of an artifact: a version. The newest ten are kept; any of them can be made current. */
+export const PublicArtifactBuildSchema = z.object({
+  id: z.string(),
+  files: z.number().int(),
+  /** Unpacked bytes. */
+  bytes: z.number().int(),
+  message: z.string().nullable(),
+  /** Who published it — a person or an agent. */
+  by: PublicActorSchema,
+  created_at: Iso,
+  /** e.g. the absolute-asset-path warning: the publish succeeded, the page may be blank. */
+  warnings: z.array(z.string()),
+  /** A source zip came with it (GET /v1/artifacts/{id}/source?build=…). */
+  has_source: z.boolean(),
+  /** This is the build people see. */
+  current: z.boolean(),
+});
+export type PublicArtifactBuild = z.infer<typeof PublicArtifactBuildSchema>;
+
+/** A person or agent the artifact is shared with. */
+export const PublicArtifactMemberSchema = z.object({
+  id: z.string(),
+  kind: PrincipalKindSchema,
+  name: z.string(),
+  /** '' for agents. */
+  email: z.string(),
+  /** A person's role. For an agent this is always 'editor' (kept for older clients) — read `agent_access`. */
+  role: ArtifactRoleSchema,
+  /** Agents only (§AA3): what this agent may do here — { build, data: 'none' | 'read' | 'write' }. */
+  agent_access: ArtifactAgentAccessSchema.optional(),
+});
+export type PublicArtifactMember = z.infer<typeof PublicArtifactMemberSchema>;
+
+export const PublicArtifactSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  icon: z.string().nullable(),
+  /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
+  url: z.string(),
+  /**
+   * The role of the principal this credential acts as. An AGENT caller always
+   * reads 'editor' here (kept for older clients); what it may actually do is
+   * `agent_access`.
+   */
+  role: ArtifactRoleSchema,
+  /**
+   * §AA3 — present only when the caller is an AGENT: its own { build, data }
+   * on this artifact. build: publish, roll back, source. data: the data API.
+   */
+  agent_access: ArtifactAgentAccessSchema.optional(),
+  /** Viewers may read its data but not write it. */
+  read_only: z.boolean(),
+  archived: z.boolean(),
+  /** The build people see; null until the first publish. */
+  current_build: z.string().nullable(),
+  owner_id: z.string(),
+  created_at: Iso,
+  updated_at: Iso,
+});
+export type PublicArtifact = z.infer<typeof PublicArtifactSchema>;
+
+/** GET /v1/artifacts/{id}: the artifact, its kept builds (newest first) and who it is shared with. */
+export const PublicArtifactDetailSchema = PublicArtifactSchema.extend({
+  builds: z.array(PublicArtifactBuildSchema),
+  members: z.array(PublicArtifactMemberSchema),
+});
+export type PublicArtifactDetail = z.infer<typeof PublicArtifactDetailSchema>;

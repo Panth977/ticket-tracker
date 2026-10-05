@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow">
+  <title>Artifacts · Plan · TaskManager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs.css" />
+  <link rel="stylesheet" href="/plan/shared.css" />
+</head>
+<body>
+  <div class="mg-page">
+    <header class="chrome">
+      <nav class="chrome__envs" aria-label="Environment">
+        <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase.">App</a>
+        <a href="/platform/db" title="The same data reached from outside — REST, MCP, webhooks, and every notification channel.">Platform</a>
+        <a href="/plan/architecture" class="on" title="The argument: architecture, decisions, and the order it gets built in.">Plan</a>
+      </nav>
+      <nav class="chrome__pages" aria-label="Page">
+        <a href="/plan/architecture">Architecture</a>
+        <a href="/plan/decisions">Decisions</a>
+        <a href="/plan/roadmap">Roadmap</a>
+        <a href="/plan/agents">Agents</a>
+        <a href="/plan/artifacts" class="on">Artifacts</a>
+        <a href="/plan/sdk">SDK</a>
+        <a href="/plan/review">Review</a>
+        <a href="/plan/reference">From TeamTrack</a>
+        <a href="/plan/run">Run</a>
+      </nav>
+    </header>
+    <article class="mg">
+
+    <h1>Artifacts</h1>
+    <p class="lede">An artifact is a small website that lives inside TaskManager: a dashboard, a tracker, a form, a tool. Somebody (usually
+    an agent) writes the frontend in whatever they like, builds it to a static folder, and publishes that folder. TaskManager keeps it in
+    Firebase Storage and shows it only to the signed-in people it has been shared with. The artifact's backend is a script tag:
+    <code>window.BackendDriver</code> gives it Firestore, the Realtime Database and Storage, all fenced inside a prefix that belongs to
+    that one artifact. Artifacts are a concept of their own, separate from boards: no tickets, no stages, their own people.</p>
+
+    <h2 id="a">A · What an artifact is</h2>
+    <ul>
+      <li><b>A static build, nothing else runs on our side.</b> The published thing is a folder with an <code>index.html</code> at its
+        root: plain HTML/CSS/JS, or the <code>dist/</code> of Svelte, React, Vue or anything else. We never build it and never run it
+        on the server. The only rules for the build: <b>relative asset paths</b> (Vite <code>base: './'</code>), and <b>hash routing</b>
+        or a single page (a deep link that is not a file falls back to <code>index.html</code>, so history routing mostly works too).</li>
+      <li><b>Its data is its own.</b> Everything an artifact stores goes under its prefix: <code>artifacts/{id}/db/data/…</code> in
+        Firestore, <code>/artifactData/{id}/…</code> in the Realtime Database, <code>artifacts/{id}/files/…</code> in Storage. The
+        artifact's code never learns these prefixes and cannot write outside them.</li>
+      <li><b>Its people are its own.</b> An artifact has an owner and a list of people (and agents) it is shared with, each with one
+        role. Being on a board gives you nothing on an artifact, and the reverse.</li>
+      <li><b>Builds are versions.</b> Every publish is a new build. The artifact points at a current build; the last ten are kept and
+        any of them can be made current again (a rollback is one click). Publishing never touches the data.</li>
+      <li><b>The source can travel with it.</b> A publish may carry a zip of the source beside the build. It is never served; it is what
+        the next agent downloads to carry on where the last one stopped.</li>
+    </ul>
+
+    <h2 id="b">B · Who can see and change one</h2>
+    <table>
+      <thead><tr><th>Role</th><th>Open it</th><th>Read its data</th><th>Write its data</th><th>Publish, roll back</th><th>Share, rename, delete</th></tr></thead>
+      <tbody>
+        <tr><td><b>owner</b></td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+        <tr><td><b>editor</b></td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>no</td></tr>
+        <tr><td><b>viewer</b></td><td>yes</td><td>yes</td><td>yes, unless the artifact is set <i>read-only for viewers</i></td><td>no</td><td>no</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><b>Only signed-in, allowed accounts, and only the ones it is shared with.</b> Nothing about an artifact (its files, its data,
+        its name) is reachable without a session whose uid is in <code>artifacts/{id}.access</code>. There is no public link and no
+        "anyone with the link". An account not on the allow list (§X in Agents) can never be given a role.</li>
+      <li><b>Viewers write by default</b>, because most of what gets built this way (a poll, a checklist, a log) is useless read-only. One
+        switch in the artifact's settings makes viewers read-only.</li>
+      <li><b>Sharing works like board invites.</b> The owner adds an email with a role. If that person already has an account they
+        get the role at once and a notification; if not, an invite waits for their first sign-in (same <code>invites/</code> flow,
+        with <code>artifactId</code> in place of <code>boardId</code>).</li>
+      <li><b>Agents are members too.</b> An agent (one of yours) can be added as an editor. Its token then reaches that artifact and only
+        that one (C4).</li>
+      <li><b>Taking access away is immediate for data</b>: the rules read the access map on every call. The static files it had already
+        loaded stay loaded until the tab closes, and a file link it held stops working within the hour (D2).</li>
+    </ul>
+
+    <h2 id="c">C · How the code gets there: publishing</h2>
+    <h3 id="c1">C1 · The one call</h3>
+    <pre>POST /v1/artifacts                         create      { name, description? } → { id, url }
+POST /v1/artifacts/{id}/builds             publish     body: a zip of the build folder (application/zip)
+                                                        ?source=1 + multipart part "source": a zip of the source (optional)
+                                                        ?message=… a line saying what changed
+GET  /v1/artifacts                         list the ones you can reach
+GET  /v1/artifacts/{id}                    meta + current build + builds[]
+POST /v1/artifacts/{id}/builds/{b}/current roll back (or forward) to a build
+GET  /v1/artifacts/{id}/source             the newest source zip (a short-lived URL)
+PUT  /v1/artifacts/{id}/access             { email, role } share / change role;  role: null removes
+DELETE /v1/artifacts/{id}                  owner only; deletes files, builds and ALL data</pre>
+    <ul>
+      <li><b>The server unpacks and checks the zip</b>: an <code>index.html</code> at the root (or in a single top folder, which is
+        stripped), at most 25 MB unpacked and 2,000 files, no path escaping the folder, no symlinks. Each file goes to
+        <code>artifacts/{id}/builds/{buildId}/…</code> in Storage with its content type. The build is written as
+        <code>artifacts/{id}/builds/{buildId}</code> (files, bytes, message, who, when) and becomes current in the same command.</li>
+      <li><b>A check that catches the usual mistake</b>: if <code>index.html</code> references <code>/assets/…</code> (an absolute
+        path, Vite's default) the publish still succeeds but answers with a warning naming the fix (<code>base: './'</code>), because
+        such a build shows a blank page.</li>
+    </ul>
+    <h3 id="c2">C2 · The same thing from the SDK, MCP and the Claude plugin</h3>
+    <pre>// SDK (Node / Deno): zips the folder for you
+const art = await tm.artifacts.create({ name: 'Sales dashboard' });
+await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+
+// MCP tools
+artifact_list · artifact_get · artifact_create · artifact_publish · artifact_rollback · artifact_share · artifact_source</pre>
+    <ul>
+      <li><b><code>artifact_publish</code> over MCP takes files, not a zip</b>: <code>[{ path, content, encoding: 'utf8'|'base64' }]</code>,
+        up to 5 MB in one call. That covers a hand-written HTML/CSS/JS artifact straight from a chat. A framework build goes through the
+        SDK or REST, from the machine that built it.</li>
+      <li><b>The Claude plugin gains a skill</b>, <code>artifact</code>: how to scaffold one (a Vite template with <code>base: './'</code>
+        and the driver tag already in <code>index.html</code>), how to run it locally against the mock driver (E5), and how to publish.
+        <code>llms-full.txt</code> gets an Artifacts chapter generated from the same sources, so an LLM handed that one file can build
+        one.</li>
+    </ul>
+    <h3 id="c3">C3 · From the app</h3>
+    <ul>
+      <li>An owner or editor can also drop a zip (or a folder) on the artifact's Builds tab. Same command, same checks.</li>
+    </ul>
+    <h3 id="c4">C4 · Tokens</h3>
+    <ul>
+      <li><b>Two new scopes</b>: <code>artifacts:read</code> (list, get, download source) and <code>artifacts:write</code> (create,
+        publish, roll back, share). An <b>account token</b> reaches every artifact where you are owner or editor; creating one needs
+        <code>artifacts:write</code>. An <b>agent's token</b> reaches only the artifacts that agent is a member of. It may create
+        one: the artifact then belongs to the agent's <b>owner</b> (it appears in their sidebar at once, with an inbox row) and the
+        agent is on it as editor, so it can publish but never share, rename or delete. Nothing here lets a token mint a token, as
+        everywhere else.</li>
+    </ul>
+
+    <h2 id="d">D · How it is served: two origins and a sandbox</h2>
+    <p>This is the part that has to be right. An artifact is code written by somebody else, often by an agent, and it runs in the
+    browser of everyone it is shared with. If it ran on <code>taskmanager-example.web.app</code> it could read the viewer's Firebase
+    session out of IndexedDB and do anything that person can do: read every board, post as them. So artifact code <b>never runs on the
+    app's origin</b> and <b>never holds a Firebase session</b>.</p>
+    <h3 id="d1">D1 · The shape</h3>
+    <pre>taskmanager-example.web.app/x/{id}          THE HOST PAGE: our Svelte code, the viewer's real session
+  └─ &lt;iframe sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-modals"
+             src="https://taskmanager-example-usercontent.web.app/c/{capability}/index.html"&gt;
+        THE ARTIFACT: its own files, an opaque origin, no cookies, no storage, no session
+        window.BackendDriver  ──postMessage──▶  host page  ──Firebase SDK, as the viewer──▶  artifacts/{id}/… only</pre>
+    <ul>
+      <li><b>A second Hosting site</b>, <code>taskmanager-example-usercontent</code>, in the same project. Its only route,
+        <code>/c/**</code>, rewrites to the <code>api</code> function, which streams the file from Storage. Nothing of the app is
+        served there: no <code>index.html</code>, no service worker, no <code>/api</code>.</li>
+      <li><b>The sandbox, twice.</b> The iframe has <code>sandbox</code> <i>without</i> <code>allow-same-origin</code>, and every
+        response from the usercontent site carries <code>Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups
+        allow-downloads allow-modals</code>. The header covers the case where somebody opens the file URL as a top-level page: it still gets
+        an opaque origin. Either one alone would do; both is cheap.</li>
+      <li><b>What the opaque origin costs the artifact</b>: <code>localStorage</code>, <code>sessionStorage</code>, IndexedDB and
+        cookies throw or do nothing. The driver's KV (E2) replaces them, and it syncs across devices, which they never did.
+        <code>fetch</code> to public APIs and CDNs works (the origin is <code>null</code>; most public CDNs allow it).</li>
+    </ul>
+    <h3 id="d2">D2 · The capability in the URL</h3>
+    <ul>
+      <li>The iframe cannot send a session, so the file URL carries one. When the host page opens an artifact it calls
+        <code>artifactOpen(id)</code>; the command checks the caller's role and answers
+        <code>{ capability, build, role, readOnly }</code>. The capability is an HMAC-signed string of
+        <code>{ artifactId, buildId, uid, exp }</code>, valid for one hour, signed with a key kept beside the other server secrets.</li>
+      <li>It is a <b>path segment</b>, so the build's relative URLs (<code>./assets/app.js</code>) carry it automatically.
+        <code>/c/{cap}/{path}</code> verifies it, maps <code>path</code> to
+        <code>artifacts/{id}/builds/{buildId}/{path}</code> (a missing path without an extension → <code>index.html</code>) and
+        streams it with its content type, <code>Cache-Control: private, max-age=3600, immutable</code> (a build never changes) and the
+        CSP header.</li>
+      <li>The host page asks for a fresh capability before the old one expires, so a tab left open all day keeps loading lazy chunks.
+        It carries a <b>build id</b>, so publishing a new build does not break a tab that is open on the old one; the host shows a
+        "new version, reload" bar instead.</li>
+    </ul>
+    <h3 id="d3">D3 · The host page</h3>
+    <ul>
+      <li><code>/x/{id}</code> in the app: a thin top bar (name, build, Share, Settings, full-screen) and the iframe filling the rest.
+        Full-screen hides the bar, so a dashboard can live on a wall screen. On a phone it is the same page under the ☰ drawer.</li>
+      <li>The host is the <b>broker</b> (E3). It holds the viewer's Firebase session and the artifact's id, listens for messages
+        <b>only from its own iframe</b> (<code>event.source === iframe.contentWindow</code>), and turns each request into a call on a
+        path it builds itself. The iframe never sends a full path, only the part after the prefix.</li>
+    </ul>
+
+    <h2 id="e">E · The driver: <code>window.BackendDriver</code></h2>
+    <h3 id="e1">E1 · Loading it</h3>
+    <pre>&lt;script src="https://taskmanager-example.web.app/backend-driver/v1/driver.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const db = window.BackendDriver;
+  await db.ready;                                    // handshake with the host done
+  const me = db.me;                                  // { uid, name, email, photoURL, role, readOnly }
+  const doc = await db.firestore.get('/my/doc');     // → artifacts/{id}/db/data/my/doc
+&lt;/script&gt;</pre>
+    <ul>
+      <li>Served from <code>/backend-driver/**</code> on the app site with the same headers as <code>/lib/**</code> (CORS open,
+        <code>nosniff</code>, a pinned <code>v1</code> cached for a year and a <code>latest</code> that is not). Also as an ES module
+        (<code>driver.mjs</code>) and on npm-by-URL with its <code>.d.ts</code>, like the SDK, so a Vite or TypeScript project gets
+        types.</li>
+      <li><b>It has no Firebase in it.</b> It is a few kilobytes of postMessage plumbing, a Promise per request and a callback per
+        subscription. All the Firebase code, and the session, stays in the host page.</li>
+      <li><b>The artifact id comes from the host</b>, in the handshake, not from the URL the artifact can see. The artifact can read
+        it (<code>db.artifact.id</code>) but cannot change it: the host ignores any id a message carries.</li>
+    </ul>
+    <h3 id="e2">E2 · The API</h3>
+    <pre>db.firestore  .get(path)                      → { id, path, exists, data }
+              .set(path, data, { merge? })  .update(path, patch)  .delete(path)
+              .add(collectionPath, data)    → { id, path }
+              .list(collectionPath, { where?: [[field, op, value]…], orderBy?: [field, 'asc'|'desc'], limit?, startAfter? })
+              .onDoc(path, cb) / .onList(collectionPath, query, cb)   → unsubscribe()
+db.rtdb       .get(path)  .set(path, v)  .update(path, patch)  .push(path, v)  .remove(path)
+              .on(path, cb)                  → unsubscribe()        (value events; the whole subtree)
+db.storage    .upload(path, blob, { contentType? })  → { path, size }
+              .url(path)                    → a short-lived URL the artifact can put in &lt;img src&gt;
+              .list(prefix)  .delete(path)
+db.kv         .get(key)  .set(key, v)  .delete(key)   per-viewer, per-artifact (artifacts/{id}/viewers/{uid}/kv)
+db.serverTime                                 a sentinel; becomes the server timestamp in any write
+db.me  ·  db.artifact  ·  db.ready  ·  db.on('readonly' | 'revoked' | 'build', cb)</pre>
+    <ul>
+      <li><b>Paths are the artifact's own view</b>: <code>'/my/doc'</code> and <code>'my/doc'</code> are the same, <code>..</code> is
+        refused, and a Firestore path must have an even number of segments for a document and odd for a collection, as Firestore
+        requires. The prefix is added in the host: Firestore <code>artifacts/{id}/db/data</code> + path, RTDB
+        <code>/artifactData/{id}</code> + path, Storage <code>artifacts/{id}/files</code> + path.</li>
+      <li><b>Values cross postMessage as structured clones.</b> Firestore Timestamps arrive as <code>Date</code>, and a
+        <code>Date</code> written becomes a Timestamp. References, GeoPoints and field transforms other than
+        <code>serverTime</code> are not in v1.</li>
+      <li><b>Errors are plain</b>: a rejected Promise with <code>{ code, message }</code>, codes <code>permission-denied</code>,
+        <code>not-found</code>, <code>invalid-argument</code>, <code>quota</code>, <code>unavailable</code>.</li>
+    </ul>
+    <h3 id="e3">E3 · The broker, and why not a Firebase session in the iframe</h3>
+    <ul>
+      <li>The alternative was to give the artifact its own Firebase session: a custom token for a synthetic uid carrying an
+        <code>artifact</code> claim, with rules keyed on it. It works, but it puts a live Firebase credential in the hands of the
+        artifact's code, creates an Auth user per viewer per artifact, and forces every existing rule to learn to refuse that identity.
+        The broker gives the same API with none of that: the only thing the artifact can ever cause is a call on its own prefix, made by
+        our code.</li>
+      <li><b>Realtime still works</b>: <code>onDoc</code> / <code>onList</code> / <code>on</code> are real listeners in the host,
+        forwarding every snapshot into the iframe. The host caps them at 50 live listeners per artifact tab, and drops them all when the
+        iframe goes away.</li>
+      <li><b>It cannot run outside TaskManager.</b> An artifact is opened at <code>/x/{id}</code>, never on its own. That is the point:
+        the host is where the sign-in and the sharing check happen.</li>
+    </ul>
+    <h3 id="e4">E4 · The rules are the fence, not the broker</h3>
+    <ul>
+      <li>The broker is our code in the viewer's browser, and the viewer can change it (devtools). So the <b>rules</b> decide, exactly as
+        for boards. Firestore: <code>artifacts/{a}/db/data/{path=**}</code> readable when <code>access[uid]</code> exists, writable when
+        it is owner/editor, or viewer and not <code>readOnly</code>. The artifact document itself and its <code>builds</code> are
+        read-only to clients; only commands write them.</li>
+      <li><b>RTDB cannot read Firestore</b>, so the access map is mirrored to <code>/artifactReaders/{id}/{uid}: role</code> by a
+        trigger, the same way <code>boardReaders</code> already works for presence.</li>
+      <li><b>Storage goes through the API for reads</b>, as attachments do since phase 11 (the cross-service
+        <code>firestore.get()</code> in Storage rules errors instead of denying). Uploads go straight to Storage under
+        <code>artifacts/{id}/files/</code> with a write rule that checks the role, and <code>url(path)</code> is a signed URL minted by
+        <code>/api/artifacts/{id}/files/url</code> after the role check.</li>
+      <li><b>Limits the rules enforce</b>: a Firestore document under 256 KB, an upload under 25 MB, and no writes when the artifact is
+        archived.</li>
+    </ul>
+    <h3 id="e5">E5 · Building one on your machine</h3>
+    <ul>
+      <li>Loaded outside a TaskManager host (<code>vite dev</code>, a file opened from disk), the driver says so in the console and
+        switches to a <b>mock backend</b>: the same API over an in-memory store saved to <code>localStorage</code>, a fake
+        <code>me</code> and a role you can set with <code>?role=viewer</code>. An agent can build and click through an artifact without
+        publishing it. <code>db.mock</code> is <code>true</code> so code can show a banner.</li>
+    </ul>
+
+    <h2 id="f">F · In the app</h2>
+    <ul>
+      <li><b>The sidebar gains ARTIFACTS</b> under BOARDS (the sidebar is the map): each artifact you can open, starred ones first, and
+        <i>+ New artifact</i>. <i>All artifacts</i> lists the rest with who shared them and when they last changed.</li>
+      <li><b>The artifact page</b> (<code>/x/{id}</code>) is the host of D3. Settings has four tabs: <b>General</b> (name, description,
+        icon, read-only for viewers, archive), <b>People</b> (owner, editors, viewers, agents; add by email), <b>Builds</b> (the list with
+        message, who, size, when; make current; drop a zip; download source), <b>Data</b> (a read-only browser of the Firestore and RTDB
+        trees under the prefix, with the document count and bytes, and <i>Delete all data</i> for the owner).</li>
+      <li><b>Search</b> (⌘K) finds artifacts by name. <b>Notifications</b>: being shared an artifact, and a new build on one you own,
+        through the same per-person channel settings as everything else.</li>
+    </ul>
+
+    <h2 id="g">G · Data model</h2>
+    <pre>artifacts/{id}                      name, description, icon, ownerUid, access { uid: 'owner'|'editor'|'viewer' },
+                                    agents { agentId: 'editor' }, readOnly, archived, currentBuild, createdAt, updatedAt
+artifacts/{id}/builds/{buildId}     files, bytes, message, sourcePath?, byUid | byAgent, createdAt, warnings[]
+artifacts/{id}/db/data/…            THE ARTIFACT'S FIRESTORE (anything it writes)
+artifacts/{id}/viewers/{uid}/kv/{key}  db.kv
+RTDB  /artifactData/{id}/…          THE ARTIFACT'S RTDB
+RTDB  /artifactReaders/{id}/{uid}   role, mirrored by a trigger
+Storage artifacts/{id}/builds/{buildId}/…   the static files (served by /c/{cap}/…)
+Storage artifacts/{id}/source/{buildId}.zip
+Storage artifacts/{id}/files/…      THE ARTIFACT'S STORAGE</pre>
+    <ul>
+      <li><b>Ids</b> are Firestore auto ids; the URL is <code>/x/{id}</code>. No keys like board keys: an artifact is opened from the
+        sidebar or a link, not typed.</li>
+      <li><b>Deleting</b> goes through a queue like <code>queueBoardDelete</code>: the data subtree, the RTDB node, every Storage
+        prefix, then the document.</li>
+      <li><b>Old builds</b> beyond the newest ten (and never the current one) are removed by the daily housekeeping job.</li>
+    </ul>
+
+    <h2 id="h">H · What it costs</h2>
+    <ul>
+      <li>Artifact data is ordinary Firestore/RTDB traffic in the same project, so it counts against the same free quota (§W). A
+        dashboard that lists 2,000 documents on every load is 2,000 reads per open. The Data tab shows each artifact's size, and the
+        cost module of §X gets a per-artifact line from a counter the broker bumps (reads/writes per artifact per day, batched).</li>
+      <li>Serving files is a function call per file, so the first open of a build is roughly its file count in invocations; after that
+        the browser cache answers (<code>immutable</code>, keyed by build). A typical Vite build is under 10 files.</li>
+    </ul>
+
+    <h2 id="i">I · Not in v1</h2>
+    <ul>
+      <li>Public or link-only sharing. Server-side code (functions) per artifact. Custom domains. Building from source on our side.
+        Linking an artifact to a board or ticket (a Markdown link to <code>/x/{id}</code> works already; §K lets the page itself
+        read and write a board's tickets). Firestore transactions and
+        batched writes through the driver. Artifact-to-artifact data sharing.</li>
+    </ul>
+
+    <h2 id="j">J · What gets built</h2>
+    <ol>
+      <li><b>Shared</b>: schemas (Artifact, Build, access roles), the two scopes, the driver's message protocol as a typed union, path
+        normalisation with its tests (the prefixing is the security boundary, so it gets the most tests).</li>
+      <li><b>Backend</b>: commands <code>artifactCreate / Update / Share / Publish / SetCurrent / Delete / Open</code>; zip unpack and
+        checks; the capability sign/verify; <code>/c/**</code> file streaming; <code>/api/artifacts/{id}/files/url</code>; REST routes;
+        MCP tools; the access-mirror trigger; the delete queue; housekeeping for old builds.</li>
+      <li><b>Rules</b>: Firestore, RTDB and Storage for the three prefixes, with emulator tests for every role against every path, and
+        a test that a viewer cannot reach <code>artifacts/{other}/…</code>.</li>
+      <li><b>Hosting</b>: the second site and its <code>firebase.json</code> target; <code>/backend-driver/**</code> on the app site;
+        <code>scripts/deploy.mjs</code> deploys both sites.</li>
+      <li><b>Driver</b>: <code>driver.js</code> / <code>driver.mjs</code> / <code>.d.ts</code> and the mock backend; built and staged like
+        the SDK.</li>
+      <li><b>Frontend</b>: sidebar section, <code>/x/{id}</code> host + broker, the four settings tabs, sharing, notifications.</li>
+      <li><b>SDK, plugin, llms-full.txt</b>: <code>tm.artifacts.*</code>, the <code>artifact</code> skill and Vite template, the
+        generated chapter.</li>
+      <li><b>End to end</b>: publish a Vite React build and a plain HTML one from the SDK, open both as owner and as viewer, write
+        from one tab and see it in the other, check that a removed viewer is refused, and check that artifact code cannot read the
+        app's session (it throws on <code>indexedDB.open</code>).</li>
+    </ol>
+
+
+    <h2 id="k">K · A board's tickets, inside the page</h2>
+    <p>A dashboard is most useful over the work itself. The owner can let an artifact use a board's tickets — read, or read and
+    write — and the page builds whatever UI it wants with <code>BackendDriver.tickets</code>.</p>
+    <h3 id="k1">K1 · The grant is a ceiling, the viewer's role is the floor</h3>
+    <pre>artifacts/{id}.boards = { [boardId]: 'read' | 'write' }        // artifactBoardAccessSet, owner only</pre>
+    <ul>
+      <li><b>Who grants:</b> the artifact's owner (Settings › <b>Board access</b>, or <code>artifactBoardAccessSet</code> /
+        MCP <code>artifact_board_access_set</code>). <code>read</code> needs them on the board; <code>write</code> needs them editor
+        or admin there. <code>null</code> removes it. At most 20 boards.</li>
+      <li><b>Who it works for:</b> the broker in the host page acts as the <b>viewer</b>, exactly as for the artifact's own data
+        (§E3). Reads are Firestore queries in the viewer's session, so the rules decide; writes are the ordinary ticket commands
+        (<code>ticketCreate</code>, <code>ticketUpdate</code>, <code>messagePost</code>) as the viewer. So someone the artifact is
+        shared with but who is not on the board sees nothing, and a board viewer cannot write through a <code>write</code> grant.
+        The grant only ever takes away.</li>
+      <li><b>The fence:</b> every <code>tk.*</code> op names a board by key (or a ticket key, whose prefix names it); one that is not
+        granted is <code>permission-denied</code>, even for its admin. A write on a <code>read</code> grant is too. A read-only
+        artifact (§B) stays read-only for its viewers, tickets included.</li>
+    </ul>
+    <h3 id="k2">K2 · The API</h3>
+    <pre>db.tickets.boards()                         → granted boards I can read: { key, name, access, canWrite, stages, priorities, tags, fields, members }
+db.tickets.list(board, query?)              → tickets   query: { stage?, assignee?: 'me' | email | id | null, state?, orderBy?, limit? }
+db.tickets.onList(board, query, cb, onErr?) → unsubscribe (live)
+db.tickets.get('ENG-42')                    → ticket | null
+db.tickets.create(board, { title, description?, stage?, priority?, tags?, assignees?, dueAt?, startAt?, fields? }) → { id, key }
+db.tickets.update('ENG-42', patch)          · db.tickets.comment('ENG-42', markdown)</pre>
+    <p>Tickets come out with names, not ids (stage, priority, tags, people, select options), Markdown descriptions and millis
+    times, and go in the same way; an unknown name is <code>invalid-argument</code> listing the ones that exist. The shapes and the
+    conversion are <code>shared/artifacts/tickets.ts</code>; the driver's own documentation is §8.6 of
+    <code>llms-full.txt</code> and the artifact skill.</p>
+    </article>
+  </div>
+  <script type="module">
+    /* The hover previews work on these pages too: a link to a card shows the card. */
+    import { listen } from '/peek.js';
+    listen();
+  </script>
+</body>
+</html>

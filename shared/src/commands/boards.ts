@@ -17,6 +17,7 @@ import {
   UidSchema,
 } from '../types/index.js';
 import { defineCommand, OkResSchema, req } from './define.js';
+import { ArtifactIdSchema } from '../artifacts/schema.js';
 
 export const MAX_INVITES_PER_CALL = 50;
 
@@ -47,6 +48,8 @@ export const inviteCreate = defineCommand({
 
 export const inviteAccept = defineCommand({
   name: 'inviteAccept',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['invites:write'],
   source: 'app',
   permission: 'The signed-in account whose VERIFIED email equals invite.email.',
   errors: ['gone', 'not_found', 'forbidden'],
@@ -57,7 +60,16 @@ export const inviteAccept = defineCommand({
     /** false = decline */
     accept: z.boolean(),
   }),
-  res: z.object({ boardId: BoardIdSchema, boardKey: BoardKeySchema }),
+  res: z.object({
+    boardId: BoardIdSchema,
+    boardKey: BoardKeySchema,
+    /**
+     * Set when the invite was to an ARTIFACT (artifacts.html §B): go to
+     * /x/{artifactId}. boardId / boardKey are then the fixed
+     * ARTIFACT_INVITE_BOARD_ID / _KEY and name no board.
+     */
+    artifactId: ArtifactIdSchema.optional(),
+  }),
 });
 
 export const inviteRevoke = defineCommand({
@@ -191,6 +203,8 @@ export const boardArchive = defineCommand({
 
 export const boardPrefSet = defineCommand({
   name: 'boardPrefSet',
+  // MCP (the Claude app as the whole UI): a write, so a write scope — never a read-only token.
+  scopes: ['tickets:update', 'board:admin', 'boards:admin'],
   source: 'app',
   permission: "can(read). Always the caller's own prefs/{actor} — there is no uid parameter.",
   errors: ['forbidden', 'not_found'],
@@ -204,6 +218,8 @@ export type ViewInput = z.infer<typeof ViewInputSchema>;
 
 export const viewSave = defineCommand({
   name: 'viewSave',
+  // MCP (the Claude app as the whole UI): a write, so a write scope — never a read-only token.
+  scopes: ['tickets:update', 'board:admin', 'boards:admin'],
   source: 'app',
   permission: 'personal → can(read) (and its owner, when updating); shared → can(edit).',
   errors: ['forbidden', 'not_found'],
@@ -213,6 +229,8 @@ export const viewSave = defineCommand({
 
 export const viewDelete = defineCommand({
   name: 'viewDelete',
+  // MCP (the Claude app as the whole UI): a write, so a write scope — never a read-only token.
+  scopes: ['tickets:update', 'board:admin', 'boards:admin'],
   source: 'app',
   permission:
     "personal → its owner; shared → can(edit). The board's default view cannot be deleted (409).",

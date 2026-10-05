@@ -54,10 +54,11 @@ export async function boardByKey(ctx: ServerCtx, keyOrId: string): Promise<Board
       if (c.deleted) throw errors.not_found('Board not found');
       return loadBoard(ctx, c.boardId);
     }
-    // No claim row (seeded / legacy data): look among the caller's own boards.
+    // No claim row (seeded / legacy data): look among the caller's own boards
+    // — a person's by readerUids, an agent's by agentIds (§AA1).
     const mine = await db()
       .collection(COLLECTIONS.boards)
-      .where('readerUids', 'array-contains', ctx.actor)
+      .where(isAgentId(ctx.actor) ? 'agentIds' : 'readerUids', 'array-contains', ctx.actor)
       .where('key', '==', key)
       .limit(1)
       .get();
@@ -75,8 +76,16 @@ export async function boardByKey(ctx: ServerCtx, keyOrId: string): Promise<Board
 
 /**
  * Every board the caller can read (narrowed by the token's boardIds), by name.
- * A board token names its board(s) outright — and an agent is never in
- * readerUids (agents.html §A) — so those are loaded by id.
+ * A board token names its board(s) outright, so those are loaded by id.
+ *
+ * A credential that spans boards (boardIds null) asks Firestore, per call:
+ *   a PERSON  (account token, OAuth)   readerUids array-contains uid
+ *   an AGENT  (§AA1 agent token)       agentIds   array-contains agentId
+ * An agent is never in readerUids (agents.html §A) — that list is what the
+ * security rules read, and agents never sign in — so its boards are found
+ * through the agents' own derived list. Both lists are derived from `access`
+ * by deriveAccess, and can() below still asks `access` itself, so a list that
+ * lagged could only ever hide a board, never open one.
  */
 export async function readableBoards(
   ctx: ServerCtx,
@@ -91,7 +100,7 @@ export async function readableBoards(
     : (
         await db()
           .collection(COLLECTIONS.boards)
-          .where('readerUids', 'array-contains', ctx.actor)
+          .where(isAgentId(ctx.actor) ? 'agentIds' : 'readerUids', 'array-contains', ctx.actor)
           .get()
       ).docs;
   return docs
@@ -112,6 +121,14 @@ export async function readableBoards(
  *
  * The board set is read HERE, per request (readableBoards), so an account
  * token that has just lost access to a board cannot name it.
+ *
+ * §AA1 — AN AGENT TOKEN works the same way as an account token: name the
+ * board, unless the agent is on exactly one. ONE ADDITION: a token converted
+ * from an old board token (§AA6) carries ctx.defaultBoardId, its old board.
+ * It is used ONLY when no board was named AND more than one is reachable AND
+ * the agent is still on it — so everything that ran against the old
+ * one-board token keeps running after the agent joins a second board. It
+ * never overrides a named board and never reaches a board the agent left.
  */
 export async function requestBoard(ctx: ServerCtx, param?: string | null): Promise<BoardWithId> {
   if (ctx.boardIds && ctx.boardIds.length === 1) {
@@ -123,13 +140,19 @@ export async function requestBoard(ctx: ServerCtx, param?: string | null): Promi
   if (param) return boardByKey(ctx, param);
   const boards = await readableBoards(ctx);
   if (boards.length === 1) return boards[0]!;
+  if (boards.length > 1 && ctx.defaultBoardId) {
+    // §AA1: the converted token's old board — only if it is still reachable.
+    const dflt = boards.find((b) => b.id === ctx.defaultBoardId);
+    if (dflt) return dflt;
+  }
   // §R2: say WHICH boards exist and how to name one — a model (or a script
   // author) can then correct itself in a single step.
   const keys = boards.map((b) => b.key);
+  const whose = isAgentId(ctx.actor) ? 'this agent is' : 'you are';
   throw errors.invalid(
     keys.length
-      ? `This token works on every board you are on, so this call needs a board. Name one of: ${keys.join(', ')}.`
-      : 'This token works on every board you are on, but you are not on any board yet.',
+      ? `This token works on every board ${whose} on, so this call needs a board. Name one of: ${keys.join(', ')}.`
+      : `This token works on every board ${whose} on, but ${whose} not on any board yet.`,
     { field: 'board', value: null, options: keys },
   );
 }

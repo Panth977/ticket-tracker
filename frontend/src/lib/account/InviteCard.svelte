@@ -56,7 +56,8 @@
     <p class="text-sm">
       <span class="font-medium">{invite.invitedByName || 'Someone'}</span> invited you to
       <span class="font-medium"
-        ><span class="font-mono text-muted">{invite.boardKey}</span> · {invite.boardName}</span
+        >{#if !invite.artifactId}<span class="font-mono text-muted">{invite.boardKey}</span> ·
+        {/if}{invite.boardName}</span
       >
       as <Badge tone="accent">{ROLE_LABELS[invite.role]}</Badge>
     </p>

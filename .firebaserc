@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "demo-taskmanager"
+  },
+  "targets": {
+    "demo-taskmanager": {
+      "hosting": {
+        "app": [
+          "demo-taskmanager"
+        ],
+        "usercontent": [
+          "demo-taskmanager-usercontent"
+        ]
+      }
+    }
   }
 }

@@ -86,7 +86,7 @@ export async function makeAgent(
   opts: {
     name?: string;
     boardId?: string;
-    role?: 'editor' | 'commenter' | 'viewer';
+    role?: 'admin' | 'editor' | 'commenter' | 'viewer';
     description?: string;
     icon?: string;
   } = {},

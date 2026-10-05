@@ -1,9 +1,0 @@
-# Runtime files and credentials never leave this machine.
-.env
-!.env.example
-*/.env
-!*/.env.example
-*/state/
-*/logs/
-.supervisor.pid
-.supervisor.log

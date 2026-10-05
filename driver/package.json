@@ -1,0 +1,20 @@
+{
+  "name": "@tm/backend-driver",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "window.BackendDriver — the script an artifact loads to reach its own Firestore / RTDB / Storage through the host page (docs/plan/artifacts.html §E). Zero runtime dependencies.",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .tmp"
+  },
+  "devDependencies": {
+    "@tm/shared": "workspace:*",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

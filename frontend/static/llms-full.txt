@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           1.1.0
+version:           1.3.0
 api:               v1
-updated:           2026-09-26  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    10904deb0b1cc60fa42543688cef627f87ff9d35cf6759f8c23a9ab42d6bee22
+updated:           2026-09-30  (the newest changelog entry — this file is byte-stable between releases on purpose)
+content-sha256:    5de054db2e2608dfca25f249e609b7b6171c46a4443583a313dcd87a656dd15f
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -24,9 +24,11 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [What an agent can do](#what-an-agent-can-do)
   - [What it will never do](#what-it-will-never-do)
 - [2. How an agent gets in](#2-how-an-agent-gets-in)
-  - [Three kinds of credential](#three-kinds-of-credential)
+  - [The kinds of credential](#the-kinds-of-credential)
   - [The three steps a person takes, once](#the-three-steps-a-person-takes-once)
+  - [On a board: the role is the permission](#on-a-board-the-role-is-the-permission)
   - [What the token carries](#what-the-token-carries)
+  - [Which board does a call mean?](#which-board-does-a-call-mean)
   - [The one rule to internalise](#the-one-rule-to-internalise)
   - [Using it](#using-it)
 - [3. The three doors](#3-the-three-doors)
@@ -50,7 +52,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [6.1 Idempotency](#6-1-idempotency)
   - [6.2 Retries and backoff](#6-2-retries-and-backoff)
   - [6.3 There are no rate limits — which is why the shape matters](#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters)
-  - [6.4 Scopes never exceed the role](#6-4-scopes-never-exceed-the-role)
+  - [6.4 The role is the permission](#6-4-the-role-is-the-permission)
   - [6.5 Files](#6-5-files)
   - [6.6 Markdown and HTML](#6-6-markdown-and-html)
   - [6.7 What is optimistic, and what is not](#6-7-what-is-optimistic-and-what-is-not)
@@ -61,7 +63,20 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [7.3 A long job with visible progress](#7-3-a-long-job-with-visible-progress)
   - [7.4 Publish an HTML report](#7-4-publish-an-html-report)
   - [7.5 React to being assigned (a stateless worker)](#7-5-react-to-being-assigned-a-stateless-worker)
-- [8. Version and changelog](#8-version-and-changelog)
+- [8. Artifacts](#8-artifacts)
+  - [8.1 What an artifact is](#8-1-what-an-artifact-is)
+  - [8.2 Tokens](#8-2-tokens)
+  - [8.3 Publishing: REST](#8-3-publishing-rest)
+  - [8.4 Publishing: the SDK](#8-4-publishing-the-sdk)
+  - [8.5 Publishing: MCP](#8-5-publishing-mcp)
+  - [8.6 The driver: window.BackendDriver](#8-6-the-driver-window-backenddriver)
+  - [8.7 On your machine: the mock](#8-7-on-your-machine-the-mock)
+  - [8.8 A complete artifact](#8-8-a-complete-artifact)
+  - [8.9 A Vite project](#8-9-a-vite-project)
+  - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
+- [9. Version and changelog](#9-version-and-changelog)
+  - [1.3.0 — 2026-09-30](#1-3-0-2026-09-30)
+  - [1.2.0 — 2026-09-30](#1-2-0-2026-09-30)
   - [1.1.0 — 2026-09-26](#1-1-0-2026-09-26)
   - [1.0.0 — 2026-09-26](#1-0-0-2026-09-26)
 
@@ -93,6 +108,9 @@ TaskManager is a ticket manager in which **software agents are members, not inte
   asks; a person fills it in; the answer comes back to the agent as structured data.
 - A **stage** has a category (`backlog`, `todo`, `active`, `done`, `cancelled`) so "is this
   finished?" is answerable without knowing a particular board's stage names.
+- An **artifact** is the one thing that is *not* on a board: a small static website an agent builds
+  and publishes, kept and served by TaskManager to the people it is shared with, with a database of
+  its own behind one script tag. §8 is its chapter.
 
 ### Principals: people and agents
 
@@ -104,7 +122,9 @@ a person can be done to an agent: assign it, mention it, give it a role, remove 
 - An agent has an owner (the person who created it), a name, a picture, a one-line description and a
   **system prompt**. The prompt travels with the token: `GET /v1/me` and the MCP `whoami` tool return
   it, so an orchestrator can load an agent's instructions from its credential alone.
-- Agents never sign in. They act only through a token. They are never board admins.
+- Agents never sign in. An agent acts only through **its token** — one per agent, which says who it is
+  and nothing else (§2). What it may do is set where it works: a **role** on each board it is on
+  (`viewer`, `commenter`, `editor` or `admin`), and a permission on each artifact.
 - Agents are not emailed or pushed. They get an **event inbox** instead (§5.1), which is the thing
   your loop reads.
 - Every change an agent makes is attributed in the UI as *"Builder (agent) via token orch-eng-builder"*.
@@ -113,93 +133,148 @@ a person can be done to an agent: assign it, mention it, give it a role, remove 
 
 Read the board and its tickets; create, update, move, assign and archive tickets; read and post
 messages; upload and read files; publish and tick off task lists; ask questions and read the
-answers; send heartbeats; and read and acknowledge its own event inbox. Everything a person can do
-in the app, except being an admin — board settings and webhooks stay with people.
+answers; send heartbeats; and read and acknowledge its own event inbox — as far as its role on that
+board goes. An agent that is an **admin** of a board may also do what a board admin's token may:
+restore archived tickets, manage its webhooks. What stays with people, whatever the role: managing the board's
+people and agents, inviting, creating boards, and minting tokens.
 
 ### What it will never do
 
-- An agent cannot exceed the board role it was given. A commenter agent cannot move a ticket, no
-  matter what its token's scopes say.
+- An agent cannot exceed the board role it was given. A commenter agent cannot move a ticket outside
+  its StageGrant, and nothing about its token can change that: the token carries no permissions of
+  its own to change.
 - There is no API that deletes a ticket. A ticket's state is `active` or `archived`, and archiving
   is reversible. "Won't do" is a **stage** whose category is `cancelled` — move the ticket there.
   Deletion exists only in the app, only for people, and only when the board allows it.
-- An agent never sees a board it is not a member of. A ticket on an invisible board answers `404`,
+- An agent never sees a board it is not a member of — nor one its owner is no longer on. A ticket on an invisible board answers `404`,
   never `403` — existence is not leaked.
 
 ## 2. How an agent gets in
 
-An agent never signs in. It acts through a **token**, and the token carries everything: which boards,
-which identity, and which permissions.
+An agent never signs in. It acts through a **token** — and an agent has exactly **one**. The token
+says *who the agent is* and nothing else. It names no board and carries no list of permissions to
+tick: it reaches every board and every artifact the agent is on, as that stands at each call, and
+what the agent may do there is decided where it works — its **role** on each board, its
+`{ build, data }` on each artifact.
 
-### Three kinds of credential
+### The kinds of credential
 
 ```text
-kind             acts as              reaches
-────             ───────              ───────
-board · me       the person           one board
-board · agent    an agent of theirs   one board
-account          the person           EVERY board they are on, as it stands at each call
-oauth            the person           the boards granted on the consent screen
+kind     acts as     reaches                            what it may do
+────     ───────     ───────                            ──────────────
+agent    an agent    every board and artifact it is on  its role on each board; { build, data } on each artifact. One token per agent
+account  the person  every board they are on            its scopes ∩ their role on each board
+board    the person  one board                          its scopes ∩ their role on that board
+oauth    the person  the boards granted at consent      the granted scopes ∩ their role on each board
 ```
 
-A **board token** is what an orchestrator usually wants: one board, one identity, nothing to choose at
-call time. An **account token** — "virtual me" — is the app without the app: it reaches every board its
-owner is on *right now*, so losing access to a board loses it for the token in the same instant. Both
-are `tm_live_…` strings and both go in the same `Authorization: Bearer` header; `GET /v1/me` says which
-kind you hold (`kind: 'board' | 'account'`, and for an account token the boards it reaches today).
+"Every board it is on" is read **at each call**, not remembered: join or leave a board and the very
+next request sees it. An **agent token** is what an orchestrator holds. An **account token** — "virtual me" — is the same
+idea for a person: the app without the app, reaching every board its owner is on *right now*. A
+**board token** is one board, acting as the person who made it, narrowed by the scopes they ticked.
+All three are `tm_live_…` strings in the same `Authorization: Bearer` header, and `GET /v1/me` says
+which you hold (`kind: 'agent' | 'account' | 'board'`, with the boards it reaches today).
 
-**What an account token can never do, whatever its scopes**: create or revoke tokens, grant or revoke
-OAuth access, change its owner's sign-in or security settings, delete or export the account. A token can
-never mint another token, so a leak cannot become permanent — revoke it and it is over.
+**What no token can do, whatever it is**: create or revoke tokens, grant or revoke OAuth access,
+change its owner's sign-in or security settings, delete or export the account. A token can never
+mint another token, so a leak cannot become permanent — regenerate it and the old one is dead.
 
-Account tokens carry the board scopes below *on every board*, plus four of their own: `boards:create`,
-`boards:admin` (only where their owner is an admin), `agents:write` and `invites:write`. The preset is
-**Full account**.
+An agent token carries no *account* scopes either: an agent cannot create boards, agents or
+invites. An account token may (`boards:create`, `boards:admin` where its owner is an admin,
+`agents:write`, `invites:write`; the preset is **Full account**).
 
 ### The three steps a person takes, once
 
-1. **Make the agent.** In the app, **You › Agents › New agent**: a name, a picture, a one-line
-   description and a **system prompt** in Markdown. The prompt is the agent's standing instructions,
-   and it is handed to the token — an orchestrator does not need a local copy of it.
-2. **Put it on a board.** A board admin who *owns* the agent adds it in **People & roles › Add
-   agent**, with a role of `editor`, `commenter` or `viewer` (never `admin`), and optionally a
-   *StageGrant* that limits which stages it may move tickets between.
-3. **Make a token.** **Account › Tokens › New token**: a name, exactly one board, *acts as* → that
-   agent, the permissions (checkboxes, or the presets *Read only* / *Worker* / *Everything*), and an
-   expiry. The token string is shown **once**. It looks like `tm_live_…`. (The same screen makes an
-   **account token** instead, if what you want is one credential for every board you are on.)
+1. **Make the agent.** In the app, **You › Agents › New agent**: a name, a picture, a one-line description
+   and a **system prompt** in Markdown. The prompt is the agent's standing instructions, and it is
+   handed to the token — an orchestrator does not need a local copy of it.
+2. **Say where it works.** On the agent's own page (https://taskmanager-example.web.app/agents › the agent › **Access**), or
+   from a board's **People & roles** and an artifact's **People**: every board with a role —
+   `viewer`, `commenter`, `editor` or `admin` — and optionally a *StageGrant* that limits which
+   stages a commenter may move tickets between; every artifact with **Build** on or off and **Data**
+   `none`, `read` or `write` (§8.2). The agent's page is the one place that answers "what may this
+   agent do?".
+3. **Generate its token.** Same page, the **Token** card: **Generate**. The string is shown
+   **once**. It looks like `tm_live_…`. There is nothing else to choose — no board, no checkboxes.
+   **Regenerate** issues a new one and the old one stops working in the same moment; that is also
+   how you deal with a leak.
 
-The same screen also hands over a ready-to-paste MCP config and curl examples, and a link to this
-page for the agent itself.
+Only the agent's owner can do step 3, only in the app, never through the API. (https://taskmanager-example.web.app/account/tokens is
+where a person makes an *account* token or a board token that acts as themselves; it lists agent
+tokens read-only and points at the agent's page.)
+
+### On a board: the role is the permission
+
+```text
+role       what the agent may do on that board
+────       ───────────────────────────────────
+viewer     Read the board, its tickets, threads and files.
+commenter  + comment, upload, ask and answer questions, publish and tick its OWN task lists, heartbeat; move tickets only inside its StageGrant.
+editor     + create, edit, move, assign and archive tickets; change any task list.
+admin      + restore archived tickets, manage webhooks — everything a board admin may do with a token.
+```
+
+Each role includes the ones above it. **An agent may be an admin** — complete ownership of that
+board's work. (Over the API today the admin-only calls are restoring an archived ticket and the
+webhook routes; a board's stages and fields are still edited in the app, by a person.) What an agent admin still cannot do is what no agent can: manage the
+board's people and agents, invite, create boards, mint tokens. Those stay with people and account
+tokens.
+
+An agent is on a board only while its **owner** is: take the owner off a board and the agent's next
+call there answers `404`, like any board it is not on.
 
 ### What the token carries
 
 ```text
-board        a board token: exactly one, and the token IS the board.
-             an account token: none — every board its owner is on, resolved at each call.
-identity     'me' (the person) or an agent. Every change is authored by that principal.
-scopes       what it may do — see §5.1.
-expiry       never / 30 / 90 / 365 days. An expired token is 401, not 403.
+identity     the agent. Every change is authored by it: "Builder (agent) via token builder".
+board        none. It reaches every board the agent is on, read at each call.
+scopes       fixed, and not a choice (§5.1 lists them): every board scope, the two admin scopes
+             and the two artifact scopes. They narrow nothing — the role does.
+expiry       optional. An expired token is 401, not 403.
+what stands  the agent exists, is its owner's, is not archived, and the owner is still allowed in.
+behind it    Checked on every call. A board the agent left is a 404 on that board — not a dead token.
 ```
 
-Nothing in the API takes a board **id**. A board token names no board at all; an account token names one
-by its **key** — in the path (`/v1/boards/ENG/tickets`), in the `board` argument of an MCP tool, or
-implicitly, because a ticket key like `ENG-42` already says which board it belongs to.
+Stored hashed; only its prefix is kept in the clear. Archiving the agent stops its token on the next
+request (`401`).
 
-Stored hashed; only its prefix is kept in the clear. Revoking it takes effect on the next request.
-Archiving an agent, or taking it off the board, revokes its tokens for that board.
+### Which board does a call mean?
+
+A ticket key names its own board, so anything addressed by key — `GET /v1/tickets/ENG-42`,
+`get_ticket`, `tm.tickets.get('ENG-42')` — needs nothing else. For a call that is about a board but
+names no ticket (list tickets, create one, read the board, heartbeat), the rule is the same for an
+agent token and an account token:
+
+- the agent is on **exactly one** board → that board. Nothing to say.
+- it is on **several** → the call **names the board**, by its key:
+
+```text
+REST   ?board=ENG on the call  (or the path form, /v1/boards/ENG/tickets)
+MCP    the `board` argument:   { "board": "ENG", … }
+SDK    createClient({ token, board: 'ENG' })   or   tm.board('ENG')
+```
+
+A call that needed a board and got none answers `400 invalid` and lists the keys it could have
+meant (`options`), so a script or a model corrects itself in one step. Nothing in the API takes a
+board **id**.
+
+**Tokens converted from the old model.** Until this release an agent had one token *per board*. Those
+were converted in place — same secret, nothing to re-issue — and each keeps its old board as a
+**default board** (`default_board` in `GET /v1/me`): a call that names no board still lands there,
+so an orchestrator written for the one-board token keeps running after its agent joins a second
+board. A freshly generated token has no default. Do not build on the default — name the board.
 
 ### The one rule to internalise
 
-> **A token's power is its scopes ∩ what its principal's board role allows.**
+> **An agent may do on a board exactly what its role there allows.** The token adds nothing and
+> takes nothing away.
 
-A scope never widens a role. An agent that is a *commenter* on the board cannot move a ticket even
-if its token carries `tickets:move` — it gets `403 forbidden`. An agent with a StageGrant cannot
-move a ticket outside the stages it was granted. And no agent is ever a board admin, so `board:admin`
-and `webhooks:manage` are only ever carried by a token that acts as a **person**.
+So `403 forbidden` always means the **role** (or the StageGrant): ask the agent's owner, or a board
+admin, to raise it on the agent's page — or accept the limit. There is no token to re-mint with
+more boxes ticked.
 
-This is deliberate: a person hands out a token without having to reason about what a scope list adds
-up to. The role is the ceiling; the scopes only lower it.
+For a **person's** token the older rule still holds: its power is *its scopes ∩ what the person's
+role allows*. A scope never widens a role; it only lowers the ceiling.
 
 ### Using it
 
@@ -209,11 +284,11 @@ export TM_TOKEN='tm_live_…'
 curl -s -H "Authorization: Bearer $TM_TOKEN" https://taskmanager-example.web.app/v1/me
 ```
 
-`GET /v1/me` is the call to start with, always. It tells you who you are, what **kind** of credential
-this is, which board you are on (or, for an account token, which boards you can reach right now), what
-role you have on each, which scopes you hold, and — if the token acts as an agent — the agent's name,
-description and **system prompt**. An orchestrator that reads `/v1/me` first needs no configuration
-beyond the token: the same code works for a board token and an account token.
+`GET /v1/me` is the call to start with, always. It tells you who you are, what **kind** of
+credential this is, the **boards** you reach right now, `board` and `role` when a call that names no
+board would land on one (null when it must name one), and — for an agent — its name, description and
+**system prompt**. An orchestrator that reads `/v1/me` first needs no configuration beyond the token
+and, on several boards, the key of the one it works on.
 
 For MCP, the same string is the Bearer token on `https://taskmanager-example.web.app/mcp`:
 
@@ -240,10 +315,11 @@ downloadable plugin with its skill and slash commands — is a page of its own: 
 The same token, the same commands, the same permission check behind all three. Pick by how your
 orchestrator is shaped, not by what it can reach — they can all reach everything.
 
-**One board or many.** Every door takes both kinds of credential (§2). A board token behaves exactly as
-it always has: it names no board, because it *is* one. An account token spans every board its owner is
-on, so each door has one way of saying which board a call means — a path segment in REST, the `board`
-argument in MCP, `tm.board('ENG')` in the SDK. A ticket key names its own board in all three.
+**One board or many.** Every door takes every kind of credential (§2). An agent token and an account
+token span every board their principal is on, so each door has one way of saying which board a call
+means — `?board=ENG` (or the path segment) in REST, the `board` argument in MCP,
+`createClient({ token, board: 'ENG' })` or `tm.board('ENG')` in the SDK. On exactly one board there is
+nothing to say; a ticket key names its own board in all three. A board token *is* its board.
 
 ```text
 door   use it when                                                       reference
@@ -289,14 +365,14 @@ import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js'
 ```
 
 ```ts
-const tm = createClient({ token: process.env.TM_TOKEN });
-const me = await tm.me();                //  who, which kind, which boards: the token decides
+const tm = createClient({ token: process.env.TM_TOKEN, board: 'ENG' });   // name the board
+const me = await tm.me();                //  who, which kind, which boards it reaches
 ```
 
-`createClient()` detects the kind for you. With a board token, everything is where it always was. With
-an account token, `tm.kind()` says so, `tm.boards.list()` is what it reaches, and `tm.board('ENG')`
-returns the very same board-scoped API pinned to one key — so existing code keeps compiling and keeps
-working.
+`board` pins every call of that client to one board; leave it out when the agent is on exactly one.
+`tm.kind()` says which credential you hold, `tm.boards.list()` is what it reaches, and
+`tm.board('ENG')` returns the very same API pinned to another key without a request — so one process
+can work several boards with one token.
 
 The SDK also **builds MCP tools for you** (`mcpTools`, `registerTools`), so you can hand a model a
 curated subset — renamed, re-described, with fixed arguments it cannot change — instead of the whole
@@ -308,14 +384,15 @@ fail. See §5.4.
 Root: `https://taskmanager-example.web.app/v1`. Bearer token. JSON in, JSON out, `application/problem+json` on failure.
 Tickets are addressed by key. Every `POST`/`PUT`/`PATCH` accepts an `Idempotency-Key`.
 
-With an **account token**, a board-scoped path takes the board key in the path — `/v1/boards/ENG/tickets`
-— while anything addressed by ticket key stays as it is (`/v1/tickets/ENG-42`). `GET /v1/boards` lists
-what you can reach, and `GET /v1/me` reports `kind: 'account'` with those boards. With a board token the
-short paths keep working unchanged.
+With an **agent token** or an **account token** on several boards, a board-scoped call names the board:
+`?board=ENG` on the short path, or the key in the path — `/v1/boards/ENG/tickets`. Anything addressed by
+ticket key stays as it is (`/v1/tickets/ENG-42`). `GET /v1/boards` lists what you can reach, and
+`GET /v1/me` reports the `kind` with those boards. On exactly one board — and with a board token — the
+short paths work with nothing added.
 
 ```bash
 curl -s -H "Authorization: Bearer $TM_TOKEN" \
-  "https://taskmanager-example.web.app/v1/tickets?assignee=me&state=active"
+  "https://taskmanager-example.web.app/v1/tickets?board=ENG&assignee=me&state=active"
 ```
 
 The full machine-readable description is at `https://taskmanager-example.web.app/v1/openapi.json` (OpenAPI 3.1, generated from the
@@ -329,16 +406,16 @@ interactive clients. Tools the token's scopes do not allow are **hidden from `to
 refused if called anyway, so a model's tool list is always exactly what it may do.
 
 Every tool that works on a board takes an optional **`board`** argument (a key, `'ENG'`). It is required
-only when the credential spans several boards — an account token or an OAuth grant — *and* the call does
-not name a ticket key. `list_boards` is then the natural first call: it returns the keys the credential
-reaches right now. A board token implies its board and may leave the argument out, exactly as before.
+only when the credential spans several boards — an agent on several, an account token or an OAuth grant
+— *and* the call does not name a ticket key. `list_boards` is then the natural first call: it returns the
+keys the credential reaches right now. On exactly one board the argument may be left out.
 
 An MCP client that a person drives — Claude Desktop, Claude Code — is set up on its own page:
 https://taskmanager-example.web.app/integrate/claude (a custom connector over OAuth, one `claude mcp add` command, or the plugin at
 https://taskmanager-example.web.app/lib/claude-plugin.zip, which brings a skill and slash commands with it).
 
 Resources: `ticket://ENG-42` (the ticket and its thread as Markdown), `file://{fileId}`,
-`board://schema` (the token's own board) and `board://{key}/schema` for a credential that spans several.
+`board://schema` (the board a call that names none lands on) and `board://{key}/schema` for a credential that spans several.
 Prompts: `triage_board`, `standup_summary`.
 
 ## 4. The loop — a complete orchestrator
@@ -364,8 +441,9 @@ it holds one streaming connection to a Realtime Database node that only moves wh
 actually changes, and only then asks for the delta. §4.5 says what to do if you are writing the
 loop by hand.
 
-Everything below runs as written. Set `TM_TOKEN` to a token whose agent is on the board with the
-*Worker* preset.
+Everything below runs as written. Set `TM_TOKEN` to the agent's token (§2), with the agent on the
+board as an `editor`. If the agent is on more than one board, name the one this loop works on:
+`createClient({ token, board: 'ENG' })`, or `?board=ENG` in the raw-REST version.
 
 ### 4.1 With the SDK, the short way
 
@@ -382,7 +460,9 @@ declare function doTheWork(context: string): Promise<string>;  // your own code
 const tm = createClient({ token: process.env.TM_TOKEN! });
 
 const me = await tm.me();
-console.log(`I am ${me.principal.name} (${me.role}) on ${me.board!.key} · ${me.scopes.join(' ')}`);
+// `board` is the one a call that names no board lands on — null when the agent is on several
+// and this client was not given one (then pass `board: 'ENG'` to createClient).
+console.log(`I am ${me.principal.name} (${me.role ?? 'no board named'}) on ${me.board?.key ?? (me.boards ?? []).map((b) => b.key).join(', ')}`);
 console.log(me.principal.system_prompt ?? '(no system prompt — this token acts as a person)');
 
 await tm.work(
@@ -568,7 +648,7 @@ async function api(method, path, body, idempotencyKey) {
 
 // 0. Who am I? (An agent token also answers with its system prompt.)
 const me = await api('GET', '/me');
-console.log(me.principal.name, '·', me.board.key, '·', me.scopes.join(' '));
+console.log(me.principal.name, '·', me.kind, '·', me.board?.key ?? (me.boards ?? []).map((b) => b.key).join(', '));
 
 // 1. The inbox, from a cursor you persist between runs. ALWAYS `unacked=1`,
 //    ALWAYS from the cursor: this asks for the delta, never for the world.
@@ -708,7 +788,7 @@ it too. Only the orchestrator posts receipts; the app's composer never does.
 
 ##### Scopes
 
-A token carries scopes. **What it may do is its scopes ∩ what its principal’s board role allows** — a scope never widens a role.
+A token carries scopes. **What it may do is its scopes ∩ what its principal’s board role allows** — a scope never widens a role. An **agent token** has no scope list to choose: it always carries the fixed set below the table, so for an agent the role alone decides (§2).
 
 ```text
 scope            what it allows
@@ -730,11 +810,16 @@ tasklists:write  Publish and update task lists on a ticket
 status:write     Send heartbeats (what the agent is doing now)
 events:read      Read and acknowledge the event inbox
 
-board:admin      Change board settings (admins only) — only a token acting as a PERSON who is a board admin
-webhooks:manage  Manage webhooks (admins only) — only a token acting as a PERSON who is a board admin
+board:admin      Change board settings (admins only) — only where the principal is a board ADMIN: a person's token that carries it, or any agent token
+webhooks:manage  Manage webhooks (admins only) — only where the principal is a board ADMIN: a person's token that carries it, or any agent token
+
+artifacts:read   Read artifacts and download their source — an account token, or an agent token for the artifacts that agent is on (§8)
+artifacts:write  Create, publish and share artifacts — an account token, or an agent token for the artifacts that agent is on (§8)
 ```
 
-Presets offered by the token form:
+Every **agent token** carries exactly these 20, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
+
+Presets offered by the token form (board tokens acting as a person, and account tokens):
 
 ```text
 Read only  board:read members:read tickets:read comments:read files:read events:read
@@ -743,7 +828,7 @@ Worker     board:read members:read tickets:read comments:read files:read events:
 
 Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
 
-Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write
 ```
 
 ##### Event types (the inbox: `GET /v1/events`, MCP `get_events`)
@@ -791,18 +876,21 @@ The body is `{ type, title, status, detail?, instance?, code, … }` — `issues
 ##### States and vocabularies
 
 ```text
-ticket state                    active | archived
-stage category                  backlog | todo | active | done | cancelled
-custom field type               text | longText | number | currency | percent | select | multiSelect | checkbox | rating | date | dateRange | person | people | url | email | phone | ticketRelation | formula
-board role                      admin | editor | commenter | viewer
-principal kind                  'user' | 'agent'  (an agent id is 'ag_' + 16 chars)
-question status                 open | answered | cancelled | expired
-question field type             single | multi | text | longText | number | boolean | date
-task item status                todo | doing | done | skipped | failed
-agent heartbeat state           working | idle | done | error
-link type                       blocks | blockedBy | relates | duplicates
-file kind                       image | video | audio | markdown | html | pdf | text | csv | json | code | other
-via (where a change came from)  app | api | mcp | email | whatsapp | intake | integration | system
+ticket state                        active | archived
+stage category                      backlog | todo | active | done | cancelled
+custom field type                   text | longText | number | currency | percent | select | multiSelect | checkbox | rating | date | dateRange | person | people | url | email | phone | ticketRelation | formula
+board role                          admin | editor | commenter | viewer
+board role an agent may hold        admin | editor | commenter | viewer
+credential kind (GET /v1/me `kind`)  board | account | agent | oauth
+agent on an artifact                { build: true | false, data: 'none' | 'read' | 'write' }
+principal kind                      'user' | 'agent'  (an agent id is 'ag_' + 16 chars)
+question status                     open | answered | cancelled | expired
+question field type                 single | multi | text | longText | number | boolean | date
+task item status                    todo | doing | done | skipped | failed
+agent heartbeat state               working | idle | done | error
+link type                           blocks | blockedBy | relates | duplicates
+file kind                           image | video | audio | markdown | html | pdf | text | csv | json | code | other
+via (where a change came from)      app | api | mcp | email | whatsapp | intake | integration | system
 ```
 
 ##### Limits
@@ -820,7 +908,7 @@ events ack               ≤ 500 ids per call
 SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal
 ```
 
-OpenAPI: `TaskManager API` version `1`, 32 paths, 49 schemas.
+OpenAPI: `TaskManager API` version `1`, 43 paths, 69 schemas.
 
 ### 5.2 REST — every endpoint
 
@@ -837,15 +925,16 @@ Scopes: _none — any valid credential_
 
 → 200 Me
 ```text
-principal  { kind, id, name, email, avatar_url, icon, description, system_prompt }  required
-owner      object | null                       required
-board      object | null                       required
-boards     object[]
-role       "admin" | "editor" | "commenter" | "viewer" | null  required
-scopes     "board:read" | "members:read" | "tickets:read" | … (22 values)[]  required
-via        "api" | "mcp" | "integration"       required
-kind       "board" | "account" | "oauth"       required
-token      object | null                       required
+principal      { kind, id, name, email, avatar_url, icon, description, system_prompt }  required
+owner          object | null                       required
+board          object | null                       required
+boards         object[]
+role           "admin" | "editor" | "commenter" | "viewer" | null  required
+scopes         "board:read" | "members:read" | "tickets:read" | … (24 values)[]  required
+via            "api" | "mcp" | "integration"       required
+kind           "board" | "account" | "oauth" | "agent"  required
+default_board  object | null
+token          object | null                       required
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
@@ -854,7 +943,7 @@ token      object | null                       required
 
 Stages, priorities, tags, fields, members.
 
-Scopes: `board:read` · board-scoped (a board token implies its board)
+Scopes: `board:read` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
 Query:
 ```text
@@ -979,7 +1068,7 @@ Idempotency-Key  string    A retried request with the same key is one change.
 Body (application/json, required):
 ```text
 agent        string                              required
-role         "editor" | "commenter" | "viewer" | null  required
+role         "admin" | "editor" | "commenter" | "viewer" | null  required
 stage_grant  object | null
 ```
 
@@ -1008,7 +1097,7 @@ name           string                              required  (≤ 60 chars)
 description    string | null
 system_prompt  string                                        (≤ 50000 chars)
 avatar         string | null
-icon           "claude" | "gemini" | "chatgpt" | … (39 values) | null
+icon           "claude" | "anthropic" | "chatgpt" | … (47 values) | null
 ```
 
 → 201 Agent
@@ -1120,7 +1209,7 @@ updated_at      string                  required
 
 List tickets.
 
-Scopes: `tickets:read` · board-scoped (a board token implies its board)
+Scopes: `tickets:read` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
 Query:
 ```text
@@ -1146,7 +1235,7 @@ next_cursor  string | null  required
 
 Create a ticket.
 
-Scopes: `tickets:create` · board-scoped (a board token implies its board)
+Scopes: `tickets:create` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
 Headers:
 ```text
@@ -1937,7 +2026,7 @@ deleted  true  required
 
 Say what you are doing (every minute, and when work ends).
 
-Scopes: `status:write` · board-scoped (a board token implies its board)
+Scopes: `status:write` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
 Headers:
 ```text
@@ -1972,11 +2061,655 @@ ended_at      string | null                       required
 
 What every agent on the board is doing.
 
-Scopes: `members:read` · board-scoped (a board token implies its board)
+Scopes: `members:read` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
 → 200 AgentStatusList
 ```text
 data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts
+
+The artifacts this credential can reach.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+→ 200 ArtifactList
+```text
+data         object[]       required
+next_cursor  string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts
+
+Create an artifact; you (or, for an agent token, the agent's owner) become its owner.
+
+Scopes: `artifacts:write`
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+name         string         required  (≤ 80 chars)
+description  string | null
+icon         string | null
+```
+
+→ 201 Artifact
+```text
+id             string                         required
+name           string                         required
+description    string | null                  required
+icon           string | null                  required
+url            string                         required
+role           "owner" | "editor" | "viewer"  required
+agent_access   { build, data }
+read_only      boolean                        required
+archived       boolean                        required
+current_build  string | null                  required
+owner_id       string                         required
+created_at     string                         required
+updated_at     string                         required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}
+
+An artifact: meta, its builds, who it is shared with.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+→ 200 ArtifactDetail
+```text
+id             string                         required
+name           string                         required
+description    string | null                  required
+icon           string | null                  required
+url            string                         required
+role           "owner" | "editor" | "viewer"  required
+agent_access   { build, data }
+read_only      boolean                        required
+archived       boolean                        required
+current_build  string | null                  required
+owner_id       string                         required
+created_at     string                         required
+updated_at     string                         required
+builds         object[]                       required
+members        object[]                       required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/artifacts/{id}
+
+Rename, describe, set read-only for viewers, archive or restore (owner).
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Body (application/json, required):
+```text
+name         string           (≤ 80 chars)
+description  string | null
+icon         string | null
+read_only    boolean
+archived     boolean
+```
+
+→ 200 Artifact
+```text
+id             string                         required
+name           string                         required
+description    string | null                  required
+icon           string | null                  required
+url            string                         required
+role           "owner" | "editor" | "viewer"  required
+agent_access   { build, data }
+read_only      boolean                        required
+archived       boolean                        required
+current_build  string | null                  required
+owner_id       string                         required
+created_at     string                         required
+updated_at     string                         required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/artifacts/{id}
+
+Delete an artifact with its builds, files and ALL its data (owner).
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+→ 204 any
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts/{id}/builds
+
+Publish: a zip of the build folder becomes the current build.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Query:
+```text
+message  string
+source   string
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/zip, required):
+```text
+(value)  string
+```
+
+Body (multipart/form-data, required):
+```text
+build   string  required
+source  string
+```
+
+→ 201 ArtifactBuild
+```text
+id          string              required
+files       integer             required
+bytes       integer             required
+message     string | null       required
+by          { id, kind, name }  required
+created_at  string              required
+warnings    string[]            required
+has_source  boolean             required
+current     boolean             required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts/{id}/builds/{build}/current
+
+Roll back (or forward) to a kept build.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id     string  required
+build  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+→ 200 Artifact
+```text
+id             string                         required
+name           string                         required
+description    string | null                  required
+icon           string | null                  required
+url            string                         required
+role           "owner" | "editor" | "viewer"  required
+agent_access   { build, data }
+read_only      boolean                        required
+archived       boolean                        required
+current_build  string | null                  required
+owner_id       string                         required
+created_at     string                         required
+updated_at     string                         required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}/source
+
+A short-lived URL for the newest source zip.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Query:
+```text
+build  string
+```
+
+→ 200 ArtifactSource
+```text
+url         string  required
+build       string  required
+expires_at  string  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/artifacts/{id}/access
+
+Share with a person or an agent, change a role, or remove (owner).
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Body (application/json, required):
+```text
+email         string                        (≤ 320 chars)
+agent         string
+role          "editor" | "viewer" | null
+agent_access  { build, data }
+```
+
+→ 200 ArtifactAccessResult
+```text
+ok       true                               required
+outcome  "granted" | "invited" | "removed"  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}/data/firestore/{path}
+
+Read a document, or list a collection, of the artifact's Firestore.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Query:
+```text
+order_by     string
+limit        integer
+start_after  string
+where        string[]    field,op,value — repeat the parameter for several filters. op: < <= == != >= > array-contains in not-in array-contains-any.
+```
+
+→ 200 ArtifactDataDoc
+```text
+id      string         required
+path    string         required
+exists  boolean        required
+data    object | null  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/artifacts/{id}/data/firestore/{path}
+
+Set a document (?merge=1 merges).
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Query:
+```text
+merge  "1" | "true" | "0" | "false"
+```
+
+Body (application/json, required):
+```text
+(value)  any    The document
+```
+
+→ 200 ArtifactDataWritten
+```text
+ok    true    required
+id    string  required
+path  string  required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/artifacts/{id}/data/firestore/{path}
+
+Update fields of an existing document.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Body (application/json, required):
+```text
+(value)  any    The fields to change; a dotted key is a field path
+```
+
+→ 200 ArtifactDataWritten
+```text
+ok    true    required
+id    string  required
+path  string  required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/artifacts/{id}/data/firestore/{path}
+
+Delete a document.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 Ok
+```text
+ok  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts/{id}/data/firestore/{path}
+
+Add a document to a collection.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+(value)  any    The new document
+```
+
+→ 201 ArtifactDataAdded
+```text
+id    string  required
+path  string  required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts/{id}/data/batch
+
+Up to 400 Firestore writes, all or nothing.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+writes  object[]  required  (≤ 400 items)
+```
+
+→ 200 ArtifactDataBatchResult
+```text
+ok       true     required
+written  integer  required  (0…)
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}/data/rtdb/{path}
+
+Read a value of the artifact's Realtime Database.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 ArtifactRtdbValue
+```text
+path   string  required
+value  any
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/artifacts/{id}/data/rtdb/{path}
+
+Set a value.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Body (application/json, required):
+```text
+(value)  any    The value (any JSON)
+```
+
+→ 200 Ok
+```text
+ok  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/artifacts/{id}/data/rtdb/{path}
+
+Update children of a value.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Body (application/json, required):
+```text
+(value)  any    An object of children to change
+```
+
+→ 200 Ok
+```text
+ok  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/artifacts/{id}/data/rtdb/{path}
+
+Remove a value.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 Ok
+```text
+ok  true  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### POST /v1/artifacts/{id}/data/rtdb/{path}
+
+Push a child with a generated key.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Headers:
+```text
+Idempotency-Key  string    A retried request with the same key is one change.
+```
+
+Body (application/json, required):
+```text
+(value)  any    The value (any JSON)
+```
+
+→ 201 ArtifactRtdbPushed
+```text
+key   string  required
+path  string  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}/data/files
+
+List the artifact's files under a prefix.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id  string  required
+```
+
+Query:
+```text
+prefix  string
+```
+
+→ 200 ArtifactFileList
+```text
+data  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/artifacts/{id}/data/files/{path}
+
+Upload a file: the raw body is the file (≤ 25 MB).
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Body (*/*, required):
+```text
+(value)  string
+```
+
+→ 201 ArtifactFile
+```text
+path          string         required
+size          integer        required  (0…)
+content_type  string | null  required
+updated_at    string | null  required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/artifacts/{id}/data/files/{path}
+
+A short-lived download URL for a file.
+
+Scopes: `artifacts:read` or `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 ArtifactFileUrl
+```text
+url         string  required
+expires_at  string  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/artifacts/{id}/data/files/{path}
+
+Delete a file.
+
+Scopes: `artifacts:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 Ok
+```text
+ok  true  required
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
@@ -2138,35 +2871,47 @@ fields      object[]       required
 
 Endpoint `https://taskmanager-example.web.app/mcp` (Streamable HTTP). The same token, as a Bearer header. A tool whose scopes
 the credential does not hold is **not listed** and is refused if called. `board` is only needed by
-credentials that span several boards — a board-scoped token implies its board.
+credentials that span several boards (an agent on several, an account token, an OAuth grant); on
+exactly one board it may be left out.
 
 ```text
-tool              scopes                              what it does
-────              ──────                              ────────────
-whoami            (any)                               Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
-list_boards       board:read                          Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
-get_board         board:read                          The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
-list_my_tickets   tickets:read                        Tickets assigned to you, most recently updated first.
-search_tickets    tickets:read                        Find tickets by text, assignee, stage, state or dates.
-get_ticket        tickets:read                        A ticket with fields, links, pinned messages, files and its last messages (Markdown).
-get_messages      comments:read                       Page through a ticket's thread (Markdown bodies, attachments with file ids).
-create_ticket     tickets:create                      Create a ticket.
-update_ticket     tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
-move_ticket       tickets:move                        Move a ticket to another stage.
-assign_ticket     tickets:assign                      Add or remove assignees (people or agents).
-post_message      comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
-upload_file       files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
-read_file         files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
-link_tickets      tickets:update                      Link two tickets: blocks, relates or duplicates.
-get_events        events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
-ack_events        events:read                         Acknowledge inbox events by id, or everything up to a cursor.
-ask_question      questions:write                     Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
-get_question      comments:read                       A question you asked: its status and, once given, the answer values.
-cancel_question   questions:write                     Cancel a question you asked — the card locks and nobody is chased for it.
-set_tasklist      tasklists:write                     Publish your plan as a checklist on the ticket (create or replace the whole list).
-update_task_item  tasklists:write                     Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
-delete_tasklist   tasklists:write                     Remove a task list from the ticket.
-heartbeat         status:write                        Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.
+tool                 scopes                              what it does
+────                 ──────                              ────────────
+whoami               (any)                               Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
+list_boards          board:read                          Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
+get_board            board:read                          The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+list_my_tickets      tickets:read                        Tickets assigned to you, most recently updated first.
+search_tickets       tickets:read                        Find tickets by text, assignee, stage, state or dates.
+get_ticket           tickets:read                        A ticket with fields, links, pinned messages, files and its last messages (Markdown).
+get_messages         comments:read                       Page through a ticket's thread (Markdown bodies, attachments with file ids).
+create_ticket        tickets:create                      Create a ticket.
+update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+move_ticket          tickets:move                        Move a ticket to another stage.
+assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
+post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+read_file            files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
+link_tickets         tickets:update                      Link two tickets: blocks, relates or duplicates.
+get_events           events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
+ack_events           events:read                         Acknowledge inbox events by id, or everything up to a cursor.
+ask_question         questions:write                     Ask the people on a ticket a question with options. It appears in the thread as a form card; the answer comes back as the inbox event question_answered.
+get_question         comments:read                       A question you asked: its status and, once given, the answer values.
+cancel_question      questions:write                     Cancel a question you asked — the card locks and nobody is chased for it.
+set_tasklist         tasklists:write                     Publish your plan as a checklist on the ticket (create or replace the whole list).
+update_task_item     tasklists:write                     Tick one item off, start it, or mark it failed with a note. Cheap — call it as you work.
+delete_tasklist      tasklists:write                     Remove a task list from the ticket.
+heartbeat            status:write                        Say what you are doing: every minute while you work, and once more when you stop ('done' or 'error'). People see a live dot on the ticket.
+artifact_list        artifacts:read | artifacts:write    The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.
+artifact_get         artifacts:read | artifacts:write    One artifact: its meta, its kept builds (newest first) and who it is shared with.
+artifact_create      artifacts:write                     Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.
+artifact_publish     artifacts:write                     Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).
+artifact_rollback    artifacts:write                     Make a kept build the current one (roll back, or forward again).
+artifact_share       artifacts:write                     Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.
+artifact_source      artifacts:read | artifacts:write    A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.
+artifact_data_get    artifacts:read | artifacts:write    Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { "$date": ISO }.
+artifact_data_list   artifacts:read | artifacts:write    List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).
+artifact_data_set    artifacts:write                     Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.
+artifact_data_batch  artifacts:write                     Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.
 ```
 
 #### whoami
@@ -2471,6 +3216,134 @@ progress  number
 board     string                                        Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
 ```
 
+#### artifact_list
+
+The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.
+
+Read-only · scopes: `artifacts:read` or `artifacts:write`
+
+_No arguments._
+
+#### artifact_get
+
+One artifact: its meta, its kept builds (newest first) and who it is shared with.
+
+Read-only · scopes: `artifacts:read` or `artifacts:write`
+
+```text
+id  string  required  Artifact id, from artifact_list or artifact_create
+```
+
+#### artifact_create
+
+Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.
+
+Writes · scopes: `artifacts:write`
+
+```text
+name         string  required
+description  string
+icon         string            One emoji
+```
+
+#### artifact_publish
+
+Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).
+
+Writes · scopes: `artifacts:write`
+
+```text
+id       string    required  Artifact id, from artifact_list or artifact_create
+files    object[]  required  The WHOLE build, not a patch: every file of the site, with an index.html at its root. At most 5 MB in one call. Load assets by RELATIVE paths (./app.js), never /app.js.
+message  string              A line saying what changed
+```
+
+#### artifact_rollback
+
+Make a kept build the current one (roll back, or forward again).
+
+Writes · scopes: `artifacts:write`
+
+```text
+id     string  required  Artifact id, from artifact_list or artifact_create
+build  string  required  A build id from artifact_get
+```
+
+#### artifact_share
+
+Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.
+
+Writes · scopes: `artifacts:write`
+
+```text
+id            string               required  Artifact id, from artifact_list or artifact_create
+email         string                         A person. Give email OR agent.
+agent         string                         One of the owner's agents ('ag_…'); say what it may do with agent_access
+role          'editor' | 'viewer'            A person: 'editor', 'viewer', or null to remove. An agent: leave out and give agent_access (or 'editor' = build + write data, null = remove).
+agent_access  { build, data }                Agents only: { build: true|false, data: 'none'|'read'|'write' }. build = publish, roll back, source; data = its database and files. Both off removes the agent.
+```
+
+#### artifact_source
+
+A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.
+
+Read-only · scopes: `artifacts:read` or `artifacts:write`
+
+```text
+id     string  required  Artifact id, from artifact_list or artifact_create
+build  string            Default: the newest build that has a source zip
+```
+
+#### artifact_data_get
+
+Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { "$date": ISO }.
+
+Read-only · scopes: `artifacts:read` or `artifacts:write`
+
+```text
+id    string  required  Artifact id, from artifact_list or artifact_create
+path  string  required  A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])
+```
+
+#### artifact_data_list
+
+List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).
+
+Read-only · scopes: `artifacts:read` or `artifacts:write`
+
+```text
+id           string                              required  Artifact id, from artifact_list or artifact_create
+path         string                              required  A COLLECTION path in the artifact's own view: 'scores', 'scores/2026/entries'
+where        [string, '<' | '<=' | '==' | … (10 values), any][]            Filters, each [field, op, value]; op is one of < <= == != >= > array-contains in not-in array-contains-any. e.g. [['status','==','open']]
+order_by     string                                        'field' or 'field,desc'
+limit        integer                                       Default 100, at most 500
+start_after  string                                        A document id: the previous page's next_cursor
+```
+
+#### artifact_data_set
+
+Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.
+
+Writes · scopes: `artifacts:write`
+
+```text
+id     string               required  Artifact id, from artifact_list or artifact_create
+path   string               required  A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])
+data   Record<string, any>  required  The document, as JSON. A timestamp is { "$date": "2026-09-30T05:30:00Z" }; the server's clock is { "$serverTime": true }.
+merge  boolean                        true merges into the stored document instead of replacing it
+```
+
+#### artifact_data_batch
+
+Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.
+
+Writes · scopes: `artifacts:write`
+
+```text
+id      string    required  Artifact id, from artifact_list or artifact_create
+writes  object[]  required  Up to 400 writes applied ALL OR NOTHING: { op: 'set', path, data, merge? } | { op: 'update', path, data } | { op: 'delete', path }. How a job replaces a dataset.
+```
+
 Resources (MCP `resources/read`):
 
 ```text
@@ -2484,7 +3357,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **1.1.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **1.3.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -2727,6 +3600,71 @@ declare function createClientBase(options: ClientOptions): {
         }>;
         delete: (id: string, o?: RequestOptions) => Promise<void>;
     };
+    /**
+     * ARTIFACTS (docs/plan/artifacts.html) — small static websites kept and
+     * served by TaskManager, each with its own people and its own data. They
+     * are not on a board, so nothing here takes one: an ACCOUNT token reaches
+     * every artifact you own or edit, an AGENT token only the artifacts that
+     * agent is on — and there what it may do is its `agent_access`
+     * { build, data } (§AA3): `build` to publish, roll back and read the
+     * source; `data` to use `artifacts.data(id)`. An agent never owns, shares,
+     * renames or deletes an artifact. Scopes: `artifacts:read` (list, get,
+     * source, data reads) and `artifacts:write` (everything else).
+     *
+     *   const art = await tm.artifacts.create({ name: 'Sales dashboard' });
+     *   const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+     *   await tm.artifacts.share(art.id, { email: 'priya@example.com', role: 'viewer' });
+     *   // people open it at art.url — {app}/x/{id}
+     */
+    artifacts: {
+        /** Every artifact this credential can reach. */
+        list: (o?: RequestOptions) => Promise<Artifact[]>;
+        /** One artifact, with its kept builds (newest first) and who it is shared with. */
+        get: (id: string, o?: RequestOptions) => Promise<ArtifactDetail>;
+        /** Create an empty artifact; you become its owner (with an agent token: the agent's owner does, and the agent may build it and write its data). */
+        create: (input: CreateArtifactInput, o?: RequestOptions) => Promise<Artifact>;
+        /** Rename, describe, set read-only for viewers, archive or restore (owner). */
+        update: (id: string, patch: UpdateArtifactInput, o?: RequestOptions) => Promise<Artifact>;
+        /** Delete the artifact with its builds, its files and ALL its data (owner). There is no undo. */
+        delete: (id: string, o?: RequestOptions) => Promise<void>;
+        /**
+         * Publish a build; it becomes the current one at once and never touches
+         * the artifact's data. `input` is the build FOLDER (the one with
+         * index.html at its root): a directory path, the bytes of a zip, or
+         * files in memory — see `ArtifactBuildInput`. `build.warnings` names
+         * anything that will show a blank page (absolute `/assets/…` paths:
+         * set Vite's `base: './'`).
+         */
+        publish: (id: string, input: ArtifactBuildInput, o?: PublishArtifactOptions) => Promise<ArtifactBuild>;
+        /** Make a kept build the current one — back, or forward again. */
+        rollback: (id: string, buildId: string, o?: RequestOptions) => Promise<Artifact>;
+        /**
+         * A short-lived URL for the source zip published beside a build — the
+         * newest build that has one, unless `buildId` names another. GET it
+         * with a plain fetch: it needs no Authorization header.
+         */
+        source: (id: string, buildId?: string, o?: RequestOptions) => Promise<ArtifactSource>;
+        /**
+         * Share with a person (by email) or one of your agents, change what
+         * they may do, or remove them. Owner only — never an agent. A person
+         * takes a `role` (null removes; with no account yet they are invited:
+         * `outcome: 'invited'`). An agent takes `access: { build, data }` (§AA3;
+         * `{ build: false, data: 'none' }` removes it).
+         */
+        share: (id: string, input: ShareArtifactInput, o?: RequestOptions) => Promise<ArtifactShareResult>;
+        /**
+         * §AA4 — the artifact's own Firestore, Realtime Database and files,
+         * from OUTSIDE the page: the same documents the page reads through its
+         * driver. Needs `data` on the artifact (an agent: 'read' for the reads,
+         * 'write' for the rest; a person: owner or editor). See src/data.ts.
+         *
+         *   const data = tm.artifacts.data(art.id);
+         *   await data.firestore.batch(rows.map((r) => ({ op: 'set', path: `sales/${r.id}`, data: r })));
+         *
+         * `{ raw: true }` leaves timestamps as `{ "$date": ISO }` instead of `Date`.
+         */
+        data: (id: string, opts?: ArtifactDataOptions) => ArtifactData;
+    };
     /** Any /v1 route the SDK does not wrap, with the same retries and errors. */
     request: <T>(method: string, path: string, init?: {
         query?: Record<string, QueryValue>;
@@ -2799,9 +3737,9 @@ export interface McpToolsOptions {
 }
 ```
 
-Exported values: `codeForStatus`, `TmError`, `isTmError`, `retryAfterMs`, `errorFromResponse`, `DEFAULT_BASE_URL`, `normalizeBaseUrl`, `randomId`, `queryString`, `backoffMs`, `Http`, `readSse`, `parseFrame`, `DEFAULT_MIN_POLL_MS`, `DEFAULT_MAX_POLL_MS`, `DEFAULT_BACKSTOP_MS`, `livePaths`, `pathsFor`, `revisionOf`, `createWatcher`, `VERSION`, `toBase64`, `runBody`, `AskHandle`, `HEARTBEAT_INTERVAL_MS`, `createClient`, `workLoop`, `MCP_TOOL_DEFS`, `MCP_TOOL_NAMES`, `toolAllowed`, `mcpTools`, `toCallResult`, `registerTools`.
+Exported values: `codeForStatus`, `TmError`, `isTmError`, `retryAfterMs`, `errorFromResponse`, `DEFAULT_BASE_URL`, `normalizeBaseUrl`, `randomId`, `queryString`, `backoffMs`, `Http`, `readSse`, `parseFrame`, `crc32`, `fromBase64`, `isZip`, `zipPath`, `zipFiles`, `readDirectory`, `realPathOrNull`, `DEFAULT_MIN_POLL_MS`, `DEFAULT_MAX_POLL_MS`, `DEFAULT_BACKSTOP_MS`, `livePaths`, `pathsFor`, `revisionOf`, `createWatcher`, `serverTime`, `encodeDataValue`, `decodeDataValue`, `ARTIFACT_DATA_LIMITS`, `ARTIFACT_RESERVED_COLLECTIONS`, `dataPath`, `formatDataWhere`, `dataListQuery`, `createArtifactData`, `VERSION`, `ARTIFACT_LIMITS`, `ARTIFACT_SOURCE_SKIP_DIRS`, `ARTIFACT_SOURCE_MAX_FILE_BYTES`, `toBase64`, `runBody`, `AskHandle`, `HEARTBEAT_INTERVAL_MS`, `createClient`, `workLoop`, `MCP_TOOL_DEFS`, `MCP_TOOL_NAMES`, `toolAllowed`, `mcpTools`, `toCallResult`, `registerTools`.
 
-Exported types: `Iso`, `Scope`, `PrincipalKind`, `BoardRole`, `TicketState`, `StageCategory`, `Via`, `LinkType`, `FileKind`, `Principal`, `Actor`, `Member`, `Stage`, `Option`, `FieldDef`, `BoardRef`, `Cost`, `Board`, `Agent`, `TicketLink`, `Ticket`, `TicketDetail`, `Attachment`, `TmFile`, `UploadedFile`, `FileWithContent`, `MessageKind`, `QuestionFieldType`, `QuestionStatus`, `QuestionValue`, `QuestionFieldOption`, `QuestionField`, `QuestionAnswer`, `Question`, `RunOutcome`, `RunUsage`, `RunReceipt`, `Message`, `TaskItemStatus`, `TaskItem`, `Tasklist`, `AgentState`, `AgentHealth`, `AgentStatus`, `EventType`, `TmEvent`, `Me`, `TokenKind`, `Page`, `EventPage`, `SearchHit`, `WebhookEvent`, `Webhook`, `TmErrorCode`, `Problem`, `TmErrorInit`, `FetchLike`, `RetryOptions`, `RequestOptions`, `HttpOptions`, `QueryValue`, `RawRequest`, `SseFrame`, `WatchSource`, `WatchReason`, `WatchSignal`, `LiveCredential`, `WatchTarget`, `WatchOptions`, `Watcher`, `WatchDeps`, `ClientOptions`, `PrincipalRef`, `TicketFilter`, `TicketInput`, `CreateTicketInput`, `RunReceiptInput`, `PostMessageInput`, `CreateAgentInput`, `CreateBoardInput`, `BoardAgentInput`, `UploadInput`, `QuestionFieldInput`, `AskInput`, `AnswerValue`, `AnswerValues`, `TypedAnswer`, `TaskItemInput`, `SetTasklistInput`, `HeartbeatInput`, `EventQuery`, `StreamOptions`, `WaitForAnswerOptions`, `Beat`, `TmClientBase`, `BoardsAccessor`, `BoardAccessor`, `TmClient`, `WorkContext`, `WorkHandler`, `WorkOptions`, `WorkSummary`, `WorkDeps`, `JsonSchema`, `McpTool`, `McpToolName`, `McpToolsOptions`, `McpCallResult`, `AnyMcpServer`.
+Exported types: `Iso`, `Scope`, `PrincipalKind`, `BoardRole`, `TicketState`, `StageCategory`, `Via`, `LinkType`, `FileKind`, `Principal`, `Actor`, `Member`, `Stage`, `Option`, `FieldDef`, `BoardRef`, `Cost`, `Board`, `Agent`, `TicketLink`, `Ticket`, `TicketDetail`, `Attachment`, `TmFile`, `UploadedFile`, `FileWithContent`, `MessageKind`, `QuestionFieldType`, `QuestionStatus`, `QuestionValue`, `QuestionFieldOption`, `QuestionField`, `QuestionAnswer`, `Question`, `RunOutcome`, `RunUsage`, `RunReceipt`, `Message`, `TaskItemStatus`, `TaskItem`, `Tasklist`, `AgentState`, `AgentHealth`, `AgentStatus`, `EventType`, `TmEvent`, `Me`, `TokenKind`, `Page`, `EventPage`, `SearchHit`, `WebhookEvent`, `Webhook`, `ArtifactRole`, `ArtifactBuild`, `ArtifactAgentAccess`, `ArtifactMember`, `Artifact`, `ArtifactDetail`, `ArtifactSource`, `ArtifactShareResult`, `TmErrorCode`, `Problem`, `TmErrorInit`, `FetchLike`, `RetryOptions`, `RequestOptions`, `HttpOptions`, `QueryValue`, `QueryParam`, `RawRequest`, `SseFrame`, `ZipEntry`, `ReadDirectoryOptions`, `WatchSource`, `WatchReason`, `WatchSignal`, `LiveCredential`, `WatchTarget`, `WatchOptions`, `Watcher`, `WatchDeps`, `ServerTimeSentinel`, `ArtifactDataWhereOp`, `ArtifactDataWhere`, `ArtifactDataDoc`, `ArtifactDataListQuery`, `ArtifactDataPage`, `ArtifactDataWrite`, `ArtifactDataWriteResult`, `ArtifactDataFile`, `ArtifactDataFileUrl`, `ArtifactDataOptions`, `ArtifactData`, `ClientOptions`, `PrincipalRef`, `TicketFilter`, `TicketInput`, `CreateTicketInput`, `RunReceiptInput`, `PostMessageInput`, `CreateAgentInput`, `CreateBoardInput`, `BoardAgentInput`, `UploadInput`, `QuestionFieldInput`, `AskInput`, `AnswerValue`, `AnswerValues`, `TypedAnswer`, `TaskItemInput`, `SetTasklistInput`, `HeartbeatInput`, `EventQuery`, `StreamOptions`, `CreateArtifactInput`, `UpdateArtifactInput`, `ArtifactFile`, `ArtifactBuildInput`, `PublishArtifactOptions`, `ShareArtifactInput`, `WaitForAnswerOptions`, `Beat`, `TmClientBase`, `BoardsAccessor`, `BoardAccessor`, `TmClient`, `WorkContext`, `WorkHandler`, `WorkOptions`, `WorkSummary`, `WorkDeps`, `JsonSchema`, `McpTool`, `McpToolName`, `McpToolsOptions`, `McpCallResult`, `AnyMcpServer`.
 
 #### Building your own MCP server from the SDK
 
@@ -2894,26 +3832,35 @@ That makes the cost of your loop entirely your responsibility. In order of how m
 - **Page properly.** `limit` up to 200 on lists, then follow `next_cursor` — but never run a
   `limit=200` list on a timer with no `updated_since`. That is a full scan of the board, forever.
 
-### 6.4 Scopes never exceed the role
+### 6.4 The role is the permission
 
 Worth saying twice, because it is the most common surprise:
 
-> A token's power is **its scopes ∩ what its principal's board role allows**. A scope cannot grant
-> anything the role does not already have.
+> **An agent may do on a board exactly what its role there allows.** Its token is one per agent,
+> says only who it is, and neither adds nor removes anything.
 
-- `viewer` → reads only, whatever the token says.
-- `commenter` → reads, comments, files, questions, task lists; may move a ticket **only** within its
-  StageGrant, if it was given one.
-- `editor` → everything except board settings.
-- `admin` → people, no agent is ever one.
+```text
+role       what the agent may do on that board
+────       ───────────────────────────────────
+viewer     Read the board, its tickets, threads and files.
+commenter  + comment, upload, ask and answer questions, publish and tick its OWN task lists, heartbeat; move tickets only inside its StageGrant.
+editor     + create, edit, move, assign and archive tickets; change any task list.
+admin      + restore archived tickets, manage webhooks — everything a board admin may do with a token.
+```
 
-So `403 forbidden` from a call whose scope you know you hold means the **role** is the problem: ask
-the board admin to raise it, or accept the limit. Read `role` and `scopes` from `GET /v1/me` at
-startup and decide what your orchestrator is allowed to attempt, rather than discovering it in
-production.
+So `403 forbidden` means the **role** is the problem (or, for a commenter's move, its StageGrant):
+ask the agent's owner or a board admin to raise it, or accept the limit. Read `boards`, `board` and
+`role` from `GET /v1/me` at startup and decide what your orchestrator is allowed to attempt, rather
+than discovering it in production. An agent that is on several boards has a role on each: `role` in
+`/v1/me` is for the board a call that names none lands on, and `GET /v1/board?board=ENG` lists the
+members of any other with theirs.
 
-Archiving an agent, removing it from the board, or revoking a token all take effect on the **next
-request** — expect a `401` mid-run and stop cleanly.
+A **person's** token (a board token, an account token) is different in one way: it carries the
+scopes that person ticked, and its power is *scopes ∩ role* — a scope never widens a role.
+
+Archiving an agent or regenerating its token takes effect on the **next request** — expect a `401`
+mid-run and stop cleanly. Taking the agent (or its owner) off a board is not a dead token: that
+board answers `404` from then on, and the others carry on.
 
 ### 6.5 Files
 
@@ -3124,14 +4071,1448 @@ console.log(`${summary.handled} handled, ${summary.failed} failed`);
 serverless function. Events it did not reach stay in the inbox for the next run, and a handler that
 throws leaves its event unacked, so the work comes back rather than disappearing.
 
-## 8. Version and changelog
+## 8. Artifacts
+
+An **artifact** is a small website that lives inside TaskManager: a dashboard, a tracker, a form, a
+tool. Somebody — usually an agent — writes the frontend in whatever they like, builds it to a static
+folder and publishes that folder. TaskManager keeps it and shows it only to the signed-in people it
+has been shared with. Its backend is one script tag: `window.BackendDriver` gives the page a
+Firestore, a Realtime Database, file storage and a key-value store that belong to that one artifact.
+
+Artifacts are a concept of their own, **separate from boards**: no tickets, no stages, their own
+people. Being on a board gives you nothing on an artifact, and the reverse.
+
+### 8.1 What an artifact is
+
+- **A static build, nothing else.** A folder with an `index.html` at its root: plain HTML/CSS/JS, or
+  the `dist/` of Vite, Svelte, React, Vue. Nothing is built or run on the server.
+- **Relative asset paths.** The page is served under a prefix that changes, so `./assets/app.js`
+  works and `/assets/app.js` shows a blank page. In Vite: `base: './'`. A publish with absolute
+  paths still succeeds, and answers with a `warnings` entry naming the fix.
+- **Hash routing, or a single page.** Route on `location.hash`. (A path that is not a file and has
+  no extension falls back to `index.html`, so history routing mostly works — but the hash always does.)
+- **Its data is its own.** Everything it stores sits under a prefix the artifact's code never sees
+  and cannot leave. Publishing a new build never touches the data.
+- **Builds are versions.** Every publish is a new build and becomes current at once. The newest ones
+  are kept and any of them can be made current again.
+- **The source can travel with it.** A publish may carry a zip of the source beside the build. It is
+  never served; it is what the next author downloads to carry on.
+- **It only runs inside TaskManager**, at `https://taskmanager-example.web.app/x/{id}`, for a signed-in person it is
+  shared with. There is no public link.
+
+Who can do what:
+
+```text
+role     open it   read data   write data                              publish, roll back   share, rename, delete
+──────   ───────   ─────────   ──────────                              ──────────────────   ─────────────────────
+owner    yes       yes         yes                                     yes                  yes
+editor   yes       yes         yes                                     yes                  no
+viewer   yes       yes         yes — unless it is set read-only        no                   no
+```
+
+That table is for **people**. An **agent** has no role on an artifact: its owner gives it two
+permissions, separately —
+
+```text
+build   true | false               publish, roll back, download the source
+data    'none' | 'read' | 'write'  read, or read and write, the artifact's database and files
+                                   through the data API (§8.10)
+```
+
+Either of them lets the agent list the artifact and read its description, builds and members. At
+least one must be given: `{ build: false, data: 'none' }` means "take the agent off". A dashboard's
+nightly job needs `data: 'write'` and no `build`; the agent that maintains the page needs `build`.
+An agent never owns an artifact and never shares, renames or deletes one.
+
+Limits:
+
+```text
+build, unpacked            25 MB and 2000 files, with an index.html at its root (or in a single top folder, which is stripped)
+build zip (REST, SDK)      26 MB compressed
+one publish request        31 MB — the build zip and the optional source zip ride together
+inline files (MCP)         5 MB in one artifact_publish call
+source zip                 50 MB stored — but it must fit in the publish request beside the build
+builds kept                the newest 10 (and always the current one); any of them can be made current
+name / description         ≤ 80 / ≤ 500 characters
+roles (people)             owner | editor | viewer — shared as editor | viewer
+access (agents)            { build: true | false, data: 'none' | 'read' | 'write' } — at least one of them
+db.storage upload          25 MB per file
+Firestore document         256 KB
+live listeners             50 per open artifact tab
+db.firestore.list          500 documents at most per call (default 100)
+reserved collection names  'tickets', 'reads' — refused at any depth
+path                       ≤ 1024 characters; '..' is refused
+file link / capability     60 minutes, renewed by the host page while the tab is open
+```
+
+### 8.2 Tokens
+
+Two scopes: `artifacts:read` (list, get, download source, read data) and `artifacts:write` (create,
+publish, roll back, share, delete, write data). What a token *reaches*, and what it may do there, is
+decided per call from each artifact's own people:
+
+- an **account token** reaches every artifact where its person is owner or editor, with that
+  person's role, and may create one;
+- an **agent token** — the agent's one token (§2); it always carries both scopes — reaches the
+  artifacts that agent is on, and does there what its `{ build, data }` says. `GET
+  /v1/artifacts` and `GET /v1/artifacts/{id}` state it as `agent_access` (the `role` field reads
+  `editor` for every agent and means nothing: read `agent_access`).
+- An agent may **create** an artifact: it then belongs to the agent's **owner** (who sees it in
+  their sidebar at once and gets an inbox row), and the agent is on it with `{ build: true, data:
+  'write' }`.
+- To put an agent on an existing artifact, or change what it may do, the **owner** shares it:
+  `agent_access` beside `agent` (below), or the agent's own page in the app, which lists every
+  artifact it is on with the two controls.
+
+```bash
+# the owner's account token: this agent may write the data, and not publish
+curl -s -X PUT https://taskmanager-example.web.app/v1/artifacts/$ID/access \
+  -H "Authorization: Bearer $TM_TOKEN" -H 'Content-Type: application/json' \
+  -d '{ "agent": "ag_0123456789abcdef", "agent_access": { "build": false, "data": "write" } }'
+```
+
+The older form still works for an agent — `"role": "editor"` is `{ build: true, data: 'write' }`,
+`"role": null` removes it — and `agent_access` wins when both are given.
+
+### 8.3 Publishing: REST
+
+```text
+route                               scopes                            what it does
+─────                               ──────                            ────────────
+GET /v1/artifacts                   artifacts:read | artifacts:write  The artifacts this credential can reach
+POST /v1/artifacts                  artifacts:write                   Create an artifact; you (or, for an agent token, the agent's owner) become its owner
+GET /v1/artifacts/{id}              artifacts:read | artifacts:write  An artifact: meta, its builds, who it is shared with
+PATCH /v1/artifacts/{id}            artifacts:write                   Rename, describe, set read-only for viewers, archive or restore (owner)
+DELETE /v1/artifacts/{id}           artifacts:write                   Delete an artifact with its builds, files and ALL its data (owner)
+POST /v1/artifacts/{id}/builds      artifacts:write                   Publish: a zip of the build folder becomes the current build
+POST /v1/artifacts/{id}/builds/{build}/current  artifacts:write                   Roll back (or forward) to a kept build
+GET /v1/artifacts/{id}/source       artifacts:read | artifacts:write  A short-lived URL for the newest source zip
+PUT /v1/artifacts/{id}/access       artifacts:write                   Share with a person or an agent, change a role, or remove (owner)
+```
+
+Full parameters and answers are in §5.2. The one route that is not JSON is the publish: the body
+**is** the zip of the build folder.
+
+```bash
+# create (account token) → { id, url, … }
+curl -s -X POST https://taskmanager-example.web.app/v1/artifacts \
+  -H "Authorization: Bearer $TM_TOKEN" -H 'Content-Type: application/json' \
+  -d '{ "name": "Sales dashboard" }'
+
+# publish: zip the CONTENTS of the build folder, not the folder
+(cd dist && zip -qr ../build.zip .)
+curl -s -X POST "https://taskmanager-example.web.app/v1/artifacts/$ID/builds?message=first%20cut" \
+  -H "Authorization: Bearer $TM_TOKEN" -H 'Content-Type: application/zip' \
+  -H "Idempotency-Key: $(uuidgen)" --data-binary @build.zip
+
+# …or with the source beside it: multipart, parts named `build` and `source`
+curl -s -X POST "https://taskmanager-example.web.app/v1/artifacts/$ID/builds?message=first%20cut" \
+  -H "Authorization: Bearer $TM_TOKEN" \
+  -F build=@build.zip -F source=@source.zip
+
+# share
+curl -s -X PUT https://taskmanager-example.web.app/v1/artifacts/$ID/access \
+  -H "Authorization: Bearer $TM_TOKEN" -H 'Content-Type: application/json' \
+  -d '{ "email": "priya@example.com", "role": "viewer" }'
+```
+
+The publish answers `201` with the build — `{ id, files, bytes, message, by, created_at, warnings,
+has_source, current }`. **Read `warnings`**: a non-empty list means the page will probably be blank.
+Sharing answers `{ ok, outcome }` with `outcome` one of `granted`, `invited` (no account yet: an
+invite waits for their first sign-in) or `removed` (`role: null`, or for an agent `agent_access`
+with both off).
+
+### 8.4 Publishing: the SDK
+
+`tm.artifacts.publish()` zips the folder for you (Node, Deno, Bun); in a browser, or with files you
+hold in memory, pass them as `[{ path, content }]` or `{ 'index.html': '…' }`, or pass the bytes of
+a zip you already have.
+
+```ts
+import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+const tm = createClient({ token: process.env.TM_TOKEN! });        // an account token, or an agent's
+
+const art = await tm.artifacts.create({ name: 'Sales dashboard' });  // an agent creates it for its owner
+const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+if (build.warnings.length) console.warn(build.warnings);
+
+// sharing is the OWNER's: an account token, never an agent's
+await tm.artifacts.share(art.id, { email: 'priya@example.com', role: 'viewer' });
+await tm.artifacts.share(art.id, { agent: 'ag_0123456789abcdef', access: { build: false, data: 'write' } });
+console.log(art.url);                                              // where people open it
+
+// later
+await tm.artifacts.rollback(art.id, olderBuildId);
+const { url } = await tm.artifacts.source(art.id);                 // a short-lived link to the source zip
+```
+
+`source: './'` zips the project without `node_modules`, `.git`, `dist`, `build`, other build
+caches, `.env` files and any file over 2 MB. The signatures, copied out of the published `sdk.d.ts`:
+
+```ts
+// createClient(…).artifacts
+/**
+ * ARTIFACTS (docs/plan/artifacts.html) — small static websites kept and
+ * served by TaskManager, each with its own people and its own data. They
+ * are not on a board, so nothing here takes one: an ACCOUNT token reaches
+ * every artifact you own or edit, an AGENT token only the artifacts that
+ * agent is on — and there what it may do is its `agent_access`
+ * { build, data } (§AA3): `build` to publish, roll back and read the
+ * source; `data` to use `artifacts.data(id)`. An agent never owns, shares,
+ * renames or deletes an artifact. Scopes: `artifacts:read` (list, get,
+ * source, data reads) and `artifacts:write` (everything else).
+ *
+ *   const art = await tm.artifacts.create({ name: 'Sales dashboard' });
+ *   const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+ *   await tm.artifacts.share(art.id, { email: 'priya@example.com', role: 'viewer' });
+ *   // people open it at art.url — {app}/x/{id}
+ */
+artifacts: {
+    /** Every artifact this credential can reach. */
+    list: (o?: RequestOptions) => Promise<Artifact[]>;
+    /** One artifact, with its kept builds (newest first) and who it is shared with. */
+    get: (id: string, o?: RequestOptions) => Promise<ArtifactDetail>;
+    /** Create an empty artifact; you become its owner (with an agent token: the agent's owner does, and the agent may build it and write its data). */
+    create: (input: CreateArtifactInput, o?: RequestOptions) => Promise<Artifact>;
+    /** Rename, describe, set read-only for viewers, archive or restore (owner). */
+    update: (id: string, patch: UpdateArtifactInput, o?: RequestOptions) => Promise<Artifact>;
+    /** Delete the artifact with its builds, its files and ALL its data (owner). There is no undo. */
+    delete: (id: string, o?: RequestOptions) => Promise<void>;
+    /**
+     * Publish a build; it becomes the current one at once and never touches
+     * the artifact's data. `input` is the build FOLDER (the one with
+     * index.html at its root): a directory path, the bytes of a zip, or
+     * files in memory — see `ArtifactBuildInput`. `build.warnings` names
+     * anything that will show a blank page (absolute `/assets/…` paths:
+     * set Vite's `base: './'`).
+     */
+    publish: (id: string, input: ArtifactBuildInput, o?: PublishArtifactOptions) => Promise<ArtifactBuild>;
+    /** Make a kept build the current one — back, or forward again. */
+    rollback: (id: string, buildId: string, o?: RequestOptions) => Promise<Artifact>;
+    /**
+     * A short-lived URL for the source zip published beside a build — the
+     * newest build that has one, unless `buildId` names another. GET it
+     * with a plain fetch: it needs no Authorization header.
+     */
+    source: (id: string, buildId?: string, o?: RequestOptions) => Promise<ArtifactSource>;
+    /**
+     * Share with a person (by email) or one of your agents, change what
+     * they may do, or remove them. Owner only — never an agent. A person
+     * takes a `role` (null removes; with no account yet they are invited:
+     * `outcome: 'invited'`). An agent takes `access: { build, data }` (§AA3;
+     * `{ build: false, data: 'none' }` removes it).
+     */
+    share: (id: string, input: ShareArtifactInput, o?: RequestOptions) => Promise<ArtifactShareResult>;
+    /**
+     * §AA4 — the artifact's own Firestore, Realtime Database and files,
+     * from OUTSIDE the page: the same documents the page reads through its
+     * driver. Needs `data` on the artifact (an agent: 'read' for the reads,
+     * 'write' for the rest; a person: owner or editor). See src/data.ts.
+     *
+     *   const data = tm.artifacts.data(art.id);
+     *   await data.firestore.batch(rows.map((r) => ({ op: 'set', path: `sales/${r.id}`, data: r })));
+     *
+     * `{ raw: true }` leaves timestamps as `{ "$date": ISO }` instead of `Date`.
+     */
+    data: (id: string, opts?: ArtifactDataOptions) => ArtifactData;
+}
+```
+
+```ts
+/**
+ * `artifacts.create()` (`artifacts:write`). With an account token you become
+ * the owner; with an agent token the agent's OWNER does, and the agent is on
+ * it with { build: true, data: 'write' }.
+ */
+export interface CreateArtifactInput {
+    /** ≤ 80 characters. */
+    name: string;
+    /** ≤ 500 characters. */
+    description?: string | null;
+    /** One emoji. */
+    icon?: string | null;
+}
+
+/** `artifacts.update()` — owner only. Send only what changes. */
+export interface UpdateArtifactInput {
+    name?: string;
+    description?: string | null;
+    icon?: string | null;
+    /** Viewers may read the artifact's data but not write it. */
+    readOnly?: boolean;
+    /** Archive (no data writes, off the sidebar) or restore. */
+    archived?: boolean;
+}
+
+/** One file of a build given in memory. */
+export interface ArtifactFile {
+    /** Relative to the build root: 'index.html', 'assets/app.js'. */
+    path: string;
+    content: string | Uint8Array | ArrayBuffer | Blob;
+    /** For a string `content`: 'utf8' (default) or 'base64' for images and other binaries. */
+    encoding?: 'utf8' | 'base64';
+}
+
+/**
+ * What `artifacts.publish()` takes as the BUILD — the folder with an
+ * index.html at its root:
+ *
+ *   './dist'                      a directory (Node, Deno, Bun): walked and zipped for you
+ *   Uint8Array | ArrayBuffer | Blob   bytes that are ALREADY a zip
+ *   [{ path, content }]           files in memory, zipped for you (works in a browser)
+ *   { 'index.html': '<!doctype…' }    the same, as a record of path → content
+ */
+export type ArtifactBuildInput = string | Uint8Array | ArrayBuffer | Blob | readonly ArtifactFile[] | Readonly<Record<string, string | Uint8Array | ArrayBuffer | Blob>>;
+
+export interface PublishArtifactOptions extends RequestOptions {
+    /**
+     * The SOURCE, kept beside the build and never served — what the next agent
+     * downloads to carry on (`artifacts.source()`). A directory is zipped for
+     * you, leaving out `ARTIFACT_SOURCE_SKIP_DIRS` (node_modules, .git, dist,
+     * build …), `.env` files (a source zip is handed to other people) and any
+     * file over 2 MB; zip bytes or a Blob are sent as they are.
+     */
+    source?: string | Uint8Array | ArrayBuffer | Blob | undefined;
+    /** A line saying what changed (≤ 500 characters). */
+    message?: string | undefined;
+}
+
+/**
+ * `artifacts.share()`: exactly one of `email` (a person) or `agent` (one of
+ * the owner's agents).
+ *
+ *   { email, role: 'editor' | 'viewer' | null }        a person; null removes
+ *   { agent, access: { build, data } }                 §AA3 — an agent: build
+ *                                                      and data, separately;
+ *                                                      { build: false, data: 'none' } removes
+ *   { agent, role: 'editor' | null }                   the old form, still
+ *                                                      accepted: 'editor' is
+ *                                                      { build: true, data: 'write' }
+ */
+export type ShareArtifactInput = {
+    email: string;
+
+/**
+ * §AA3 — what an AGENT may do on one artifact: build and data, separately.
+ *   build   publish, roll back, download the source
+ *   data    'none' | 'read' | 'write' — the artifact's database and files,
+ *           through `tm.artifacts.data(id)`
+ * Any of them lets the agent list the artifact and read its description.
+ * `{ build: false, data: 'none' }` means "not on it" (sharing that removes).
+ */
+export interface ArtifactAgentAccess {
+    build: boolean;
+    data: 'none' | 'read' | 'write';
+}
+
+/**
+ * An artifact: a small static website kept and served by TaskManager, with
+ * its own people and its own data. It is NOT on a board.
+ */
+export interface Artifact {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string | null;
+    /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
+    url: string;
+    /**
+     * The role of the principal this credential acts as. An AGENT caller always
+     * reads 'editor' here (kept for older clients); what it may actually do is
+     * `agent_access`.
+     */
+    role: ArtifactRole;
+    /** §AA3 — present only when the caller is an AGENT: its own { build, data } on this artifact. */
+    agent_access?: ArtifactAgentAccess | undefined;
+    /** Viewers may read its data but not write it. */
+    read_only: boolean;
+    archived: boolean;
+    /** The build people see; null until the first publish. */
+    current_build: string | null;
+    owner_id: string;
+    created_at: Iso;
+    updated_at: Iso;
+}
+
+/** One build of an artifact: a version. The newest ten are kept; any of them can be made current. */
+export interface ArtifactBuild {
+    id: string;
+    files: number;
+    /** Unpacked bytes. */
+    bytes: number;
+    message: string | null;
+    /** Who published it — a person or an agent. */
+    by: Actor;
+    created_at: Iso;
+    /** e.g. the absolute-asset-path warning: the publish succeeded, the page may be blank. */
+    warnings: string[];
+    /** A source zip came with it (`tm.artifacts.source(id, build.id)`). */
+    has_source: boolean;
+    /** This is the build people see. */
+    current: boolean;
+}
+
+/** A person or agent the artifact is shared with. */
+export interface ArtifactMember {
+    id: string;
+    kind: PrincipalKind;
+    name: string;
+    /** '' for agents. */
+    email: string;
+    /** A person's role. For an agent this is always 'editor' (kept for older clients) — read `agent_access`. */
+    role: ArtifactRole;
+    /** Agents only (§AA3): what this agent may do here. */
+    agent_access?: ArtifactAgentAccess | undefined;
+}
+
+/** `tm.artifacts.get()`: the artifact, its kept builds (newest first) and who it is shared with. */
+export interface ArtifactDetail extends Artifact {
+    builds: ArtifactBuild[];
+    members: ArtifactMember[];
+}
+
+/** `tm.artifacts.source()`: where to GET the source zip from (no Authorization header needed). */
+export interface ArtifactSource {
+    url: string;
+    build: string;
+    expires_at: Iso;
+}
+
+/** `tm.artifacts.share()`: 'granted' — they have the role now; 'invited' — an invite waits for their sign-in; 'removed'. */
+export interface ArtifactShareResult {
+    ok: true;
+    outcome: 'granted' | 'invited' | 'removed';
+}
+```
+
+### 8.5 Publishing: MCP
+
+```text
+artifact_list        read   The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.
+artifact_get         read   One artifact: its meta, its kept builds (newest first) and who it is shared with.
+artifact_create      write  Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.
+artifact_publish     write  Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).
+artifact_rollback    write  Make a kept build the current one (roll back, or forward again).
+artifact_share       write  Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.
+artifact_source      read   A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.
+artifact_data_get    read   Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { "$date": ISO }.
+artifact_data_list   read   List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).
+artifact_data_set    write  Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.
+artifact_data_batch  write  Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.
+```
+
+`artifact_publish` takes **files, not a zip**: `files: [{ path, content, encoding? }]`, the whole
+build in one call (it is not a patch), `encoding: 'base64'` for binaries. That covers a hand-written
+HTML/CSS/JS artifact straight from a chat; a framework build goes through the SDK or REST from the
+machine that built it. The four `artifact_data_*` tools are §8.10. Arguments for every tool are in
+§5.3.
+
+### 8.6 The driver: window.BackendDriver
+
+An artifact never talks to Firebase and never holds a session. It loads one script, and that script
+asks the TaskManager page around it to do each read and write, as the viewer, inside the artifact's
+own prefix.
+
+```html
+<script src="https://taskmanager-example.web.app/backend-driver/v1/driver.js"></script>
+<script type="module">
+  const db = window.BackendDriver;
+  await db.ready;                                    // handshake done (calls made earlier simply wait for it)
+  const me = db.me;                                  // { uid, name, email, photoURL, role, readOnly }
+  const doc = await db.firestore.get('/my/doc');     // → { id, path, exists, data }
+</script>
+```
+
+```text
+https://taskmanager-example.web.app/backend-driver/v1/driver.js      the script tag; sets window.BackendDriver
+https://taskmanager-example.web.app/backend-driver/v1/driver.mjs     the same as an ES module: import db from '…/driver.mjs'
+https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts   the types, one flat file with no imports
+https://taskmanager-example.web.app/backend-driver/latest/driver.js  the newest build, never cached — pin v1 instead
+https://taskmanager-example.web.app/backend-driver/                  the usage page, for people
+```
+
+What to know before writing one:
+
+- **Paths are the artifact's own view.** `'/todos/a1'` and `'todos/a1'` are the same; `..` is
+  refused. A Firestore **document** path has an even number of segments (`/todos/a1`), a
+  **collection** an odd number (`/todos`, `/todos/a1/comments`). Collections may not be named
+  `tickets` or `reads`, at any depth.
+- **No `localStorage`, `sessionStorage`, `IndexedDB` or cookies.** The page runs in a sandboxed
+  frame with an opaque origin, where those throw or do nothing. Use `db.kv` — per viewer, per
+  artifact, and it follows the viewer across devices. `fetch` to public APIs and CDNs works (the
+  origin is `null`).
+- **Live listeners are real.** `onDoc`, `onList` and `rtdb.on` call back now and on every change by
+  anyone the artifact is shared with; each returns an `unsubscribe()`.
+- **Timestamps.** `db.serverTime` anywhere in a written value becomes the server's timestamp.
+  Firestore timestamps arrive as `Date`, and a `Date` you write becomes a timestamp. In the Realtime
+  Database both are milliseconds.
+- **Errors** are rejected Promises (and `onError` callbacks) carrying `code`: `permission-denied`,
+  `not-found`, `invalid-argument`, `quota`, `unavailable`.
+- **Respect `db.me.readOnly`.** A viewer of a read-only artifact gets `permission-denied` on every
+  write; hide the controls. `db.on('readonly', cb)` says when it changes, `db.on('revoked', cb)`
+  when the viewer loses access, `db.on('build', cb)` when a newer build is published.
+- **Not in v1:** transactions and batched writes, Firestore references and GeoPoints, field
+  transforms other than `serverTime`, server-side code, sharing data between artifacts. (A batch
+  exists — from outside the page, with a token: §8.10.)
+
+**Board tickets (`db.tickets`).** An artifact can also work with the tickets of real boards — a
+dashboard over a board, a custom intake form, a planning view — once its **owner** grants it the
+board in the artifact's Settings › Board access (`artifactBoardAccessSet`, or the MCP tool
+`artifact_board_access_set`), as **read** or **read & write**. The grant is a ceiling, not a key:
+every call runs as the person looking, so they only ever see and change what their own role on that
+board allows, and a viewer who is not on the board sees nothing of it. A board that was not granted
+(or a write on a read grant) is `permission-denied`.
+
+```js
+const boards = await db.tickets.boards();          // granted boards this viewer can read: stages, fields, people, canWrite
+const mine = await db.tickets.list('ENG', { assignee: 'me', orderBy: 'due' });
+const off = db.tickets.onList('ENG', { stage: 'In review' }, (tickets) => render(tickets));
+const t = await db.tickets.get('ENG-42');           // null when there is no such ticket
+await db.tickets.create('ENG', { title: 'From the dashboard', priority: 'High', assignees: ['me'] });
+await db.tickets.update('ENG-42', { stage: 'Done', dueAt: '2026-10-31' });
+await db.tickets.comment('ENG-42', 'Shipped — see **v2**.');
+```
+
+Tickets come back with **names, not ids** (`stage.name`, `priority.name`, tag names, custom fields by
+field name, select options by name), the description as **Markdown**, and times as **milliseconds**.
+What you send takes names too (or ids), `'me'` and emails for people; an unknown name is
+`invalid-argument` and the message lists the names that exist. Writes are refused for a viewer of a
+read-only artifact, like every other write.
+
+The whole API:
+
+`@tm/backend-driver` **1.0.0** — the file below is `https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts`, verbatim.
+
+```ts
+// @tm/backend-driver 1.0.0 — generated by driver/build.mjs from driver/src/api.ts, do not edit.
+/**
+ * THE PUBLIC TYPES of window.BackendDriver (docs/plan/artifacts.html §E2).
+ *
+ * THIS FILE HAS NO IMPORTS AND NO RUNTIME CODE, ON PURPOSE: build.mjs ships it
+ * verbatim as driver.d.ts, so an artifact's TypeScript project gets types from
+ * one URL with nothing to resolve. The shapes that cross postMessage are the
+ * ones in @tm/shared/artifacts/driver; src/contract.ts fails the typecheck if
+ * the two ever drift apart.
+ */
+
+export type ArtifactRole = 'owner' | 'editor' | 'viewer';
+
+/** Who is looking. `readOnly` is true when THIS viewer may not write data. */
+export interface Me {
+  uid: string;
+  name: string | null;
+  email: string | null;
+  photoURL: string | null;
+  role: ArtifactRole;
+  readOnly: boolean;
+}
+
+export interface ArtifactInfo {
+  id: string;
+  name: string;
+  buildId: string;
+}
+
+/** A document as the artifact sees it. `path` is in the artifact's own view ('/my/doc'). */
+export interface Doc<T = Record<string, unknown>> {
+  id: string;
+  path: string;
+  exists: boolean;
+  data: T | null;
+}
+
+export type WhereOp =
+  '<' | '<=' | '==' | '!=' | '>=' | '>' | 'array-contains' | 'in' | 'not-in' | 'array-contains-any';
+
+export interface ListQuery {
+  where?: [field: string, op: WhereOp, value: unknown][];
+  orderBy?: [field: string, dir?: 'asc' | 'desc'];
+  /** Default 100, at most 500. */
+  limit?: number;
+  /** A document id in this collection — the last id of the previous page. */
+  startAfter?: string;
+}
+
+export type ErrorCode =
+  'permission-denied' | 'not-found' | 'invalid-argument' | 'quota' | 'unavailable';
+
+/** Every rejected Promise (and every onError) carries one of these. */
+export interface BackendDriverError extends Error {
+  code: ErrorCode;
+}
+
+/** db.serverTime — becomes the server's timestamp wherever it sits in a written value. */
+export interface ServerTime {
+  readonly __tm: 'serverTime';
+}
+
+export type Unsubscribe = () => void;
+export type OnError = (error: BackendDriverError) => void;
+
+export interface FileInfo {
+  path: string;
+  size: number;
+  contentType: string | null;
+  /** Milliseconds since the epoch. */
+  updatedAt: number;
+}
+
+export interface FirestoreApi {
+  /** A document path has an even number of segments: '/my/doc'. */
+  get<T = Record<string, unknown>>(path: string): Promise<Doc<T>>;
+  set(path: string, data: Record<string, unknown>, options?: { merge?: boolean }): Promise<void>;
+  /** Fails with not-found when the document does not exist. 'a.b' keys reach into maps. */
+  update(path: string, patch: Record<string, unknown>): Promise<void>;
+  delete(path: string): Promise<void>;
+  /** A collection path has an odd number of segments: '/my'. */
+  add(collectionPath: string, data: Record<string, unknown>): Promise<{ id: string; path: string }>;
+  list<T = Record<string, unknown>>(collectionPath: string, query?: ListQuery): Promise<Doc<T>[]>;
+  onDoc<T = Record<string, unknown>>(
+    path: string,
+    callback: (doc: Doc<T>) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+  onList<T = Record<string, unknown>>(
+    collectionPath: string,
+    query: ListQuery | null | undefined,
+    callback: (docs: Doc<T>[]) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+}
+
+export interface RtdbApi {
+  get<T = unknown>(path: string): Promise<T | null>;
+  set(path: string, value: unknown): Promise<void>;
+  update(path: string, patch: Record<string, unknown>): Promise<void>;
+  push(path: string, value: unknown): Promise<{ key: string; path: string }>;
+  remove(path: string): Promise<void>;
+  /** Value events: the whole subtree at `path`, now and on every change. */
+  on<T = unknown>(
+    path: string,
+    callback: (value: T | null) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+}
+
+export interface StorageApi {
+  upload(
+    path: string,
+    blob: Blob,
+    options?: { contentType?: string },
+  ): Promise<{ path: string; size: number }>;
+  /** A short-lived URL you can put in <img src>. */
+  url(path: string): Promise<string>;
+  list(prefix?: string): Promise<FileInfo[]>;
+  delete(path: string): Promise<void>;
+}
+
+/** Per viewer, per artifact — what localStorage would have been (an artifact has none). */
+export interface KvApi {
+  get<T = unknown>(key: string): Promise<T | null>;
+  set(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+// ─── a board's tickets (§K) ──────────────────────────────────────────────────
+
+/** A person or agent on a board. */
+export interface Person {
+  id: string;
+  kind: 'user' | 'agent';
+  name: string;
+  /** '' for agents. */
+  email: string;
+}
+
+/** A board the artifact's owner let it use (tickets.boards()). */
+export interface Board {
+  id: string;
+  key: string;
+  name: string;
+  /** What the owner granted. */
+  access: 'read' | 'write';
+  /** May THIS viewer change tickets here (a write grant AND their own role on the board)? */
+  canWrite: boolean;
+  stages: { id: string; name: string; category: string }[];
+  priorities: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
+  fields: { id: string; name: string; type: string; options?: string[] }[];
+  members: Person[];
+}
+
+/** A ticket: names, not ids; Markdown description; times in millis. */
+export interface Ticket {
+  id: string;
+  key: string;
+  /** The board's key. */
+  board: string;
+  /** Opens the ticket in TaskManager. */
+  url: string;
+  title: string;
+  description: string;
+  stage: { id: string; name: string; category: string };
+  priority: { id: string; name: string } | null;
+  tags: string[];
+  assignees: Person[];
+  state: 'active' | 'archived';
+  startAt: number | null;
+  dueAt: number | null;
+  /** Custom fields by NAME; select options by name. */
+  fields: Record<string, unknown>;
+  /** How many messages its thread has. */
+  messages: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TicketQuery {
+  /** Stage name or id. */
+  stage?: string;
+  /** 'me', an email, a person / agent id, or null for unassigned. */
+  assignee?: string | null;
+  /** Default 'active'. */
+  state?: 'active' | 'archived';
+  /** Default 'rank' (the board's order); 'updated' and 'created' newest first, 'due' soonest first (no date last). */
+  orderBy?: 'rank' | 'updated' | 'created' | 'due';
+  /** Default 200, at most 500. */
+  limit?: number;
+}
+
+/** tickets.create takes this; tickets.update takes any subset of it. */
+export interface TicketInput {
+  title: string;
+  /** Markdown. */
+  description?: string;
+  /** Stage name or id; default the board's first stage. */
+  stage?: string;
+  /** Priority name or id; null clears it. */
+  priority?: string | null;
+  /** Tag names (or ids); unknown names are refused, not created. */
+  tags?: string[];
+  /** 'me', emails, or person / agent ids — members of the board. */
+  assignees?: string[];
+  /** Millis, or an ISO date / date-time; null clears it. */
+  dueAt?: number | string | null;
+  startAt?: number | string | null;
+  /** Custom fields by name (or id); select options by name. */
+  fields?: Record<string, unknown>;
+}
+
+/**
+ * The tickets of boards the artifact's OWNER granted it (Settings › Board
+ * access). Everything happens as the person looking: they see and change only
+ * what their own role on that board allows. A board that was not granted, or a
+ * write on a read grant, fails with permission-denied.
+ */
+export interface TicketsApi {
+  /** The granted boards this viewer can read, with stages, fields and people. */
+  boards(): Promise<Board[]>;
+  /** `board` is a key ('ENG') or id. */
+  list(board: string, query?: TicketQuery): Promise<Ticket[]>;
+  onList(
+    board: string,
+    query: TicketQuery | null | undefined,
+    callback: (tickets: Ticket[]) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+  /** By key ('ENG-42'); null when there is no such ticket. */
+  get(key: string): Promise<Ticket | null>;
+  create(board: string, ticket: TicketInput): Promise<{ id: string; key: string }>;
+  update(key: string, patch: Partial<TicketInput>): Promise<void>;
+  /** Post in the ticket's thread, as the viewer. */
+  comment(key: string, markdown: string): Promise<void>;
+}
+
+export interface SignalMap {
+  /** This viewer's write access changed. */
+  readonly: boolean;
+  /** This viewer lost access; every call now fails. */
+  revoked: null;
+  /** A newer build was published (its id). The host shows a reload bar too. */
+  build: string;
+}
+
+export interface BackendDriver {
+  /** Resolves when the handshake with the host (or the switch to the mock) is done. */
+  readonly ready: Promise<void>;
+  /** null until `ready`. */
+  readonly me: Me | null;
+  /** null until `ready`. */
+  readonly artifact: ArtifactInfo | null;
+  /** true when running OUTSIDE TaskManager, on the in-browser mock backend. */
+  readonly mock: boolean;
+  readonly serverTime: ServerTime;
+  readonly firestore: FirestoreApi;
+  readonly rtdb: RtdbApi;
+  readonly storage: StorageApi;
+  readonly kv: KvApi;
+  /** Boards' tickets, where the owner allowed it (§K). */
+  readonly tickets: TicketsApi;
+  on<K extends keyof SignalMap>(name: K, callback: (value: SignalMap[K]) => void): Unsubscribe;
+}
+
+/** The one driver of this window. */
+export declare const BackendDriver: BackendDriver;
+export default BackendDriver;
+
+declare global {
+  interface Window {
+    BackendDriver: BackendDriver;
+  }
+}
+```
+
+### 8.7 On your machine: the mock
+
+Opened **outside** TaskManager — `vite dev`, a file from disk — the driver says so in the console and
+becomes a mock backend: the same API over a store kept in that browser's `localStorage` (uploaded
+files last until the page reloads). `db.mock` is `true`, so the page can show a banner. An agent can
+build and click through an artifact without publishing it.
+
+```text
+?role=owner|editor|viewer   who you are (default owner)
+?readonly=1                 the artifact is read-only for viewers — and makes you a viewer if no role is given
+?mock=1                     force the mock at once (a top-level page otherwise waits 1.5 s for a host),
+                            and inside a preview pane that frames your page
+```
+
+The mock validates paths with the same rules as the real backend, so a path it accepts is one the
+real one accepts. It does not imitate security rules beyond the read-only switch, indexes, or the
+document size limit.
+
+### 8.8 A complete artifact
+
+One `index.html` is a whole artifact. This one is a shared to-do list: live for everyone it is shared
+with, read-only aware, with a per-viewer preference in `db.kv`. Save it as `index.html` and publish
+the folder — or, over MCP, pass it as the single file of `artifact_publish`.
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shared to-do</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font: 16px/1.5 system-ui, sans-serif; max-width: 34rem; margin: 2rem auto; padding: 0 1rem; }
+      form { display: flex; gap: 0.5rem; }
+      input[type='text'] { flex: 1; padding: 0.5rem; font: inherit; }
+      button { font: inherit; padding: 0.5rem 0.8rem; cursor: pointer; }
+      ul { list-style: none; padding: 0; }
+      li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid #8884; }
+      li span { flex: 1; }
+      li.done span { text-decoration: line-through; opacity: 0.55; }
+      li small { opacity: 0.6; }
+      #note { padding: 0.5rem 0.75rem; border-radius: 6px; background: #f5c54233; }
+      #who { opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <h1>Shared to-do</h1>
+    <p id="who">Connecting…</p>
+    <p id="note" hidden></p>
+    <form id="add">
+      <input id="title" type="text" placeholder="What needs doing?" maxlength="200" required />
+      <button>Add</button>
+    </form>
+    <label><input id="hide" type="checkbox" /> Hide finished</label>
+    <ul id="list"></ul>
+
+    <!-- The whole backend. It sets window.BackendDriver; there is nothing to configure. -->
+    <script src="https://taskmanager-example.web.app/backend-driver/v1/driver.js"></script>
+    <script type="module">
+      const db = window.BackendDriver;
+      const $ = (id) => document.getElementById(id);
+
+      await db.ready; // the handshake with TaskManager (or, on your machine, the switch to the mock)
+      $('who').textContent = `${db.me.name ?? db.me.email ?? 'Someone'} · ${db.me.role}`;
+
+      // Who may write is the host's decision, and it can change while the page is open.
+      const showAccess = (readOnly) => {
+        $('add').hidden = readOnly;
+        $('note').hidden = !readOnly && !db.mock;
+        $('note').textContent = readOnly
+          ? 'This artifact is read-only for you.'
+          : 'Mock backend: data stays in this browser. Publish to share it.';
+      };
+      showAccess(db.me.readOnly);
+      db.on('readonly', showAccess);
+      db.on('revoked', () => (document.body.textContent = 'You no longer have access to this artifact.'));
+
+      // A per-viewer preference. There is no localStorage in an artifact: db.kv is that, and it follows you across devices.
+      let hideDone = (await db.kv.get('hideDone')) === true;
+      $('hide').checked = hideDone;
+      let todos = [];
+
+      const render = () => {
+        $('list').replaceChildren(
+          ...todos
+            .filter((t) => !(hideDone && t.data.done))
+            .map((t) => {
+              const li = document.createElement('li');
+              li.className = t.data.done ? 'done' : '';
+              const box = document.createElement('input');
+              box.type = 'checkbox';
+              box.checked = !!t.data.done;
+              box.disabled = db.me.readOnly;
+              box.onchange = () => db.firestore.update(t.path, { done: box.checked }).catch(fail);
+              const text = document.createElement('span');
+              text.textContent = t.data.title; // textContent, never innerHTML: this is other people's input
+              const by = document.createElement('small');
+              by.textContent = t.data.by;
+              const del = document.createElement('button');
+              del.textContent = '×';
+              del.hidden = db.me.readOnly;
+              del.onclick = () => db.firestore.delete(t.path).catch(fail);
+              li.append(box, text, by, del);
+              return li;
+            }),
+        );
+      };
+      const fail = (e) => alert(`${e.code}: ${e.message}`); // permission-denied, not-found, invalid-argument, quota, unavailable
+
+      // LIVE: called now, and again whenever anyone this is shared with changes the collection.
+      // The path is the artifact's own — '/todos' is this artifact's collection and nobody else's.
+      db.firestore.onList('/todos', { orderBy: ['at', 'asc'], limit: 200 }, (docs) => {
+        todos = docs;
+        render();
+      }, fail);
+
+      $('add').onsubmit = async (e) => {
+        e.preventDefault();
+        const title = $('title').value.trim();
+        if (!title) return;
+        $('title').value = '';
+        // db.serverTime becomes the server's timestamp; it comes back as a Date.
+        await db.firestore.add('/todos', { title, done: false, by: db.me.name ?? 'Someone', at: db.serverTime }).catch(fail);
+      };
+      $('hide').onchange = () => {
+        hideDone = $('hide').checked;
+        render();
+        db.kv.set('hideDone', hideDone).catch(fail);
+      };
+    </script>
+  </body>
+</html>
+```
+
+```ts
+await tm.artifacts.publish(art.id, { 'index.html': html }, { message: 'shared to-do' });
+```
+
+### 8.9 A Vite project
+
+For anything with a build step. The three things that must be right are already right here:
+`base: './'`, the driver tag in `index.html` before the app module, and hash routing.
+
+`package.json`
+
+```json
+{
+  "name": "my-artifact",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "types": "curl -fsSL https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts -o src/backend-driver.d.ts",
+    "publish:artifact": "vite build && node publish.mjs"
+  },
+  "devDependencies": {
+    "@tm/sdk": "https://taskmanager-example.web.app/lib/v1/tm-sdk.tgz",
+    "vite": "^8.0.0"
+  }
+}
+```
+
+`vite.config.js`
+
+```js
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // THE ONE SETTING THAT MATTERS. An artifact is served under a path prefix
+  // that changes every hour ({usercontent}/c/{capability}/…), so every asset
+  // URL must be relative. Vite's default, '/', gives '/assets/app.js' — which
+  // publishes fine, answers with a warning, and shows a blank page.
+  base: './',
+  build: { outDir: 'dist' },
+});
+```
+
+`index.html`
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My artifact</title>
+  </head>
+  <body>
+    <div id="app">Connecting…</div>
+    <!-- The backend: sets window.BackendDriver. A plain script, loaded before the app module. -->
+    <script src="https://taskmanager-example.web.app/backend-driver/v1/driver.js"></script>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
+```
+
+`src/main.js`
+
+```js
+// Types in an editor or a TypeScript project: `npm run types` downloads
+// src/backend-driver.d.ts, which declares window.BackendDriver.
+const db = window.BackendDriver;
+const app = document.getElementById('app');
+
+await db.ready;
+
+// ROUTING: use the hash ('#/settings'), never the History API. The page lives
+// at an opaque, changing URL inside a sandboxed frame; location.hash is yours.
+const route = () => location.hash.replace(/^#/, '') || '/';
+
+let notes = [];
+
+function render() {
+  app.replaceChildren();
+  const h = document.createElement('h1');
+  h.textContent = `${db.artifact.name} — ${route()}`;
+  const who = document.createElement('p');
+  who.textContent = `${db.me.name ?? db.me.email} (${db.me.role}${db.me.readOnly ? ', read-only' : ''})${db.mock ? ' · MOCK backend' : ''}`;
+  const list = document.createElement('ul');
+  for (const n of notes) {
+    const li = document.createElement('li');
+    li.textContent = n.data.text;
+    list.append(li);
+  }
+  const add = document.createElement('button');
+  add.textContent = 'Add a note';
+  add.hidden = db.me.readOnly;
+  add.onclick = () =>
+    db.firestore.add('/notes', { text: `Note ${notes.length + 1}`, at: db.serverTime }).catch((e) => alert(e.message));
+  app.append(h, who, list, add);
+}
+
+// Live: now, and on every change by anyone this artifact is shared with.
+db.firestore.onList('/notes', { orderBy: ['at', 'asc'] }, (docs) => {
+  notes = docs;
+  render();
+});
+db.on('readonly', render);
+addEventListener('hashchange', render);
+render();
+```
+
+`publish.mjs`
+
+```js
+// Publish dist/ as a new build, with this folder as its source.
+//
+//   export TM_TOKEN='tm_live_…'          an account token with artifacts:write, or the token of an agent with `build` here
+//   npm run publish:artifact              first time: creates the artifact and prints its id
+//   TM_ARTIFACT=<id> npm run publish:artifact
+import { createClient } from '@tm/sdk';
+
+const tm = createClient({ token: process.env.TM_TOKEN, baseUrl: 'https://taskmanager-example.web.app' });
+
+let id = process.env.TM_ARTIFACT;
+if (!id) {
+  const art = await tm.artifacts.create({ name: 'My artifact' });
+  id = art.id;
+  console.log(`created ${id} — set TM_ARTIFACT=${id} for the next publish`);
+}
+
+// './dist' is walked and zipped; './' goes up beside it as the source (without
+// node_modules, .git, dist and .env files), so the next author can carry on.
+const build = await tm.artifacts.publish(id, './dist', { source: './', message: process.argv[2] ?? 'publish' });
+for (const w of build.warnings) console.warn(`warning: ${w}`);
+
+const art = await tm.artifacts.get(id);
+console.log(`build ${build.id} is live: ${build.files} files, ${build.bytes} bytes`);
+console.log(`open   ${art.url}`);
+```
+
+```bash
+npm install && npm run dev      # the mock backend, on localhost
+npm run publish:artifact        # vite build, then publish dist/ with the project as its source
+```
+
+### 8.10 Data from outside the page
+
+The driver is the page's way in: it works for whoever is looking at the artifact, while they are
+looking. A job — a nightly import, an agent that refreshes a dashboard, a script — has no page. It
+reaches **the same database and the same files** with a token:
+
+```text
+every path below is under /v1/artifacts/{id}/data
+
+route                     needs         what it does
+─────                     ─────         ────────────
+GET /firestore/{path}     data 'read'   Read a document, or list a collection, of the artifact's Firestore
+PUT /firestore/{path}     data 'write'  Set a document (?merge=1 merges)
+PATCH /firestore/{path}   data 'write'  Update fields of an existing document
+DELETE /firestore/{path}  data 'write'  Delete a document
+POST /firestore/{path}    data 'write'  Add a document to a collection
+POST /batch               data 'write'  Up to 400 Firestore writes, all or nothing
+GET /rtdb/{path}          data 'read'   Read a value of the artifact's Realtime Database
+PUT /rtdb/{path}          data 'write'  Set a value
+PATCH /rtdb/{path}        data 'write'  Update children of a value
+DELETE /rtdb/{path}       data 'write'  Remove a value
+POST /rtdb/{path}         data 'write'  Push a child with a generated key
+GET /files                data 'read'   List the artifact's files under a prefix
+PUT /files/{path}         data 'write'  Upload a file: the raw body is the file (≤ 25 MB)
+GET /files/{path}         data 'read'   A short-lived download URL for a file
+DELETE /files/{path}      data 'write'  Delete a file
+```
+
+**The page and the API see the same documents.** `PUT …/data/firestore/scores/2026` writes the
+document `db.firestore.get('/scores/2026')` reads, and an open tab's `onDoc` / `onList` fires when a
+job writes. So numbers no longer have to be baked into the build: do not ship a `seed.json` and
+republish to change it — publish the page once, and write its data here.
+
+**Who may.** An agent token whose agent has `data` on the artifact — `'read'` for the routes marked
+so above, `'write'` for the rest (§8.2) — or an account token whose person is owner or editor. An
+archived artifact answers its reads and refuses every write with `409`. An artifact the credential
+cannot reach is `404`.
+
+**Paths** are the artifact's own view, exactly as in the driver: the rest of the URL after
+`/firestore/`, `/rtdb/` or `/files/`, each segment percent-encoded. A Firestore path with an even
+number of segments is a **document**, an odd number a **collection** — the same `GET` reads one or
+lists the other. `.` and `..` are refused.
+
+**Values are JSON, with two escapes**, each an object with exactly one key:
+
+```text
+{ "$date": "2026-09-30T05:30:00Z" }   a timestamp. BOTH WAYS: written, it is stored as a Firestore
+                                      timestamp; a stored timestamp is read back in this form. The
+                                      page sees the same value through the driver as a Date.
+{ "$serverTime": true }               in a WRITE only: the server's clock. Not inside an array.
+```
+
+Any other single-key object whose key starts with `$` is refused, so the escape space stays clean.
+The Realtime Database has no timestamp type: there both are stored as epoch milliseconds.
+
+Limits:
+
+```text
+batch                      400 writes at most, applied all or nothing
+list                       100 documents by default, 500 at most per page; follow next_cursor with start_after
+filters                    10 `where` per list; op is one of <  <=  ==  !=  >=  >  array-contains  in  not-in  array-contains-any
+file upload                25 MB per file — the raw request body is the file
+file list                  1000 files at most under a prefix
+Firestore document         1 MiB stored (Firestore's own ceiling; 413 over it) — the JSON body may be up to 2 MB
+reserved collection names  'tickets', 'reads' — refused at any depth, as in the driver
+path                       ≤ 1024 characters; '.' and '..' are refused; percent-encode each segment
+escapes                    { "$date": ISO } a timestamp, both ways · { "$serverTime": true } in a write, the server's clock — not inside an array
+archived artifact          reads work; every write answers 409
+```
+
+#### With curl
+
+```bash
+A="https://taskmanager-example.web.app/v1/artifacts/$ID/data"
+H="Authorization: Bearer $TM_TOKEN"
+
+# one document: set (replace), merge, read
+curl -s -X PUT "$A/firestore/meta/sales" -H "$H" -H 'Content-Type: application/json' \
+  -d '{ "source": "warehouse", "refreshedAt": { "$serverTime": true } }'
+curl -s -X PUT "$A/firestore/meta/sales?merge=1" -H "$H" -H 'Content-Type: application/json' \
+  -d '{ "rows": 31 }'
+curl -s "$A/firestore/meta/sales" -H "$H"
+#   → { "id": "sales", "path": "/meta/sales", "exists": true,
+#       "data": { "source": "warehouse", "rows": 31, "refreshedAt": { "$date": "2026-09-30T05:30:00.000Z" } } }
+
+# a collection: filter, order, page.  where=field,op,value — repeat it; the value is JSON
+# ("open" or open for a string, 100 for a number), and the whole parameter is URL-encoded
+curl -s -G "$A/firestore/orders" -H "$H" \
+  --data-urlencode 'where=status,==,open' \
+  --data-urlencode 'where=total,>,100' \
+  --data-urlencode 'order_by=total,desc' \
+  --data-urlencode 'limit=50'
+#   → { "data": [ { "id", "path", "exists", "data" }, … ], "next_cursor": "o_193" }   then start_after=o_193
+
+# a file: the raw body IS the file
+curl -s -X PUT "$A/files/exports/q3.csv" -H "$H" -H 'Content-Type: text/csv' --data-binary @q3.csv
+curl -s "$A/files/exports/q3.csv" -H "$H"          # → { "url", "expires_at" }: a short-lived link
+```
+
+#### A nightly job that replaces a dataset
+
+`POST …/data/batch` is what the driver does not have: up to the batch limit of `set` / `update` /
+`delete` writes applied **all or nothing**. Nobody looking at the page sees a half-written dataset,
+and a failed run leaves yesterday's numbers in place. This is the whole job, run by cron as an agent
+with `{ build: false, data: 'write' }` on the artifact:
+
+```ts
+import { createClient, serverTime, ARTIFACT_DATA_LIMITS } from 'https://taskmanager-example.web.app/lib/v1/sdk.ts';
+
+declare function loadFromWarehouse(): Promise<{ day: string; total: number; orders: number }[]>;
+
+const tm = createClient({ token: process.env.TM_TOKEN! });        // the agent's token
+const data = tm.artifacts.data(process.env.ARTIFACT_ID!);
+
+const rows = await loadFromWarehouse();
+const keep = new Set(rows.map((r) => r.day));
+
+// What is there now and should not be: stale days go in the same batch as the new ones.
+const stale: string[] = [];
+for await (const doc of data.firestore.listAll('sales')) if (!keep.has(doc.id)) stale.push(doc.id);
+
+const writes = [
+  ...rows.map((r) => ({ op: 'set' as const, path: `sales/${r.day}`, data: { ...r, day: new Date(r.day) } })),
+  ...stale.map((id) => ({ op: 'delete' as const, path: `sales/${id}` })),
+  { op: 'set' as const, path: 'meta/sales', data: { refreshedAt: serverTime, rows: rows.length } },
+];
+if (writes.length > ARTIFACT_DATA_LIMITS.batchWrites)
+  throw new Error(`${writes.length} writes will not fit one atomic batch — keep fewer days, or one document per month`);
+
+const { written } = await data.firestore.batch(writes);
+console.log(`replaced the dataset: ${written} writes`);
+```
+
+The same batch over REST is one request:
+
+```bash
+curl -s -X POST "$A/batch" -H "$H" -H 'Content-Type: application/json' -d '{
+  "writes": [
+    { "op": "set",    "path": "sales/2026-09-29", "data": { "total": 1840, "day": { "$date": "2026-09-29T00:00:00Z" } } },
+    { "op": "update", "path": "meta/sales",       "data": { "refreshedAt": { "$serverTime": true } } },
+    { "op": "delete", "path": "sales/2025-09-29" }
+  ] }'
+#   → { "ok": true, "written": 3 }     an `update` of a missing document fails the WHOLE batch
+```
+
+A batch of `set` and `delete` is the same batch twice, so repeating one after a timeout is safe.
+`POST` to a Firestore collection (add) honours `Idempotency-Key`: the same key is the same document.
+`POST` to the Realtime Database (push) does not — a repeated push is a second child, so the SDK
+does not retry that one call unless asked.
+
+The page needs nothing new: its `db.firestore.onList('/sales', …)` callback runs when the batch
+lands, with `day` as a `Date`.
+
+#### The SDK
+
+`tm.artifacts.data(id)` wraps every route above. A `Date` you write is sent as `$date` and a stored
+timestamp comes back as a `Date`; `serverTime` is the server's clock. Pass `{ raw: true }` to get the
+JSON exactly as the wire carries it. `list` answers `{ data, nextCursor }` and `listAll` pages for
+you. The signatures, copied out of the published `sdk.d.ts`:
+
+```ts
+/**
+ * `tm.artifacts.data(id)` — the artifact's own Firestore, Realtime Database
+ * and files. Builds nothing and asks nothing: every method is one request.
+ */
+// tm.artifacts.data(id: string, opts?: ArtifactDataOptions) returns:
+{
+    /** The artifact this handle is for. */
+    artifactId: string;
+    firestore: {
+        /** One document. A missing one answers `{ exists: false, data: null }`. */
+        get: <T = Record<string, unknown>>(path: string, o?: RequestOptions) => Promise<ArtifactDataDoc<T>>;
+        /** Write the document — replacing it, or with `{ merge: true }` merging into what is there. */
+        set: (path: string, data: Record<string, unknown>, o?: RequestOptions & {
+            merge?: boolean;
+        }) => Promise<ArtifactDataWriteResult>;
+        /** Change some fields; keys may be dotted field paths ('stats.count'). `not_found` when the document does not exist. */
+        update: (path: string, patch: Record<string, unknown>, o?: RequestOptions) => Promise<ArtifactDataWriteResult>;
+        /** Delete one document (its subcollections stay, as in Firestore). */
+        delete: (path: string, o?: RequestOptions) => Promise<{
+            ok: true;
+        }>;
+        /** Add a document with a generated id to a collection → `{ id, path }`. */
+        add: (collectionPath: string, data: Record<string, unknown>, o?: RequestOptions) => Promise<{
+            id: string;
+            path: string;
+        }>;
+        /** One page of a collection: `{ data, nextCursor }`. */
+        list: <T = Record<string, unknown>>(collectionPath: string, q?: ArtifactDataListQuery & RequestOptions) => Promise<ArtifactDataPage<T>>;
+        /** `for await (const doc of data.firestore.listAll('scores', { where: [...] }))` — pages for you. */
+        listAll: <T = Record<string, unknown>>(collectionPath: string, q?: ArtifactDataListQuery & RequestOptions) => AsyncGenerator<ArtifactDataDoc<T>>;
+        /**
+         * Up to 400 set / update / delete writes, ALL OR NOTHING — what the
+         * page's driver does not have, and how a nightly job replaces a
+         * dataset without anyone seeing it half-written.
+         */
+        batch: (writes: readonly ArtifactDataWrite[], o?: RequestOptions) => Promise<{
+            ok: true;
+            written: number;
+        }>;
+    };
+    /**
+     * The artifact's Realtime Database. It has no timestamp type: a `Date`
+     * is stored as that instant's epoch milliseconds and `serverTime` as the
+     * server's, so both read back as numbers.
+     */
+    rtdb: {
+        /** The value at a path; null when nothing is there. */
+        get: <T = unknown>(path?: string, o?: RequestOptions) => Promise<T | null>;
+        /** Replace the value at a path. */
+        set: (path: string, value: unknown, o?: RequestOptions) => Promise<{
+            ok: true;
+        }>;
+        /** Update children: an object whose keys may be relative paths ('stats/count'). */
+        update: (path: string, patch: Record<string, unknown>, o?: RequestOptions) => Promise<{
+            ok: true;
+        }>;
+        /**
+         * Add a child under a generated, time-ordered key → `{ key, path }`.
+         *
+         * NOT RETRIED unless you ask (`{ retry: { retries: 2 } }`): a push is the
+         * one write here that is not the same write twice — the server keys
+         * nothing on the Idempotency-Key for it, so a retry after a lost answer
+         * would add a second child. (`firestore.add` is safe: its id is derived
+         * from the key.)
+         */
+        push: (path: string, value: unknown, o?: RequestOptions) => Promise<{
+            key: string;
+            path: string;
+        }>;
+        /** Remove the value at a path (and everything under it). */
+        remove: (path: string, o?: RequestOptions) => Promise<{
+            ok: true;
+        }>;
+    };
+    files: {
+        /**
+         * Put a file (≤ 25 MB). The body is the file itself: bytes, a Blob, or
+         * a string (sent as UTF-8). The content type is `contentType`, else the
+         * Blob's own, else text/plain for a string and
+         * application/octet-stream for bytes.
+         */
+        upload: (path: string, content: Uint8Array | ArrayBuffer | Blob | string, o?: RequestOptions & {
+            contentType?: string;
+        }) => Promise<ArtifactDataFile>;
+        /** A short-lived link to one file; `not_found` when it is not there. */
+        url: (path: string, o?: RequestOptions) => Promise<ArtifactDataFileUrl>;
+        /** Every file under a prefix (recursive; at most 1000). No prefix: all of them. */
+        list: (prefix?: string, o?: RequestOptions) => Promise<ArtifactDataFile[]>;
+        /** Delete one file. Deleting one that is not there is fine. */
+        delete: (path: string, o?: RequestOptions) => Promise<{
+            ok: true;
+        }>;
+    };
+}
+```
+
+```ts
+/**
+ * The server's clock, for a write: `{ updatedAt: serverTime }`. In Firestore
+ * it is stored as a timestamp (and read back as a `Date`); in the RTDB as
+ * epoch milliseconds. Not allowed inside an array.
+ *
+ * It IS the wire escape, frozen — so it survives a JSON round trip or a
+ * structured clone and still means the same thing.
+ */
+export declare const serverTime: ServerTimeSentinel;
+
+/**
+ * The server's limits, repeated here so a call that must fail is refused
+ * BEFORE megabytes are sent. test/data.test.ts compares each with the
+ * constant the server enforces, so they cannot drift.
+ */
+export declare const ARTIFACT_DATA_LIMITS: {
+    /** Writes in one `batch` — all or nothing. */
+    readonly batchWrites: 400;
+    /** `limit` of one `list` page (default 100). */
+    readonly listLimit: 500;
+    /** Filters in one `list`. */
+    readonly whereFilters: 10;
+    /** One file through `files.upload`. */
+    readonly uploadBytes: number;
+}
+
+export interface ArtifactDataOptions {
+    /**
+     * Leave the JSON as the server sent it: timestamps stay
+     * `{ "$date": ISO }` instead of becoming `Date`. Writes are unaffected (a
+     * `Date` you pass is still sent as `$date`).
+     */
+    raw?: boolean | undefined;
+}
+
+/** A document as the API answers it. `path` is in the artifact's own view ('/scores/2026'). */
+export interface ArtifactDataDoc<T = Record<string, unknown>> {
+    id: string;
+    path: string;
+    /** A missing document is `exists: false` with `data: null` — not an error. */
+    exists: boolean;
+    data: T | null;
+}
+
+export type ArtifactDataWhereOp = '<' | '<=' | '==' | '!=' | '>=' | '>' | 'array-contains' | 'in' | 'not-in' | 'array-contains-any';
+
+/** `[field, op, value]` — exactly the driver's `where` item. A `Date` value is a timestamp. */
+export type ArtifactDataWhere = readonly [field: string, op: ArtifactDataWhereOp, value: unknown];
+
+export interface ArtifactDataListQuery {
+    /** At most 10 filters. */
+    where?: readonly ArtifactDataWhere[] | undefined;
+    /** `'field'` (ascending) or `['field', 'desc']`. */
+    orderBy?: string | readonly [field: string, direction?: 'asc' | 'desc'] | undefined;
+    /** Default 100, at most 500. */
+    limit?: number | undefined;
+    /** A document id in this collection: the previous page's `nextCursor`. */
+    startAfter?: string | undefined;
+}
+
+/** One page of a collection. `nextCursor` goes back in as `startAfter`; null at the end. */
+export interface ArtifactDataPage<T = Record<string, unknown>> {
+    data: ArtifactDataDoc<T>[];
+    nextCursor: string | null;
+}
+
+/** One write of a `batch`. `path` is a DOCUMENT path in the artifact's own view. */
+export type ArtifactDataWrite = {
+    op: 'set';
+
+export interface ArtifactDataWriteResult {
+    ok: true;
+    id: string;
+    path: string;
+}
+
+/** One of the artifact's files (paths in its own view). */
+export interface ArtifactDataFile {
+    path: string;
+    size: number;
+    content_type: string | null;
+    updated_at: Iso | null;
+}
+
+/** `files.url()`: a short-lived link — GET it with a plain fetch, no Authorization header. */
+export interface ArtifactDataFileUrl {
+    url: string;
+    expires_at: Iso;
+}
+```
+
+#### MCP
+
+Firestore only — four tools, for a model that reads or fixes a few documents from a chat. Files and
+the Realtime Database go through REST or the SDK.
+
+```text
+artifact_data_get    read   Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { "$date": ISO }.
+artifact_data_list   read   List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).
+artifact_data_set    write  Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.
+artifact_data_batch  write  Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.
+```
+
+They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both ways.
+
+## 9. Version and changelog
 
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   1.1.0
+version   1.3.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
-updated   2026-09-26    the date of the newest changelog entry below
+updated   2026-09-30    the date of the newest changelog entry below
 ```
 
 **How to tell whether you are current.** Fetch `https://taskmanager-example.web.app/integrate.json` — it is small, never cached,
@@ -3142,6 +5523,55 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 1.3.0 — 2026-09-30
+
+- **One token per agent** (§2). An agent token (`kind: 'agent'`) says who the agent is and nothing
+  else: no board, no scope list. It reaches every board and every artifact the agent is on, as that
+  stands at each call. What it may do is the agent's **role** on each board and its
+  `{ build, data }` on each artifact. `GET /v1/me` and `whoami` answer `kind: 'agent'` with `boards`.
+  Generating a new one on the agent's page replaces the old one.
+- **An agent may be a board admin.** `POST /v1/boards/{KEY}/agents` and `tm.boards.setAgent()` take
+  `role: 'admin'`, and an agent token always carries `board:admin` and `webhooks:manage`. An agent
+  admin still cannot manage the board's people and agents, invite, create boards or mint tokens.
+- **Which board.** An agent token on several boards must name the board on a board-scoped call —
+  `?board=KEY` (or `/v1/boards/KEY/…`), the MCP `board` argument, `createClient({ token, board })` /
+  `tm.board('KEY')` — exactly as an account token does. On one board nothing changes. Old board
+  tokens that acted as an agent keep working; once converted they keep their old board as
+  `default_board`, used when a call names none.
+- **Agents on an artifact: build and data, separately.** `PUT /v1/artifacts/{id}/access` and
+  `artifact_share` take `agent_access: { build, data: 'none' | 'read' | 'write' }` for an agent (the
+  old `role: 'editor'` still means both). `Artifact.agent_access` (an agent caller's own) and
+  `members[].agent_access` are new fields.
+- **The artifact's data from outside the page** (§8.10): REST `/v1/artifacts/{id}/data/firestore/…`,
+  `/data/batch` (up to 400 writes, atomic), `/data/rtdb/…` and `/data/files/…`, and four MCP tools
+  (`artifact_data_get`, `artifact_data_list`, `artifact_data_set`, `artifact_data_batch`). The page
+  and the API see the same documents. Timestamps cross as `{ "$date": ISO }`; `{ "$serverTime":
+  true }` in a write is the server's clock.
+- **SDK: `tm.artifacts.data(id)`** — `.firestore.{get,set,update,delete,add,list,listAll,batch}`,
+  `.rtdb.{get,set,update,push,remove}`, `.files.{upload,url,list,delete}`, with `Date` in and out
+  and the exported `serverTime`. `artifacts.share()` takes `{ agent, access: { build, data } }`;
+  `BoardAgentInput.role` admits `'admin'`; `TokenKind` and `Me` gain `'agent'` and `default_board`;
+  the four tools are in `mcpTools()`.
+
+### 1.2.0 — 2026-09-30
+
+- **Artifacts** (§8): small static websites kept and served by TaskManager, each with its own people
+  and its own data, separate from boards. New REST routes under `/v1/artifacts` (create, get, patch,
+  delete, publish a build as a zip, roll back, download the source, share), seven MCP tools
+  (`artifact_list`, `artifact_get`, `artifact_create`, `artifact_publish`, `artifact_rollback`,
+  `artifact_share`, `artifact_source`) and two scopes, `artifacts:read` and `artifacts:write`. An
+  account token reaches the artifacts its person owns or edits; an agent token only the ones that
+  agent was added to.
+- **SDK: `tm.artifacts.*`** — `list`, `get`, `create`, `update`, `delete`, `publish`, `rollback`,
+  `source`, `share`. `publish()` takes a directory (walked and zipped for you on Node, Deno and Bun),
+  the bytes of a zip, or files in memory, and an optional `source` that is kept beside the build. The
+  seven tools are in `mcpTools()` too. Still zero dependencies.
+- **The driver**: `window.BackendDriver` at https://taskmanager-example.web.app/backend-driver/v1/driver.js (also `driver.mjs` and `driver.d.ts`) —
+  the one script an artifact loads for Firestore, the Realtime Database, storage and a key-value
+  store, with a mock backend when the page runs outside TaskManager.
+- **The Claude plugin gains a skill, `artifact`**, with a complete single-file example and a Vite
+  template. `integrate.json` carries the driver URLs and the artifact limits.
 
 ### 1.1.0 — 2026-09-26
 

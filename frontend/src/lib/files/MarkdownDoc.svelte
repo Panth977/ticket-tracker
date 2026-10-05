@@ -92,7 +92,7 @@
     {/if}
     <div class="min-w-0 flex-1 overflow-y-auto">
       {#if mode === 'preview'}
-        <article class="mx-auto max-w-3xl px-6 py-6">
+        <article class="mx-auto max-w-6xl px-6 py-6">
           <Markdown
             source={text}
             {ticketHref}

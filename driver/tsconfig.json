@@ -1,0 +1,17 @@
+{
+  // Typechecks the driver source and its tests against @tm/shared's SOURCE
+  // (the protocol in shared/src/artifacts/driver.ts). Nothing is emitted from
+  // here: build.mjs bundles with esbuild and writes the flat driver.d.ts from
+  // src/api.ts, which has no imports on purpose.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "customConditions": ["@tm/source"],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": ["src", "test"]
+}

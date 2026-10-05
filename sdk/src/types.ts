@@ -22,7 +22,14 @@
 /** An ISO 8601 timestamp with an offset, e.g. `2026-09-23T10:42:00.000Z`. */
 export type Iso = string;
 
-/** What a token may do. Narrows the acting principal's board role; never widens it. */
+/**
+ * What a token may do. Narrows the acting principal's board role; never widens it.
+ *
+ * §AA1: an AGENT token has no scope list to choose — it always carries every
+ * board scope, the two admin scopes and the two artifact scopes, and they
+ * narrow nothing. What an agent may do is its ROLE on each board and its
+ * { build, data } on each artifact.
+ */
 export type Scope =
   | 'board:read'
   | 'members:read'
@@ -48,7 +55,12 @@ export type Scope =
   | 'boards:create'
   | 'boards:admin'
   | 'agents:write'
-  | 'invites:write';
+  | 'invites:write'
+  // Artifacts (docs/plan/artifacts.html §C4). Not about a board: an account
+  // token reaches the artifacts its person owns or edits, an agent token only
+  // the ones that agent was added to.
+  | 'artifacts:read'
+  | 'artifacts:write';
 
 /** A person (a Firebase uid) or an agent (`ag_` + 16 chars). */
 export type PrincipalKind = 'user' | 'agent';
@@ -485,8 +497,16 @@ export interface Me {
    *   'account' an account token ("virtual me"): `board` is null and `boards`
    *             lists every board you are on RIGHT NOW (read at this call)
    *   'oauth'   an OAuth access token, narrowed to `boards` by its grant
+   *   'agent'   §AA1 — an agent token: ONE per agent, like 'account' but for
+   *             the agent. `boards` lists every board the agent is on right
+   *             now; `board` is set when that is exactly one, or when the
+   *             token was converted from a board token and still has its
+   *             default board (`default_board`). On several boards with no
+   *             default, a board-scoped call must name one: `tm.board('ENG')`.
    */
   kind: TokenKind;
+  /** §AA1 — agent tokens converted from a board token: the board used when a call names none. */
+  default_board?: BoardRef | null | undefined;
   /** The token's board; null for credentials spanning several boards. */
   board: BoardRef | null;
   /** Credentials spanning several boards (account tokens, OAuth). */
@@ -499,12 +519,13 @@ export interface Me {
     name: string;
     prefix: string;
     expires_at: Iso | null;
-    kind: 'board' | 'account';
+    /** 'board', 'account' or 'agent' — the same value as the top-level `kind`. */
+    kind: 'board' | 'account' | 'agent';
   } | null;
 }
 
 /** What `tm.kind()` answers (§R2). */
-export type TokenKind = 'board' | 'account' | 'oauth';
+export type TokenKind = 'board' | 'account' | 'oauth' | 'agent';
 
 // ───────────────────────── list envelopes ─────────────────────────
 
@@ -550,4 +571,101 @@ export interface Webhook {
   active: boolean;
   failures: number;
   created_at: Iso;
+}
+
+// ───────────────────────── artifacts (docs/plan/artifacts.html) ─────────────────────────
+
+/** What a principal may do on an artifact: the owner shares and deletes, an editor publishes, a viewer opens it. */
+export type ArtifactRole = 'owner' | 'editor' | 'viewer';
+
+/** One build of an artifact: a version. The newest ten are kept; any of them can be made current. */
+export interface ArtifactBuild {
+  id: string;
+  files: number;
+  /** Unpacked bytes. */
+  bytes: number;
+  message: string | null;
+  /** Who published it — a person or an agent. */
+  by: Actor;
+  created_at: Iso;
+  /** e.g. the absolute-asset-path warning: the publish succeeded, the page may be blank. */
+  warnings: string[];
+  /** A source zip came with it (`tm.artifacts.source(id, build.id)`). */
+  has_source: boolean;
+  /** This is the build people see. */
+  current: boolean;
+}
+
+/**
+ * §AA3 — what an AGENT may do on one artifact: build and data, separately.
+ *   build   publish, roll back, download the source
+ *   data    'none' | 'read' | 'write' — the artifact's database and files,
+ *           through `tm.artifacts.data(id)`
+ * Any of them lets the agent list the artifact and read its description.
+ * `{ build: false, data: 'none' }` means "not on it" (sharing that removes).
+ */
+export interface ArtifactAgentAccess {
+  build: boolean;
+  data: 'none' | 'read' | 'write';
+}
+
+/** A person or agent the artifact is shared with. */
+export interface ArtifactMember {
+  id: string;
+  kind: PrincipalKind;
+  name: string;
+  /** '' for agents. */
+  email: string;
+  /** A person's role. For an agent this is always 'editor' (kept for older clients) — read `agent_access`. */
+  role: ArtifactRole;
+  /** Agents only (§AA3): what this agent may do here. */
+  agent_access?: ArtifactAgentAccess | undefined;
+}
+
+/**
+ * An artifact: a small static website kept and served by TaskManager, with
+ * its own people and its own data. It is NOT on a board.
+ */
+export interface Artifact {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
+  url: string;
+  /**
+   * The role of the principal this credential acts as. An AGENT caller always
+   * reads 'editor' here (kept for older clients); what it may actually do is
+   * `agent_access`.
+   */
+  role: ArtifactRole;
+  /** §AA3 — present only when the caller is an AGENT: its own { build, data } on this artifact. */
+  agent_access?: ArtifactAgentAccess | undefined;
+  /** Viewers may read its data but not write it. */
+  read_only: boolean;
+  archived: boolean;
+  /** The build people see; null until the first publish. */
+  current_build: string | null;
+  owner_id: string;
+  created_at: Iso;
+  updated_at: Iso;
+}
+
+/** `tm.artifacts.get()`: the artifact, its kept builds (newest first) and who it is shared with. */
+export interface ArtifactDetail extends Artifact {
+  builds: ArtifactBuild[];
+  members: ArtifactMember[];
+}
+
+/** `tm.artifacts.source()`: where to GET the source zip from (no Authorization header needed). */
+export interface ArtifactSource {
+  url: string;
+  build: string;
+  expires_at: Iso;
+}
+
+/** `tm.artifacts.share()`: 'granted' — they have the role now; 'invited' — an invite waits for their sign-in; 'removed'. */
+export interface ArtifactShareResult {
+  ok: true;
+  outcome: 'granted' | 'invited' | 'removed';
 }

@@ -23,7 +23,7 @@
  * (shared/api/mcp.ts); `test/mcp.test.ts` compares them item by item, so the
  * two lists cannot drift apart.
  */
-import type { RunReceiptInput, TmClientBase } from './client.js';
+import type { RunReceiptInput, ShareArtifactInput, TmClientBase } from './client.js';
 import type { Scope, TicketState } from './types.js';
 
 /** A JSON Schema (draft 2020-12) object, as MCP's `tools/list` wants it. */
@@ -75,7 +75,18 @@ export type McpToolName =
   | 'set_tasklist'
   | 'update_task_item'
   | 'delete_tasklist'
-  | 'heartbeat';
+  | 'heartbeat'
+  | 'artifact_list'
+  | 'artifact_get'
+  | 'artifact_create'
+  | 'artifact_publish'
+  | 'artifact_rollback'
+  | 'artifact_share'
+  | 'artifact_source'
+  | 'artifact_data_get'
+  | 'artifact_data_list'
+  | 'artifact_data_set'
+  | 'artifact_data_batch';
 
 export interface McpToolsOptions {
   /** Keep only these (names BEFORE rename). */
@@ -219,6 +230,12 @@ const FILE_IDS = list(str(), 'File ids from upload_file, already on this ticket'
 const TICKET_STATES = ['active', 'archived', 'cancelled'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'skipped', 'failed'] as const;
 const AGENT_STATES = ['working', 'idle', 'done', 'error'] as const;
+const ARTIFACT = str('Artifact id, from artifact_list or artifact_create', { minLength: 1 });
+const ARTIFACT_AGENT_DATA = ['none', 'read', 'write'] as const;
+const DATA_DOC_PATH = str(
+  "A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])",
+  { minLength: 1, maxLength: 1024 },
+);
 
 const schema = (
   properties: Record<string, Record<string, unknown>>,
@@ -710,6 +727,235 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
     ),
     run: (tm, a) =>
       tm.heartbeat.send(a.state, { ticket: a.ticket, message: a.message, progress: n(a.progress) }),
+  },
+  // ───────── artifacts (docs/plan/artifacts.html §C2) ─────────
+  artifact_list: {
+    description:
+      'The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+    inputSchema: schema({}),
+    run: (tm) => tm.artifacts.list(),
+  },
+  artifact_get: {
+    description:
+      'One artifact: its meta, its kept builds (newest first) and who it is shared with.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+    inputSchema: schema({ id: ARTIFACT }, ['id']),
+    run: (tm, a) => tm.artifacts.get(s(a.id)),
+  },
+  artifact_create: {
+    description:
+      "Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      {
+        name: str(undefined, { minLength: 1, maxLength: 80 }),
+        description: str(undefined, { maxLength: 500 }),
+        icon: str('One emoji', { maxLength: 16 }),
+      },
+      ['name'],
+    ),
+    run: (tm, a) =>
+      tm.artifacts.create({ name: s(a.name), description: a.description, icon: a.icon }),
+  },
+  artifact_publish: {
+    description:
+      'Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        files: list(
+          {
+            type: 'object',
+            properties: {
+              path: str("Relative to the build root, e.g. 'index.html', 'assets/app.js'", {
+                minLength: 1,
+                maxLength: 1024,
+              }),
+              content: str(),
+              encoding: enumOf(
+                ['utf8', 'base64'],
+                "Default 'utf8'; 'base64' for images and other binaries",
+              ),
+            },
+            required: ['path', 'content'],
+            additionalProperties: false,
+          },
+          'The WHOLE build, not a patch: every file of the site, with an index.html at its root. At most 5 MB in one call. ' +
+            'Load assets by RELATIVE paths (./app.js), never /app.js.',
+          { minItems: 1, maxItems: 2000 },
+        ),
+        message: str('A line saying what changed', { maxLength: 500 }),
+      },
+      ['id', 'files'],
+    ),
+    // /mcp hands the files to the command as they are; from here they go
+    // through REST, which wants a zip — so the SDK zips them. The answer is
+    // the same: the build, plus the URL a person opens.
+    run: async (tm, a) => {
+      const build = await tm.artifacts.publish(s(a.id), a.files, { message: a.message });
+      return { ...build, url: (await tm.artifacts.get(s(a.id))).url };
+    },
+  },
+  artifact_rollback: {
+    description: 'Make a kept build the current one (roll back, or forward again).',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      { id: ARTIFACT, build: str('A build id from artifact_get', { minLength: 1 }) },
+      ['id', 'build'],
+    ),
+    run: (tm, a) => tm.artifacts.rollback(s(a.id), s(a.build)),
+  },
+  artifact_share: {
+    description:
+      'Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        email: str('A person. Give email OR agent.'),
+        agent: str("One of the owner's agents ('ag_…'); say what it may do with agent_access"),
+        role: {
+          ...enumOf(
+            ['editor', 'viewer'],
+            "A person: 'editor', 'viewer', or null to remove. An agent: leave out and give agent_access (or 'editor' = build + write data, null = remove).",
+          ),
+          nullable: true,
+        },
+        agent_access: {
+          type: 'object',
+          description:
+            "Agents only: { build: true|false, data: 'none'|'read'|'write' }. build = publish, roll back, source; data = its database and files. Both off removes the agent.",
+          properties: { build: bool(), data: enumOf(ARTIFACT_AGENT_DATA) },
+          required: ['build', 'data'],
+          additionalProperties: false,
+        },
+      },
+      ['id'],
+    ),
+    // The REST route's own rules (exactly one of email / agent; a role, or
+    // agent_access for an agent) are checked by artifacts.share before anything is sent.
+    run: (tm, a) =>
+      tm.artifacts.share(s(a.id), {
+        ...(a.email !== undefined ? { email: s(a.email) } : {}),
+        ...(a.agent !== undefined ? { agent: s(a.agent) } : {}),
+        ...(a.role !== undefined ? { role: a.role } : {}),
+        ...(a.agent_access !== undefined ? { access: a.agent_access } : {}),
+      } as ShareArtifactInput),
+  },
+  artifact_source: {
+    description:
+      'A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        build: str('Default: the newest build that has a source zip', { minLength: 1 }),
+      },
+      ['id'],
+    ),
+    run: (tm, a) => tm.artifacts.source(s(a.id), a.build),
+  },
+  // ───────── artifact data (docs/plan/agents.html §AA4) — Firestore only ─────────
+  // `raw: true`: a tool answers JSON, so timestamps stay { "$date": ISO } —
+  // exactly what /mcp sends, and what the model writes back.
+  artifact_data_get: {
+    description:
+      "Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { \"$date\": ISO }.",
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+    inputSchema: schema({ id: ARTIFACT, path: DATA_DOC_PATH }, ['id', 'path']),
+    run: (tm, a) => tm.artifacts.data(s(a.id), { raw: true }).firestore.get(s(a.path)),
+  },
+  artifact_data_list: {
+    description:
+      "List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).",
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        path: str("A COLLECTION path in the artifact's own view: 'scores', 'scores/2026/entries'", {
+          minLength: 1,
+          maxLength: 1024,
+        }),
+        where: list(
+          { type: 'array', minItems: 3, maxItems: 3 },
+          "Filters, each [field, op, value]; op is one of < <= == != >= > array-contains in not-in array-contains-any. e.g. [['status','==','open']]",
+          { maxItems: 10 },
+        ),
+        order_by: str("'field' or 'field,desc'", { minLength: 1, maxLength: 600 }),
+        limit: int('Default 100, at most 500', { minimum: 1, maximum: 500 }),
+        start_after: str("A document id: the previous page's next_cursor", { minLength: 1 }),
+      },
+      ['id', 'path'],
+    ),
+    run: async (tm, a) => {
+      const [field, dir] = a.order_by === undefined ? [] : s(a.order_by).split(',').map((x) => x.trim());
+      const page = await tm.artifacts.data(s(a.id), { raw: true }).firestore.list(s(a.path), {
+        where: a.where,
+        orderBy: field ? [field, dir === 'desc' ? 'desc' : 'asc'] : undefined,
+        limit: a.limit,
+        startAfter: a.start_after,
+      });
+      // The wire's own names, as /mcp answers.
+      return { data: page.data, next_cursor: page.nextCursor };
+    },
+  },
+  artifact_data_set: {
+    description:
+      "Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        path: DATA_DOC_PATH,
+        data: record(
+          'The document, as JSON. A timestamp is { "$date": "2026-09-30T05:30:00Z" }; the server\'s clock is { "$serverTime": true }.',
+        ),
+        merge: bool('true merges into the stored document instead of replacing it'),
+      },
+      ['id', 'path', 'data'],
+    ),
+    run: (tm, a) =>
+      tm.artifacts.data(s(a.id), { raw: true }).firestore.set(s(a.path), a.data, { merge: a.merge === true }),
+  },
+  artifact_data_batch: {
+    description:
+      "Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+    inputSchema: schema(
+      {
+        id: ARTIFACT,
+        writes: list(
+          {
+            type: 'object',
+            properties: {
+              op: enumOf(['set', 'update', 'delete']),
+              path: str(undefined, { maxLength: 1024 }),
+              data: record(),
+              merge: bool(),
+            },
+            required: ['op', 'path'],
+            additionalProperties: false,
+          },
+          "Up to 400 writes applied ALL OR NOTHING: { op: 'set', path, data, merge? } | { op: 'update', path, data } | { op: 'delete', path }. How a job replaces a dataset.",
+          { minItems: 1, maxItems: 400 },
+        ),
+      },
+      ['id', 'writes'],
+    ),
+    run: (tm, a) => tm.artifacts.data(s(a.id), { raw: true }).firestore.batch(a.writes),
   },
 };
 

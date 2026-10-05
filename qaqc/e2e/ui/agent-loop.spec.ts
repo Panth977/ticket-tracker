@@ -79,14 +79,8 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
   );
   await expect(page.getByLabel('Role of Builder on Agent loop')).toHaveValue('editor');
 
-  // ── 3. a token that acts as it, from the agent's board row ─────────────────
-  await page.getByRole('link', { name: 'Token', exact: true }).click();
-  await page.waitForURL(/\/account\/tokens/);
-  const form = page.getByRole('dialog', { name: 'New token' });
-  await form.getByLabel('Name').fill('orch-e2e-builder');
-  await expect(form.getByRole('radio', { name: /agent/i })).toBeChecked();
-  await form.getByRole('button', { name: 'Worker' }).click();
-  await form.getByRole('button', { name: 'Create token' }).click();
+  // ── 3. THE agent's token, from its own page (§AA: one token, no board, no checkboxes) ──
+  await page.getByRole('button', { name: 'Generate token' }).click();
   const shown = page.getByRole('dialog', { name: 'Copy your token now' });
   const token = (await shown.locator('pre').first().textContent())!.trim();
   expect(token).toMatch(/^tm_live_/);
@@ -117,7 +111,8 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
       'move_ticket',
     ]),
   );
-  expect(tools).not.toContain('create_ticket'); // Worker has no tickets:create — hidden, not just refused
+  // §AA: the ROLE is the permission — an editor agent creates tickets (there is no Worker preset to hide it).
+  expect(tools).toContain('create_ticket');
 
   const me = payload(await mcp.callTool({ name: 'whoami', arguments: {} }));
   const agentDoc = await read(`agents/${agentId}`);
@@ -169,7 +164,7 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
   const msg = thread.getByRole('article', { name: 'Message from Builder' });
   await expect(msg).toBeVisible();
   await expect(msg.locator('[data-agent-badge]').first()).toBeVisible();
-  await expect(msg).toContainText('via token orch-e2e-builder');
+  await expect(msg).toContainText('via token Builder');
   // Markdown rendered: a heading and a task list, not the raw '##'.
   await expect(msg.getByRole('heading', { name: 'Done' })).toBeVisible();
   await expect(msg.getByRole('checkbox')).toHaveCount(2);

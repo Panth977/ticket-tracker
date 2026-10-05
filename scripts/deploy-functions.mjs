@@ -27,6 +27,14 @@
  * block and the "use pnpm deploy:prod" guards removed. The dev setup keeps
  * using firebase.json (source backend/, lib/ hot-reloaded by the emulator).
  *
+ * TWO HOSTING SITES (docs/plan/artifacts.html §D1). firebase.json names them
+ * by TARGET ('app', 'usercontent'), which the CLI resolves through
+ * .firebaserc — a file that only knows the projects somebody listed in it.
+ * The deploy config therefore carries the real SITE ids instead
+ * (hostingSites): the project's default site, and {project}-usercontent. So
+ * `pnpm deploy:prod --project <other>` needs no .firebaserc entry, and
+ * `--only hosting` deploys both sites (`--only hosting:<site id>` just one).
+ *
  *   node scripts/deploy-functions.mjs [--project <id>] [--verify] [--skip-build]
  *
  *   --verify      then simulate Cloud Build: `npm install --omit=dev` in
@@ -48,14 +56,14 @@ import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DEFAULT_PROJECT } from './project.mjs';
-
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BACKEND = join(ROOT, 'backend');
 const SHARED = join(ROOT, 'shared');
 const LIB = join(BACKEND, 'lib');
 export const OUT = join(BACKEND, 'deploy');
 export const DEPLOY_CONFIG = join(ROOT, 'firebase.deploy.json');
+import { DEFAULT_PROJECT } from './project.mjs';
+
 export { DEFAULT_PROJECT };
 
 // Keep in sync with backend/src/runtime/autoload.ts.
@@ -239,6 +247,18 @@ function copyEnv() {
 
 const GUARD = /deploy-guard\.mjs/;
 
+/**
+ * The Hosting site id behind each target of firebase.json, for a project.
+ * The usercontent site is a SECOND site in the same project and must be
+ * created once by hand (see docs/plan/artifacts.html §D1):
+ *   firebase hosting:sites:create {project}-usercontent --project {project}
+ * backend/src/artifacts/capability.ts derives the same name for the URLs it
+ * hands out (TM_ARTIFACT_ORIGIN overrides both halves together).
+ */
+export function hostingSites(project) {
+  return { app: project, usercontent: `${project}-usercontent` };
+}
+
 /** firebase.json → firebase.deploy.json for `firebase deploy --config`. */
 export function writeDeployConfig(project) {
   const cfg = readJson(join(ROOT, 'firebase.json'));
@@ -251,10 +271,20 @@ export function writeDeployConfig(project) {
       else delete block.predeploy;
     }
   };
-  for (const h of [].concat(cfg.hosting ?? [])) {
+  const sites = hostingSites(project);
+  cfg.hosting = [].concat(cfg.hosting ?? []).map((site) => {
+    const h = { ...site };
     strip(h);
     for (const r of h.rewrites ?? []) if (r.function) r.function.region = region;
-  }
+    if (h.target) {
+      const id = sites[h.target];
+      if (!id) throw new Error(`firebase.json hosting target "${h.target}" has no site (hostingSites)`);
+      // `site` first, in place of `target` — the rest of the entry is untouched.
+      const { target: _target, ...rest } = h;
+      return { site: id, ...rest };
+    }
+    return h;
+  });
   cfg.functions = [].concat(cfg.functions ?? []).map((f) => {
     const g = { ...f };
     strip(g);
@@ -272,7 +302,7 @@ export function writeDeployConfig(project) {
       2,
     ) + '\n',
   );
-  return { region };
+  return { region, sites };
 }
 
 /** Simulate Cloud Build: clean install of the generated package, then load it. */
@@ -332,10 +362,11 @@ async function main() {
   const externals = await bundle(project);
   const pkg = writePackageJson(externals);
   const env = copyEnv();
-  const { region } = writeDeployConfig(project);
+  const { region, sites } = writeDeployConfig(project);
   log(`bundled → ${relative(ROOT, OUT)}/lib/index.js (@tm/shared inlined)`);
   log(`dependencies: ${Object.entries(pkg.dependencies).map(([n, v]) => `${n}@${v}`).join(', ')}`);
   log(`env files: ${env.join(', ') || '(none)'} · region ${region} · config ${relative(ROOT, DEPLOY_CONFIG)}`);
+  log(`hosting sites: ${Object.entries(sites).map(([t, s]) => `${t} → ${s}`).join(', ')}`);
   if (!existsSync(join(BACKEND, `.env.${project}`)))
     log(`\x1b[33mwarning\x1b[0m: backend/.env.${project} not found — functions default to us-central1`);
 

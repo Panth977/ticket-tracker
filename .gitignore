@@ -26,3 +26,7 @@ pubsub-debug.log*
 .emulator-data/
 /.locks/
 .DS_Store
+
+# scripts/migrate-agent-tokens.mjs (§AA6): the ONE place a minted agent token secret is written
+.agent-tokens/
+/frontend/mcp-ui/dist/

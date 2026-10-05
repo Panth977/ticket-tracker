@@ -42,6 +42,7 @@ export const QUEUE_FUNCTIONS: Record<QueueName, string> = {
   deliver: 'queueDeliver',
   webhooks: 'queueWebhooks',
   boardDelete: 'queueBoardDelete',
+  artifactDelete: 'queueArtifactDelete',
   export: 'queueExport',
   email: 'queueEmail',
 };

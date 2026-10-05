@@ -23,6 +23,24 @@ const icons: Plugin = {
   },
 };
 
+// window.BackendDriver (artifacts.html §E1) is served from static/backend-driver
+// and committed there so `vite dev` has it; rebuilding it with every production
+// build is what keeps the committed copy from drifting behind driver/src or the
+// protocol in @tm/shared. A child process, for the same reason as the icons:
+// esbuild stays the driver package's dependency, not the SPA's.
+const BUILD_DRIVER = fileURLToPath(new URL('../driver/build.mjs', import.meta.url));
+let driverBuilt = false;
+const driver: Plugin = {
+  name: 'tm-backend-driver',
+  apply: 'build',
+  buildStart() {
+    if (driverBuilt) return;
+    driverBuilt = true;
+    const r = spawnSync(process.execPath, [BUILD_DRIVER, '--quiet'], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error('driver/build.mjs failed — static/backend-driver is stale');
+  },
+};
+
 // In dev, requests the SPA makes to the backend "doors" are forwarded to the
 // Functions emulator's `api` function (same paths firebase.json rewrites in prod).
 // Ports are this project's dedicated emulator block (firebase.json).
@@ -46,7 +64,7 @@ const bypass = (req: { url?: string }) =>
     : undefined;
 
 export default defineConfig({
-  plugins: [icons, tailwindcss(), sveltekit()],
+  plugins: [icons, driver, tailwindcss(), sveltekit()],
   // "@tm/source" resolves @tm/shared to its TypeScript source: live HMR, no prebuild.
   resolve: { conditions: ['@tm/source', ...defaultClientConditions] },
   ssr: {

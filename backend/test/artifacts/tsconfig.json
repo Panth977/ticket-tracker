@@ -1,0 +1,7 @@
+{
+  // Typechecks the artifact tests (vitest does not): npx tsc -p test/artifacts
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../.." },
+  "include": ["../../src", "../harness", "../boards/helpers.ts", "../platform/helpers.ts", "."],
+  "exclude": []
+}

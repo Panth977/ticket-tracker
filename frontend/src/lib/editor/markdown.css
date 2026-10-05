@@ -29,6 +29,8 @@
   padding: 0.3em 0.65em;
   text-align: left;
   vertical-align: top;
+  /* .tm-prose's "anywhere" lets a column shrink to one letter ("Categor|y"); break only words that can't fit */
+  overflow-wrap: break-word;
 }
 .tm-md th {
   background: var(--tm-surface-2);

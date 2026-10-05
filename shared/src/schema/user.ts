@@ -10,6 +10,7 @@ import {
   NotifyEventSchema,
   ADMIN_SCOPES,
   isAccountScope,
+  isAgentTokenScopes,
   PrincipalRefSchema,
   ScopeListInputSchema,
   ScopeSchema,
@@ -19,6 +20,7 @@ import {
   UidSchema,
   ViaSchema,
 } from '../types/index.js';
+import { ArtifactIdSchema } from '../artifacts/schema.js';
 
 export const THEMES = ['system', 'light', 'dark'] as const;
 export const ThemeSchema = z.enum(THEMES);
@@ -125,6 +127,12 @@ export const InboxItemSchema = z.object({
   readAt: MillisSchema.nullable(),
   archivedAt: MillisSchema.nullable(),
   snoozedUntil: MillisSchema.nullable(),
+  /**
+   * A row about an ARTIFACT (shared with you, an invite to one, a new build
+   * on one you own): boardId is ARTIFACT_INVITE_BOARD_ID and this says which
+   * artifact. Absent on every board row.
+   */
+  artifactId: ArtifactIdSchema.optional(),
 });
 export type InboxItem = z.infer<typeof InboxItemSchema>;
 /** Fields the owner may write directly (firestore.rules onlyChanges). */
@@ -148,12 +156,26 @@ export const READ_CLIENT_FIELDS = ['readAt', 'boardId', 'ticketId'] as const;
  * users/{uid}/apiKeys/{keyId} — API KEY v2 (docs/plan/agents.html §E).
  * ONE BOARD EACH, optionally ACTING AS AN AGENT the owner owns. Stored as a
  * hash, shown once. What it may do = scopes ∩ can() for its principal on
- * `boardId`. Archiving the agent, or removing it from the board, revokes it.
+ * `boardId`. Archiving the agent revokes it; removing the agent from the board
+ * revokes a (legacy) board token for that board — never a §AA agent token,
+ * which belongs to the agent and not to a board.
  *
  * Phase-1 keys (boardIds, no actsAs) are no longer valid documents; the
  * middleware treats a doc that fails this schema as revoked.
  */
-export const API_KEY_KINDS = ['board', 'account'] as const;
+/**
+ * §AA1 adds the THIRD kind, 'agent': ONE TOKEN PER AGENT. It acts as the
+ * agent, has no board of its own (boardId null) and no checkbox list — its
+ * scopes are always AGENT_TOKEN_SCOPES. It reaches every board and every
+ * artifact the agent is on, as that stands at each call, exactly as an
+ * account token does for a person. What it may DO there is the agent's role
+ * on that board / its { build, data } on that artifact.
+ *
+ * A kind 'board' row acting as an agent (every agent token before §AA) is
+ * still a valid document and still resolves as before, until
+ * scripts/migrate-agent-tokens.mjs converts it (§AA6).
+ */
+export const API_KEY_KINDS = ['board', 'account', 'agent'] as const;
 export const ApiKeyKindSchema = z.enum(API_KEY_KINDS);
 export type ApiKeyKind = z.infer<typeof ApiKeyKindSchema>;
 
@@ -168,8 +190,16 @@ export const ApiKeySchema = z
      * on, as that stands at each call.
      */
     kind: ApiKeyKindSchema.default('board'),
-    /** Exactly one board the owner is on; null for an account token. */
+    /** Exactly one board the owner is on; null for an account token and for an agent token (§AA1). */
     boardId: BoardIdSchema.nullable(),
+    /**
+     * §AA1 / §AA6 — kind 'agent' only, and only on a token that was CONVERTED
+     * from an old board token: the board it used to be for. A call that needs
+     * a board and names none uses it (when the agent is on several boards and
+     * is still on this one), so nothing that ran before the conversion breaks.
+     * A freshly generated agent token has none.
+     */
+    defaultBoardId: BoardIdSchema.nullable().optional(),
     /** Who the token's changes are authored by: the owner, or one of their agents on that board. */
     actsAs: PrincipalRefSchema,
     /** New vocabulary only (TOKEN_SCOPES, + ADMIN_SCOPES / ACCOUNT_SCOPES where allowed). */
@@ -184,22 +214,53 @@ export const ApiKeySchema = z
     revokedAt: MillisSchema.nullable(),
     /** Why it stopped working — for the Tokens list. */
     revokedReason: z
-      .enum(['owner', 'agentArchived', 'agentRemoved', 'ownerLeft'])
+      // 'rotated' (§AA1): generating a new agent token replaced this one.
+      .enum(['owner', 'agentArchived', 'agentRemoved', 'ownerLeft', 'rotated'])
       .nullable()
       .optional(),
     createdAt: MillisSchema,
   })
   .superRefine((k, ctx) => {
+    // §AA changed this rule: it now applies ONLY to a legacy kind 'board' key
+    // acting as an agent. A kind 'agent' token always carries the admin
+    // scopes (AGENT_TOKEN_SCOPES) — the agent's role decides, not the token.
     if (
+      k.kind === 'board' &&
       k.actsAs.kind === 'agent' &&
       k.scopes.some((s) => (ADMIN_SCOPES as readonly string[]).includes(s))
     )
       ctx.addIssue({
         code: 'custom',
         path: ['scopes'],
-        message: 'An agent token cannot carry admin scopes',
+        message: 'A board token acting as an agent cannot carry admin scopes',
       });
-    if (k.kind === 'account') {
+    if (k.kind !== 'agent' && k.defaultBoardId !== undefined && k.defaultBoardId !== null)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['defaultBoardId'],
+        message: 'Only an agent token has a default board',
+      });
+    if (k.kind === 'agent') {
+      // §AA1: who the agent is, and nothing else.
+      if (k.actsAs.kind !== 'agent')
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actsAs'],
+          message: 'An agent token acts as an agent',
+        });
+      if (k.boardId !== null)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['boardId'],
+          message: 'An agent token has no board of its own',
+        });
+      if (!isAgentTokenScopes(k.scopes))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopes'],
+          message: 'An agent token carries exactly AGENT_TOKEN_SCOPES',
+        });
+    } else if (k.kind === 'account') {
       // "Virtual me": no board of its own, and always the person — an agent
       // lives on ONE board, so an account-wide agent token is a contradiction.
       if (k.boardId !== null)
@@ -232,7 +293,7 @@ export const ApiKeySchema = z
 export type ApiKey = z.infer<typeof ApiKeySchema>;
 /** A stored row's kind, tolerating phase-2 rows that predate the field. */
 export const apiKeyKind = (k: Pick<Partial<ApiKey>, 'kind'>): ApiKeyKind =>
-  k.kind === 'account' ? 'account' : 'board';
+  k.kind === 'account' ? 'account' : k.kind === 'agent' ? 'agent' : 'board';
 export const API_KEY_PREFIX = 'tm_live_';
 export const DEFAULT_API_KEY_LIMITS = { perMin: 60, perDay: 10_000 } as const;
 /** The token form's Expires choices (null = never). */

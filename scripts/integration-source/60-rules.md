@@ -65,26 +65,30 @@ That makes the cost of your loop entirely your responsibility. In order of how m
 - **Page properly.** `limit` up to 200 on lists, then follow `next_cursor` — but never run a
   `limit=200` list on a timer with no `updated_since`. That is a full scan of the board, forever.
 
-### 6.4 Scopes never exceed the role
+### 6.4 The role is the permission
 
 Worth saying twice, because it is the most common surprise:
 
-> A token's power is **its scopes ∩ what its principal's board role allows**. A scope cannot grant
-> anything the role does not already have.
+> **An agent may do on a board exactly what its role there allows.** Its token is one per agent,
+> says only who it is, and neither adds nor removes anything.
 
-- `viewer` → reads only, whatever the token says.
-- `commenter` → reads, comments, files, questions, task lists; may move a ticket **only** within its
-  StageGrant, if it was given one.
-- `editor` → everything except board settings.
-- `admin` → people, no agent is ever one.
+```text
+{{gen:agentroles}}
+```
 
-So `403 forbidden` from a call whose scope you know you hold means the **role** is the problem: ask
-the board admin to raise it, or accept the limit. Read `role` and `scopes` from `GET /v1/me` at
-startup and decide what your orchestrator is allowed to attempt, rather than discovering it in
-production.
+So `403 forbidden` means the **role** is the problem (or, for a commenter's move, its StageGrant):
+ask the agent's owner or a board admin to raise it, or accept the limit. Read `boards`, `board` and
+`role` from `GET /v1/me` at startup and decide what your orchestrator is allowed to attempt, rather
+than discovering it in production. An agent that is on several boards has a role on each: `role` in
+`/v1/me` is for the board a call that names none lands on, and `GET /v1/board?board=ENG` lists the
+members of any other with theirs.
 
-Archiving an agent, removing it from the board, or revoking a token all take effect on the **next
-request** — expect a `401` mid-run and stop cleanly.
+A **person's** token (a board token, an account token) is different in one way: it carries the
+scopes that person ticked, and its power is *scopes ∩ role* — a scope never widens a role.
+
+Archiving an agent or regenerating its token takes effect on the **next request** — expect a `401`
+mid-run and stop cleanly. Taking the agent (or its owner) off a board is not a dead token: that
+board answers `404` from then on, and the others carry on.
 
 ### 6.5 Files
 

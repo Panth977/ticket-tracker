@@ -281,6 +281,10 @@ async function checkClaude() {
     ['/lib/claude-plugin/README.md', 'text/markdown; charset=utf-8', 'no-cache'],
     ['/lib/claude-plugin/skills/taskmanager/SKILL.md', 'text/markdown; charset=utf-8', 'no-cache'],
     ['/lib/claude-plugin/commands/tm-inbox.md', 'text/markdown; charset=utf-8', 'no-cache'],
+    // The `artifact` skill (docs/plan/artifacts.html §C2) and one file of the
+    // Vite template it bundles — a nested folder the plugin zip also carries.
+    ['/lib/claude-plugin/skills/artifact/SKILL.md', 'text/markdown; charset=utf-8', 'no-cache'],
+    ['/lib/claude-plugin/skills/artifact/template/vite.config.js', 'text/javascript; charset=utf-8', 'no-cache'],
     // No cache/CORS assertion on this one: hosting's header globs do not match a
     // path segment that starts with a dot, so `.claude-plugin/**` gets the
     // defaults. It is still SERVED (the `ignore` list no longer drops dotfiles),

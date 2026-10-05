@@ -2,7 +2,7 @@
  * createClient — every /v1 route as a typed function (docs/plan/agents.html §M).
  *
  *   const tm = createClient({ token: process.env.TM_TOKEN })
- *   const me = await tm.me()            // one board, one identity: the token decides
+ *   const me = await tm.me()            // who the token is, and which boards it reaches
  *
  * Inputs are camelCase and forgiving (a task list takes plain strings, a
  * question's options take plain strings, a file takes text or bytes); answers
@@ -13,7 +13,10 @@
  * §R2: an ACCOUNT token reaches every board you are on — `tm.kind()` says
  * which you hold, `tm.boards.list()` says what it reaches, and
  * `tm.board('ENG')` gives you this very same API pinned to one board.
+ * §AA1: an AGENT token (one per agent) works the same way for the agent's
+ * boards — on several boards, name the board.
  */
+import { createArtifactData, type ArtifactData, type ArtifactDataOptions } from './data.js';
 import { TmError } from './errors.js';
 import {
   Http,
@@ -25,11 +28,18 @@ import {
 } from './http.js';
 import { readSse } from './sse.js';
 import { createWatcher, type LiveCredential, type WatchOptions, type Watcher } from './watch.js';
+import { fromBase64, isZip, readDirectory, realPathOrNull, zipFiles, zipPath, type ZipEntry } from './zip.js';
 import { workLoop, type WorkHandler, type WorkOptions, type WorkSummary } from './work.js';
 import type {
   Agent,
   AgentState,
   AgentStatus,
+  Artifact,
+  ArtifactAgentAccess,
+  ArtifactBuild,
+  ArtifactDetail,
+  ArtifactShareResult,
+  ArtifactSource,
   Board,
   BoardRole,
   EventPage,
@@ -174,8 +184,13 @@ export interface CreateBoardInput {
 export interface BoardAgentInput {
   /** `ag_…` from `agents.create()`. */
   agent: string;
-  /** null removes the agent from the board. Never 'admin'. */
-  role: Exclude<BoardRole, 'admin'> | null;
+  /**
+   * null removes the agent from the board. §AA2: an agent may be 'admin' —
+   * board settings, stages, fields, webhooks, restore. What an agent admin
+   * still cannot do is what no agent can: manage the board's people and
+   * agents, invite, create boards, mint tokens.
+   */
+  role: BoardRole | null;
   /** Commenters only: the stages it may move tickets between. null clears it. */
   stageGrant?: { stages: string[]; assignedOnly?: boolean } | null;
 }
@@ -283,6 +298,125 @@ export interface StreamOptions extends EventQuery {
   maxReconnects?: number | undefined;
 }
 
+// ───────────────────────── artifacts: inputs ─────────────────────────
+
+/**
+ * `artifacts.create()` (`artifacts:write`). With an account token you become
+ * the owner; with an agent token the agent's OWNER does, and the agent is on
+ * it with { build: true, data: 'write' }.
+ */
+export interface CreateArtifactInput {
+  /** ≤ 80 characters. */
+  name: string;
+  /** ≤ 500 characters. */
+  description?: string | null;
+  /** One emoji. */
+  icon?: string | null;
+}
+
+/** `artifacts.update()` — owner only. Send only what changes. */
+export interface UpdateArtifactInput {
+  name?: string;
+  description?: string | null;
+  icon?: string | null;
+  /** Viewers may read the artifact's data but not write it. */
+  readOnly?: boolean;
+  /** Archive (no data writes, off the sidebar) or restore. */
+  archived?: boolean;
+}
+
+/** One file of a build given in memory. */
+export interface ArtifactFile {
+  /** Relative to the build root: 'index.html', 'assets/app.js'. */
+  path: string;
+  content: string | Uint8Array | ArrayBuffer | Blob;
+  /** For a string `content`: 'utf8' (default) or 'base64' for images and other binaries. */
+  encoding?: 'utf8' | 'base64';
+}
+
+/**
+ * What `artifacts.publish()` takes as the BUILD — the folder with an
+ * index.html at its root:
+ *
+ *   './dist'                      a directory (Node, Deno, Bun): walked and zipped for you
+ *   Uint8Array | ArrayBuffer | Blob   bytes that are ALREADY a zip
+ *   [{ path, content }]           files in memory, zipped for you (works in a browser)
+ *   { 'index.html': '<!doctype…' }    the same, as a record of path → content
+ */
+export type ArtifactBuildInput =
+  | string
+  | Uint8Array
+  | ArrayBuffer
+  | Blob
+  | readonly ArtifactFile[]
+  | Readonly<Record<string, string | Uint8Array | ArrayBuffer | Blob>>;
+
+export interface PublishArtifactOptions extends RequestOptions {
+  /**
+   * The SOURCE, kept beside the build and never served — what the next agent
+   * downloads to carry on (`artifacts.source()`). A directory is zipped for
+   * you, leaving out `ARTIFACT_SOURCE_SKIP_DIRS` (node_modules, .git, dist,
+   * build …), `.env` files (a source zip is handed to other people) and any
+   * file over 2 MB; zip bytes or a Blob are sent as they are.
+   */
+  source?: string | Uint8Array | ArrayBuffer | Blob | undefined;
+  /** A line saying what changed (≤ 500 characters). */
+  message?: string | undefined;
+}
+
+/**
+ * `artifacts.share()`: exactly one of `email` (a person) or `agent` (one of
+ * the owner's agents).
+ *
+ *   { email, role: 'editor' | 'viewer' | null }        a person; null removes
+ *   { agent, access: { build, data } }                 §AA3 — an agent: build
+ *                                                      and data, separately;
+ *                                                      { build: false, data: 'none' } removes
+ *   { agent, role: 'editor' | null }                   the old form, still
+ *                                                      accepted: 'editor' is
+ *                                                      { build: true, data: 'write' }
+ */
+export type ShareArtifactInput =
+  | { email: string; agent?: undefined; role: 'editor' | 'viewer' | null; access?: undefined }
+  | { agent: string; email?: undefined; access: ArtifactAgentAccess; role?: 'editor' | null | undefined }
+  | { agent: string; email?: undefined; role: 'editor' | null; access?: undefined };
+
+/**
+ * The server's limits on one publish, repeated here so an oversized build is
+ * refused BEFORE a 26 MB upload rather than after it. test/artifacts.test.ts
+ * compares each with the constant the server enforces, so they cannot drift.
+ */
+export const ARTIFACT_LIMITS = {
+  /** The build zip, compressed. */
+  zipBytes: 26 * 1024 * 1024,
+  /** The build, unpacked. */
+  buildBytes: 25 * 1024 * 1024,
+  buildFiles: 2000,
+  /** The whole request: build zip + source zip ride together, and Cloud Functions stops at 32 MB. */
+  requestBytes: 31 * 1024 * 1024,
+} as const;
+
+/** Directory names left out of a source zip made from a folder. */
+export const ARTIFACT_SOURCE_SKIP_DIRS: readonly string[] = [
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.svelte-kit',
+  '.next',
+  '.nuxt',
+  '.vite',
+  '.cache',
+  '.turbo',
+  'coverage',
+];
+/** One source file over this is left out: it is a video or a database, not source. */
+export const ARTIFACT_SOURCE_MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** A publish uploads megabytes; the 30 s default would cut a slow link off mid-body. */
+const PUBLISH_TIMEOUT_MS = 180_000;
+/** Finder and Explorer litter: never part of a build or of its source. */
+const JUNK_FILES = new Set(['.DS_Store', 'Thumbs.db']);
+
 // ───────────────────────── small helpers ─────────────────────────
 
 const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -370,6 +504,124 @@ function taskItems(items: readonly (string | TaskItemInput)[]): unknown[] {
       ? { title: i }
       : defined({ id: i.id, title: i.title, status: i.status, note: i.note }),
   );
+}
+
+const asBlob = (bytes: Uint8Array): Blob => new Blob([bytes as BlobPart], { type: 'application/zip' });
+
+const tooLarge = (message: string): TmError =>
+  new TmError({ code: 'too_large', status: 0, message: `artifacts.publish: ${message}` });
+
+const mb = (n: number): string => `${(n / 1024 / 1024).toFixed(1)} MB`;
+
+async function fileBytes(f: ArtifactFile): Promise<Uint8Array> {
+  const c = f.content;
+  if (typeof c === 'string')
+    return f.encoding === 'base64' ? fromBase64(c) : new TextEncoder().encode(c);
+  if (c instanceof Uint8Array) return c;
+  if (c instanceof ArrayBuffer) return new Uint8Array(c);
+  if (typeof Blob !== 'undefined' && c instanceof Blob) return new Uint8Array(await c.arrayBuffer());
+  throw new TypeError(`artifacts.publish: '${f.path}' has no usable content`);
+}
+
+/**
+ * The checks the server makes on an unpacked build, made first on a build WE
+ * are about to zip — where the answer costs nothing, and can name the folder.
+ * (Zip bytes handed to us go up unopened; the server is the judge of those.)
+ */
+function checkBuild(entries: readonly ZipEntry[], what: string): void {
+  if (!entries.length) throw new TypeError(`artifacts.publish: ${what} has no files in it`);
+  const paths = entries.map((e) => zipPath(e.path));
+  // An index.html at the root — or in a single top folder, which the server strips.
+  const tops = new Set(paths.map((p) => (p.includes('/') ? p.slice(0, p.indexOf('/')) : '')));
+  const only = tops.size === 1 ? [...tops][0]! : '';
+  if (!paths.includes(only ? `${only}/index.html` : 'index.html'))
+    throw new TypeError(
+      `artifacts.publish: ${what} has no index.html at its root — publish the BUILD folder (Vite: dist/), not the project`,
+    );
+  if (entries.length > ARTIFACT_LIMITS.buildFiles)
+    throw tooLarge(`${what} has ${entries.length} files; a build is at most ${ARTIFACT_LIMITS.buildFiles}`);
+  const bytes = entries.reduce((n, e) => n + e.bytes.length, 0);
+  if (bytes > ARTIFACT_LIMITS.buildBytes)
+    throw tooLarge(`${what} is ${mb(bytes)} unpacked; a build is at most ${mb(ARTIFACT_LIMITS.buildBytes)}`);
+}
+
+/** Any `ArtifactBuildInput` → the bytes of one zip. */
+async function buildZip(input: ArtifactBuildInput): Promise<Uint8Array> {
+  if (typeof input === 'string') {
+    const entries = await readDirectory(
+      input,
+      { skipDirs: ['__MACOSX'], skipFile: (name) => JUNK_FILES.has(name) },
+      'artifacts.publish',
+    );
+    checkBuild(entries, `'${input}'`);
+    return zipFiles(entries);
+  }
+  const given =
+    input instanceof Uint8Array
+      ? input
+      : input instanceof ArrayBuffer
+        ? new Uint8Array(input)
+        : typeof Blob !== 'undefined' && input instanceof Blob
+          ? new Uint8Array(await input.arrayBuffer())
+          : null;
+  if (given) {
+    if (!isZip(given))
+      throw new TypeError(
+        'artifacts.publish: those bytes are not a zip — pass a directory path or a list of { path, content } files to have them zipped',
+      );
+    return given;
+  }
+  if (typeof input !== 'object' || input === null)
+    throw new TypeError('artifacts.publish: give a directory path, zip bytes, or files');
+  const files: ArtifactFile[] = Array.isArray(input)
+    ? [...(input as readonly ArtifactFile[])]
+    : Object.entries(input as Record<string, ArtifactFile['content']>).map(([path, content]) => ({
+        path,
+        content,
+      }));
+  const entries: ZipEntry[] = [];
+  for (const f of files) entries.push({ path: f.path, bytes: await fileBytes(f) });
+  checkBuild(entries, 'the file list');
+  return zipFiles(entries);
+}
+
+/** `source` → zip bytes. A directory loses what is not source; the build folder inside it goes too. */
+async function sourceZip(
+  source: NonNullable<PublishArtifactOptions['source']>,
+  buildDir: string | undefined,
+): Promise<Uint8Array> {
+  if (typeof source !== 'string') {
+    const bytes =
+      source instanceof Uint8Array
+        ? source
+        : source instanceof ArrayBuffer
+          ? new Uint8Array(source)
+          : new Uint8Array(await source.arrayBuffer());
+    if (!isZip(bytes))
+      throw new TypeError('artifacts.publish: `source` must be a directory path or the bytes of a zip');
+    return bytes;
+  }
+  // A build folder with an unusual name ('out', 'public') is not in the skip
+  // list, so it is recognised by WHERE it is instead.
+  const buildReal = buildDir === undefined ? null : await realPathOrNull(buildDir);
+  const sourceReal = await realPathOrNull(source);
+  const entries = await readDirectory(
+    source,
+    {
+      skipDirs: ARTIFACT_SOURCE_SKIP_DIRS,
+      // Publishing the project folder itself as the build: keep its files as source.
+      skipRealPaths: buildReal && buildReal !== sourceReal ? [buildReal] : [],
+      // .env and .env.local hold secrets, and a source zip is what the NEXT
+      // person downloads. .env.example is documentation and stays.
+      skipFile: (name) =>
+        JUNK_FILES.has(name) || (/^\.env(\..+)?$/.test(name) && !/\.(example|sample|template)$/.test(name)),
+      maxFileBytes: ARTIFACT_SOURCE_MAX_FILE_BYTES,
+    },
+    'artifacts.publish',
+  );
+  if (!entries.length)
+    throw new TypeError(`artifacts.publish: the source folder '${source}' has no files to keep`);
+  return zipFiles(entries);
 }
 
 /** A ticket key in a URL path. Keys are `ENG-42`, but never trust the caller. */
@@ -713,6 +965,55 @@ function createClientBase(options: ClientOptions) {
         o,
       ),
   });
+
+  // ── artifacts (docs/plan/artifacts.html §C) ──────────────────────────────
+
+  /**
+   * PUBLISH. One request: the build zip as the body, or — when a source comes
+   * with it — multipart with the parts `build` and `source`. The zips are made
+   * (and checked) before anything is sent, so the Idempotency-Key and every
+   * retry carry the very same bytes.
+   */
+  async function publishArtifact(
+    id: string,
+    input: ArtifactBuildInput,
+    o: PublishArtifactOptions = {},
+  ): Promise<ArtifactBuild> {
+    const build = await buildZip(input);
+    if (build.length > ARTIFACT_LIMITS.zipBytes)
+      throw tooLarge(`the build zip is ${mb(build.length)}; at most ${mb(ARTIFACT_LIMITS.zipBytes)}`);
+    const source =
+      o.source === undefined
+        ? undefined
+        : await sourceZip(o.source, typeof input === 'string' ? input : undefined);
+    // 64 kB of headroom for the multipart framing.
+    if (source && build.length + source.length > ARTIFACT_LIMITS.requestBytes - 65_536)
+      throw tooLarge(
+        `build (${mb(build.length)}) + source (${mb(source.length)}) is over the ${mb(ARTIFACT_LIMITS.requestBytes)} ` +
+          'one request may carry — publish without `source`, or pass a smaller source zip',
+      );
+
+    let rawBody: Blob | FormData;
+    let headers: Record<string, string> | undefined;
+    if (source) {
+      // No content-type header: fetch writes multipart/form-data WITH its boundary.
+      const form = new FormData();
+      form.append('build', asBlob(build), 'build.zip');
+      form.append('source', asBlob(source), 'source.zip');
+      rawBody = form;
+    } else {
+      rawBody = asBlob(build);
+      headers = { 'content-type': 'application/zip' };
+    }
+    return http.json<ArtifactBuild>({
+      method: 'POST',
+      path: `/artifacts/${seg(id)}/builds`,
+      query: { message: o.message, source: source ? 1 : undefined },
+      rawBody,
+      headers,
+      options: { ...req(o), timeoutMs: o.timeoutMs ?? PUBLISH_TIMEOUT_MS },
+    });
+  }
 
   return {
     /** The build this client came from (stamped in at build time). */
@@ -1059,6 +1360,116 @@ function createClientBase(options: ClientOptions) {
         write<void>('DELETE', `/webhooks/${seg(id)}`, undefined, o),
     },
 
+    /**
+     * ARTIFACTS (docs/plan/artifacts.html) — small static websites kept and
+     * served by TaskManager, each with its own people and its own data. They
+     * are not on a board, so nothing here takes one: an ACCOUNT token reaches
+     * every artifact you own or edit, an AGENT token only the artifacts that
+     * agent is on — and there what it may do is its `agent_access`
+     * { build, data } (§AA3): `build` to publish, roll back and read the
+     * source; `data` to use `artifacts.data(id)`. An agent never owns, shares,
+     * renames or deletes an artifact. Scopes: `artifacts:read` (list, get,
+     * source, data reads) and `artifacts:write` (everything else).
+     *
+     *   const art = await tm.artifacts.create({ name: 'Sales dashboard' });
+     *   const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
+     *   await tm.artifacts.share(art.id, { email: 'priya@example.com', role: 'viewer' });
+     *   // people open it at art.url — {app}/x/{id}
+     */
+    artifacts: {
+      /** Every artifact this credential can reach. */
+      list: async (o?: RequestOptions): Promise<Artifact[]> =>
+        (await get<Page<Artifact>>('/artifacts', undefined, o)).data,
+      /** One artifact, with its kept builds (newest first) and who it is shared with. */
+      get: (id: string, o?: RequestOptions): Promise<ArtifactDetail> =>
+        get<ArtifactDetail>(`/artifacts/${seg(id)}`, undefined, o),
+      /** Create an empty artifact; you become its owner (with an agent token: the agent's owner does, and the agent may build it and write its data). */
+      create: (input: CreateArtifactInput, o?: RequestOptions): Promise<Artifact> =>
+        write<Artifact>(
+          'POST',
+          '/artifacts',
+          defined({ name: input.name, description: input.description, icon: input.icon }),
+          o,
+        ),
+      /** Rename, describe, set read-only for viewers, archive or restore (owner). */
+      update: (id: string, patch: UpdateArtifactInput, o?: RequestOptions): Promise<Artifact> =>
+        write<Artifact>(
+          'PATCH',
+          `/artifacts/${seg(id)}`,
+          defined({
+            name: patch.name,
+            description: patch.description,
+            icon: patch.icon,
+            read_only: patch.readOnly,
+            archived: patch.archived,
+          }),
+          o,
+        ),
+      /** Delete the artifact with its builds, its files and ALL its data (owner). There is no undo. */
+      delete: (id: string, o?: RequestOptions): Promise<void> =>
+        write<void>('DELETE', `/artifacts/${seg(id)}`, undefined, o),
+      /**
+       * Publish a build; it becomes the current one at once and never touches
+       * the artifact's data. `input` is the build FOLDER (the one with
+       * index.html at its root): a directory path, the bytes of a zip, or
+       * files in memory — see `ArtifactBuildInput`. `build.warnings` names
+       * anything that will show a blank page (absolute `/assets/…` paths:
+       * set Vite's `base: './'`).
+       */
+      publish: publishArtifact,
+      /** Make a kept build the current one — back, or forward again. */
+      rollback: (id: string, buildId: string, o?: RequestOptions): Promise<Artifact> =>
+        write<Artifact>('POST', `/artifacts/${seg(id)}/builds/${seg(buildId)}/current`, undefined, o),
+      /**
+       * A short-lived URL for the source zip published beside a build — the
+       * newest build that has one, unless `buildId` names another. GET it
+       * with a plain fetch: it needs no Authorization header.
+       */
+      source: (id: string, buildId?: string, o?: RequestOptions): Promise<ArtifactSource> =>
+        get<ArtifactSource>(`/artifacts/${seg(id)}/source`, { build: buildId }, o),
+      /**
+       * Share with a person (by email) or one of your agents, change what
+       * they may do, or remove them. Owner only — never an agent. A person
+       * takes a `role` (null removes; with no account yet they are invited:
+       * `outcome: 'invited'`). An agent takes `access: { build, data }` (§AA3;
+       * `{ build: false, data: 'none' }` removes it).
+       */
+      share: (id: string, input: ShareArtifactInput, o?: RequestOptions): Promise<ArtifactShareResult> => {
+        if ((input.email === undefined) === (input.agent === undefined))
+          throw new TypeError('artifacts.share: give exactly one of email or agent');
+        if (input.email !== undefined && input.access !== undefined)
+          throw new TypeError('artifacts.share: `access` is for an agent — a person takes a role');
+        if (input.role === undefined && input.access === undefined)
+          throw new TypeError('artifacts.share: give role — or, for an agent, access: { build, data }');
+        return write<ArtifactShareResult>(
+          'PUT',
+          `/artifacts/${seg(id)}/access`,
+          defined({
+            email: input.email,
+            agent: input.agent,
+            role: input.role,
+            agent_access: input.access
+              ? { build: input.access.build, data: input.access.data }
+              : undefined,
+          }),
+          o,
+        );
+      },
+      /**
+       * §AA4 — the artifact's own Firestore, Realtime Database and files,
+       * from OUTSIDE the page: the same documents the page reads through its
+       * driver. Needs `data` on the artifact (an agent: 'read' for the reads,
+       * 'write' for the rest; a person: owner or editor). See src/data.ts.
+       *
+       *   const data = tm.artifacts.data(art.id);
+       *   await data.firestore.batch(rows.map((r) => ({ op: 'set', path: `sales/${r.id}`, data: r })));
+       *
+       * `{ raw: true }` leaves timestamps as `{ "$date": ISO }` instead of `Date`.
+       */
+      data: (id: string, opts?: ArtifactDataOptions): ArtifactData =>
+        createArtifactData(http, id, opts),
+    },
+
     /** Any /v1 route the SDK does not wrap, with the same retries and errors. */
     request: <T>(
       method: string,
@@ -1213,8 +1624,9 @@ export interface TmClient extends Omit<TmClientBase, 'board' | 'boards'> {
   work(handler: WorkHandler, opts?: WorkOptions): Promise<WorkSummary>;
   /**
    * §R2 — WHICH KIND OF TOKEN IS THIS? 'board' (one board), 'account'
-   * ("virtual me": every board you are on) or 'oauth'. It asks GET /v1/me
-   * once and remembers the answer, so calling it in a loop is free.
+   * ("virtual me": every board you are on), 'agent' (§AA1: the agent's one
+   * token — every board the AGENT is on) or 'oauth'. It asks GET /v1/me once
+   * and remembers the answer, so calling it in a loop is free.
    *
    *   if ((await tm.kind()) === 'account') for (const b of await tm.boards.list()) …
    */
@@ -1230,15 +1642,24 @@ export interface TmClient extends Omit<TmClientBase, 'board' | 'boards'> {
  * board. An account token (§R2) reaches every board you are on: ask
  * `tm.kind()`, list them with `tm.boards.list()`, and work on one with
  * `tm.board('ENG')`, which returns this same API scoped to ENG.
+ *
+ * §AA1 — AN AGENT TOKEN is one per agent and says only WHO the agent is: it
+ * reaches every board the agent is on, and what it may do there is the
+ * agent's role on that board. So it is in the account token's position. On
+ * exactly one board nothing needs naming; on several, every board-scoped
+ * call must name the board — `createClient({ token, board: 'ENG' })` or
+ * `tm.board('ENG')` — or it answers 400 `invalid` with the keys in
+ * `problem.options`. (A token converted from an old board token falls back
+ * to its old board, `me.default_board`. Do not build on that: name the board.)
  */
 export function createClient(options: ClientOptions): TmClient {
   const base = createClientBase(options);
 
   /*
-   * §R2 — ONE API, TWO KINDS OF TOKEN. `tm.board('ENG')` builds a SECOND
+   * §R2, §AA1 — ONE API, WHATEVER THE TOKEN. `tm.board('ENG')` builds a SECOND
    * client over the same options with the board pinned (Http adds board=ENG
    * to every call), so everything a board token can do, an account token can
-   * do on any of your boards, with the identical code:
+   * (or an agent token) can do on any of its boards, with the identical code:
    *
    *   const eng = tm.board('ENG');
    *   await eng.tickets.list();          // exactly as with a board token

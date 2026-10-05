@@ -48,4 +48,19 @@ describe('TokenCreated', () => {
     await fireEvent.click(screen.getAllByRole('button', { name: /^Copy/ })[0]!);
     expect(writeText).toHaveBeenCalledWith('tm_live_abcdef123456');
   });
+
+  // §AA1/§AA5: the agent page's "shown once" — no board, and the TM_TOKEN line.
+  it('shows an agent token with its TM_TOKEN line and no board', () => {
+    const { container } = render(TokenCreated, {
+      token: 'tm_live_abcdef123456',
+      apiBase: 'https://tm.example.com',
+      name: 'Builder',
+      actsAs: 'Builder (agent)',
+      kind: 'agent',
+    });
+    const pre = [...container.querySelectorAll('pre')].map((p) => p.textContent ?? '');
+    expect(pre).toContain('TM_TOKEN=tm_live_abcdef123456');
+    expect(container.textContent).toContain('every board and artifact it is on');
+    expect(container.textContent).toContain('Builder (agent)');
+  });
 });

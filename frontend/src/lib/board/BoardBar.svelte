@@ -38,6 +38,11 @@
   import type { Board, BoardPref, View, ViewInput, ViewType } from '@tm/shared';
   import { VIEW_TYPES } from '@tm/shared';
   import { myBoards, type WithId } from '$lib/stores';
+  import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import { activeWorkspace, switcherItems } from '$lib/workspaces/switcher';
+  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import { workspaceContext } from '$lib/workspaces/context.svelte';
+  import { myWorkspaces } from '$lib/workspaces/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import { fmtTurns, fmtUsd, fmtUsdExact } from '$lib/cost/format';
   import Popover from '$lib/ui/Popover.svelte';
@@ -164,17 +169,23 @@
     return items;
   });
 
-  // The title is also the board switcher: every board I am on, this one marked.
+  // The title is also the board switcher: every board I am on, this one marked —
+  // or, when I came here through a workspace that holds this board (§AB3),
+  // only that workspace's boards and artifacts.
   const boardsQ = $derived(myBoards(auth.uid));
-  const boardItems = $derived<MenuItem[]>(
-    $boardsQ.data
-      .filter((b) => b.archivedAt == null)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((b) => ({
-        label: `${b.key} · ${b.name}`,
-        href: routes.board(b.key),
-        disabled: b.id === board.id,
-      })),
+  const wsQ = $derived(myWorkspaces(auth.uid));
+  const artifactsQ = $derived(myArtifacts(auth.uid));
+  const workspace = $derived(
+    activeWorkspace($wsQ.data, workspaceContext.id, { boardId: board.id }),
+  );
+  const boardItems = $derived(
+    switcherItems({
+      boards: $boardsQ.data,
+      artifacts: splitArtifacts($artifactsQ.data).active,
+      workspace,
+      current: { boardId: board.id },
+      leave: () => workspaceContext.leave(),
+    }),
   );
 </script>
 
@@ -183,6 +194,10 @@
 >
   <!-- The board IS the page title. -->
   <div class="flex min-w-0 items-center gap-2">
+    {#if workspace}
+      <!-- §AB3: where I came from; one click back to the workspace page. -->
+      <WorkspaceCrumb {workspace} />
+    {/if}
     <ColorSwatch color={board.color} size={10} />
     <Menu items={boardItems} placement="bottom-start">
       {#snippet trigger(p)}

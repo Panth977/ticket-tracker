@@ -35,8 +35,9 @@ A ticket's state is `active` or `archived` — nothing else. "Cancelled" is a *s
 
 ## Which board?
 
-The credential you are using may reach **one** board (a board token) or **every board the user is on** (an
-account token, or a connector grant). When it spans several boards:
+The credential you are using reaches **every board its principal is on**: the user's boards (an account
+token, or a connector grant), or an agent's boards (an agent's token — one per agent, with no board of its
+own). That may be one board or many. When it spans several boards:
 
 1. `list_boards` is the first call. It returns the keys — `ENG`, `HOME` — that everything else takes.
 2. Pass `board: 'ENG'` on any call that does not name a ticket.
@@ -45,8 +46,11 @@ account token, or a connector grant). When it spans several boards:
 If a call comes back asking which board it meant, you skipped step 1. Do not guess a key from the user's
 wording: `HOME` and `HOUSE` are different boards, and one of them does not exist.
 
-The credential's reach is resolved **live**. A board the user left is gone from `list_boards` on the next call,
-and nothing you do can exceed the user's own role on a board.
+The credential's reach is resolved **live**. A board the principal left is gone from `list_boards` on the next
+call, and nothing you do can exceed its role on a board. For an **agent's** token the role *is* the permission
+— `viewer`, `commenter`, `editor` or `admin`, set per board by the agent's owner — and the token itself carries
+no list of permissions that could be widened: a `403` is answered by changing the role on the agent's page
+({{url:agentsUrl}}), not by making another token.
 
 ## The tools
 
@@ -54,8 +58,9 @@ and nothing you do can exceed the user's own role on a board.
 {{gen:tools}}
 ```
 
-`whoami` tells you who you are acting as, what kind of credential this is and which scopes it holds — worth one
-call at the start of a session that will write anything.
+`whoami` tells you who you are acting as, what kind of credential this is (`agent`, `account`, `board`,
+`oauth`), which boards it reaches and the role where a call that names no board would land — worth one call at
+the start of a session that will write anything.
 
 ## Working well
 
@@ -73,10 +78,10 @@ call at the start of a session that will write anything.
   a wrong guess would be expensive; use it with options rather than free text when you can.
 - **Markdown, and files when it is long.** Message bodies are GitHub-flavoured Markdown. A report belongs in an
   uploaded `.md` or `.html` file (`upload_file`) with a short message pointing at it, not in a 500-line comment.
-- **Everything you do is attributed** to the user, "via token <name>". Write as if they will read it, because
+- **Everything you do is attributed** to the principal — the user, or the agent — "via token <name>". Write as if they will read it, because
   they will.
-- **Permissions are a ceiling, not a suggestion.** `403 forbidden` means the scope or the role says no. Do not
-  retry it, do not route around it — say what was refused.
+- **Permissions are a ceiling, not a suggestion.** `403 forbidden` means the role (or, for a person's token, a
+  scope) says no. Do not retry it, do not route around it — say what was refused.
 - **Retries are safe.** Every write takes an idempotency key; the tools set one. A retried call is still one
   change. `429` carries `Retry-After`; wait it out rather than hammering.
 - **Wake, do not poll.** There are no rate limits here, so the cost of a loop is entirely yours. If you write
@@ -113,8 +118,8 @@ written down, under a key that outlives the conversation.
 
 ```text
 400 invalid           the input, or it names something that is not on that board (a stage, a tag, a person)
-401 unauthenticated   revoked or expired credential — tell the user; do not retry
-403 forbidden         scope or role — say what was refused and stop
+401 unauthenticated   revoked, expired or regenerated credential, or an archived agent — tell the user; do not retry
+403 forbidden         the role on that board (an agent), or scope ∩ role (a person) — say what was refused and stop
 404 not_found         gone, or on a board this credential cannot read (existence is never leaked)
 409 conflict          a state conflict: the key is taken, the update is stale, the ticket is archived
 422 unprocessable     a board rule refuses it — a stage's `requires` names the missing fields

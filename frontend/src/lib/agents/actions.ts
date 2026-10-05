@@ -1,22 +1,17 @@
 /**
- * Agents on boards — boardAgentSet (agents.html §C). The owner (a board admin)
- * adds; any admin re-roles or removes. Removing takes it off assignees and
- * watchers and revokes its tokens for that board; its messages stay.
+ * Agents on boards — boardAgentSet (agents.html §C, §AA2). The owner (a board
+ * admin) adds; any admin re-roles or removes. The role may be 'admin' (§AA2 —
+ * the old "never admin" rule is gone). Removing takes it off assignees and
+ * watchers; its messages stay, and its one token (§AA1) simply stops reaching
+ * that board (a legacy board token for that board is revoked).
  */
 import type { AgentBoardRole, StageGrant } from '@tm/shared';
 import { command, isAppError } from '$lib/api';
 import { toast } from '$lib/ui';
 
-export const AGENT_ROLE_LABEL: Record<AgentBoardRole, string> = {
-  editor: 'Editor',
-  commenter: 'Commenter',
-  viewer: 'Viewer',
-};
-export const AGENT_ROLE_HINT: Record<AgentBoardRole, string> = {
-  editor: 'Create and edit every ticket, move anywhere',
-  commenter: 'Read, post in threads, move within a stage grant',
-  viewer: 'Read only',
-};
+// §AA2: the labels and one-line descriptions (Admin included) are pure data
+// and live in ./access, where the tests reach them without the API.
+export { AGENT_NEVER, AGENT_ROLE_HINT, AGENT_ROLE_LABEL, AGENT_ROLE_ORDER } from './access';
 
 async function set(
   input: {

@@ -16,9 +16,13 @@
   import { boardPref, myBoards, myInvites } from '$lib/stores';
   import { Button, EmptyState, Skeleton, toast } from '$lib/ui';
   import { dateOnly } from '$lib/account/format';
+  import { workspaceContext } from '$lib/workspaces/context.svelte';
+  import { hiddenItems } from '$lib/workspaces/store';
 
   const uid = $derived(auth.uid);
   const boardsQ = $derived(myBoards(uid));
+  // §AB: the eye on each tile hides it from the sidebar's root; it stays here.
+  const hiddenQ = $derived(hiddenItems(uid));
   const invitesQ = $derived(myInvites(auth.user?.emailVerified ? auth.user.email : null));
   const invites = $derived($invitesQ.data.filter((i) => i.expiresAt > Date.now()));
 
@@ -101,7 +105,12 @@
     {:else}
       <div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
         {#each sorted as b (b.id)}
-          <BoardTile board={b} uid={uid ?? ''} />
+          <BoardTile
+            board={b}
+            uid={uid ?? ''}
+            hidden={$hiddenQ}
+            onopen={() => workspaceContext.leave()}
+          />
         {/each}
         <a
           href={routes.newBoard()}

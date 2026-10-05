@@ -8,6 +8,8 @@
  *   unattached uploads older than 24h          → deleted (no ticket.files row points at them)
  *   webhook deliveries (and notify deliveries) older than 30 days → deleted
  *   agent inbox events acked more than 30 days ago → deleted (unacked stay)
+ *   artifact builds beyond the newest ten (never the current), and upload
+ *     zips nobody published within 24h         → deleted (artifacts/housekeeping.ts)
  *
  * Each part is independent; one failing is logged and the others still run.
  */
@@ -20,6 +22,7 @@ import {
   type StoredActivity,
 } from '@tm/shared';
 import { ports } from '../adapters/index.js';
+import { artifactHousekeeping } from '../artifacts/housekeeping.js';
 import { db, storageAdmin } from '../runtime/firebase.js';
 import { typedCol } from '../runtime/index.js';
 import { batchWriter } from '../tickets/doc.js';
@@ -36,6 +39,8 @@ export interface HousekeepingResult {
   uploadsDeleted: number;
   deliveriesDeleted: number;
   agentEventsDeleted: number;
+  artifactBuildsPruned: number;
+  artifactUploadsDeleted: number;
   errors: string[];
 }
 
@@ -47,6 +52,8 @@ export async function housekeeping(now: number): Promise<HousekeepingResult> {
     uploadsDeleted: 0,
     deliveriesDeleted: 0,
     agentEventsDeleted: 0,
+    artifactBuildsPruned: 0,
+    artifactUploadsDeleted: 0,
     errors: [],
   };
   const part = async (
@@ -66,6 +73,12 @@ export async function housekeeping(now: number): Promise<HousekeepingResult> {
   await part('uploadsDeleted', () => pruneUploads(now));
   await part('deliveriesDeleted', () => pruneDeliveries(now));
   await part('agentEventsDeleted', () => pruneAgentEvents(now));
+  // Two counters from one pass over the artifacts (it also heals the RTDB mirror).
+  await part('artifactBuildsPruned', async () => {
+    const a = await artifactHousekeeping(now);
+    r.artifactUploadsDeleted = a.uploadsDeleted;
+    return a.buildsPruned;
+  });
   return r;
 }
 

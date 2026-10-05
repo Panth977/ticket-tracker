@@ -28,8 +28,7 @@
     "lib:check": "PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node scripts/lock.mjs emulators -- node scripts/deploy-lib-check.mjs",
     "orch:sample": "node qaqc/orch-sample/check.mjs",
     "deploy:prod": "node scripts/deploy.mjs",
-    "deploy:functions:build": "node scripts/deploy-functions.mjs --verify",
-    "ws": "node workspaces/ws.mjs"
+    "deploy:functions:build": "node scripts/deploy-functions.mjs --verify"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

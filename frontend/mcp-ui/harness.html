@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  A stand-in for Claude, to look at the view locally (pnpm --filter @tm/frontend mcp-ui:dev,
+  then /harness.html?view=board|ticket|mywork&theme=dark&mode=fullscreen). It speaks the
+  MCP Apps protocol through the SDK's AppBridge and answers tool calls from fixtures.
+  Never built or shipped: the production build takes index.html only.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MCP Apps harness</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font: 14px system-ui;
+        background: #faf9f5;
+      }
+      body.dark {
+        background: #262624;
+        color: #faf9f5;
+      }
+      iframe {
+        width: 100%;
+        border: 0.5px solid #ccc;
+        border-radius: 12px;
+        background: transparent;
+      }
+      .full iframe {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+      }
+      #log {
+        font:
+          12px ui-monospace,
+          monospace;
+        white-space: pre-wrap;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="view" src="./index.html" title="view"></iframe>
+    <div id="log"></div>
+    <script type="module" src="./harness/host.ts"></script>
+  </body>
+</html>

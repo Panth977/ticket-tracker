@@ -30,6 +30,20 @@ import {
   TaskItemStatusSchema,
 } from '../schema/tasklist.js';
 import { AGENT_STATUS_MESSAGE_MAX, AgentStateSchema } from '../schema/agentStatus.js';
+import {
+  ARTIFACT_BUILD_MAX_FILES,
+  ARTIFACT_DESCRIPTION_MAX,
+  ARTIFACT_NAME_MAX,
+  ArtifactAgentAccessSchema,
+  ArtifactShareRoleSchema,
+} from '../artifacts/schema.js';
+import {
+  ARTIFACT_DATA_BATCH_MAX,
+  ARTIFACT_DATA_WHERE_MAX,
+  ArtifactDataWhereSchema,
+  ArtifactDataWriteSchema,
+} from '../artifacts/data.js';
+import { LIST_LIMIT_MAX } from '../artifacts/driver.js';
 
 const Key = z.string().min(1).describe("Ticket key, e.g. 'ENG-42'");
 const Board = z
@@ -48,6 +62,16 @@ const FileIds = z
   .max(20)
   .describe('File ids from upload_file, already on this ticket');
 const Cursor = z.string().describe('Opaque cursor from a previous call');
+const ArtifactRef = z
+  .string()
+  .min(1)
+  .describe('Artifact id, from artifact_list or artifact_create');
+
+const DataDocPath = z
+  .string()
+  .min(1)
+  .max(1024)
+  .describe("A DOCUMENT path in the artifact's own view, e.g. 'scores/2026' (collection/doc[/collection/doc…])");
 
 export const McpToolShapes = {
   whoami: {},
@@ -247,6 +271,112 @@ export const McpToolShapes = {
     progress: z.number().min(0).max(1).optional(),
     board: Board.optional(),
   },
+  // ───────── artifacts (docs/plan/artifacts.html §C2) ─────────
+  artifact_list: {},
+  artifact_get: { id: ArtifactRef },
+  artifact_create: {
+    name: z.string().min(1).max(ARTIFACT_NAME_MAX),
+    description: z.string().max(ARTIFACT_DESCRIPTION_MAX).optional(),
+    icon: z.string().max(16).optional().describe('One emoji'),
+  },
+  artifact_publish: {
+    id: ArtifactRef,
+    files: z
+      .array(
+        z.object({
+          path: z
+            .string()
+            .min(1)
+            .max(1024)
+            .describe("Relative to the build root, e.g. 'index.html', 'assets/app.js'"),
+          content: z.string(),
+          encoding: z
+            .enum(['utf8', 'base64'])
+            .optional()
+            .describe("Default 'utf8'; 'base64' for images and other binaries"),
+        }),
+      )
+      .min(1)
+      .max(ARTIFACT_BUILD_MAX_FILES)
+      .describe(
+        'The WHOLE build, not a patch: every file of the site, with an index.html at its root. At most 5 MB in one call. ' +
+          'Load assets by RELATIVE paths (./app.js), never /app.js.',
+      ),
+    message: z.string().max(500).optional().describe('A line saying what changed'),
+  },
+  artifact_rollback: {
+    id: ArtifactRef,
+    build: z.string().min(1).describe('A build id from artifact_get'),
+  },
+  artifact_share: {
+    id: ArtifactRef,
+    email: z.string().optional().describe('A person. Give email OR agent.'),
+    agent: z
+      .string()
+      .optional()
+      .describe("One of the owner's agents ('ag_…'); say what it may do with agent_access"),
+    role: ArtifactShareRoleSchema.nullable()
+      .optional()
+      .describe(
+        "A person: 'editor', 'viewer', or null to remove. An agent: leave out and give agent_access (or 'editor' = build + write data, null = remove).",
+      ),
+    agent_access: ArtifactAgentAccessSchema.optional().describe(
+      "Agents only: { build: true|false, data: 'none'|'read'|'write' }. build = publish, roll back, source; data = its database and files. Both off removes the agent.",
+    ),
+  },
+  artifact_source: {
+    id: ArtifactRef,
+    build: z.string().min(1).optional().describe('Default: the newest build that has a source zip'),
+  },
+  // ───────── artifact data (docs/plan/agents.html §AA4) — Firestore only ─────────
+  artifact_data_get: { id: ArtifactRef, path: DataDocPath },
+  artifact_data_list: {
+    id: ArtifactRef,
+    path: z
+      .string()
+      .min(1)
+      .max(1024)
+      .describe("A COLLECTION path in the artifact's own view: 'scores', 'scores/2026/entries'"),
+    where: z
+      .array(ArtifactDataWhereSchema)
+      .max(ARTIFACT_DATA_WHERE_MAX)
+      .optional()
+      .describe(
+        "Filters, each [field, op, value]; op is one of < <= == != >= > array-contains in not-in array-contains-any. e.g. [['status','==','open']]",
+      ),
+    order_by: z
+      .string()
+      .min(1)
+      .max(600)
+      .optional()
+      .describe("'field' or 'field,desc'"),
+    limit: z.number().int().min(1).max(LIST_LIMIT_MAX).optional().describe('Default 100, at most 500'),
+    start_after: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("A document id: the previous page's next_cursor"),
+  },
+  artifact_data_set: {
+    id: ArtifactRef,
+    path: DataDocPath,
+    data: z
+      .record(z.string(), z.unknown())
+      .describe(
+        'The document, as JSON. A timestamp is { "$date": "2026-09-30T05:30:00Z" }; the server\'s clock is { "$serverTime": true }.',
+      ),
+    merge: z.boolean().optional().describe('true merges into the stored document instead of replacing it'),
+  },
+  artifact_data_batch: {
+    id: ArtifactRef,
+    writes: z
+      .array(ArtifactDataWriteSchema)
+      .min(1)
+      .max(ARTIFACT_DATA_BATCH_MAX)
+      .describe(
+        "Up to 400 writes applied ALL OR NOTHING: { op: 'set', path, data, merge? } | { op: 'update', path, data } | { op: 'delete', path }. How a job replaces a dataset.",
+      ),
+  },
 } as const satisfies Record<string, z.ZodRawShape>;
 
 export type McpToolName = keyof typeof McpToolShapes;
@@ -391,6 +521,73 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
     readOnly: false,
     scopes: ['status:write'],
   },
+  // artifacts (§C2, §C4)
+  artifact_list: {
+    description:
+      'The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  artifact_get: {
+    description:
+      'One artifact: its meta, its kept builds (newest first) and who it is shared with.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  artifact_create: {
+    description:
+      "Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
+  artifact_publish: {
+    description:
+      'Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
+  artifact_rollback: {
+    description: 'Make a kept build the current one (roll back, or forward again).',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
+  artifact_share: {
+    description:
+      'Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.',
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
+  artifact_source: {
+    description:
+      'A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.',
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  // artifact data (agents.html §AA4) — the artifact's own Firestore, from outside the page.
+  artifact_data_get: {
+    description:
+      "Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { \"$date\": ISO }.",
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  artifact_data_list: {
+    description:
+      "List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).",
+    readOnly: true,
+    scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  artifact_data_set: {
+    description:
+      "Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
+  artifact_data_batch: {
+    description:
+      "Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.",
+    readOnly: false,
+    scopes: ['artifacts:write'],
+  },
 };
 
 /** Cross-field rules the raw shapes cannot say (applied by McpToolSchemas). */
@@ -409,6 +606,14 @@ const REFINES: Partial<Record<McpToolName, (v: Record<string, unknown>) => strin
       : 'Nothing to add or remove',
   update_task_item: (v) =>
     v.status !== undefined || v.note !== undefined ? null : 'Give a status or a note',
+  artifact_share: (v) =>
+    (v.email === undefined) === (v.agent === undefined)
+      ? 'Give exactly one of email or agent'
+      : v.role === undefined && (v.agent === undefined || v.agent_access === undefined)
+        ? 'Give role — or, for an agent, agent_access'
+        : v.email !== undefined && v.agent_access !== undefined
+          ? 'agent_access is for an agent'
+          : null,
   post_message: (v) =>
     String(v.markdown ?? '').trim().length > 0 ||
     ((v.attachments as unknown[] | undefined)?.length ?? 0) > 0

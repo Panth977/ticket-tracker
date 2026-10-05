@@ -54,7 +54,10 @@
     try {
       const r = await command('inviteAccept', { inviteId, token, accept: true }, { toast: false });
       // A brand-new account still has Welcome to do; the guard sends it there.
-      await goto(routes.board(r.boardKey), { replaceState: true });
+      // An invite to an ARTIFACT (artifacts.html §B) names no board.
+      await goto(r.artifactId ? routes.artifact(r.artifactId) : routes.board(r.boardKey), {
+        replaceState: true,
+      });
     } catch (e) {
       if (!isAppError(e)) throw e;
       // inviteAccept answers 403 { invitedEmail: 'a***@acme.com' } (masked).
@@ -122,8 +125,8 @@
             {invite.invitedByName || 'Someone'} invited you to {invite.boardName}
           </h1>
           <p class="text-sm text-muted">
-            as <Badge tone="accent">{ROLE_LABELS[invite.role]}</Badge> on
-            <span class="font-mono">{invite.boardKey}</span>
+            as <Badge tone="accent">{ROLE_LABELS[invite.role]}</Badge>
+            {#if !invite.artifactId}on <span class="font-mono">{invite.boardKey}</span>{/if}
           </p>
         </div>
         {#if invite.message}
@@ -149,8 +152,13 @@
     {:else if view === 'accepted'}
       <div class="flex flex-col gap-3">
         <h1 class="text-lg font-semibold">You’re already on {invite?.boardName}</h1>
-        <Button variant="primary" href={routes.board(invite?.boardKey ?? '')}>Open the board</Button
-        >
+        {#if invite?.artifactId}
+          <Button variant="primary" href={routes.artifact(invite.artifactId)}>Open it</Button>
+        {:else}
+          <Button variant="primary" href={routes.board(invite?.boardKey ?? '')}
+            >Open the board</Button
+          >
+        {/if}
       </div>
     {:else if view === 'closed' || view === 'expired'}
       <div class="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-## 8. Version and changelog
+## 9. Version and changelog
 
 This page carries a version so an agent can tell whether what it knows is current.
 
@@ -16,6 +16,55 @@ the copy you hold, re-read `{{url:llmsFullUrl}}`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 1.3.0 — 2026-09-30
+
+- **One token per agent** (§2). An agent token (`kind: 'agent'`) says who the agent is and nothing
+  else: no board, no scope list. It reaches every board and every artifact the agent is on, as that
+  stands at each call. What it may do is the agent's **role** on each board and its
+  `{ build, data }` on each artifact. `GET /v1/me` and `whoami` answer `kind: 'agent'` with `boards`.
+  Generating a new one on the agent's page replaces the old one.
+- **An agent may be a board admin.** `POST /v1/boards/{KEY}/agents` and `tm.boards.setAgent()` take
+  `role: 'admin'`, and an agent token always carries `board:admin` and `webhooks:manage`. An agent
+  admin still cannot manage the board's people and agents, invite, create boards or mint tokens.
+- **Which board.** An agent token on several boards must name the board on a board-scoped call —
+  `?board=KEY` (or `/v1/boards/KEY/…`), the MCP `board` argument, `createClient({ token, board })` /
+  `tm.board('KEY')` — exactly as an account token does. On one board nothing changes. Old board
+  tokens that acted as an agent keep working; once converted they keep their old board as
+  `default_board`, used when a call names none.
+- **Agents on an artifact: build and data, separately.** `PUT /v1/artifacts/{id}/access` and
+  `artifact_share` take `agent_access: { build, data: 'none' | 'read' | 'write' }` for an agent (the
+  old `role: 'editor'` still means both). `Artifact.agent_access` (an agent caller's own) and
+  `members[].agent_access` are new fields.
+- **The artifact's data from outside the page** (§8.10): REST `/v1/artifacts/{id}/data/firestore/…`,
+  `/data/batch` (up to 400 writes, atomic), `/data/rtdb/…` and `/data/files/…`, and four MCP tools
+  (`artifact_data_get`, `artifact_data_list`, `artifact_data_set`, `artifact_data_batch`). The page
+  and the API see the same documents. Timestamps cross as `{ "$date": ISO }`; `{ "$serverTime":
+  true }` in a write is the server's clock.
+- **SDK: `tm.artifacts.data(id)`** — `.firestore.{get,set,update,delete,add,list,listAll,batch}`,
+  `.rtdb.{get,set,update,push,remove}`, `.files.{upload,url,list,delete}`, with `Date` in and out
+  and the exported `serverTime`. `artifacts.share()` takes `{ agent, access: { build, data } }`;
+  `BoardAgentInput.role` admits `'admin'`; `TokenKind` and `Me` gain `'agent'` and `default_board`;
+  the four tools are in `mcpTools()`.
+
+### 1.2.0 — 2026-09-30
+
+- **Artifacts** (§8): small static websites kept and served by TaskManager, each with its own people
+  and its own data, separate from boards. New REST routes under `/v1/artifacts` (create, get, patch,
+  delete, publish a build as a zip, roll back, download the source, share), seven MCP tools
+  (`artifact_list`, `artifact_get`, `artifact_create`, `artifact_publish`, `artifact_rollback`,
+  `artifact_share`, `artifact_source`) and two scopes, `artifacts:read` and `artifacts:write`. An
+  account token reaches the artifacts its person owns or edits; an agent token only the ones that
+  agent was added to.
+- **SDK: `tm.artifacts.*`** — `list`, `get`, `create`, `update`, `delete`, `publish`, `rollback`,
+  `source`, `share`. `publish()` takes a directory (walked and zipped for you on Node, Deno and Bun),
+  the bytes of a zip, or files in memory, and an optional `source` that is kept beside the build. The
+  seven tools are in `mcpTools()` too. Still zero dependencies.
+- **The driver**: `window.BackendDriver` at {{url:driver.js}} (also `driver.mjs` and `driver.d.ts`) —
+  the one script an artifact loads for Firestore, the Realtime Database, storage and a key-value
+  store, with a mock backend when the page runs outside TaskManager.
+- **The Claude plugin gains a skill, `artifact`**, with a complete single-file example and a Vite
+  template. `integrate.json` carries the driver URLs and the artifact limits.
 
 ### 1.1.0 — 2026-09-26
 

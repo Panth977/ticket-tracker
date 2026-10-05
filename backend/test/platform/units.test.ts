@@ -62,6 +62,13 @@ describe('oauth helpers', () => {
     expect(() => parseScopes('tickets:read admin:all')).toThrow(OAuthError);
   });
 
+  it('scopes: generic OAuth/OIDC scopes a client adds are ignored, not refused', () => {
+    expect(parseScopes('openid offline_access tickets:read profile email')).toEqual(
+      parseScopes('tickets:read'),
+    );
+    expect(parseScopes('openid offline_access')).toEqual([]);
+  });
+
   it('redirectWith keeps the registered query', () => {
     expect(redirectWith('https://c.example/cb?x=1', { code: 'abc', state: null })).toBe(
       'https://c.example/cb?x=1&code=abc',

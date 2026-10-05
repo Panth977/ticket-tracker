@@ -33,6 +33,8 @@
     layout?: 'card' | 'row';
     showKey?: boolean;
     showTitle?: boolean;
+    /** 'row' only: which part of the line to draw (TicketSummary › part). */
+    part?: 'all' | 'title' | 'chat' | 'activity';
   }
   let {
     board,
@@ -42,6 +44,7 @@
     layout = 'card',
     showKey = true,
     showTitle = true,
+    part = 'all',
   }: Props = $props();
   const bs = useBoard();
 
@@ -98,6 +101,7 @@
     {layout}
     {showKey}
     {showTitle}
+    {part}
     unread={bs.unread(t)}
     since={bs.unreadSince(t)}
     {unsent}

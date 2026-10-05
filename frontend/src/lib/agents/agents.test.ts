@@ -6,7 +6,6 @@ import {
   draftPatch,
   freshAgentId,
   sortAgents,
-  tokensOfAgent,
 } from './agents';
 import { agentRoutes } from './routes';
 import type { Board } from '@tm/shared';
@@ -42,32 +41,6 @@ describe('agents', () => {
     expect(boardsOfAgent(boards, AG).map((r) => [r.board.id, r.role])).toEqual([['b1', 'editor']]);
     expect(boardsToAddAgent(boards, 'me', AG).map((b) => b.id)).toEqual(['b2']);
   });
-  it('lists tokens acting as it, active first', () => {
-    const keys = [
-      {
-        id: 'k1',
-        actsAs: { kind: 'agent' as const, id: AG },
-        revokedAt: 3,
-        expiresAt: null,
-        createdAt: 3,
-      },
-      {
-        id: 'k2',
-        actsAs: { kind: 'user' as const, id: 'u1' },
-        revokedAt: null,
-        expiresAt: null,
-        createdAt: 2,
-      },
-      {
-        id: 'k3',
-        actsAs: { kind: 'agent' as const, id: AG },
-        revokedAt: null,
-        expiresAt: null,
-        createdAt: 1,
-      },
-    ];
-    expect(tokensOfAgent(keys, AG).map((k) => k.id)).toEqual(['k3', 'k1']);
-  });
   it('validates and diffs a draft', () => {
     expect(draftErrors({ name: ' ', description: '', systemPrompt: '' }).name).toBeTruthy();
     expect(
@@ -97,8 +70,5 @@ describe('agents', () => {
   });
   it('builds routes', () => {
     expect(agentRoutes.agent(AG)).toBe(`/agents/${AG}`);
-    expect(agentRoutes.newToken({ boardId: 'b1', agentId: AG })).toBe(
-      `/account/tokens?new=1&board=b1&agent=${AG}`,
-    );
   });
 });

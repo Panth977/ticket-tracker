@@ -225,8 +225,14 @@ class AuthState {
     prewarm(u.uid);
   }
 
-  /** Fresh ID token for /api calls (null when signed out). */
+  /**
+   * Fresh ID token for /api calls (null when signed out). §T paints a
+   * remembered session before Firebase has restored it, so a call made on
+   * mount (the OAuth consent screen's) waits for that restore rather than
+   * reading "no user" and failing as if signed out.
+   */
   async idToken(forceRefresh = false): Promise<string | null> {
+    if (!this.fbUser) await getAuthClient().authStateReady();
     const u = this.fbUser ?? getAuthClient().currentUser;
     return u ? u.getIdToken(forceRefresh) : null;
   }

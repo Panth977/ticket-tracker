@@ -31,6 +31,11 @@ export const MOUNTS = {
   ics: '/ics',
   /** Third-party install flows /integrations/{provider}/connect|callback (platform). */
   integrations: '/integrations',
+  /**
+   * Artifact files, /c/{capability}/{path} (doors/artifactContent.ts). On the
+   * usercontent Hosting site this is the ONLY path that reaches the function.
+   */
+  content: '/c',
 } as const;
 export type MountName = keyof typeof MOUNTS;
 

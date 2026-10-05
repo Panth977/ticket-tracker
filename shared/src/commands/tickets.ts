@@ -186,6 +186,8 @@ export const ticketState = defineCommand({
 
 export const ticketDelete = defineCommand({
   name: 'ticketDelete',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['tickets:state'],
   source: 'app',
   permission: 'board.settings.allowDelete && can(delete). The key is tombstoned, never reissued.',
   errors: ['forbidden', 'not_found'],

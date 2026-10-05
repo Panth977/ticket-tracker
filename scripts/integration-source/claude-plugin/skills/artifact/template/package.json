@@ -1,0 +1,16 @@
+{
+  "name": "my-artifact",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "types": "curl -fsSL {{url:driver.types}} -o src/backend-driver.d.ts",
+    "publish:artifact": "vite build && node publish.mjs"
+  },
+  "devDependencies": {
+    "@tm/sdk": "{{url:sdk.tarball}}",
+    "vite": "^8.0.0"
+  }
+}

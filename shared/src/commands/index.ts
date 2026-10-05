@@ -13,6 +13,8 @@ import * as questions from './questions.js';
 import * as tasklists from './tasklists.js';
 import * as tickets from './tickets.js';
 import * as users from './users.js';
+import * as workspaces from './workspaces.js';
+import * as artifacts from '../artifacts/commands.js';
 
 export * from './define.js';
 export * from './boards.js';
@@ -23,6 +25,7 @@ export * from './agents.js';
 export * from './questions.js';
 export * from './tasklists.js';
 export * from './users.js';
+export * from './workspaces.js';
 
 export const COMMANDS = {
   // boards, people, views
@@ -85,6 +88,25 @@ export const COMMANDS = {
   userList: users.userList,
   userAllow: users.userAllow,
   userDisallow: users.userDisallow,
+  // artifacts (docs/plan/artifacts.html)
+  artifactCreate: artifacts.artifactCreate,
+  artifactUpdate: artifacts.artifactUpdate,
+  artifactShare: artifacts.artifactShare,
+  artifactPublish: artifacts.artifactPublish,
+  artifactSetCurrent: artifacts.artifactSetCurrent,
+  artifactDelete: artifacts.artifactDelete,
+  artifactOpen: artifacts.artifactOpen,
+  artifactFileUrl: artifacts.artifactFileUrl,
+  artifactFileList: artifacts.artifactFileList,
+  artifactFileDelete: artifacts.artifactFileDelete,
+  artifactSourceUrl: artifacts.artifactSourceUrl,
+  artifactDataClear: artifacts.artifactDataClear,
+  artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
+  // workspaces (agents.html §AB): a person's own sidebar
+  workspaceCreate: workspaces.workspaceCreate,
+  workspaceUpdate: workspaces.workspaceUpdate,
+  workspaceDelete: workspaces.workspaceDelete,
+  sidebarHide: workspaces.sidebarHide,
 } as const satisfies { [K in string]: CommandSpec<K> };
 
 export type Commands = typeof COMMANDS;

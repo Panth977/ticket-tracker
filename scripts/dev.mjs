@@ -37,6 +37,11 @@ const env = {
   // discovery documents advertise the SPA origin too (vite proxies those paths).
   APP_URL: process.env.APP_URL ?? URLS.web,
   API_URL: process.env.API_URL ?? URLS.web,
+  // Artifact files (docs/plan/artifacts.html §D) are served from ANOTHER origin
+  // than the app, as in production — here the functions emulator's own URL for
+  // `api`, whose /c/{capability}/… route streams them. The backend's default
+  // under the emulators is this same URL (backend/src/artifacts/capability.ts).
+  TM_ARTIFACT_ORIGIN: process.env.TM_ARTIFACT_ORIGIN ?? URLS.api,
   // Webhooks saved as https://*.webhook.test/… are delivered here instead
   // (backend/src/platform/net.ts; the e2e receiver listens on it).
   TM_DEV_WEBHOOK_SINK: process.env.TM_DEV_WEBHOOK_SINK ?? URLS.webhookSink,

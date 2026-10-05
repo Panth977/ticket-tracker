@@ -42,6 +42,10 @@ type Input = CommandReqParsed<'boardAccessSet'>;
 
 export async function applyAccess(ctx: ServerCtx, input: Input): Promise<{ removed: Uid[] }> {
   const { boardId, people, stageGrants, leave } = input;
+  // §AA2 — an agent may be a board ADMIN now, so can(admin) alone no longer
+  // says "a person". What an agent admin still cannot do is what no agent
+  // can: manage the board's people (nor "leave": an agent is taken off a board by a person, with boardAgentSet). Refused here by who is acting, whatever the role.
+  if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot manage board members');
   if (leave && (people || stageGrants))
     throw errors.invalid('`leave` cannot be combined with other changes');
   if (!leave && !people && !stageGrants) throw errors.invalid('Nothing to change');
@@ -57,7 +61,7 @@ export async function applyAccess(ctx: ServerCtx, input: Input): Promise<{ remov
       delete access[ctx.actor];
       removed.push(ctx.actor);
     }
-    // Agents have their own command (never admin, added without an invite).
+    // Agents have their own command (boardAgentSet: added without an invite).
     const agentIds = [...Object.keys(people ?? {}), ...Object.keys(stageGrants ?? {})].filter(
       isAgentId,
     );

@@ -8,11 +8,20 @@
  *   REMOVE (role null): any board admin. Like removing a person — off
  *     assignees and watchers of active tickets, its messages stay — and its
  *     tokens for this board are revoked (revokedReason 'agentRemoved').
- *   Never 'admin' (the request schema has no such role).
+ *     LEGACY board tokens for this board are revoked (revokedReason
+ *     'agentRemoved'). §AA1: its agent token is NOT — that token belongs to
+ *     the agent, and this board simply becomes a 404 for it.
+ *   §AA2: the role may be 'admin' ("complete ownership" of the board's
+ *     settings). The old "never admin" rule is gone.
+ *
+ * A PERSON ONLY. §AA2 made agents admins, which is exactly why the check
+ * below stays: what an agent admin still cannot do is manage the board's
+ * people and agents. (An agent token could not reach this command anyway —
+ * its scopes are account scopes, which AGENT_TOKEN_SCOPES never holds.)
  *
  * Writes: access[agentId] and stageGrants[agentId] on the board (readerUids
- * and editorUids stay people-only — deriveAccess), and members/{agentId}
- * { kind: 'agent', … } for the pickers.
+ * and editorUids stay people-only; agentIds gains / loses the agent —
+ * deriveAccess), and members/{agentId} { kind: 'agent', … } for the pickers.
  */
 import { errors, isAgentId, type StageGrant } from '@tm/shared';
 import { agentMemberDoc, agentRef, removeAgentFromBoard } from '../agents/shared.js';
@@ -30,6 +39,7 @@ function checkGrant(board: { stages: { id: string }[] }, grant: StageGrant): Sta
 
 export default defineCommand('boardAgentSet', async (ctx: ServerCtx, input) => {
   const { boardId, agentId, role } = input;
+  // KEPT under §AA2 — see the header: an agent admin never manages people or agents.
   if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot manage board members');
 
   if (role === null) {

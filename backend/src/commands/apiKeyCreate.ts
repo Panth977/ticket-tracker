@@ -19,14 +19,26 @@
  * exactly once. The middleware (middleware/apiKey.ts) re-checks board, owner
  * and agent on every request, so removing either one stops the token.
  *
+ * §AA1 (agents.html) adds kind 'agent' — ONE TOKEN PER AGENT. It names the
+ * agent (actsAs) and nothing else: no board, no scopes (always
+ * AGENT_TOKEN_SCOPES). The agent must be the caller's and not archived; it
+ * need not be on any board yet — the token reaches whatever the agent is on
+ * at each call. GENERATING A NEW ONE REPLACES THE OLD: in the same
+ * transaction that writes the new row, every other live token acting as that
+ * agent (agent tokens and legacy board tokens alike) is revoked with
+ * revokedReason 'rotated' — unless keepOthers, which the migration uses
+ * (§AA6) and which the owner may use for a deliberate overlap.
+ *
+ * A board token acting as an agent can still be created (the pre-§AA form):
+ * existing orchestrators and the SDK mint them, and the middleware resolves
+ * them as before. The app no longer offers it (§AA5).
+ *
  * A TOKEN IS NEVER MADE BY A TOKEN: apiKeyCreate is on TOKEN_DENIED_COMMANDS,
  * so the runner refuses it for any credential carrying scopes, whatever they
  * are. That is what keeps a leak from becoming permanent (§R1).
  */
 import {
   ADMIN_SCOPES,
-  API_KEY_PREFIX,
-  API_KEY_SHOWN_PREFIX_LEN,
   ctxOwner,
   DEFAULT_API_KEY_LIMITS,
   errors,
@@ -35,11 +47,14 @@ import {
   type Agent,
   type ApiKey,
   type Board,
+  type Scope,
 } from '@tm/shared';
 import { roleOf } from '@tm/shared/logic/index';
-import { base62, sha256hex } from '../platform/crypto.js';
-import { typedDoc } from '../runtime/converters.js';
+import { agentRef } from '../agents/shared.js';
+import { agentKeyDoc, mintApiKey } from '../platform/apiKeyMint.js';
+import { typedCol, typedDoc } from '../runtime/converters.js';
 import { db } from '../runtime/firebase.js';
+import { runTx, txGet } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
 
 const DAY = 86_400_000;
@@ -49,8 +64,43 @@ export default defineCommand('apiKeyCreate', async (ctx, input) => {
   if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot create tokens');
   const owner = ctxOwner(ctx);
 
+  const expiresAt = input.expiresInDays ? ctx.now + input.expiresInDays * DAY : null;
+
+  if (input.kind === 'agent') {
+    // The request schema guarantees actsAs is an agent, no boardId, no scopes.
+    if (input.actsAs.kind !== 'agent') throw errors.invalid('Name the agent', { field: 'actsAs' });
+    const agentId = input.actsAs.id;
+    const minted = mintApiKey();
+    const keyId = ctx.ids.id();
+    const rotated = await runTx(async (tx) => {
+      // ── reads ──
+      const agent = await txGet(tx, agentRef(agentId));
+      // Agents are private to their owner: someone else's agent is simply not found.
+      if (!agent || agent.ownerUid !== owner) throw errors.not_found('Agent not found');
+      if (agent.archivedAt !== null)
+        throw errors.invalid('This agent is archived', { field: 'actsAs' });
+      // Every token acting as this agent lives under its owner (only the
+      // owner can mint one) — read in the transaction, so two "Regenerate"
+      // clicks at once cannot both leave a live token behind.
+      const others = input.keepOthers
+        ? []
+        : (
+            await tx.get(typedCol('apiKeys', paths.apiKeys(owner)).where('actsAs.id', '==', agentId))
+          ).docs.filter((d) => d.data().revokedAt === null);
+      // ── writes ──
+      for (const d of others) tx.update(d.ref, { revokedAt: ctx.now, revokedReason: 'rotated' });
+      tx.create(
+        typedDoc('apiKeys', paths.apiKey(owner, keyId)),
+        agentKeyDoc({ name: input.name, agentId, ...minted, now: ctx.now, expiresAt }),
+      );
+      return others.length;
+    });
+    return { key: minted.key, keyId, prefix: minted.prefix, expiresAt, rotated };
+  }
+
   const account = input.kind === 'account';
-  const scopes = [...new Set(input.scopes)];
+  // Required for 'board' and 'account' by the request schema.
+  const scopes: Scope[] = [...new Set(input.scopes ?? [])];
   // The request schema already refuses account scopes on a board token and a
   // boardId / agent on an account token; this is the data side of the rules.
   const boardId = account ? null : input.boardId!;
@@ -92,9 +142,8 @@ export default defineCommand('apiKeyCreate', async (ctx, input) => {
    * editor buys nothing.
    */
 
-  const key = API_KEY_PREFIX + base62(32);
+  const { key, prefix, hash } = mintApiKey();
   const keyId = ctx.ids.id();
-  const expiresAt = input.expiresInDays ? ctx.now + input.expiresInDays * DAY : null;
   const doc: ApiKey = {
     name: input.name,
     kind: input.kind,
@@ -104,8 +153,8 @@ export default defineCommand('apiKeyCreate', async (ctx, input) => {
         ? { kind: 'agent', id: input.actsAs.id }
         : { kind: 'user', id: owner },
     scopes,
-    prefix: key.slice(0, API_KEY_SHOWN_PREFIX_LEN),
-    hash: sha256hex(key),
+    prefix,
+    hash,
     limits: { ...DEFAULT_API_KEY_LIMITS },
     lastUsedAt: null,
     expiresAt,

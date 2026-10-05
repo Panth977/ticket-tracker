@@ -14,10 +14,17 @@
  *      yesterday's API is worse than no page. Then a copy for THIS project's
  *      URLs is staged into the build.
  *   6. firebase deploy --config firebase.deploy.json --project <id>
- *      (hosting, functions, firestore rules + indexes, storage, database rules)
+ *      (hosting — BOTH sites: the app and the artifact usercontent site,
+ *      docs/plan/artifacts.html §D1 — functions, firestore rules + indexes,
+ *      storage, database rules)
+ *
+ * The usercontent site ({project}-usercontent) has to exist before the first
+ * deploy that includes hosting. It is created once, by hand:
+ *   firebase hosting:sites:create <id>-usercontent --project <id>
  *
  *   pnpm deploy:prod                         everything to the "prod" alias in .firebaserc
  *   pnpm deploy:prod --only functions,hosting   any firebase --only list
+ *   pnpm deploy:prod --only hosting          both sites; hosting:<site id> for one
  *   pnpm deploy:prod --dry-run               steps 1–4 only: build + verify + stage, no deploy
  *   pnpm deploy:prod --build-sdk             rebuild sdk/dist instead of failing on a stale one
  *   pnpm deploy:prod --project <id>          another project (needs backend/.env.<id>)
@@ -94,6 +101,11 @@ run('pnpm', ['--filter', '@tm/frontend', 'build'], {
 });
 
 // 3. functions package + Cloud Build simulation
+// The chat UI (MCP Apps) is a file the api function serves: rebuild it so the
+// deployed function never carries a stale copy of the view.
+step('building the chat UI (frontend/mcp-ui → backend mcpUiHtml.gen.ts)');
+run('pnpm', ['--filter', '@tm/frontend', 'mcp-ui:build']);
+
 step('packaging functions → backend/deploy (verify = npm install --omit=dev + load)');
 run(process.execPath, [join(ROOT, 'scripts', 'deploy-functions.mjs'), '--project', project, '--verify']);
 

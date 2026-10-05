@@ -17,11 +17,13 @@
   import { shortcuts } from '$lib/keyboard/shortcuts';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import SearchProviders from '$lib/search/SearchProviders.svelte';
+  import { myArtifacts } from '$lib/artifacts/store';
   import { myBoards, online } from '$lib/stores';
   import Drawer from '$lib/ui/Drawer.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Sidebar from './Sidebar.svelte';
   import { registerNavProviders } from './navProviders';
+  import { myWorkspaces } from '$lib/workspaces/store';
   import { routes } from './routes';
 
   let { children }: { children: Snippet } = $props();
@@ -31,7 +33,16 @@
 
   const boards = $derived(myBoards(auth.uid));
 
-  $effect(() => registerNavProviders(() => boards));
+  const artifacts = $derived(myArtifacts(auth.uid));
+  const workspaces = $derived(myWorkspaces(auth.uid));
+
+  $effect(() =>
+    registerNavProviders(
+      () => boards,
+      () => artifacts,
+      () => workspaces,
+    ),
+  );
   $effect(() =>
     shortcuts.bind('mod+k', () => palette.toggle(), {
       inInputs: true,

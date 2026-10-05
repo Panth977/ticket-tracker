@@ -21,8 +21,9 @@ it holds one streaming connection to a Realtime Database node that only moves wh
 actually changes, and only then asks for the delta. §4.5 says what to do if you are writing the
 loop by hand.
 
-Everything below runs as written. Set `TM_TOKEN` to a token whose agent is on the board with the
-*Worker* preset.
+Everything below runs as written. Set `TM_TOKEN` to the agent's token (§2), with the agent on the
+board as an `editor`. If the agent is on more than one board, name the one this loop works on:
+`createClient({ token, board: 'ENG' })`, or `?board=ENG` in the raw-REST version.
 
 ### 4.1 With the SDK, the short way
 
@@ -39,7 +40,9 @@ declare function doTheWork(context: string): Promise<string>;  // your own code
 const tm = createClient({ token: process.env.TM_TOKEN! });
 
 const me = await tm.me();
-console.log(`I am ${me.principal.name} (${me.role}) on ${me.board!.key} · ${me.scopes.join(' ')}`);
+// `board` is the one a call that names no board lands on — null when the agent is on several
+// and this client was not given one (then pass `board: 'ENG'` to createClient).
+console.log(`I am ${me.principal.name} (${me.role ?? 'no board named'}) on ${me.board?.key ?? (me.boards ?? []).map((b) => b.key).join(', ')}`);
 console.log(me.principal.system_prompt ?? '(no system prompt — this token acts as a person)');
 
 await tm.work(
@@ -225,7 +228,7 @@ async function api(method, path, body, idempotencyKey) {
 
 // 0. Who am I? (An agent token also answers with its system prompt.)
 const me = await api('GET', '/me');
-console.log(me.principal.name, '·', me.board.key, '·', me.scopes.join(' '));
+console.log(me.principal.name, '·', me.kind, '·', me.board?.key ?? (me.boards ?? []).map((b) => b.key).join(', '));
 
 // 1. The inbox, from a cursor you persist between runs. ALWAYS `unacked=1`,
 //    ALWAYS from the cursor: this asks for the delta, never for the world.

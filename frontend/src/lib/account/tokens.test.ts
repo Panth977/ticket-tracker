@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT_SCOPES, SCOPE_PRESETS, TOKEN_SCOPES } from '@tm/shared';
+import { ACCOUNT_SCOPES, ARTIFACT_SCOPES, SCOPE_PRESETS, TOKEN_SCOPES } from '@tm/shared';
 import {
   ACCOUNT_DEFAULT_EXPIRY,
   ACCOUNT_SCOPE_SECTION,
+  ARTIFACT_SCOPE_SECTION,
   apiBase,
+  artifactScopesFit,
   choiceOf,
   EXPIRY_OPTIONS,
   expiryIsRisky,
@@ -20,13 +22,12 @@ import {
   type TokenDraft,
 } from './tokens';
 
-const AG = 'ag_AAAAAAAAAAAAAAAA';
+// §AA5: the form makes a board token acting as ME, or an account token —
+// never one acting as an agent (that is the agent page's one token).
 const draft = (o: Partial<TokenDraft> = {}): TokenDraft => ({
   name: 'orch-eng-builder',
   kind: 'board',
   boardId: 'b1',
-  actsAs: 'agent',
-  agentId: AG,
   scopes: [...SCOPE_PRESETS.worker],
   expiry: '90',
   ...o,
@@ -51,29 +52,21 @@ describe('token form (agents.html §E)', () => {
   it('validates a draft', () => {
     expect(tokenDraftErrors(draft())).toEqual({});
     expect(
-      Object.keys(
-        tokenDraftErrors(draft({ name: ' ', boardId: null, agentId: null, scopes: [] })),
-      ).sort(),
-    ).toEqual(['agentId', 'boardId', 'name', 'scopes']);
-    expect(tokenDraftErrors(draft({ scopes: ['board:read', 'webhooks:manage'] })).scopes).toMatch(
-      /admin/,
-    );
-    expect(
-      tokenDraftErrors(
-        draft({ actsAs: 'me', agentId: null, scopes: ['board:read', 'webhooks:manage'] }),
-      ),
-    ).toEqual({});
+      Object.keys(tokenDraftErrors(draft({ name: ' ', boardId: null, scopes: [] }))).sort(),
+    ).toEqual(['boardId', 'name', 'scopes']);
+    // Acting as me, the admin scopes are legal (the form offers them only where I am admin).
+    expect(tokenDraftErrors(draft({ scopes: ['board:read', 'webhooks:manage'] }))).toEqual({});
   });
   it('builds the apiKeyCreate request', () => {
     expect(tokenRequest(draft())).toEqual({
       name: 'orch-eng-builder',
       kind: 'board',
       boardId: 'b1',
-      actsAs: { kind: 'agent', id: AG },
+      actsAs: { kind: 'user' },
       scopes: [...SCOPE_PRESETS.worker],
       expiresInDays: 90,
     });
-    const me = tokenRequest(draft({ actsAs: 'me', expiry: 'never', scopes: ['board:read'] }));
+    const me = tokenRequest(draft({ expiry: 'never', scopes: ['board:read'] }));
     expect(me).toEqual({
       name: 'orch-eng-builder',
       kind: 'board',
@@ -96,6 +89,7 @@ describe('token form (agents.html §E)', () => {
   it('explains revocations', () => {
     expect(revokedReasonLabel('agentArchived')).toMatch(/archived/);
     expect(revokedReasonLabel('agentRemoved')).toMatch(/left the board/);
+    expect(revokedReasonLabel('rotated')).toMatch(/newer token/);
     expect(revokedReasonLabel(null)).toBe('Revoked');
   });
   it('picks the API base', () => {
@@ -114,24 +108,22 @@ describe('account tokens (agents.html §R1)', () => {
     draft({
       kind: 'account',
       boardId: null,
-      actsAs: 'me',
-      agentId: null,
       scopes: [...SCOPE_PRESETS.fullAccount],
       ...o,
     });
 
-  it('offers three choices, and switching between them keeps the draft legal', () => {
-    expect(choiceOf(draft())).toBe('agent');
-    expect(choiceOf(draft({ actsAs: 'me' }))).toBe('me');
+  it('offers two choices, and switching between them keeps the draft legal', () => {
+    expect(choiceOf(draft())).toBe('me');
     expect(choiceOf(acc())).toBe('account');
 
-    // board · agent → account: the board, the agent and the admin scopes go.
+    // board → account: the board and the admin scopes go.
     const toAccount = withChoice(draft({ scopes: ['board:read', 'webhooks:manage'] }), 'account');
     expect(toAccount.kind).toBe('account');
     expect(toAccount.boardId).toBe(null);
-    expect(toAccount.agentId).toBe(null);
-    expect(toAccount.actsAs).toBe('me');
     expect(toAccount.scopes).toEqual(['board:read']);
+    // §AA5: the draft has no "acts as" any more — nothing here can name an agent.
+    expect(toAccount).not.toHaveProperty('actsAs');
+    expect(toAccount).not.toHaveProperty('agentId');
 
     // account → board: the account scopes go, because a board token may not carry them.
     const back = withChoice(acc(), 'me');
@@ -155,9 +147,9 @@ describe('account tokens (agents.html §R1)', () => {
     expect(tokenDraftErrors(acc())).toEqual({});
     // No boardId is not an error here — it is the point.
     expect(tokenDraftErrors(acc({ boardId: null })).boardId).toBeUndefined();
-    expect(
-      tokenDraftErrors(draft({ actsAs: 'me', scopes: ['board:read', 'boards:create'] })).scopes,
-    ).toMatch(/[Aa]ccount/);
+    expect(tokenDraftErrors(draft({ scopes: ['board:read', 'boards:create'] })).scopes).toMatch(
+      /[Aa]ccount/,
+    );
     expect(tokenDraftErrors(acc({ name: '  ' })).name).toBeTruthy();
     expect(tokenDraftErrors(acc({ scopes: [] })).scopes).toBeTruthy();
   });
@@ -172,9 +164,25 @@ describe('account tokens (agents.html §R1)', () => {
       expiresInDays: 90,
     });
     // A board token never carries an account scope, even if one sneaks in.
-    expect(
-      tokenRequest(draft({ actsAs: 'me', scopes: ['board:read', 'boards:admin'] })).scopes,
-    ).toEqual(['board:read']);
+    expect(tokenRequest(draft({ scopes: ['board:read', 'boards:admin'] })).scopes).toEqual([
+      'board:read',
+    ]);
+  });
+
+  it('keeps the Artifacts checkboxes for an account token only', () => {
+    expect(artifactScopesFit(acc())).toBe(true);
+    expect(artifactScopesFit(draft())).toBe(false);
+    expect(ARTIFACT_SCOPE_SECTION.scopes).toEqual([...ARTIFACT_SCOPES]);
+    // account → board drops them, and a board request never carries one.
+    const back = withChoice(acc({ scopes: ['board:read', 'artifacts:write'] }), 'me');
+    expect(back.scopes).toEqual(['board:read']);
+    expect(tokenRequest(draft({ scopes: ['board:read', 'artifacts:read'] })).scopes).toEqual([
+      'board:read',
+    ]);
+    expect(tokenRequest(acc({ scopes: ['board:read', 'artifacts:write'] })).scopes).toEqual([
+      'board:read',
+      'artifacts:write',
+    ]);
   });
 
   it('offers the right presets and the account checkboxes', () => {
@@ -186,5 +194,7 @@ describe('account tokens (agents.html §R1)', () => {
       expect(SCOPE_SECTIONS.flatMap((x) => x.scopes)).not.toContain(s);
     expect(tokenKindLabel('account')).toBe('Account token');
     expect(tokenKindLabel('board')).toBe('Board token');
+    // §AA1: listed (read-only) on the Tokens page, made on the agent's page.
+    expect(tokenKindLabel('agent')).toBe('Agent token');
   });
 });

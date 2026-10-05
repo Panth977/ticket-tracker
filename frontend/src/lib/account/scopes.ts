@@ -7,7 +7,7 @@
 import { normalizeScopes, SCOPES, type Scope } from '@tm/shared';
 
 export interface ScopeGroup {
-  id: 'read' | 'write' | 'comment' | 'webhooks';
+  id: 'read' | 'write' | 'comment' | 'plan' | 'webhooks' | 'boards' | 'agents' | 'artifacts';
   label: string;
   hint: string;
   scopes: Scope[];
@@ -40,10 +40,34 @@ export const SCOPE_GROUPS: ScopeGroup[] = [
     scopes: ['comments:write', 'files:write'],
   },
   {
+    id: 'plan',
+    label: 'Can plan and report',
+    hint: 'Ask questions in threads, keep task lists, say what it is working on',
+    scopes: ['questions:write', 'tasklists:write', 'status:write'],
+  },
+  {
     id: 'webhooks',
     label: 'Can manage the board',
     hint: 'Settings and webhooks, on boards where you are an admin',
     scopes: ['board:admin', 'webhooks:manage'],
+  },
+  {
+    id: 'boards',
+    label: 'Can create boards and invite people',
+    hint: 'New boards, and settings and people on boards where you are an admin',
+    scopes: ['boards:create', 'boards:admin', 'invites:write'],
+  },
+  {
+    id: 'agents',
+    label: 'Can manage your agents',
+    hint: 'Create and edit your agents, and put them on boards',
+    scopes: ['agents:write'],
+  },
+  {
+    id: 'artifacts',
+    label: 'Can read and publish artifacts',
+    hint: 'Read, create, publish and share artifacts',
+    scopes: ['artifacts:read', 'artifacts:write'],
   },
 ];
 

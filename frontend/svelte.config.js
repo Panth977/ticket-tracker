@@ -15,10 +15,13 @@ const config = {
        * app shell only — icons, the manifest, the offline page, the favicon, the
        * merged messaging worker. static/lib (the hosted SDK), static/integrate
        * and the llms*.txt files are megabytes meant for orchestrators fetching
-       * them over the network, never for a phone's offline cache.
+       * them over the network, never for a phone's offline cache. The same goes
+       * for static/backend-driver (artifacts.html §E1): artifacts load it, the
+       * app never does.
        */
       files: (path) =>
         !path.startsWith('lib/') &&
+        !path.startsWith('backend-driver/') &&
         !path.startsWith('integrate/') &&
         path !== 'integrate.json' &&
         !/^llms.*\.txt$/.test(path),

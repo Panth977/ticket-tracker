@@ -2,25 +2,31 @@
   Account › Tokens (agents.html §E, §R1): every token I made — name, what it
   reaches, permissions, last used, expiry, revoke — and New token.
 
-  BOARD TOKENS are grouped by board and optionally carry an agent's identity.
+  BOARD TOKENS are grouped by board and act as me.
+  AGENT TOKENS (§AA1, §AA5) are listed READ-ONLY, in their own group: an agent
+  has one token, generated, replaced and revoked on the agent's own page —
+  each row links there. That group also holds any legacy board token still
+  acting as an agent (§AA6), because it is managed in the same place.
   ACCOUNT TOKENS (§R1) have no board: they act as me on every board I am on,
   as that stands at each call, so they get their own group at the top and are
   marked plainly. Either way the string (tm_live_…) is shown once, with ready
   snippets. Stored as a hash; revoking takes effect on the next request.
 
-  ?new=1&board={boardId}&agent={agentId} opens the form prefilled (the agent
-  page's "New token" links here).
+  ?new=1&board={boardId} opens the form prefilled; ?new=1&kind=account the
+  account form. An old ?new=1&agent={agentId} link goes to that agent's page,
+  where its token is made now (§AA5).
 -->
 <script lang="ts">
-  /* eslint-disable svelte/no-navigation-without-resolve -- an absolute URL to this deployment, opened in a new tab */
+  /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { env } from '$env/dynamic/public';
-  import { Globe, KeyRound, Plus } from 'lucide-svelte';
+  import { Bot, Globe, KeyRound, Plus } from 'lucide-svelte';
   import { apiKeyKind, paths, SCOPE_PRESETS, type ApiKey } from '@tm/shared';
   import { command } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
-  import { Principal, principalLabel } from '$lib/people';
+  import { Principal } from '$lib/people';
   import { myBoards, queryStore, type WithId } from '$lib/stores';
   import { Badge, Button, Dialog, EmptyState, Skeleton, toast } from '$lib/ui';
   import { dateOnly, relativeTime } from '../format';
@@ -41,11 +47,11 @@
     tokenRequest,
     type TokenDraft,
   } from '../tokens';
-  import { myAgents } from '$lib/agents/agents';
+  import { isAgentKey } from '$lib/agents/access';
+  import { agentRoutes } from '$lib/agents/routes';
 
   const keysQ = $derived(queryStore<ApiKey>(auth.uid ? { path: paths.apiKeys(auth.uid) } : null));
   const boardsQ = $derived(myBoards(auth.uid));
-  const agentsQ = $derived(myAgents(auth.uid));
   const activeBoards = $derived(
     $boardsQ.data.filter((b) => b.archivedAt == null).sort((a, b) => a.name.localeCompare(b.name)),
   );
@@ -71,11 +77,22 @@
   const shown = $derived(
     keys.filter(
       (k) =>
-        (boardFilter === 'all' || apiKeyKind(k) === 'account' || k.boardId === boardFilter) &&
+        (boardFilter === 'all' ||
+          apiKeyKind(k) === 'account' ||
+          apiKeyKind(k) === 'agent' ||
+          k.boardId === boardFilter ||
+          (k.defaultBoardId ?? null) === boardFilter) &&
         (showInactive || keyState(k) === 'active'),
     ),
   );
   const accountKeys = $derived(shown.filter((k) => apiKeyKind(k) === 'account'));
+  /*
+   * §AA5: every key acting as an agent — the kind 'agent' token (no board, so
+   * the board filter never hides it, as for an account token) and a legacy
+   * board token acting as an agent (which the filter treats like any board
+   * token). Read-only here.
+   */
+  const agentKeys = $derived(shown.filter((k) => isAgentKey(k)));
   const inactiveCount = $derived(keys.filter((k) => keyState(k) !== 'active').length);
   const boardName = (id: string) =>
     $boardsQ.data.find((b) => b.id === id)?.name ?? 'A board you left';
@@ -84,7 +101,8 @@
   const groups = $derived.by(() => {
     const by: Record<string, WithId<ApiKey>[]> = {};
     // Account tokens are listed on their own, above (they have no board).
-    for (const k of shown) if (k.boardId) (by[k.boardId] ??= []).push(k);
+    // Agent tokens too (§AA5), legacy board ones included.
+    for (const k of shown) if (k.boardId && !isAgentKey(k)) (by[k.boardId] ??= []).push(k);
     return Object.entries(by)
       .map(([boardId, list]) => ({ boardId, list }))
       .sort((a, b) => boardName(a.boardId).localeCompare(boardName(b.boardId)));
@@ -95,8 +113,6 @@
     name: '',
     kind: 'board',
     boardId: activeBoards.length === 1 ? activeBoards[0]!.id : null,
-    actsAs: 'me',
-    agentId: null,
     scopes: [...SCOPE_PRESETS.worker],
     expiry: '90',
   });
@@ -108,7 +124,6 @@
   let created = $state<{
     key: string;
     name: string;
-    actsAs: string;
     boardName: string;
     kind: 'board' | 'account';
     boardCount: number;
@@ -124,37 +139,24 @@
   onMount(() => {
     const q = page.url.searchParams;
     if (q.get('new') !== '1') return;
+    // §AA5: an agent's token is made on the agent's page. An old link lands there.
     const agentId = q.get('agent');
+    if (agentId) {
+      void goto(agentRoutes.agent(agentId), { replaceState: true });
+      return;
+    }
     // ?new=1&kind=account — what the Claude setup guide (§R3) links to.
     if (q.get('kind') === 'account') {
       openCreate({
         kind: 'account',
         boardId: null,
-        actsAs: 'me',
         scopes: [...SCOPE_PRESETS.fullAccount],
         expiry: ACCOUNT_DEFAULT_EXPIRY,
       });
       return;
     }
-    openCreate({
-      ...(q.get('board') ? { boardId: q.get('board') } : {}),
-      ...(agentId ? { actsAs: 'agent' as const, agentId } : {}),
-    });
+    openCreate({ ...(q.get('board') ? { boardId: q.get('board') } : {}) });
   });
-  // An agent link without a board: pick the first board that agent is on.
-  $effect(() => {
-    if (
-      !createOpen ||
-      draft.kind === 'account' ||
-      draft.boardId ||
-      draft.actsAs !== 'agent' ||
-      !draft.agentId
-    )
-      return;
-    const b = activeBoards.find((x) => x.access[draft.agentId!] != null);
-    if (b) draft.boardId = b.id;
-  });
-
   async function create(e: SubmitEvent) {
     e.preventDefault();
     touched = true;
@@ -163,12 +165,9 @@
     try {
       const req = tokenRequest(draft);
       const r = await command('apiKeyCreate', req, { toast: 'Could not create the token' });
-      const agent =
-        draft.actsAs === 'agent' ? $agentsQ.data.find((a) => a.id === draft.agentId) : null;
       created = {
         key: r.key,
         name: req.name,
-        actsAs: agent ? principalLabel({ name: agent.name, kind: 'agent' }) : 'you',
         boardName: req.boardId ? boardName(req.boardId) : '',
         kind: req.kind,
         boardCount: activeBoards.length,
@@ -212,7 +211,7 @@
 
 <SectionHeader
   title="Tokens"
-  description="Keys for orchestrators, agents and scripts to use the REST API and MCP. A board token works on one board, as you or as one of your agents; an account token acts as you on every board you are on. Either way a token only narrows what that role already allows."
+  description="Keys for orchestrators, agents and scripts to use the REST API and MCP. A board token works on one board, as you; an account token acts as you on every board you are on — either only narrows what your role already allows. Each of your agents has one token of its own, made on the agent’s page and listed here."
 >
   {#snippet actions()}<Button variant="primary" icon={Plus} onclick={() => openCreate()}
       >New token</Button
@@ -253,7 +252,7 @@
   <EmptyState
     icon={KeyRound}
     title="No tokens yet"
-    description="Create one for an orchestrator, an agent, a script or a CI job."
+    description="Create one for a script, a CI job or Claude. An agent’s token is made on the agent’s page."
   >
     {#snippet action()}<Button icon={Plus} onclick={() => openCreate()}>New token</Button>{/snippet}
   </EmptyState>
@@ -290,6 +289,10 @@
           {#if apiKeyKind(k) === 'account'}
             <Badge tone="accent">{tokenKindLabel('account')}</Badge>
           {/if}
+          <!-- §AA6: a board token still acting as an agent, not converted yet. -->
+          {#if isAgentKey(k) && apiKeyKind(k) === 'board'}
+            <Badge>Older board token</Badge>
+          {/if}
           {#if st === 'revoked'}<Badge tone="danger">{revokedReasonLabel(k.revokedReason)}</Badge
             >{:else if st === 'expired'}<Badge tone="warning">Expired</Badge>{/if}
         </p>
@@ -302,10 +305,20 @@
               <Principal id={auth.uid} layout="compact" size={16} suffix="(you)" />
             {/if}
             {#if apiKeyKind(k) === 'account'}<span>on every board you are on</span>{/if}
+            {#if apiKeyKind(k) === 'agent'}<span>on every board and artifact it is on</span>{/if}
+            {#if isAgentKey(k) && apiKeyKind(k) === 'board' && k.boardId}
+              <span>on {boardName(k.boardId)}</span>
+            {/if}
           </span>
-          <span title={scopesTooltip(k.scopes)} class="cursor-help underline decoration-dotted"
-            >{scopesSummary(k.scopes)}</span
-          >
+          {#if apiKeyKind(k) === 'agent'}
+            <!-- §AA1: no checkbox list — the role on each board decides. -->
+            <span>Its roles decide what it may do</span>
+            {#if k.defaultBoardId}<span>default board {boardKey(k.defaultBoardId)}</span>{/if}
+          {:else}
+            <span title={scopesTooltip(k.scopes)} class="cursor-help underline decoration-dotted"
+              >{scopesSummary(k.scopes)}</span
+            >
+          {/if}
         </div>
         <p class="text-xs text-subtle">
           Created {dateOnly(k.createdAt, tz)} ·
@@ -316,7 +329,12 @@
             >{/if}
         </p>
       </div>
-      {#if st === 'active'}
+      {#if isAgentKey(k) && k.actsAs.kind === 'agent'}
+        <!-- §AA5: read-only here — generate, replace and revoke on the agent's page. -->
+        <Button size="sm" variant="ghost" href={agentRoutes.agent(k.actsAs.id)}
+          >Manage on the agent’s page</Button
+        >
+      {:else if st === 'active'}
         <Button
           size="sm"
           variant="ghost"
@@ -330,7 +348,7 @@
     </li>
   {/snippet}
 
-  {#if !groups.length && !accountKeys.length}
+  {#if !groups.length && !accountKeys.length && !agentKeys.length}
     <p class="text-sm text-muted">No active tokens here.</p>
   {/if}
   <div class="flex flex-col gap-5" data-token-list>
@@ -350,6 +368,27 @@
         </ul>
         <p class="text-xs text-muted">
           Each of these acts as you on every board you are on right now — and on none you have left.
+        </p>
+      </section>
+    {/if}
+    <!--
+        §AA5 — agent tokens, read-only. One per agent; while converted older
+        tokens are still about an agent has several rows, and its page is
+        where "Revoke older tokens" is.
+      -->
+    {#if agentKeys.length}
+      <section class="flex flex-col gap-1.5" data-agent-tokens>
+        <h3 class="flex items-center gap-2 text-sm font-medium">
+          <Bot size={16} class="text-muted" aria-hidden="true" />
+          Your agents
+          <span class="font-normal text-subtle">{agentKeys.length}</span>
+        </h3>
+        <ul class="divide-y divide-line rounded-xl border border-line bg-surface">
+          {#each agentKeys as k (k.id)}{@render tokenRow(k)}{/each}
+        </ul>
+        <p class="text-xs text-muted">
+          Each agent has one token. What it may do is set on the agent’s page: a role on each board,
+          a permission on each artifact.
         </p>
       </section>
     {/if}
@@ -381,7 +420,7 @@
       token={created.key}
       apiBase={base}
       name={created.name}
-      actsAs={created.actsAs}
+      actsAs="you"
       boardName={created.boardName}
       kind={created.kind}
       boardCount={created.boardCount}

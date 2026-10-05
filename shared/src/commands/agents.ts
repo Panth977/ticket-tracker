@@ -87,7 +87,7 @@ export const boardAgentSet = defineCommand({
   /** §R1: account tokens only. The handler still needs can(admin), i.e. boards:admin. */
   scopes: ['agents:write', 'boards:admin'],
   permission:
-    "Adding (the agent not on the board yet): a board admin who OWNS the agent, agent not archived. Changing role / stageGrant or removing: any board admin. Never 'admin'. Removing works like removing a person (off assignees and watchers, messages stay) and revokes its tokens for this board (revokedReason 'agentRemoved').",
+    "A PERSON only — an agent never manages a board's agents, whatever its role (§AA2). Adding (the agent not on the board yet): a board admin who OWNS the agent, agent not archived. Changing role / stageGrant or removing: any board admin. §AA2: the role may be 'admin'. Removing works like removing a person (off assignees and watchers, messages stay) and revokes its LEGACY board tokens for this board (revokedReason 'agentRemoved') — never its agent token (§AA1), which simply stops reaching this board.",
   errors: ['forbidden', 'not_found', 'conflict'],
   req: req({
     boardId: BoardIdSchema,

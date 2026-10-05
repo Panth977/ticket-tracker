@@ -257,6 +257,20 @@
       ]
     },
     {
+      "collectionGroup": "boards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "agentIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "invites",
       "queryScope": "COLLECTION",
       "fields": [
@@ -327,6 +341,38 @@
         {
           "fieldPath": "__name__",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "artifacts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memberUids",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "artifactId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }

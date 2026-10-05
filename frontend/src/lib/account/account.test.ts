@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defaultChannelMatrix, NOTIFY_EVENTS } from '@tm/shared';
+import { defaultChannelMatrix, NOTIFY_EVENTS, SCOPES } from '@tm/shared';
 import { clampCrop, coverScale, sourceRect } from './avatar';
 import {
   createKeyChecker,
@@ -177,6 +177,9 @@ describe('scopes', () => {
       'events:read',
     ]);
   });
+  it('every scope belongs to a consent group, so a requested one is never silently dropped', () => {
+    expect(scopesFromGroups(groupsFor(SCOPES).map((g) => g.id))).toEqual([...SCOPES]);
+  });
   it('describes scopes for a list row', () => {
     expect(describeScopes(['tickets:read', 'comments:write'])).toBe('Read tickets · Comment');
   });
@@ -206,10 +209,10 @@ describe('oauth consent request', () => {
     const { code_challenge: _, ...noPkce } = base;
     expect(p(noPkce).ok).toBe(false);
   });
-  it('defaults to read-only when no scope is asked', () => {
+  it('offers every scope when none is asked (the person unticks on the consent screen)', () => {
     const { scope: _, ...noScope } = base;
     const r = p(noScope);
-    expect(r.ok && r.req.scopes.every((s) => s.endsWith(':read'))).toBe(true);
+    expect(r.ok && r.req.scopes).toEqual([...SCOPES]);
   });
 });
 

@@ -2,11 +2,15 @@
  * Tokens (apiKeyCreate v2, agents.html §E, and §R1) — the create form's
  * choices, the list's helpers, and the "shown once" snippets.
  *
- * THREE KINDS, one form:
+ * TWO KINDS in the form:
  *   board · me      one board, acting as me
- *   board · agent   one board, acting as one of my agents on it
  *   account         §R1 "virtual me": no board, acting as me on EVERY board I
  *                   am on, as that stands at each call
+ *
+ * §AA5: the form no longer makes a token that acts as an AGENT. An agent has
+ * ONE token (kind 'agent', no board, no checkboxes — its role on each board
+ * and its permission on each artifact decide), generated on the agent's own
+ * page (lib/agents/AgentTokenCard). This page lists those read-only.
  */
 import {
   ACCOUNT_KEY_DEFAULT_EXPIRY_DAYS,
@@ -14,6 +18,7 @@ import {
   ACCOUNT_TOKEN_PRESETS,
   ADMIN_SCOPES,
   API_KEY_EXPIRY_DAYS,
+  ARTIFACT_SCOPES,
   BOARD_TOKEN_PRESETS,
   isAccountScope,
   presetOf,
@@ -76,6 +81,9 @@ export function revokedReasonLabel(reason: ApiKey['revokedReason']): string {
       return 'Revoked · agent left the board';
     case 'ownerLeft':
       return 'Revoked · you left the board';
+    // §AA1: generating a new agent token replaced this one.
+    case 'rotated':
+      return 'Replaced by a newer token';
     default:
       return 'Revoked';
   }
@@ -100,9 +108,9 @@ export function scopesSummary(scopes: readonly Scope[]): string {
   return extra.length ? `${base} + ${extra.join(' + ')}` : base;
 }
 
-/** 'Account token' / 'Board token' — the badge on a list row (§R1). */
+/** 'Account token' / 'Agent token' / 'Board token' — the badge on a list row (§R1, §AA1). */
 export const tokenKindLabel = (kind: ApiKeyKind): string =>
-  kind === 'account' ? 'Account token' : 'Board token';
+  kind === 'account' ? 'Account token' : kind === 'agent' ? 'Agent token' : 'Board token';
 
 /** Tooltip: one scope per line, with its label. */
 export function scopesTooltip(scopes: readonly Scope[]): string {
@@ -160,6 +168,21 @@ export const ACCOUNT_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
   scopes: [...ACCOUNT_SCOPES],
 };
 
+/**
+ * Artifacts (artifacts.html §C4) — not about a board, so not board checkboxes.
+ * An ACCOUNT token reaches every artifact its person owns or edits. A board
+ * token (one board, acting as me) reaches none, so the form does not offer
+ * them there (artifactScopesFit). An AGENT's token always carries them (§AA1:
+ * AGENT_TOKEN_SCOPES) and is not made by this form at all.
+ */
+export const ARTIFACT_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
+  title: 'Artifacts',
+  scopes: [...ARTIFACT_SCOPES],
+};
+const isArtifactScope = (s: string): boolean => (ARTIFACT_SCOPES as readonly string[]).includes(s);
+/** May this kind of token carry artifacts:* at all? */
+export const artifactScopesFit = (d: Pick<TokenDraft, 'kind'>): boolean => d.kind === 'account';
+
 /** What an account token can NEVER do, in the words the form shows (§R1). */
 export const ACCOUNT_TOKEN_NEVER = [
   'create or revoke tokens',
@@ -176,28 +199,29 @@ export function toggleScope(scopes: readonly Scope[], s: Scope, on: boolean): Sc
   return SCOPES.filter((x) => set.has(x));
 }
 
+/** What the FORM can make (§AA5): never kind 'agent' — that is the agent page's. */
+export type FormTokenKind = Exclude<ApiKeyKind, 'agent'>;
+
 export interface TokenDraft {
   name: string;
-  /** §R1: 'board' (one board) or 'account' (every board I am on). */
-  kind: ApiKeyKind;
+  /** §R1: 'board' (one board, acting as me) or 'account' (every board I am on). */
+  kind: FormTokenKind;
   /** kind 'board' only. */
   boardId: string | null;
-  actsAs: 'me' | 'agent';
-  agentId: string | null;
   scopes: Scope[];
   expiry: ExpiryChoice;
 }
 
-/** The three choices the form offers, as one value. */
-export type TokenChoice = 'me' | 'agent' | 'account';
-export const choiceOf = (d: Pick<TokenDraft, 'kind' | 'actsAs'>): TokenChoice =>
-  d.kind === 'account' ? 'account' : d.actsAs;
+/** The two choices the form offers, as one value. */
+export type TokenChoice = 'me' | 'account';
+export const choiceOf = (d: Pick<TokenDraft, 'kind'>): TokenChoice =>
+  d.kind === 'account' ? 'account' : 'me';
 
 /**
- * Switch the form between the three choices, keeping everything that still
- * makes sense. Going to 'account' drops the board, the agent and the admin
- * scopes (which the account scopes replace); coming back drops the account
- * scopes, which a board token may not carry.
+ * Switch the form between the two choices, keeping everything that still
+ * makes sense. Going to 'account' drops the board and the admin scopes (which
+ * the account scopes replace); coming back drops the account scopes and the
+ * artifact scopes, neither of which a board token may carry.
  */
 export function withChoice(d: TokenDraft, choice: TokenChoice): TokenDraft {
   if (choice === 'account')
@@ -205,8 +229,6 @@ export function withChoice(d: TokenDraft, choice: TokenChoice): TokenDraft {
       ...d,
       kind: 'account',
       boardId: null,
-      actsAs: 'me',
-      agentId: null,
       scopes: d.scopes.filter((s) => !(ADMIN_SCOPES as readonly string[]).includes(s)),
       // Deliberate, not incidental: an account token starts with an expiry.
       expiry: d.expiry === 'never' ? ACCOUNT_DEFAULT_EXPIRY : d.expiry,
@@ -214,54 +236,40 @@ export function withChoice(d: TokenDraft, choice: TokenChoice): TokenDraft {
   return {
     ...d,
     kind: 'board',
-    actsAs: choice,
-    scopes: d.scopes.filter((s) => !isAccountScope(s)),
+    // A board token reaches no artifact (artifacts.html §C4).
+    scopes: d.scopes.filter((s) => !isAccountScope(s) && !isArtifactScope(s)),
   };
 }
 
 /** Problems with a token draft, by field (empty = can create). */
 export function tokenDraftErrors(
   d: TokenDraft,
-): Partial<Record<'name' | 'boardId' | 'agentId' | 'scopes', string>> {
-  const e: Partial<Record<'name' | 'boardId' | 'agentId' | 'scopes', string>> = {};
+): Partial<Record<'name' | 'boardId' | 'scopes', string>> {
+  const e: Partial<Record<'name' | 'boardId' | 'scopes', string>> = {};
   const account = d.kind === 'account';
-  if (!d.name.trim()) e.name = 'Name it after what will use it, e.g. “orch-eng-builder”.';
+  if (!d.name.trim()) e.name = 'Name it after what will use it, e.g. “ci-release-notes”.';
   else if (d.name.trim().length > 80) e.name = 'At most 80 characters.';
   // An account token has no board on purpose — asking for one would be wrong.
   if (!account && !d.boardId) e.boardId = 'Pick the board this token works on.';
-  if (!account && d.actsAs === 'agent' && !d.agentId)
-    e.agentId = 'Pick one of your agents on this board.';
   if (!d.scopes.length) e.scopes = 'Pick at least one permission.';
-  else if (
-    d.actsAs === 'agent' &&
-    d.scopes.some((s) => (ADMIN_SCOPES as readonly string[]).includes(s))
-  )
-    e.scopes = 'An agent token cannot carry admin permissions.';
   else if (!account && d.scopes.some(isAccountScope))
     e.scopes = 'Account permissions need an account token.';
   return e;
 }
 
-/** The apiKeyCreate input for a valid draft. */
+/** The apiKeyCreate input for a valid draft. Always acts as the person (§AA5). */
 export function tokenRequest(d: TokenDraft) {
   const days = expiresInDays(d.expiry);
   const account = d.kind === 'account';
   const scopes = account
     ? d.scopes
-    : d.scopes.filter(
-        (s) =>
-          !isAccountScope(s) &&
-          !(d.actsAs === 'agent' && (ADMIN_SCOPES as readonly string[]).includes(s)),
-      );
+    : d.scopes.filter((s) => !isAccountScope(s) && !isArtifactScope(s));
   return {
     name: d.name.trim(),
     kind: d.kind,
     // The command takes boardId: null for an account token.
     boardId: account ? null : d.boardId!,
-    actsAs:
-      !account && d.actsAs === 'agent'
-        ? { kind: 'agent' as const, id: d.agentId! }
-        : { kind: 'user' as const },
+    actsAs: { kind: 'user' as const },
     scopes,
     ...(days ? { expiresInDays: days } : {}),
   };

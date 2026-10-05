@@ -35,18 +35,23 @@ export const grantRevoke = defineCommand({
  * as the caller, and may carry the account scopes. It is never created BY a
  * token: apiKeyCreate is on TOKEN_DENIED_COMMANDS, so a leaked token cannot
  * mint a longer-lived one.
+ *
+ * §AA1 adds kind: 'agent' — ONE TOKEN PER AGENT. The agent is named by
+ * actsAs; there is no boardId and no scopes (they are always
+ * AGENT_TOKEN_SCOPES). Generating one REPLACES the agent's other live tokens
+ * (revokedReason 'rotated') in the same transaction, unless keepOthers: true.
  */
 export const apiKeyCreate = defineCommand({
   name: 'apiKeyCreate',
   source: 'platform',
   permission:
-    "Any signed-in person IN THE APP (never a token — see TOKEN_DENIED_COMMANDS), for themselves. kind 'board': boardId is a board they are on; actsAs agent means an agent THEY own, not archived, currently on that board; agent tokens cannot carry admin scopes; admin scopes need the owner to be admin there. kind 'account': no boardId, acts as them everywhere, and may carry the account scopes.",
+    "Any signed-in person IN THE APP (never a token — see TOKEN_DENIED_COMMANDS), for themselves. kind 'board': boardId is a board they are on; actsAs agent means an agent THEY own, not archived, currently on that board; a board token acting as an agent cannot carry admin scopes; admin scopes need the owner to be admin there. kind 'account': no boardId, acts as them everywhere, and may carry the account scopes. kind 'agent' (§AA1): actsAs names an agent THEY own, not archived; no boardId, no scopes; the agent's other live tokens are revoked ('rotated') unless keepOthers.",
   errors: ['forbidden', 'not_found', 'invalid'],
   req: req({
     name: z.string().trim().min(1).max(80),
     /** Default 'board' — every phase-2 caller keeps working unchanged. */
     kind: ApiKeyKindSchema.default('board'),
-    /** kind 'board' only; omitted / null for an account token. */
+    /** kind 'board' only; omitted / null for an account token and for an agent token. */
     boardId: BoardIdSchema.nullable().optional(),
     /** Default { kind: 'user' } — the caller themselves. */
     actsAs: z
@@ -55,18 +60,62 @@ export const apiKeyCreate = defineCommand({
         z.object({ kind: z.literal('agent'), id: AgentIdSchema }).strict(),
       ])
       .default({ kind: 'user' }),
-    scopes: z.array(ScopeSchema).min(1),
+    /**
+     * Required for kind 'board' and 'account'. kind 'agent' takes NONE: an
+     * agent token always carries AGENT_TOKEN_SCOPES (§AA1).
+     */
+    scopes: z.array(ScopeSchema).min(1).optional(),
     /** Absent / null = never expires. The form offers 30 / 90 / 365. */
     expiresInDays: z.number().int().min(1).max(3650).nullable().optional(),
+    /**
+     * §AA1 — kind 'agent' only. Default false: the new token REPLACES the
+     * agent's other live tokens. true keeps them working beside it (the
+     * migration, §AA6, and a deliberate overlap while callers switch).
+     */
+    keepOthers: z.boolean().optional(),
   }).superRefine((r, ctx) => {
+    if (r.kind === 'agent') {
+      // §AA1: who the agent is, and nothing else.
+      if (r.actsAs.kind !== 'agent')
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actsAs'],
+          message: "Name the agent: actsAs { kind: 'agent', id }",
+        });
+      if (r.boardId)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['boardId'],
+          message: 'An agent token has no board — it reaches every board the agent is on',
+        });
+      if (r.scopes !== undefined)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopes'],
+          message: "An agent token has no scopes to choose — the agent's role on each board decides",
+        });
+      return;
+    }
+    if (r.keepOthers !== undefined)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['keepOthers'],
+        message: 'keepOthers is for an agent token',
+      });
+    if (!r.scopes) {
+      ctx.addIssue({ code: 'custom', path: ['scopes'], message: 'Pick at least one permission' });
+      return;
+    }
+    const scopes = r.scopes;
+    // §AA: this rule is now about LEGACY board tokens acting as an agent only.
     if (
       r.actsAs.kind === 'agent' &&
-      r.scopes.some((s) => (ADMIN_SCOPES as readonly string[]).includes(s))
+      scopes.some((s) => (ADMIN_SCOPES as readonly string[]).includes(s))
     )
       ctx.addIssue({
         code: 'custom',
         path: ['scopes'],
-        message: 'An agent token cannot carry admin scopes',
+        message: 'A board token acting as an agent cannot carry admin scopes',
       });
     if (r.kind === 'account') {
       if (r.boardId)
@@ -88,7 +137,7 @@ export const apiKeyCreate = defineCommand({
           path: ['boardId'],
           message: 'Pick the board this token works on',
         });
-      if (r.scopes.some(isAccountScope))
+      if (scopes.some(isAccountScope))
         ctx.addIssue({
           code: 'custom',
           path: ['scopes'],
@@ -103,13 +152,15 @@ export const apiKeyCreate = defineCommand({
     /** What the list will show ('tm_live_3fa9'). */
     prefix: z.string(),
     expiresAt: MillisSchema.nullable(),
+    /** §AA1 — kind 'agent': how many of the agent's other live tokens this one replaced (0 with keepOthers). */
+    rotated: z.number().int().nonnegative().optional(),
   }),
 });
 
 export const apiKeyRevoke = defineCommand({
   name: 'apiKeyRevoke',
   source: 'platform',
-  permission: "Owner only; revokedAt = now, revokedReason 'owner'. Revoking twice is ok.",
+  permission: "Owner only (never a token, never an agent); revokedAt = now, revokedReason 'owner'. Revoking twice is ok.",
   errors: ['not_found'],
   req: req({ keyId: z.string().min(1) }),
   res: OkResSchema,
@@ -156,6 +207,8 @@ export type IntakeConfig = z.infer<typeof IntakeConfigSchema>;
 
 export const intakeUpsert = defineCommand({
   name: 'intakeUpsert',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['board:admin', 'boards:admin'],
   source: 'extra',
   permission:
     'can(admin). intakes/{slug} is server-only, so Board settings › Intake reads and writes it here.',
@@ -179,6 +232,8 @@ export const intakeUpsert = defineCommand({
 
 export const installRemove = defineCommand({
   name: 'installRemove',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['board:admin', 'boards:admin'],
   source: 'extra',
   permission: 'can(admin). Marks the integration removed and deletes its provider token.',
   errors: ['forbidden', 'not_found'],
@@ -189,6 +244,8 @@ export const installRemove = defineCommand({
 /** Board settings › Integrations: what a connected provider does for THIS board. */
 export const installConfigure = defineCommand({
   name: 'installConfigure',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['board:admin', 'boards:admin'],
   source: 'extra',
   permission: "can(admin). The integration must be connected (not 'removed').",
   errors: ['forbidden', 'not_found', 'invalid'],

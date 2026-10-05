@@ -62,6 +62,16 @@
     showKey?: boolean;
     /** The title — off where the row draws its own. */
     showTitle?: boolean;
+    /**
+     * 'row' only. The table gives the thread and what is going on their own
+     * columns instead of packing them in front of the title, where a narrow
+     * column drew the badges over the text:
+     *   'title'     the title alone
+     *   'chat'      the unread count and the unsent mark
+     *   'activity'  the ❓ question, the facts (task list, files, blocked), cost, agent dot
+     * 'all' (default) is the one-line summary My work draws.
+     */
+    part?: 'all' | 'title' | 'chat' | 'activity';
   }
   let {
     ticket: t,
@@ -80,6 +90,7 @@
     layout = 'card',
     showKey = true,
     showTitle = true,
+    part = 'all',
   }: Props = $props();
 
   // §W2: the count comes out of the ticket's OWN inline thread — no listener,
@@ -120,21 +131,33 @@
 {#if layout === 'row'}
   <!-- One line: signals, the title, then whatever facts are left over. -->
   <span class="flex min-w-0 items-center gap-1.5 overflow-hidden" data-summary="row">
-    <TicketSignals
-      {badge}
-      {unsent}
-      {waiting}
-      cost={t.cost ?? null}
-      boardId={board.id}
-      ticketId={t.id}
-    />
-    {#if showTitle}
-      <span class="truncate {t.state !== 'active' ? 'text-muted line-through' : ''}" title={t.title}
-        >{t.title}</span
-      >
+    {#if part === 'chat'}
+      <TicketSignals {badge} {unsent} />
+    {:else if part === 'activity'}
+      <TicketSignals {waiting} cost={t.cost ?? null} boardId={board.id} ticketId={t.id} />
+      <TicketFacts {facts} inline />
+    {:else}
+      {#if part === 'all'}
+        <TicketSignals
+          {badge}
+          {unsent}
+          {waiting}
+          cost={t.cost ?? null}
+          boardId={board.id}
+          ticketId={t.id}
+        />
+      {/if}
+      {#if showTitle}
+        <span
+          class="truncate {t.state !== 'active' ? 'text-muted line-through' : ''}"
+          title={t.title}>{t.title}</span
+        >
+      {/if}
+      {#if part === 'all'}
+        <TicketFacts {facts} inline />
+        {@render assigneeCluster()}
+      {/if}
     {/if}
-    <TicketFacts {facts} inline />
-    {@render assigneeCluster()}
   </span>
 {:else}
   <div class="flex min-w-0 flex-col gap-1" data-summary="card">

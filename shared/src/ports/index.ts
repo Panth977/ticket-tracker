@@ -129,6 +129,12 @@ export interface QueuePayloads {
   webhooks: WebhookTask;
   /** boardArchive 'delete': recursive delete of tickets, threads, files. */
   boardDelete: { boardId: BoardId; actor: Uid };
+  /**
+   * artifactDelete / artifactDataClear (artifacts.html §G): the artifact's
+   * Firestore subtree, RTDB nodes and Storage prefixes. `dataOnly` keeps the
+   * builds, the people and the document (the owner's 'Delete all data').
+   */
+  artifactDelete: { artifactId: string; actor: Uid; dataOnly?: boolean };
   /** accountExport. */
   export: { jobId: string; uid: Uid };
   /** Generic e-mail outside notify (invites, export ready …). */

@@ -43,10 +43,35 @@
   const SELECT_W = 36;
 
   type Col = ViewInput['columns'][number];
-  const allCols = $derived<Col[]>(view.columns.length ? view.columns : DEFAULT_COLUMNS);
+  /**
+   * TWO COLUMNS THAT ARE NOT TICKET FIELDS. 'chat' is the thread (the unread
+   * count); 'activity' is what is going on with the ticket (a question waiting
+   * for an answer, the task list, files, blocked, cost, the agent's dot). They
+   * used to be packed in front of the title. They are ordinary columns in the
+   * view — moved, resized, hidden and saved like any other — and a view saved
+   * before they existed gets them right after the title the first time it is
+   * drawn (a view that HID them names them with `hidden`, so that is kept).
+   */
+  const EXTRA: Record<string, { label: string; width: number }> = {
+    chat: { label: 'Chat', width: 64 },
+    activity: { label: 'Activity', width: 230 },
+  };
+  function withExtras(list: readonly Col[]): Col[] {
+    const out = [...list];
+    let at = out.findIndex((c) => c.field === 'title') + 1;
+    for (const field of Object.keys(EXTRA)) {
+      const i = out.findIndex((c) => c.field === field);
+      if (i >= 0) at = Math.max(at, i + 1);
+      else out.splice(at++, 0, { field, width: EXTRA[field]!.width });
+    }
+    return out;
+  }
+  const allCols = $derived<Col[]>(withExtras(view.columns.length ? view.columns : DEFAULT_COLUMNS));
   const cols = $derived(
     allCols.filter(
-      (c) => !c.hidden && (c.field === 'key' || c.field === 'title' || fieldInfo(board, c.field)),
+      (c) =>
+        !c.hidden &&
+        (c.field === 'key' || c.field === 'title' || c.field in EXTRA || fieldInfo(board, c.field)),
     ),
   );
   const totalWidth = $derived(SELECT_W + cols.reduce((n, c) => n + c.width, 0));
@@ -185,8 +210,16 @@
   const addable = $derived(
     boardFields(board).filter((f) => f.column && !cols.some((c) => c.field === f.key)),
   );
-  const addItems = $derived<MenuItem[]>(
-    addable.map((f) => ({
+  const addItems = $derived<MenuItem[]>([
+    // A hidden Chat / Activity column comes back where it was.
+    ...Object.entries(EXTRA)
+      .filter(([field]) => !cols.some((c) => c.field === field))
+      .map(([field, x]) => ({
+        label: x.label,
+        onSelect: () =>
+          setCols(allCols.map((c) => (c.field === field ? { field: c.field, width: c.width } : c))),
+      })),
+    ...addable.map((f) => ({
       label: f.label,
       onSelect: () => {
         const exists = allCols.some((x) => x.field === f.key);
@@ -197,7 +230,7 @@
         );
       },
     })),
-  );
+  ]);
 
   // Resize: drag the header's right edge; commit the width on release.
   let resizing = $state<{ field: string; startX: number; startW: number; w: number } | null>(null);
@@ -223,7 +256,11 @@
   }
   const widthOf = (c: Col) => (resizing?.field === c.field ? resizing.w : c.width);
   const label = (f: string) =>
-    f === 'key' ? 'Key' : f === 'title' ? 'Title' : (fieldInfo(board, f)?.label ?? f);
+    f === 'key'
+      ? 'Key'
+      : f === 'title'
+        ? 'Title'
+        : (EXTRA[f]?.label ?? fieldInfo(board, f)?.label ?? f);
   const peopleGroups = $derived(isPeopleGroup(board, view.groupBy));
 </script>
 

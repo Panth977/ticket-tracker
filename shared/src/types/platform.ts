@@ -11,8 +11,11 @@ import { ViaSchema } from './notify.js';
  * widens it: what a token may do is its scopes ∩ can().
  *
  * The first 16 are the token form's checkboxes, in display order. The last two
- * are ADMIN scopes a token acting as a PERSON may carry (board settings,
- * webhooks); an agent is never admin, so agent tokens never carry them.
+ * are ADMIN scopes (board settings, webhooks). A BOARD token acting as a person
+ * may carry them; a legacy board token acting as an agent never did. §AA: an
+ * AGENT token (ApiKey kind 'agent') carries them always — see AGENT_TOKEN_SCOPES
+ * — because for an agent the ROLE is the permission, and an agent may now be
+ * a board admin.
  */
 export const TOKEN_SCOPES = [
   'board:read',
@@ -57,12 +60,50 @@ export const ACCOUNT_SCOPES = [
   /** Invite people to boards you administer, and revoke invites. */
   'invites:write',
 ] as const;
-export const SCOPES = [...TOKEN_SCOPES, ...ADMIN_SCOPES, ...ACCOUNT_SCOPES] as const;
+/**
+ * ARTIFACTS (docs/plan/artifacts.html §C4). Not about a board, so not board
+ * checkboxes. An ACCOUNT token reaches every artifact where its person is
+ * owner or editor; an AGENT token reaches only the artifacts that agent is on
+ * (one it creates belongs to its owner, with the agent as editor). A board
+ * token acting as a person carries none.
+ */
+export const ARTIFACT_SCOPES = [
+  /** List and read artifacts, download a build's source. */
+  'artifacts:read',
+  /** Create, publish, roll back, share, delete (owner/editor as the role allows). */
+  'artifacts:write',
+] as const;
+export const SCOPES = [...TOKEN_SCOPES, ...ADMIN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES] as const;
+/**
+ * §AA1 — WHAT EVERY AGENT TOKEN CARRIES, and it is not a choice. An agent
+ * token (ApiKey kind 'agent') says WHO the agent is and nothing else, so its
+ * scopes are fixed: every board checkbox, the two admin scopes and the two
+ * artifact scopes. They never narrow anything — the agent's ROLE on each
+ * board and its { build, data } on each artifact do (§AA2, §AA3).
+ *
+ * NO ACCOUNT SCOPES: an agent still cannot create boards, agents or invites,
+ * and the deny list (TOKEN_DENIED_COMMANDS, §R1) still applies to it like to
+ * any token, so a token can never mint a token.
+ */
+export const AGENT_TOKEN_SCOPES = [
+  ...TOKEN_SCOPES,
+  ...ADMIN_SCOPES,
+  ...ARTIFACT_SCOPES,
+] as const satisfies readonly (typeof SCOPES)[number][];
+/** Is this scope list EXACTLY the agent token's (any order, no duplicates needed)? */
+export function isAgentTokenScopes(scopes: readonly string[]): boolean {
+  const have = new Set(scopes);
+  return (
+    have.size === AGENT_TOKEN_SCOPES.length &&
+    (AGENT_TOKEN_SCOPES as readonly string[]).every((s) => have.has(s))
+  );
+}
 export const ScopeSchema = z.enum(SCOPES);
 export type Scope = z.infer<typeof ScopeSchema>;
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
 export type AdminScope = (typeof ADMIN_SCOPES)[number];
 export type AccountScope = (typeof ACCOUNT_SCOPES)[number];
+export type ArtifactScope = (typeof ARTIFACT_SCOPES)[number];
 export const isAccountScope = (s: string): s is AccountScope =>
   (ACCOUNT_SCOPES as readonly string[]).includes(s);
 
@@ -91,6 +132,9 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   'boards:admin': 'Change settings and people on boards where you are an admin',
   'agents:write': 'Create and edit your agents, and put them on boards',
   'invites:write': 'Invite people to boards you administer',
+  // Artifacts (artifacts.html §C4): account tokens, and agent tokens for the artifacts that agent is on.
+  'artifacts:read': 'Read artifacts and download their source',
+  'artifacts:write': 'Create, publish and share artifacts',
 };
 
 const READ_ONLY: readonly Scope[] = [
@@ -117,7 +161,7 @@ export const SCOPE_PRESETS = {
   ],
   everything: [...TOKEN_SCOPES],
   /** §R1: every board checkbox, on every board, plus the account-level ones. */
-  fullAccount: [...TOKEN_SCOPES, ...ACCOUNT_SCOPES],
+  fullAccount: [...TOKEN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES],
 } as const satisfies Record<string, readonly Scope[]>;
 export type ScopePreset = keyof typeof SCOPE_PRESETS;
 export const SCOPE_PRESET_LABELS: Record<ScopePreset, string> = {

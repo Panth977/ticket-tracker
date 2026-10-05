@@ -21,8 +21,20 @@
     current: boolean;
     /** prefs.lastViewId, when I have one that still exists. */
     lastViewId?: string | null;
+    /** §AB: under a workspace in the sidebar. */
+    indent?: boolean;
+    /** §AB: entering (or leaving) a workspace context on the way. */
+    onclick?: () => void;
   }
-  let { board, starred, unread, current, lastViewId = null }: Props = $props();
+  let {
+    board,
+    starred,
+    unread,
+    current,
+    lastViewId = null,
+    indent = false,
+    onclick,
+  }: Props = $props();
 
   // One click = the default view. Linking straight at it skips the /b/KEY
   // redirect hop; a lastViewId whose view has since been deleted still lands
@@ -32,9 +44,10 @@
 
 <a
   {href}
+  {onclick}
   aria-current={current ? 'page' : undefined}
   data-board={board.key}
-  class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
+  class="flex h-7 min-w-0 items-center gap-2 rounded-md text-sm {indent ? 'pr-2 pl-7' : 'px-2'}
     {current
     ? 'bg-surface-3 font-medium text-text'
     : 'text-muted hover:bg-surface-2 hover:text-text'}"

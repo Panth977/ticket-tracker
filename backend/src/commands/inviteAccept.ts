@@ -13,8 +13,28 @@
  * are already on the board), readerUids / editorUids, members/{uid} from
  * users/{uid}, invite 'accepted', the inbox row done. Then the RTDB mirror
  * and the inviter is told. decline: status 'declined'; the inviter is told.
+ *
+ * AN ARTIFACT INVITE (docs/plan/artifacts.html §B — invite.artifactId set) is
+ * the same three checks and the same two outcomes; what is granted is
+ * artifacts/{id}.access[uid] instead of a board role. It is kept in this
+ * command on purpose: one link format, one inbox row, one place that decides
+ * whether the account owns the invited address.
  */
-import { errors, type BoardRole } from '@tm/shared';
+import {
+  ARTIFACT_INVITE_BOARD_ID,
+  ARTIFACT_INVITE_BOARD_KEY,
+  errors,
+  paths,
+  type ArtifactRole,
+  type BoardRole,
+} from '@tm/shared';
+import {
+  artifactInboxRow,
+  artifactRef,
+  syncArtifactMirror,
+  withMembers,
+} from '../artifacts/shared.js';
+import { typedDoc } from '../runtime/converters.js';
 import { notify } from '../notify/index.js';
 import { runTx, txGet } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
@@ -30,6 +50,8 @@ import {
 import { inviteInboxRef, inviteRef, isLive, maskEmail } from './inviteShared.js';
 
 const RANK: Record<BoardRole, number> = { viewer: 0, commenter: 1, editor: 2, admin: 3 };
+/** Accepting never downgrades: an owner who is sent a viewer invite stays the owner. */
+const ARTIFACT_RANK: Record<ArtifactRole, number> = { viewer: 0, editor: 1, owner: 2 };
 
 export default defineCommand('inviteAccept', async (ctx, { inviteId, token, accept }) => {
   const profile = await profileOf(ctx.actor);
@@ -52,6 +74,34 @@ export default defineCommand('inviteAccept', async (ctx, { inviteId, token, acce
         invitedEmail: maskEmail(inv.email),
       });
 
+    // ── an artifact invite ──
+    if (inv.artifactId) {
+      const artifactId = inv.artifactId;
+      const artifact = await txGet(tx, artifactRef(artifactId));
+      if (!artifact || artifact.deletingAt) throw errors.gone('This artifact no longer exists');
+      const inbox = inviteInboxRef(ctx.actor, inviteId);
+      const row = await txGet(tx, inbox);
+      if (row) tx.update(inbox, { readAt: ctx.now, archivedAt: ctx.now });
+      if (!accept) {
+        tx.update(inviteRef(inviteId), { status: 'declined' });
+        return { kind: 'artifact' as const, inv, artifactId, artifact, joined: false };
+      }
+      const wanted = inv.role === 'editor' ? 'editor' : 'viewer';
+      const current = Object.prototype.hasOwnProperty.call(artifact.access, ctx.actor)
+        ? artifact.access[ctx.actor]
+        : undefined;
+      const role = current && ARTIFACT_RANK[current] >= ARTIFACT_RANK[wanted] ? current : wanted;
+      const next = { ...artifact, ...withMembers({ ...artifact.access, [ctx.actor]: role }) };
+      tx.update(artifactRef(artifactId), {
+        access: next.access,
+        memberUids: next.memberUids,
+        updatedAt: ctx.now,
+      });
+      tx.update(inviteRef(inviteId), { status: 'accepted' });
+      return { kind: 'artifact' as const, inv, artifactId, artifact: next, joined: true };
+    }
+
+    // ── a board invite ──
     const board = await txGet(tx, boardRef(inv.boardId));
     if (!board) throw errors.gone('This board no longer exists');
     const inbox = inviteInboxRef(ctx.actor, inviteId);
@@ -61,7 +111,7 @@ export default defineCommand('inviteAccept', async (ctx, { inviteId, token, acce
     if (row) tx.update(inbox, { readAt: ctx.now, archivedAt: ctx.now });
     if (!accept) {
       tx.update(inviteRef(inviteId), { status: 'declined' });
-      return { inv, board, joined: false, readerUids: null };
+      return { kind: 'board' as const, inv, board, joined: false, readerUids: null };
     }
 
     const current = board.access[ctx.actor];
@@ -76,8 +126,33 @@ export default defineCommand('inviteAccept', async (ctx, { inviteId, token, acce
         memberDoc(ctx.actor, role, profile, inv.invitedBy, ctx.now),
       );
     tx.update(inviteRef(inviteId), { status: 'accepted' });
-    return { inv, board, joined: true, readerUids: derived.readerUids };
+    return { kind: 'board' as const, inv, board, joined: true, readerUids: derived.readerUids };
   });
+
+  if (res.kind === 'artifact') {
+    if (res.joined) await syncArtifactMirror(res.artifactId, res.artifact);
+    // The person who shared it is told, in their inbox (artifacts have no notify router).
+    await typedDoc(
+      'inbox',
+      paths.inboxItem(res.inv.invitedBy, `artifact_${res.artifactId}_joined_${ctx.actor}`),
+    )
+      .set(
+        artifactInboxRow(
+          res.artifactId,
+          'invited',
+          res.joined
+            ? `${profile.name} now has access to “${res.artifact.name}”`
+            : `${profile.name} declined the artifact “${res.artifact.name}”`,
+          ctx,
+        ),
+      )
+      .catch((e) => console.warn('[inviteAccept] artifact inbox row failed', e));
+    return {
+      boardId: ARTIFACT_INVITE_BOARD_ID,
+      boardKey: ARTIFACT_INVITE_BOARD_KEY,
+      artifactId: res.artifactId,
+    };
+  }
 
   if (res.readerUids) await syncReaders(res.inv.boardId, res.readerUids);
   // The inviter is told (the actor is never notified by notify itself).

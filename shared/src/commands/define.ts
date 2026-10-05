@@ -42,6 +42,7 @@ export type Action = (typeof ACTIONS)[number];
  *   user              → { actor: uid, via: 'app' }
  *   apiKey (as me)    → { actor: owner uid, ownerUid: owner, via: 'api' | 'mcp', scopes, boardIds: [boardId], keyId, keyName }
  *   apiKey (as agent) → { actor: agentId, ownerUid: agent's owner, via: 'api' | 'mcp', scopes, boardIds: [boardId], keyId, keyName }
+ *   agent token (§AA1)→ { actor: agentId, ownerUid: agent's owner, via: 'api' | 'mcp', scopes: AGENT_TOKEN_SCOPES, boardIds: null, defaultBoardId?, keyId, keyName }
  *   oauth             → { actor, via: 'mcp' | 'integration', scopes, clientName }
  * Scopes and boardIds only ever NARROW what the actor's board role allows.
  */
@@ -67,6 +68,13 @@ export interface CommandCtx {
   scopes?: readonly Scope[];
   /** null / absent = every board the actor is on. */
   boardIds?: readonly BoardId[] | null;
+  /**
+   * §AA1 — an AGENT token converted from a board token (§AA6): the board it
+   * used to be for. It narrows NOTHING (can() never reads it). Its one use:
+   * when a call needs a board, names none, and the agent is on more than one,
+   * this is the board meant — so what ran before the conversion still runs.
+   */
+  defaultBoardId?: BoardId | null;
   /** The token's name: 'Builder (agent) via token orch-eng-builder' → stamped as viaToken. */
   keyName?: string;
   /** 'Panth via Claude (MCP)' */

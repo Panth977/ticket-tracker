@@ -1,21 +1,36 @@
 <!--
   /agents/{agentId} (agents.html §B): name, picture (upload + crop) or icon,
-  description, system prompt (Markdown editor with preview), the boards it is
-  on, the tokens acting as it, and archive / restore. Owner only: anyone else
-  gets "not found" (agents are private).
+  description, system prompt (Markdown editor with preview), and — §AA5 — the
+  two cards where its access is read and set:
+    TOKEN   the agent's ONE token (generate / regenerate, shown once; older
+            converted tokens listed until they are revoked)
+    ACCESS  every board it is on with its role, every artifact with Build and
+            Data — "what may this agent do?" has one answer, and it is here
+  then archive / restore. Owner only: anyone else gets "not found" (agents are
+  private).
 -->
 <script lang="ts">
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { page } from '$app/state';
   import { beforeNavigate } from '$app/navigation';
-  import { Archive, ArchiveRestore, ArrowLeft, Bot, Copy, Save } from 'lucide-svelte';
+  import {
+    AppWindow,
+    Archive,
+    ArchiveRestore,
+    ArrowLeft,
+    Bot,
+    Copy,
+    LayoutGrid,
+    Save,
+  } from 'lucide-svelte';
   import { paths, type Agent } from '@tm/shared';
   import { command } from '$lib/api';
   import Panel from '$lib/account/Panel.svelte';
   import AgentAvatarEditor from '$lib/agents/AgentAvatarEditor.svelte';
   import AgentActivity from '$lib/agents/AgentActivity.svelte';
+  import AgentArtifacts from '$lib/agents/AgentArtifacts.svelte';
   import AgentBoards from '$lib/agents/AgentBoards.svelte';
-  import AgentTokens from '$lib/agents/AgentTokens.svelte';
+  import AgentTokenCard from '$lib/agents/AgentTokenCard.svelte';
   import PromptEditor from '$lib/agents/PromptEditor.svelte';
   import {
     AGENT_DESCRIPTION_MAX,
@@ -105,7 +120,7 @@
           : `${agent?.name ?? 'Agent'} restored`,
         action === 'archive'
           ? `Left ${r.boardsLeft} board${r.boardsLeft === 1 ? '' : 's'}; ${r.tokensRevoked} token${r.tokensRevoked === 1 ? '' : 's'} revoked.`
-          : 'Add it to boards and create new tokens to use it again.',
+          : 'Add it to boards and generate a token to use it again.',
       );
     } catch {
       /* toasted */
@@ -177,8 +192,8 @@
 
     {#if archived}
       <p class="rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
-        This agent is archived: it is off every board and its tokens were revoked. Restore it to
-        edit it or use it again.
+        This agent is archived: it is off every board and its token was revoked. Restore it to edit
+        it or use it again.
       </p>
     {/if}
 
@@ -235,25 +250,49 @@
         </p>{/if}
     </Panel>
 
+    <!-- §AA5 — the two cards. The token says WHO; Access says WHAT. -->
     <Panel
-      title="Boards"
-      description="Where it can be assigned and mentioned. You add it; any admin of the board can change its role or remove it."
+      title="Token"
+      description="One token for this agent. It says who the agent is and nothing else — what it may do is set in Access, below."
     >
-      <AgentBoards {agentId} name={agent.name} {archived} />
+      <AgentTokenCard {agentId} name={agent.name} {archived} />
     </Panel>
 
     <Panel
-      title="Tokens"
-      description="Tokens acting as this agent. Each works on one board; its changes are authored by the agent “via token …”."
+      title="Access"
+      description="What this agent may do, set where it works: a role on each board, a permission on each artifact. A change here applies to its token at once."
     >
-      <AgentTokens {agentId} {archived} />
+      <section class="flex flex-col gap-3" aria-label="Boards">
+        <div>
+          <h4 class="flex items-center gap-1.5 text-sm font-medium">
+            <LayoutGrid size={15} aria-hidden="true" /> Boards
+          </h4>
+          <p class="text-xs text-muted">
+            On a board the role is the permission. Any admin of the board can change it or remove
+            the agent.
+          </p>
+        </div>
+        <AgentBoards {agentId} name={agent.name} {archived} />
+      </section>
+      <section class="flex flex-col gap-3 border-t border-line pt-4" aria-label="Artifacts">
+        <div>
+          <h4 class="flex items-center gap-1.5 text-sm font-medium">
+            <AppWindow size={15} aria-hidden="true" /> Artifacts
+          </h4>
+          <p class="text-xs text-muted">
+            Build and data are separate: it may publish one artifact and only read or write the data
+            of another.
+          </p>
+        </div>
+        <AgentArtifacts {agentId} name={agent.name} {archived} />
+      </section>
     </Panel>
 
     <Panel title={archived ? 'Restore' : 'Archive'} tone={archived ? 'default' : 'danger'}>
       {#if archived}
         <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-muted">
-            Restoring doesn’t put it back on boards or bring back tokens.
+            Restoring doesn’t put it back on boards or bring back its token.
           </p>
           <Button icon={ArchiveRestore} loading={archiving} onclick={() => archive('restore')}
             >Restore agent</Button
@@ -262,7 +301,7 @@
       {:else}
         <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-muted">
-            Takes it off every board and revokes every token acting as it. Its messages stay.
+            Takes it off every board and revokes its token. Its messages stay.
           </p>
           <Button variant="danger" icon={Archive} onclick={() => (archiveOpen = true)}
             >Archive agent</Button
@@ -276,7 +315,7 @@
 <Dialog bind:open={archiveOpen} title="Archive {agent?.name ?? 'this agent'}?" size="sm">
   <ul class="list-disc pl-5 text-sm">
     <li>It is removed from every board, and unassigned from its tickets there.</li>
-    <li>Every token acting as it stops working at once.</li>
+    <li>Its token stops working at once.</li>
     <li>Its messages and files stay.</li>
   </ul>
   {#snippet footer()}

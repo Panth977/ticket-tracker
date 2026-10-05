@@ -625,6 +625,11 @@ describe('MCP with an agent token', () => {
         'get_events',
         'ack_events',
         'get_question',
+        // doors/mcpApp.ts: the app's own reads.
+        'get_board_settings',
+        'list_views',
+        // ticketWatch's spec scope is tickets:read: watching is the reader's own subscription.
+        'ticket_watch',
       ]).toContain(n);
     expect(names).not.toContain('post_message');
     await client.close();

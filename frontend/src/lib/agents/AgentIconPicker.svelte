@@ -1,7 +1,10 @@
 <!--
   The icon picker for an agent's avatar (agents.html §B): a button that opens
   a popover with the brand marks, the generic icons and "none (initials)",
-  each drawn exactly as the avatar will look (the agent's colour). Optional
+  each drawn exactly as the avatar will look: a BRAND mark on its own tile
+  (the brand's colours — lib/agents/icons, lib/ui/Avatar), a generic icon and
+  the initials on the agent's colour. The 15 brands sit five to a row, so they
+  fill three even rows. Optional
   `footer` for the picture actions (upload / remove) so the whole choice lives
   in one place. Fits a 390 px phone: the panel is min(20rem, 100vw - 1rem).
 
@@ -64,7 +67,7 @@
   <div class="flex flex-col gap-3" data-agent-icon-picker>
     <section>
       <h3 class="mb-1.5 text-[11px] font-semibold tracking-wide text-subtle uppercase">Brand</h3>
-      <div class="grid grid-cols-7 gap-1.5" role="listbox" aria-label="Brand marks">
+      <div class="grid grid-cols-5 gap-1.5" role="listbox" aria-label="Brand marks">
         {#each AGENT_BRAND_ICONS as i (i.id)}
           <button
             type="button"

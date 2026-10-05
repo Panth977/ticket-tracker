@@ -19,6 +19,7 @@
   "dependencies": {
     "@google-cloud/tasks": "^7.1.1",
     "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@tm/shared": "workspace:*",
     "firebase-admin": "^14.4.0",
@@ -28,10 +29,12 @@
     "resend": "^6.28.1",
     "sharp": "^0.35.4",
     "typesense": "^3.0.6",
+    "yauzl": "^3.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "@types/yauzl": "^2.10.3",
     "esbuild": "^0.28.2",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"

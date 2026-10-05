@@ -10,10 +10,14 @@
  * then the e-mail, and — when an account with that address exists — an
  * 'invited' inbox row with Accept / Decline right in it.
  *
+ * A PERSON ONLY (§AA2): an agent token carries board:admin, which is one of
+ * this command's scopes, and its agent may be a board admin — so the handler
+ * refuses an agent actor itself. Inviting stays with people and their tokens.
+ *
  * ANYONE CAN BE INVITED — they need not have an account yet; they sign up
  * with that address and the invite is waiting in their inbox.
  */
-import { errors, INVITE_TTL_MS, paths, rateBuckets, type Invite } from '@tm/shared';
+import { errors, INVITE_TTL_MS, isAgentId, paths, rateBuckets, type Invite } from '@tm/shared';
 import { roleOf } from '@tm/shared/logic/index';
 import { typedCol } from '../runtime/converters.js';
 import { runTx, txGetAll } from '../runtime/tx.js';
@@ -52,6 +56,10 @@ function assertMayInvite(
 
 export default defineCommand('inviteCreate', async (ctx, input) => {
   const { boardId } = input;
+  // §AA2 — an agent may be a board ADMIN now, so can(admin) alone no longer
+  // says "a person". What an agent admin still cannot do is what no agent
+  // can: invite people to a board. Refused here by who is acting, whatever the role.
+  if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot invite people');
   // Last role wins for an address listed twice.
   const wanted = new Map<string, Invite['role']>();
   for (const i of input.invites) wanted.set(i.email, i.role);

@@ -191,9 +191,15 @@ test('the /lib index and the integration page point at the Claude guide', async 
 });
 
 test('hosting serves the guide and the bundle with the right types and no stale caching', async () => {
-  const cfg = JSON.parse(await readFile(join(ROOT, 'firebase.json'), 'utf8'));
-  const headers: { source: string; headers: { key: string; value: string }[] }[] =
-    cfg.hosting.headers;
+  // `hosting` is a list since the artifact usercontent site was added
+  // (docs/plan/artifacts.html §D1); the APP site is always its first entry.
+  const appSite = (file: { hosting: unknown }) =>
+    (Array.isArray(file.hosting) ? file.hosting[0] : file.hosting) as {
+      headers: { source: string; headers: { key: string; value: string }[] }[];
+      ignore: string[];
+    };
+  const cfg = appSite(JSON.parse(await readFile(join(ROOT, 'firebase.json'), 'utf8')));
+  const headers = cfg.headers;
   const valueFor = (source: string, key: string) =>
     headers
       .filter((h) => h.source === source)
@@ -215,10 +221,10 @@ test('hosting serves the guide and the bundle with the right types and no stale 
     expect(valueFor(source, 'access-control-allow-origin'), source).toBe('*');
   }
   // A blanket '**/.*' would drop .claude-plugin/plugin.json from the deploy.
-  expect(cfg.hosting.ignore).not.toContain('**/.*');
+  expect(cfg.ignore).not.toContain('**/.*');
 
   // The production deploy uses firebase.deploy.json; the headers must survive it.
-  const deployCfg = JSON.parse(await readFile(join(ROOT, 'firebase.deploy.json'), 'utf8'));
-  expect(deployCfg.hosting.headers).toEqual(cfg.hosting.headers);
-  expect(deployCfg.hosting.ignore).toEqual(cfg.hosting.ignore);
+  const deployCfg = appSite(JSON.parse(await readFile(join(ROOT, 'firebase.deploy.json'), 'utf8')));
+  expect(deployCfg.headers).toEqual(cfg.headers);
+  expect(deployCfg.ignore).toEqual(cfg.ignore);
 });

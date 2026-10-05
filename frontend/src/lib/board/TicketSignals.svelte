@@ -34,6 +34,8 @@
     boardId?: string | null;
     ticketId?: string | null;
   }
+  // A caller that draws the signals in two places (the table's Chat and
+  // Activity columns) simply leaves out the props the other place owns.
   let {
     badge = null,
     unsent = false,
@@ -66,13 +68,13 @@
   </span>
 {/if}
 {#if waiting?.waiting}
-  <span data-waiting title={waiting.title ?? undefined} class="min-w-0">
+  <span data-waiting title={waiting.title ?? undefined} class="min-w-0 overflow-hidden">
     <Badge tone="accent"
       ><span aria-hidden="true">❓</span>{waitingBadgeLabel(waiting.waiting)}</Badge
     >
   </span>
 {:else if waiting?.open}
-  <span data-waiting title={waiting.title ?? undefined} class="min-w-0">
+  <span data-waiting title={waiting.title ?? undefined} class="min-w-0 overflow-hidden">
     <Badge><span aria-hidden="true">❓</span>Waiting for an answer</Badge>
   </span>
 {/if}

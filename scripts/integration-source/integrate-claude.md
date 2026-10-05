@@ -12,6 +12,10 @@ The connector route is the only one that needs no token at all: you sign in, tic
 the grant. The other two carry an **account token** — "virtual me", a credential that acts as you across every
 board you are on today, and loses a board the moment you do.
 
+(This page is about Claude acting **as you**. An *agent* — a separate member of your boards, with its own name
+on what it does — has one token of its own, generated on the agent's page at {{url:agentsUrl}}; it works in the
+same header, and §2 of {{url:llmsFullUrl}} is its chapter.)
+
 **Make an account token first** (routes 2 and 3 need one): {{url:tokensUrl}} → **New token** →
 **Account token**. Give it a name you will recognise in the list (`claude-code`, `claude-desktop`), leave the
 expiry at 90 days unless you have a reason, and choose the **Full account** preset — or tick fewer boxes, which
@@ -128,6 +132,10 @@ Inside:
 .claude-plugin/marketplace.json     lets the folder itself be added as a marketplace
 skills/taskmanager/SKILL.md         the integration context: boards, tickets, threads, the rules
 skills/taskmanager/reference/…      llms-full.txt verbatim — the whole generated reference, offline
+skills/artifact/SKILL.md            how to build, run locally and publish an ARTIFACT (a small website
+                                    kept inside TaskManager, with its own data)
+skills/artifact/example/index.html  a complete single-file artifact, ready to publish
+skills/artifact/template/…          a Vite project with the three settings that matter already right
 commands/tm-inbox.md                /tm-inbox      what is waiting on you
 commands/tm-triage.md               /tm-triage     a board's untriaged tickets, one pass
 commands/tm-new.md                  /tm-new        a ticket from a sentence
@@ -187,12 +195,26 @@ endpoint:
 
 Two things worth knowing before you ask for anything:
 
-- **`board` is an argument now.** With an account token or a connector grant, a call that does not name a ticket
-  key needs to know which board it means, so `list_boards` is the natural first call and `board: 'ENG'` is how
+- **`board` is an argument.** With an account token, a connector grant or an agent's token on several boards, a
+  call that does not name a ticket key needs to know which board it means, so `list_boards` is the natural first call and `board: 'ENG'` is how
   every other call says where. A ticket key already names its board, so `get_ticket ENG-42` needs nothing else.
 - **Nothing exceeds your own access.** A tool call is checked against the boards the credential reaches *right
   now* and the role you hold on each. Claude cannot see a board you left, and it cannot do on a board something
   you could not do yourself.
+
+## Building artifacts
+
+An **artifact** is a small website that lives inside TaskManager — a dashboard, a tracker, a poll — shared
+with the people you choose, with its own database behind one script tag. With the plugin installed, ask for
+one in plain words ("build me a shared packing list as a TaskManager artifact and share it with
+priya@example.com") and the `artifact` skill takes it from there: it writes the page, loads
+`{{url:driver.js}}` for the backend, publishes it with `artifact_publish` and shares it with
+`artifact_share`. The token needs the `artifacts:read` and `artifacts:write` scopes, which the **Full
+account** preset includes (an agent's token always has them; what it may do on an artifact is the
+`{ build, data }` its owner gave it there). The same skill covers the artifact's **data from outside the
+page** — `artifact_data_get / list / set / batch` — so "refresh the numbers on the sales dashboard" is a
+data write, not a rebuild. Without the plugin the same `artifact_*` tools are there; point Claude at §8 of
+{{url:llmsFullUrl}} for the rest.
 
 ## The memory palace
 
@@ -257,9 +279,10 @@ Read {{url:llmsFullUrl}} first.
 
 ```text
 /mcp says failed              the token: quotes lost by the shell, or not an account token
-401 unauthenticated           revoked, expired, or a board token used for another board
-403 forbidden                 the scope, or your role on that board — a scope never widens a role
-"which board?"                account-wide credential + no ticket key: pass board, or call list_boards
+401 unauthenticated           revoked, expired, regenerated since, or its agent was archived
+403 forbidden                 the scope, or your role on that board — a scope never widens a role.
+                              For an agent's token it is always the role: it has no scopes to add
+"which board?"                a credential on several boards + no ticket key: pass board, or call list_boards
 a board is missing            you are no longer on it; the credential follows your access, live
 the connector cannot be added claude.ai needs the https URL exactly: {{url:mcpUrl}}
 ```

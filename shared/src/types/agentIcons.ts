@@ -6,9 +6,11 @@
  *   members/{agentId}.icon     the same id, denormalised like name / avatarPath
  *
  * Rendering precedence everywhere an avatar shows: a real picture (avatarPath)
- * > icon > initials. Brand marks are drawn by the frontend
- * (lib/agents/icons/*.svelte); generic ones come from lucide. The id is the
+ * > icon > initials. Brand marks are the real logos, drawn by the frontend
+ * (lib/agents/icons/brands.ts); generic ones come from lucide. The id is the
  * contract: the backend validates against this list and never needs the art.
+ * Additive only: stored profiles reference ids, so never rename or remove one
+ * (a label may change).
  */
 import { z } from 'zod';
 
@@ -26,12 +28,20 @@ export const AGENT_ICON_ID_MAX = 40;
 export const AGENT_ICONS = [
   // ── well-known AI brands ──
   { id: 'claude', label: 'Claude', kind: 'brand' },
+  { id: 'anthropic', label: 'Anthropic', kind: 'brand' },
+  { id: 'chatgpt', label: 'ChatGPT (OpenAI)', kind: 'brand' },
   { id: 'gemini', label: 'Gemini', kind: 'brand' },
-  { id: 'chatgpt', label: 'ChatGPT', kind: 'brand' },
-  { id: 'copilot', label: 'Copilot', kind: 'brand' },
-  { id: 'mistral', label: 'Mistral', kind: 'brand' },
-  { id: 'llama', label: 'Llama', kind: 'brand' },
+  { id: 'copilot', label: 'GitHub Copilot', kind: 'brand' },
+  { id: 'ms-copilot', label: 'Microsoft Copilot', kind: 'brand' },
   { id: 'cursor', label: 'Cursor', kind: 'brand' },
+  { id: 'mistral', label: 'Mistral', kind: 'brand' },
+  { id: 'llama', label: 'Llama (Meta)', kind: 'brand' },
+  { id: 'grok', label: 'Grok (xAI)', kind: 'brand' },
+  { id: 'deepseek', label: 'DeepSeek', kind: 'brand' },
+  { id: 'perplexity', label: 'Perplexity', kind: 'brand' },
+  { id: 'qwen', label: 'Qwen', kind: 'brand' },
+  { id: 'huggingface', label: 'Hugging Face', kind: 'brand' },
+  { id: 'ollama', label: 'Ollama', kind: 'brand' },
   // ── generic (lucide) ──
   { id: 'bot', label: 'Bot', kind: 'generic' },
   { id: 'cpu', label: 'Chip', kind: 'generic' },

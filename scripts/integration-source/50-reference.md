@@ -21,7 +21,8 @@ header. Every failure is `application/problem+json` (§5.1). Machine-readable:
 
 Endpoint `{{url:mcpUrl}}` (Streamable HTTP). The same token, as a Bearer header. A tool whose scopes
 the credential does not hold is **not listed** and is refused if called. `board` is only needed by
-credentials that span several boards — a board-scoped token implies its board.
+credentials that span several boards (an agent on several, an account token, an OAuth grant); on
+exactly one board it may be left out.
 
 {{gen:mcp}}
 

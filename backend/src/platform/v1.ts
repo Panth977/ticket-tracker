@@ -98,7 +98,9 @@ export async function signedUrl(
  * kind 'board' with its one `board`; an ACCOUNT token answers kind 'account'
  * with board: null and `boards` = every board reachable AT THIS CALL (the
  * list is read now, not remembered), so a client never has to guess whether
- * it must name a board.
+ * it must name a board. §AA1: an AGENT token answers kind 'agent' with
+ * `boards` = every board the agent is on, `board` = the one a call that names
+ * none would get (or null when it must name one), and `default_board`.
  */
 export async function whoami(ctx: ServerCtx): Promise<RestMeRes> {
   const key = apiKeyOf(ctx);
@@ -113,7 +115,18 @@ export async function whoami(ctx: ServerCtx): Promise<RestMeRes> {
   ]);
   // A board token narrows to exactly one board; account tokens and OAuth
   // grants list what they reach instead.
-  const single = ctx.boardIds?.length === 1 ? (boards[0] ?? null) : null;
+  //
+  // §AA1 — an AGENT token lists what the agent reaches too, and ALSO says
+  // which board a call that names none gets, exactly as requestBoard decides
+  // it: the only live board it is on, else its default board (a token
+  // converted from a board token, §AA6) while the agent is still on it. So a
+  // client that read `board` from a one-board agent token reads the same
+  // thing after the conversion.
+  const agentToken = key?.kind === 'agent';
+  const live = boards.filter((b) => b.archivedAt === null);
+  const dflt = agentToken ? (live.find((b) => b.id === ctx.defaultBoardId) ?? null) : null;
+  const implied = agentToken ? (live.length === 1 ? live[0]! : dflt) : null;
+  const single = ctx.boardIds?.length === 1 ? (boards[0] ?? null) : implied;
   const kind: RestMeRes['kind'] = key ? key.kind : 'oauth';
   // The board's member rows mirror names and emails; a fallback when a profile is missing.
   const members = single ? await boardMembers(single.id) : new Map<string, BoardMember>();
@@ -156,7 +169,8 @@ export async function whoami(ctx: ServerCtx): Promise<RestMeRes> {
       : null,
     kind,
     board: single ? boardRef(single) : null,
-    ...(single ? {} : { boards: boards.map(boardRef) }),
+    ...(single && !agentToken ? {} : { boards: boards.map(boardRef) }),
+    ...(agentToken ? { default_board: dflt ? boardRef(dflt) : null } : {}),
     role: single ? effectiveRole(single, ctx.actor) : null,
     scopes: ctx.scopes ? [...ctx.scopes] : [...SCOPES],
     via,

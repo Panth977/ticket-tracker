@@ -58,6 +58,12 @@ export interface HttpOptions {
    * which routes that do not need a board simply ignore. A BOARD token may
    * set it to its own board; any other key answers 404, exactly as the API
    * does. Leave it out and the token decides (phase-2 behaviour).
+   *
+   * §AA1 — an AGENT token is one per agent and reaches every board the agent
+   * is on, so it is in the account token's position: on several boards, a
+   * call that names no board is a 400 listing the keys. Set this (or use
+   * `tm.board('ENG')`). Only a token converted from an old board token has a
+   * default board (`me.default_board`) that such a call falls back to.
    */
   board?: string | undefined;
   /** The app's origin, or the /v1 root — both work. Default: the hosted build. */
@@ -80,6 +86,8 @@ export interface HttpOptions {
 }
 
 export type QueryValue = string | number | boolean | null | undefined;
+/** A query parameter: one value, or a list sent as a REPEATED key (`where=…&where=…`, §AA4). */
+export type QueryParam = QueryValue | readonly QueryValue[];
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -112,13 +120,17 @@ export function randomId(): string {
   return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 14)}`;
 }
 
-/** `?a=1&b=x`, dropping undefined and null. */
-export function queryString(q: Record<string, QueryValue> | undefined): string {
+/** `?a=1&b=x`, dropping undefined and null. A list repeats its key: `?w=1&w=2`. */
+export function queryString(q: Record<string, QueryParam> | undefined): string {
   if (!q) return '';
   const parts: string[] = [];
-  for (const [k, v] of Object.entries(q)) {
-    if (v === undefined || v === null) continue;
-    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  for (const [k, value] of Object.entries(q)) {
+    for (const v of Array.isArray(value)
+      ? (value as readonly QueryValue[])
+      : [value as QueryValue]) {
+      if (v === undefined || v === null) continue;
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    }
   }
   return parts.length ? `?${parts.join('&')}` : '';
 }
@@ -191,11 +203,16 @@ export interface RawRequest {
   method: string;
   /** Relative to the /v1 root, e.g. `/tickets/ENG-42`. */
   path: string;
-  query?: Record<string, QueryValue> | undefined;
+  query?: Record<string, QueryParam> | undefined;
   /** JSON-encoded unless `rawBody` is given. */
   body?: unknown;
-  /** A pre-built body sent as-is; give the content-type in `headers`. */
-  rawBody?: string | undefined;
+  /**
+   * A pre-built body sent as-is; give the content-type in `headers`. Bytes go
+   * as a Blob and a multipart body as FormData (leave the content-type out
+   * for that one: fetch writes it, with the boundary) — both can be read
+   * again, so a retried upload sends the same body.
+   */
+  rawBody?: string | Blob | FormData | undefined;
   options?: RequestOptions | undefined;
   /** Force / suppress the Idempotency-Key (default: on for writes). */
   idempotent?: boolean | undefined;
@@ -268,7 +285,7 @@ export class Http {
    * ignore the parameter (their query schemas drop unknown keys), so one rule
    * covers the whole API instead of a list of routes to keep in step.
    */
-  url(path: string, query?: Record<string, QueryValue>): string {
+  url(path: string, query?: Record<string, QueryParam>): string {
     const q =
       this.board !== undefined && (query?.board === undefined || query.board === null)
         ? { ...query, board: this.board }

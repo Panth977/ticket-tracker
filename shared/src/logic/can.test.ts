@@ -9,7 +9,14 @@ import {
   type Action,
   type CanBoard,
 } from './can.js';
-import { presetOf, SCOPE_PRESETS, SCOPES, type BoardRole, type Scope } from '../types/index.js';
+import {
+  AGENT_TOKEN_SCOPES,
+  presetOf,
+  SCOPE_PRESETS,
+  SCOPES,
+  type BoardRole,
+  type Scope,
+} from '../types/index.js';
 
 const board = (over: Partial<CanBoard> = {}): CanBoard => ({
   id: 'b1',
@@ -192,8 +199,18 @@ describe('can — scopes narrow, never widen', () => {
   it('empty scope list allows nothing', () => {
     for (const a of ACTIONS) expect(can({ actor: 'ad', scopes: [] }, board(), a)).toBe(false);
   });
-  it('no scope grants hard delete', () => {
-    expect(can({ actor: 'ad', scopes: [...SCOPES] }, board(), 'delete')).toBe(false);
+  it('hard delete: a person with tickets:state (the Claude app) may, nothing else; the board must opt in', () => {
+    expect(can({ actor: 'ad', scopes: ['tickets:state'] }, board(), 'delete')).toBe(true);
+    expect(
+      can({ actor: 'ad', scopes: ['tickets:update', 'tickets:read'] }, board(), 'delete'),
+    ).toBe(false);
+    expect(
+      can(
+        { actor: 'ad', scopes: [...SCOPES] },
+        board({ settings: { allowDelete: false } }),
+        'delete',
+      ),
+    ).toBe(false);
     expect(can({ actor: 'ad' }, board(), 'delete')).toBe(true);
   });
   it('scopeAllows table', () => {
@@ -210,7 +227,8 @@ describe('can — scopes narrow, never widen', () => {
     'tickets:update': ['read', 'edit'],
     'tickets:move': ['read', 'move'],
     'tickets:assign': ['read', 'assign'],
-    'tickets:state': ['read', 'state', 'restore'],
+    // A person's token may also hard delete (personMayHardDelete); presets never list it.
+    'tickets:state': ['read', 'state', 'restore', 'delete'],
     'comments:read': ['read'],
     'comments:write': ['read', 'comment', 'pin'],
     'files:read': ['read'],
@@ -226,6 +244,9 @@ describe('can — scopes narrow, never widen', () => {
     'boards:admin': ['read', 'admin'],
     'agents:write': ['read'],
     'invites:write': ['read'],
+    // Artifacts (artifacts.html §C4): not about a board, so no board action.
+    'artifacts:read': ['read'],
+    'artifacts:write': ['read'],
   };
   it('the table covers every scope', () => {
     expect(Object.keys(ONLY).sort()).toEqual([...SCOPES].sort());
@@ -236,7 +257,7 @@ describe('can — scopes narrow, never widen', () => {
         can({ actor: 'ad', scopes: [scope] }, board(), a, null, null),
       );
       expect(allowed).toEqual(ACTIONS.filter((a) => ONLY[scope].includes(a)));
-      expect(actionsForScopes([scope])).toEqual(allowed);
+      expect(actionsForScopes([scope])).toEqual(allowed.filter((a) => a !== 'delete'));
     });
   }
 
@@ -302,12 +323,50 @@ describe('can — agent principals', () => {
   it('an agent not on the board can do nothing', () => {
     expect(can({ actor: 'ag_Stranger0000000x' }, b, 'read')).toBe(false);
   });
-  it("an agent is never admin: an 'admin' entry acts as editor", () => {
-    expect(effectiveRole(b, 'ag_Adm1n0000000000x')).toBe('editor');
-    expect(can({ actor: 'ag_Adm1n0000000000x' }, b, 'admin')).toBe(false);
-    expect(can({ actor: 'ag_Adm1n0000000000x' }, b, 'restore')).toBe(false);
+  // §AA2 CHANGED THIS. It used to read: "an agent is never admin: an 'admin'
+  // entry acts as editor". An agent may now be a board admin, and the role is
+  // the permission — effectiveRole no longer downgrades.
+  it("§AA2: an agent's 'admin' entry IS admin (no downgrade to editor)", () => {
+    expect(effectiveRole(b, 'ag_Adm1n0000000000x')).toBe('admin');
+    expect(can({ actor: 'ag_Adm1n0000000000x' }, b, 'admin')).toBe(true);
+    expect(can({ actor: 'ag_Adm1n0000000000x' }, b, 'restore')).toBe(true);
     expect(can({ actor: 'ag_Adm1n0000000000x' }, b, 'edit')).toBe(true);
     expect(effectiveRole(b, 'ad')).toBe('admin');
+  });
+  it('§AA1: an agent token (AGENT_TOKEN_SCOPES, boardIds null) is cut by the ROLE, never by its scopes', () => {
+    const tok = (actor: string) => ({ actor, scopes: AGENT_TOKEN_SCOPES, boardIds: null });
+    // admin agent: board settings and restore; hard delete is still app-only (no scope grants it).
+    expect(can(tok('ag_Adm1n0000000000x'), b, 'admin')).toBe(true);
+    expect(can(tok('ag_Adm1n0000000000x'), b, 'restore')).toBe(true);
+    expect(
+      can(tok('ag_Adm1n0000000000x'), { ...b, settings: { allowDelete: true } }, 'delete'),
+    ).toBe(false);
+    // editor agent: everything but admin / restore.
+    expect(can(tok(AG2), b, 'edit')).toBe(true);
+    expect(can(tok(AG2), b, 'admin')).toBe(false);
+    // commenter agent: comments, not edits.
+    expect(can(tok(AG), b, 'comment')).toBe(true);
+    expect(can(tok(AG), b, 'edit')).toBe(false);
+    // viewer agent: read only.
+    expect(can(tok(AG3), b, 'read')).toBe(true);
+    expect(can(tok(AG3), b, 'comment')).toBe(false);
+    // not on the board: nothing, whatever the scopes.
+    expect(can(tok('ag_Stranger0000000x'), b, 'read')).toBe(false);
+  });
+  it('§AA1: an agent acting for an owner reaches a board only while that owner is on it', () => {
+    // 'ad' is on the board: the agent acts by its own role.
+    expect(can({ actor: AG2, ownerUid: 'ad' }, b, 'edit')).toBe(true);
+    // the owner is not (or no longer) on it: the agent has nothing there, not even read —
+    // a person removed from a board does not keep it through their agent.
+    expect(can({ actor: AG2, ownerUid: 'gone' }, b, 'read')).toBe(false);
+    expect(
+      can({ actor: AG2, ownerUid: 'gone', scopes: AGENT_TOKEN_SCOPES, boardIds: null }, b, 'edit'),
+    ).toBe(false);
+    expect(canEditTasklist({ actor: AG, ownerUid: 'gone' }, b, { owner: AG })).toBe(false);
+    // no ownerUid (the UI asking what an agent could do): not narrowed
+    expect(can({ actor: AG2 }, b, 'edit')).toBe(true);
+    // a person's own ctx is never affected
+    expect(can({ actor: 'ad', ownerUid: 'ad' }, b, 'edit')).toBe(true);
   });
   it('a commenter agent moves only inside its StageGrant, only its own tickets', () => {
     expect(can({ actor: AG }, b, 'move', t('review', [AG]), 'done')).toBe(true);

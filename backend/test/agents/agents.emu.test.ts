@@ -146,9 +146,18 @@ describe('boardAgentSet', () => {
     await expect(
       call(priya, 'boardAgentSet', { boardId: b.id, agentId: pri.id, role: 'editor' }),
     ).rejects.toMatchObject({ code: 'forbidden' });
-    // Never admin: the schema has no such agent role.
+    // §AA2 CHANGED THIS. It used to read "Never admin: the schema has no such
+    // agent role" and expect `invalid`. An agent may be a board admin now.
+    await call(asha, 'boardAgentSet', { boardId: b.id, agentId: ashas.id, role: 'admin' });
+    expect((await boardDoc(b.id)).access[ashas.id]).toBe('admin');
+    expect(await memberDoc(b.id, ashas.id)).toMatchObject({ kind: 'agent', role: 'admin' });
+    // Agents are never readers (the rules read readerUids); they are in agentIds (§AA1).
+    expect((await boardDoc(b.id)).readerUids).not.toContain(ashas.id);
+    expect((await boardDoc(b.id)).editorUids).not.toContain(ashas.id);
+    expect((await boardDoc(b.id)).agentIds).toEqual([ashas.id]);
+    // There is still no role beyond the four.
     await expect(
-      call(asha, 'boardAgentSet', { boardId: b.id, agentId: ashas.id, role: 'admin' as 'editor' }),
+      call(asha, 'boardAgentSet', { boardId: b.id, agentId: ashas.id, role: 'owner' as 'editor' }),
     ).rejects.toMatchObject({ code: 'invalid' });
   });
 

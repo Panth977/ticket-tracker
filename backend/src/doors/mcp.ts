@@ -37,8 +37,10 @@ import {
   MCP_RESOURCES,
   MCP_TOOLS,
   mcpToolAllowed,
+  ArtifactDataQuerySchema,
   McpToolSchemas,
   McpToolShapes,
+  parseOrderByParam,
   paths,
   restPatchScopes,
   type BoardWithId,
@@ -54,6 +56,8 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../http/env.js';
 import { door } from '../http/mounts.js';
 import { requireScope, requireScopes, tokenAuth } from '../platform/auth.js';
+import { registerAppTools } from './mcpApp.js';
+import { registerUiTools } from './mcpUi.js';
 import {
   addLink,
   createTicket,
@@ -94,6 +98,9 @@ import {
   ticketDetail,
   whoami,
 } from '../platform/v1.js';
+import { artifactDetail, artifactView, buildView, listArtifacts } from '../platform/artifacts.js';
+import { dataBatch, dataGet, dataList, dataSet } from '../platform/artifactData.js';
+import { invoke } from '../platform/ops.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
 import { toAppError } from '../runtime/runner.js';
@@ -104,8 +111,10 @@ const SERVER_INFO = { name: 'taskmanager', version: '2.0.0' };
 /** What the model is told about this server, for the credential at hand. */
 function instructions(ctx: ServerCtx): string {
   const who = isAgentId(ctx.actor)
-    ? 'You act as an AGENT on a TaskManager board: every change you make is authored by that agent. ' +
-      'Call whoami first — it returns your name, your board and your system prompt (follow it).'
+    ? 'You act as an AGENT in TaskManager: every change you make is authored by that agent. ' +
+      'Call whoami first — it returns your name, your board(s) and your system prompt (follow it). ' +
+      // §AA2 / §AA3: the role is the permission — there is no checkbox list to consult.
+      'What you may do is set where you work: your ROLE on each board, and on each artifact whether you may build it and read or write its data.'
     : 'You act as the person who connected you: every change you make is recorded as theirs, via this client.';
   /*
    * §R2 — SAY WHICH SHAPE THE WORLD HAS. boardIds === null means the
@@ -113,10 +122,13 @@ function instructions(ctx: ServerCtx): string {
    * OAuth grant that was not narrowed): the model must name a board on calls
    * that do not carry a ticket key. A board token implies its board, and is
    * told nothing new, so its behaviour is unchanged.
+   *
+   * §AA1: an agent token is the same shape for the agent — every board IT is
+   * on. One converted from a board token still has a default board (§AA6).
    */
   const where =
     ctx.boardIds === null || ctx.boardIds === undefined
-      ? 'You reach EVERY board this account is on, as that stands right now. Call list_boards first and keep the keys: ' +
+      ? `You reach EVERY board ${isAgentId(ctx.actor) ? 'this agent' : 'this account'} is on, as that stands right now. Call list_boards first and keep the keys: ` +
         "tools that work on a board take a `board` argument ('ENG'), which you must give unless the call already names a " +
         'ticket key like ENG-42 (a key names its own board). If you are on exactly one board, it is assumed. '
       : 'You work on ONE board; leave the `board` argument out. ';
@@ -238,7 +250,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
   const describe = <N extends McpToolName>(name: N, description: string): string => {
     if (!manyBoards) return description;
     if (!Object.prototype.hasOwnProperty.call(McpToolShapes[name], 'board')) return description;
-    return `${description} Your token reaches every board you are on, so pass \`board\` (a key from list_boards) unless the call names a ticket key.`;
+    return `${description} Your token reaches every board ${isAgentId(ctx.actor) ? 'this agent is' : 'you are'} on, so pass \`board\` (a key from list_boards) unless the call names a ticket key.`;
   };
 
   const tool = <N extends McpToolName>(
@@ -547,6 +559,123 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
     );
   });
 
+  // ─── artifacts (docs/plan/artifacts.html §C2) ──────────────────────────────
+
+  /*
+   * Registered like every other tool: a credential without artifacts:read /
+   * artifacts:write never sees them. They are the same commands the app and
+   * REST use; what the credential REACHES is decided per call from each
+   * artifact's own access map (an agent: only the artifacts it was added to).
+   * artifact_publish takes FILES, not a zip (§C2) — a hand-written page
+   * straight from a chat; a framework build goes through the SDK or REST.
+   */
+  tool('artifact_list', async () => json(await listArtifacts(ctx)));
+
+  tool('artifact_get', async (a) => json(await artifactDetail(ctx, a.id)));
+
+  tool('artifact_create', async (a) => {
+    const res = await invoke(
+      'artifactCreate',
+      {
+        name: a.name,
+        ...(a.description !== undefined ? { description: a.description } : {}),
+        ...(a.icon !== undefined ? { icon: a.icon } : {}),
+      },
+      ctx,
+    );
+    return json(await artifactView(ctx, res.artifactId));
+  });
+
+  tool('artifact_publish', async (a) => {
+    const res = await invoke(
+      'artifactPublish',
+      {
+        artifactId: a.id,
+        files: a.files.map((f) => ({
+          path: f.path,
+          content: f.content,
+          encoding: f.encoding ?? 'utf8',
+        })),
+        ...(a.message ? { message: a.message } : {}),
+      },
+      ctx,
+    );
+    return json({
+      ...(await buildView(ctx, a.id, res.buildId)),
+      url: (await artifactView(ctx, a.id)).url,
+    });
+  });
+
+  tool('artifact_rollback', async (a) => {
+    await invoke('artifactSetCurrent', { artifactId: a.id, buildId: a.build }, ctx);
+    return json(await artifactView(ctx, a.id));
+  });
+
+  tool('artifact_share', async (a) =>
+    json(
+      await invoke(
+        'artifactShare',
+        {
+          artifactId: a.id,
+          ...(a.email !== undefined ? { email: a.email } : {}),
+          ...(a.agent !== undefined ? { agentId: a.agent } : {}),
+          ...(a.role !== undefined ? { role: a.role } : {}),
+          // §AA3: what an agent may do on this artifact — { build, data }.
+          ...(a.agent_access !== undefined ? { agentAccess: a.agent_access } : {}),
+        },
+        ctx,
+      ),
+    ),
+  );
+
+  tool('artifact_source', async (a) => {
+    const res = await invoke(
+      'artifactSourceUrl',
+      {
+        artifactId: a.id,
+        ...(a.build ? { buildId: a.build } : {}),
+      },
+      ctx,
+    );
+    return json({
+      url: res.url,
+      build: res.buildId,
+      expires_at: new Date(res.expiresAt).toISOString(),
+    });
+  });
+
+  // ─── artifact data (docs/plan/agents.html §AA4) — Firestore only ───────────
+
+  /*
+   * The artifact's own database from outside the page: the same functions the
+   * REST routes call (platform/artifactData.ts), so who may, where a path
+   * lands and what a value means are decided once. An agent needs `data` on
+   * the artifact (read for get / list, write for set / batch); RTDB and files
+   * are REST and SDK only.
+   */
+  tool('artifact_data_get', async (a) => json(await dataGet(ctx, a.id, a.path)));
+
+  tool('artifact_data_list', async (a) => {
+    const orderBy = a.order_by === undefined ? undefined : parseOrderByParam(a.order_by);
+    if (orderBy === null)
+      throw errors.invalid('order_by is "field" or "field,desc"', { field: 'order_by' });
+    const q = ArtifactDataQuerySchema.safeParse({
+      ...(a.where?.length ? { where: a.where } : {}),
+      ...(orderBy ? { orderBy } : {}),
+      ...(a.limit !== undefined ? { limit: a.limit } : {}),
+      ...(a.start_after !== undefined ? { startAfter: a.start_after } : {}),
+    });
+    if (!q.success)
+      throw errors.invalid(q.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+    return json(await dataList(ctx, a.id, a.path, q.data));
+  });
+
+  tool('artifact_data_set', async (a) =>
+    json(await dataSet(ctx, a.id, a.path, a.data, a.merge === true)),
+  );
+
+  tool('artifact_data_batch', async (a) => json(await dataBatch(ctx, a.id, a.writes)));
+
   // ─── resources ─────────────────────────────────────────────────────────────
 
   const resourceGuard = (scopes: readonly Scope[]) => requireScope(ctx, scopes);
@@ -707,6 +836,11 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       ],
     }),
   );
+
+  // Everything else the app can do: every command, and the app's own reads.
+  registerAppTools(server, ctx);
+  // The app's UI inside the chat (MCP Apps): board, ticket, my work.
+  registerUiTools(server, ctx, briefs);
 
   return server;
 }

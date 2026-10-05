@@ -112,6 +112,80 @@ service firebase.storage {
       allow delete: if signedIn() && request.auth.uid == uid;
     }
 
+    // ------------------------------------------------------------ artifacts
+    // (docs/plan/artifacts.html §E4, §G) — artifacts/{artifactId}/…
+    //
+    //   files/**            THE ARTIFACT'S OWN STORAGE (db.storage.upload). The
+    //                       host page uploads as the viewer; whoever may write
+    //                       the artifact's data may upload, 25 MB a file.
+    //   uploads/{id}.zip    a build (or source) zip on its way to
+    //                       artifactPublish: owner and editor only, written
+    //                       once, swept after a day if never published.
+    //   builds/**, source/**   written by the server only, and served only by
+    //                       the /c route and signed links. No client access.
+    //
+    // NO CLIENT READ, LIST OR DELETE ANYWHERE UNDER artifacts/ — for the reason
+    // at the top of this file: a read rule would need the cross-service
+    // firestore.get(), whose failure is an error and so a 403. Reads, lists and
+    // deletes are commands (artifactFileUrl / FileList / FileDelete) that check
+    // the role themselves. For WRITES the lookup is acceptable: refusing
+    // wrongly costs an upload the person can retry, never a read that breaks a
+    // page.
+    //
+    // An artifact that does not exist makes the lookup an error, and an error
+    // denies — so nothing can be uploaded under an id nobody created.
+
+    function artifactDoc(artifactId) {
+      return firestore.get(/databases/(default)/documents/artifacts/$(artifactId)).data;
+    }
+
+    // artifactCan.writeData (shared/src/artifacts/schema.ts), plus 'never when
+    // archived' and the allow list — the same answer firestore.rules gives for
+    // the artifact's documents.
+    function artifactMayWrite(artifactId) {
+      let art = artifactDoc(artifactId);
+      let role = art.access.get(request.auth.uid, null);
+      return signedIn()
+        && notRefused(request.auth.uid)
+        && art.archivedAt == null
+        && (role == 'owner' || role == 'editor' || (role == 'viewer' && art.readOnly == false));
+    }
+
+    function artifactMayPublish(artifactId) {
+      let art = artifactDoc(artifactId);
+      return signedIn()
+        && notRefused(request.auth.uid)
+        && art.archivedAt == null
+        && art.access.get(request.auth.uid, null) in ['owner', 'editor'];
+    }
+
+    match /artifacts/{artifactId}/files/{path=**} {
+      // ARTIFACT_UPLOAD_MAX_BYTES. `update` too: an artifact may replace its
+      // own file (a profile picture, a saved drawing).
+      allow create, update: if artifactMayWrite(artifactId)
+        && request.resource.size < 25 * 1024 * 1024;
+      allow read, delete: if false;
+    }
+
+    match /artifacts/{artifactId}/uploads/{file} {
+      // ARTIFACT_SOURCE_MAX_BYTES: the larger of the two zips that land here.
+      // artifactPublish holds the BUILD zip to its own, smaller limit
+      // (ARTIFACT_ZIP_MAX_BYTES) before it unpacks a byte.
+      allow create: if resource == null
+        && artifactMayPublish(artifactId)
+        && file.matches('[A-Za-z0-9_-]{1,64}[.]zip')
+        && request.resource.size < 50 * 1024 * 1024;
+      allow read, update, delete: if false;
+    }
+
+    match /artifacts/{artifactId}/builds/{path=**} {
+      allow read, write: if false;
+    }
+
+    match /artifacts/{artifactId}/source/{path=**} {
+      allow read, write: if false;
+    }
+
     // exports/{uid}/{jobId}.zip — written by accountExport, handed out as a
     // 7-day signed URL (which bypasses rules). No client access.
     match /exports/{uid}/{file} {

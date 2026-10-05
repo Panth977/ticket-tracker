@@ -26,7 +26,7 @@
   }
   let { board, ticket: t, field, editing, onclose }: Props = $props();
 
-  /** What the title cell adds: the signals and facts no column carries (§P2). */
+  /** What the Activity cell shows: the facts no other column carries (§P2). */
   const ROW_FACTS = ['tasks', 'files', 'blocked'];
   const bs = useBoard();
 
@@ -161,12 +161,25 @@
     <span class="font-mono text-xs text-subtle">{t.key}</span>
   {:else if field === 'title'}
     <!--
-      §P2 › reuse: the title cell IS the card, in one line — the same component
-      the kanban and My work draw, so all three agree on what a ticket is
-      saying. It asks only for the facts that have no column of their own; the
-      rest are already cells beside it.
+      §P2 › reuse: these three cells ARE the card, one part each — the same
+      component the kanban and My work draw, so all agree on what a ticket is
+      saying. The title stands alone; the thread (Chat) and what is going on
+      (Activity: the ❓ question, task list, files, blocked, cost, agent dot)
+      have their own columns, where they line up down the table instead of
+      crowding — and, in a narrow column, covering — the title.
     -->
-    <TicketCard {board} ticket={t} cardFields={ROW_FACTS} layout="row" showKey={false} />
+    <TicketCard {board} ticket={t} cardFields={[]} layout="row" showKey={false} part="title" />
+  {:else if field === 'chat'}
+    <TicketCard {board} ticket={t} cardFields={[]} layout="row" showKey={false} part="chat" />
+  {:else if field === 'activity'}
+    <TicketCard
+      {board}
+      ticket={t}
+      cardFields={ROW_FACTS}
+      layout="row"
+      showKey={false}
+      part="activity"
+    />
   {:else if field === 'stage'}
     {#if stage}<Badge color={stage.color}>{stage.name}</Badge>{/if}
   {:else if field === 'priority'}

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { APP_ERROR_CODES } from '../errors.js';
 import { fixtures } from '../schema/fixtures.js';
-import { SCOPE_PRESETS, SCOPES, TOKEN_SCOPES } from '../types/index.js';
+import { AGENT_TOKEN_SCOPES, SCOPE_PRESETS, SCOPES, TOKEN_SCOPES } from '../types/index.js';
 import {
   bulkActionScope,
   COMMAND_NAMES,
@@ -83,7 +83,8 @@ describe('COMMANDS registry', () => {
     // agents:write, which only an account token may carry.
     expect(tokenMayCall(COMMANDS.agentCreate, ['agents:write'])).toBe(true);
     expect(tokenMayCall(COMMANDS.agentCreate, [...TOKEN_SCOPES])).toBe(false);
-    expect(tokenMayCall(COMMANDS.ticketDelete, [...SCOPES])).toBe(false);
+    expect(tokenMayCall(COMMANDS.ticketDelete, ['tickets:state'])).toBe(true);
+    expect(tokenMayCall(COMMANDS.ticketDelete, ['tickets:read'])).toBe(false);
     expect(tokenMayCall(COMMANDS.ticketDelete, undefined)).toBe(true);
     expect(tokenMayCall(COMMANDS.agentInboxAck, ['events:read'])).toBe(true);
     for (const n of COMMAND_NAMES)
@@ -286,7 +287,9 @@ describe('request schemas', () => {
     expect(tokenMayCall(COMMANDS.messagePost, ['comments:write'])).toBe(true);
   });
 
-  it('apiKeyCreate v2: one board, actsAs, scopes; agent tokens never admin', () => {
+  // §AA changed the name of the rule: "agent tokens never admin" is now about
+  // LEGACY board tokens acting as an agent only (kind 'board'); see the next test.
+  it('apiKeyCreate v2: one board, actsAs, scopes; a BOARD token acting as an agent never carries admin scopes', () => {
     const r = COMMANDS.apiKeyCreate.req;
     const ok = r.parse({ name: 'orch', boardId: 'b', scopes: ['tickets:read'] });
     expect(ok.actsAs).toEqual({ kind: 'user' });
@@ -322,6 +325,58 @@ describe('request schemas', () => {
       false,
     );
     expect(r.safeParse({ name: 'orch', boardId: 'b', scopes: [] }).success).toBe(false);
+    // scopes became optional in the schema for kind 'agent' (§AA1); a board or account token still needs them.
+    expect(r.safeParse({ name: 'orch', boardId: 'b' }).success).toBe(false);
+    expect(r.safeParse({ name: 'orch', kind: 'account' }).success).toBe(false);
+  });
+
+  it("§AA1 apiKeyCreate kind 'agent': the agent by actsAs, no board, no scopes, keepOthers", () => {
+    const r = COMMANDS.apiKeyCreate.req;
+    const agent = { kind: 'agent', id: 'ag_Bu1lder000000001' } as const;
+    const ok = r.parse({ name: 'Builder', kind: 'agent', actsAs: agent });
+    expect(ok.scopes).toBeUndefined();
+    expect(ok.boardId).toBeUndefined();
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, keepOthers: true }).success).toBe(true);
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, expiresInDays: 90 }).success).toBe(true);
+    // boardId null is "no board", the same as leaving it out.
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: null }).success).toBe(true);
+    // an agent token names an agent …
+    expect(r.safeParse({ name: 'Builder', kind: 'agent' }).success).toBe(false);
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: { kind: 'user' } }).success).toBe(false);
+    // … no board, and no scopes to choose
+    expect(r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, boardId: 'b' }).success).toBe(false);
+    expect(
+      r.safeParse({ name: 'Builder', kind: 'agent', actsAs: agent, scopes: ['board:read'] }).success,
+    ).toBe(false);
+    // keepOthers is about rotating an agent's tokens: meaningless anywhere else
+    expect(
+      r.safeParse({ name: 'orch', boardId: 'b', scopes: ['board:read'], keepOthers: true }).success,
+    ).toBe(false);
+    // and it stays on the deny list: no token mints a token, an agent token included
+    expect(tokenMayCall(COMMANDS.apiKeyCreate, [...AGENT_TOKEN_SCOPES])).toBe(false);
+  });
+
+  it('§AA3 artifactShare: agentAccess beside agentId; the old role form still parses', () => {
+    const r = COMMANDS.artifactShare.req;
+    const a = { artifactId: 'artifact_1', agentId: 'ag_Bu1lder000000001' };
+    expect(r.safeParse({ ...a, agentAccess: { build: true, data: 'none' } }).success).toBe(true);
+    expect(r.safeParse({ ...a, agentAccess: { build: false, data: 'read' } }).success).toBe(true);
+    // "remove" spelled the new way
+    expect(r.safeParse({ ...a, agentAccess: { build: false, data: 'none' } }).success).toBe(true);
+    // the old form: 'editor' → both, null → removed
+    expect(r.safeParse({ ...a, role: 'editor' }).success).toBe(true);
+    expect(r.safeParse({ ...a, role: null }).success).toBe(true);
+    // neither, a viewer role for an agent, a malformed access
+    expect(r.safeParse(a).success).toBe(false);
+    expect(r.safeParse({ ...a, role: 'viewer' }).success).toBe(false);
+    expect(r.safeParse({ ...a, agentAccess: { build: true } }).success).toBe(false);
+    expect(r.safeParse({ ...a, agentAccess: { build: true, data: 'all' } }).success).toBe(false);
+    // a person has a role, never an agentAccess
+    const p = { artifactId: 'artifact_1', email: 'x@example.com' };
+    expect(r.safeParse({ ...p, role: 'viewer' }).success).toBe(true);
+    expect(r.safeParse({ ...p, role: null }).success).toBe(true);
+    expect(r.safeParse(p).success).toBe(false);
+    expect(r.safeParse({ ...p, role: 'viewer', agentAccess: { build: true, data: 'none' } }).success).toBe(false);
   });
 
   it('agent commands', () => {
@@ -351,8 +406,12 @@ describe('request schemas', () => {
     expect(
       set.safeParse({ boardId: 'b', agentId: 'ag_Bu1lder000000001', role: null }).success,
     ).toBe(true);
+    // §AA2 changed this: 'admin' is a role an agent may hold.
     expect(
       set.safeParse({ boardId: 'b', agentId: 'ag_Bu1lder000000001', role: 'admin' }).success,
+    ).toBe(true);
+    expect(
+      set.safeParse({ boardId: 'b', agentId: 'ag_Bu1lder000000001', role: 'owner' }).success,
     ).toBe(false);
     const ack = COMMANDS.agentInboxAck.req;
     expect(ack.safeParse({ agentId: 'ag_Bu1lder000000001', ids: ['e1'] }).success).toBe(true);

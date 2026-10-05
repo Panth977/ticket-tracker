@@ -485,8 +485,12 @@ describe('public api shapes', () => {
     expect(
       RestBoardAgentBodySchema.safeParse({ agent: 'ag_Bu1lder000000001', role: null }).success,
     ).toBe(true);
+    // §AA2 changed this: an agent may be a board admin now.
     expect(
       RestBoardAgentBodySchema.safeParse({ agent: 'ag_Bu1lder000000001', role: 'admin' }).success,
+    ).toBe(true);
+    expect(
+      RestBoardAgentBodySchema.safeParse({ agent: 'ag_Bu1lder000000001', role: 'owner' }).success,
     ).toBe(false);
     expect(RestBoardAgentBodySchema.safeParse({ agent: 'nope', role: 'editor' }).success).toBe(
       false,

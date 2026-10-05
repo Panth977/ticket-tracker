@@ -1,15 +1,18 @@
 <!--
-  People & roles › the board's agents (agents.html §C): picture, name, Agent
-  badge and owner; role (editor / commenter / viewer) and stage grant, changed
-  by any admin through boardAgentSet; ⋯ Remove (unassigns it and revokes its
-  tokens for this board — its messages stay).
+  People & roles › the board's agents (agents.html §C, §AA2): picture, name,
+  Agent badge and owner; role (viewer / commenter / editor / ADMIN — §AA2: an
+  agent may be admin now, and on a board the role is the permission) and stage
+  grant, changed by any admin through boardAgentSet; ⋯ Remove (unassigns it;
+  its token stops reaching this board — its messages stay).
 -->
 <script lang="ts">
   import { Bot, ExternalLink, MoreHorizontal, UserMinus } from 'lucide-svelte';
-  import { AGENT_BOARD_ROLES, type AgentBoardRole, type Board, type BoardMember } from '@tm/shared';
+  import type { AgentBoardRole, Board, BoardMember } from '@tm/shared';
+  import { agentRoleOf } from '$lib/agents/access';
   import {
     AGENT_ROLE_HINT,
     AGENT_ROLE_LABEL,
+    AGENT_ROLE_ORDER,
     removeAgentFromBoard,
     setAgentGrant,
     setAgentRole,
@@ -40,7 +43,7 @@
   const statuses = $derived(boardAgentStatus(board.id));
   const healthOf = (agentId: string) => agentLead($statuses.data, agentId, $healthClock);
 
-  const roleOf = (m: BoardMember) => m.role as AgentBoardRole;
+  const roleOf = (m: BoardMember) => agentRoleOf(m.role);
   const grantOf = (m: BoardMember) => board.stageGrants[m.uid] ?? m.stageGrant;
 
   async function role(m: BoardMember, r: AgentBoardRole) {
@@ -53,7 +56,7 @@
   async function remove(m: BoardMember) {
     if (
       !confirm(
-        `Remove ${m.name} (agent) from ${board.name}? It is unassigned from its tickets here and its tokens for this board stop working. Its messages stay.`,
+        `Remove ${m.name} (agent) from ${board.name}? It is unassigned from its tickets here and its token stops reaching this board at once. Its messages stay.`,
       )
     )
       return;
@@ -116,8 +119,7 @@
                       void role(m, r);
                     }}
                   >
-                    {#each AGENT_BOARD_ROLES as r (r)}<option value={r}
-                        >{AGENT_ROLE_LABEL[r]}</option
+                    {#each AGENT_ROLE_ORDER as r (r)}<option value={r}>{AGENT_ROLE_LABEL[r]}</option
                       >{/each}
                   </select>
                 {:else}

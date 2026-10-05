@@ -84,7 +84,10 @@
   {:else if kind === 'image' && url}
     <ImageZoom bind:this={zoom} src={url} alt={file.name} />
   {:else if kind === 'video' && url}
-    <div class="grid min-h-0 flex-1 place-items-center bg-black">
+    <!-- minmax(0,1fr) tracks give the cell a definite size, so max-h-full caps a tall video at the viewport -->
+    <div
+      class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center bg-black"
+    >
       <!-- svelte-ignore a11y_media_has_caption -->
       <video src={url} controls autoplay playsinline class="max-h-full max-w-full"></video>
     </div>

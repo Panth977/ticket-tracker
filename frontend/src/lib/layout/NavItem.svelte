@@ -43,7 +43,9 @@
 {/snippet}
 
 {#if href}
-  <a {href} class={cls} style={pad} aria-current={active ? 'page' : undefined}>{@render body()}</a>
+  <a {href} {onclick} class={cls} style={pad} aria-current={active ? 'page' : undefined}
+    >{@render body()}</a
+  >
 {:else}
   <button type="button" class={cls} style={pad} {onclick}>{@render body()}</button>
 {/if}

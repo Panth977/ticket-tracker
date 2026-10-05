@@ -38,6 +38,22 @@
  *                the states a ticket, a question and a task-list item can be in.
  *   SDK          sdk/dist/sdk.d.ts — the client surface, verbatim, with its doc
  *                comments, so a signature here is the signature that compiles.
+ *   driver       frontend/static/backend-driver/v1/driver.d.ts — the published
+ *                types of window.BackendDriver (docs/plan/artifacts.html §E),
+ *                verbatim, and checked against driver/src/api.ts, the file it
+ *                is built from. The Artifacts chapter's route table, tool table
+ *                and limits come from the same registries as §5; its complete
+ *                example and its Vite template ARE the files the plugin's
+ *                `artifact` skill ships, read from claude-plugin/skills/artifact/.
+ *   agent tokens docs/plan/agents.html §AA: the credential kinds, the scopes an
+ *                agent token always carries, the roles an agent may hold and
+ *                { build, data } on an artifact are read from @tm/shared
+ *                (API_KEY_KINDS, AGENT_TOKEN_SCOPES, AGENT_BOARD_ROLES,
+ *                ARTIFACT_AGENT_DATA). The data API's routes, tools, limits and
+ *                filter operators come from REST_ROUTES, MCP_TOOLS and
+ *                shared/artifacts/data; its SDK surface from sdk.d.ts. Only
+ *                the MEANING beside each name is written here, and a name with
+ *                no meaning fails the build instead of printing a blank.
  *
  * DETERMINISTIC ON PURPOSE. The deploy fails when the committed copy differs
  * from a fresh generation (`--check`, the same guard style as the SDK
@@ -84,7 +100,23 @@ export const PLUGIN_FILES = [
   join('commands', 'tm-standup.md'),
   join('skills', 'taskmanager', 'SKILL.md'),
   join('skills', 'taskmanager', 'reference', 'llms-full.txt'),
+  // The `artifact` skill (docs/plan/artifacts.html §C2): how to build, run
+  // locally and publish one — with a complete single-file example and a Vite
+  // template it can copy rather than retype.
+  join('skills', 'artifact', 'SKILL.md'),
+  join('skills', 'artifact', 'example', 'index.html'),
+  join('skills', 'artifact', 'template', 'README.md'),
+  join('skills', 'artifact', 'template', 'package.json'),
+  join('skills', 'artifact', 'template', 'vite.config.js'),
+  join('skills', 'artifact', 'template', 'index.html'),
+  join('skills', 'artifact', 'template', 'src', 'main.js'),
+  join('skills', 'artifact', 'template', 'publish.mjs'),
 ];
+/** The artifact skill's bundled files, as the Artifacts chapter quotes them. */
+const ARTIFACT_EXAMPLE = join('skills', 'artifact', 'example', 'index.html');
+const ARTIFACT_TEMPLATE = ['package.json', 'vite.config.js', 'index.html', join('src', 'main.js'), 'publish.mjs'].map(
+  (f) => join('skills', 'artifact', 'template', f),
+);
 export const PLUGIN_DIR = join('lib', 'claude-plugin');
 /** The same bundle as one download. Binary, so the guard compares it byte for byte. */
 export const PLUGIN_ZIP = join('lib', 'claude-plugin.zip');
@@ -164,6 +196,32 @@ function loadSdk() {
     dts: readFileSync(dts, 'utf8'),
     version: JSON.parse(readFileSync(join(ROOT, 'sdk', 'package.json'), 'utf8')).version,
   };
+}
+
+/**
+ * The driver's declaration file, as PUBLISHED (frontend/static/backend-driver
+ * is committed, and is what an artifact's TypeScript project downloads). It is
+ * driver/src/api.ts plus a header line and the value declarations — so the
+ * source must appear in it verbatim, or the staged copy is stale and the
+ * chapter would document yesterday's driver.
+ */
+function loadDriver() {
+  const dts = join(STATIC, 'backend-driver', 'v1', 'driver.d.ts');
+  if (!existsSync(dts))
+    fail(
+      'frontend/static/backend-driver/v1/driver.d.ts is missing — the BackendDriver reference is read from it\n' +
+        '    run:  pnpm --filter @tm/backend-driver build',
+    );
+  const text = readFileSync(dts, 'utf8');
+  const api = join(ROOT, 'driver', 'src', 'api.ts');
+  if (existsSync(api) && !text.includes(readFileSync(api, 'utf8')))
+    fail(
+      'frontend/static/backend-driver/v1/driver.d.ts is not built from the current driver/src/api.ts\n' +
+        '    run:  pnpm --filter @tm/backend-driver build',
+    );
+  const version = /^\/\/ @tm\/backend-driver (\S+)/.exec(text)?.[1];
+  if (!version) fail('driver.d.ts does not start with its `// @tm/backend-driver <version>` line');
+  return { dts: text, version };
 }
 
 /** Every prose file, by name. `index.md` feeds llms.txt; the numbered ones feed llms-full.txt. */
@@ -393,7 +451,7 @@ function restBlock(doc, S) {
     const scopes = route ? route.scopes : [];
     out.push(
       `Scopes: ${scopes.length ? scopes.map((s) => `\`${s}\``).join(' or ') : '_none — any valid credential_'}` +
-        (route?.board ? ' · board-scoped (a board token implies its board)' : ''),
+        (route?.board ? ' · board-scoped: a credential on several boards names one (`?board=KEY`)' : ''),
     );
 
     const params = op.parameters ?? [];
@@ -492,7 +550,8 @@ function contractsBlock(S, doc) {
 
   b.push('##### Scopes');
   b.push(
-    'A token carries scopes. **What it may do is its scopes ∩ what its principal’s board role allows** — a scope never widens a role.',
+    'A token carries scopes. **What it may do is its scopes ∩ what its principal’s board role allows** — a scope never widens a role. ' +
+      'An **agent token** has no scope list to choose: it always carries the fixed set below the table, so for an agent the role alone decides (§2).',
   );
   b.push(
     fence(
@@ -502,11 +561,18 @@ function contractsBlock(S, doc) {
         ['─────', '──────────────'],
         ...S.TOKEN_SCOPES.map((s) => [s, S.SCOPE_LABELS[s]]),
         ['', ''],
-        ...S.ADMIN_SCOPES.map((s) => [s, `${S.SCOPE_LABELS[s]} — only a token acting as a PERSON who is a board admin`]),
+        ...S.ADMIN_SCOPES.map((s) => [s, `${S.SCOPE_LABELS[s]} — only where the principal is a board ADMIN: a person's token that carries it, or any agent token`]),
+        ['', ''],
+        ...S.ARTIFACT_SCOPES.map((s) => [s, `${S.SCOPE_LABELS[s]} — an account token, or an agent token for the artifacts that agent is on (§8)`]),
       ]),
     ),
   );
-  b.push('Presets offered by the token form:');
+  b.push(
+    `Every **agent token** carries exactly these ${S.AGENT_TOKEN_SCOPES.length}, and they are not a choice: ` +
+      `${S.AGENT_TOKEN_SCOPES.map((x) => `\`${x}\``).join(', ')}. ` +
+      `It never carries an account scope (${S.ACCOUNT_SCOPES.map((x) => `\`${x}\``).join(', ')}).`,
+  );
+  b.push('Presets offered by the token form (board tokens acting as a person, and account tokens):');
   b.push(
     fence(
       'text',
@@ -562,6 +628,9 @@ function contractsBlock(S, doc) {
         ['stage category', S.STAGE_CATEGORIES.join(' | ')],
         ['custom field type', S.FIELD_TYPES.join(' | ')],
         ['board role', S.BOARD_ROLES.join(' | ')],
+        ['board role an agent may hold', S.AGENT_BOARD_ROLES.join(' | ')],
+        ['credential kind (GET /v1/me `kind`)', [...S.API_KEY_KINDS, 'oauth'].join(' | ')],
+        ['agent on an artifact', `{ build: true | false, data: ${S.ARTIFACT_AGENT_DATA.map((d) => `'${d}'`).join(' | ')} }`],
         ['principal kind', "'user' | 'agent'  (an agent id is 'ag_' + 16 chars)"],
         ['question status', S.QUESTION_STATUSES.join(' | ')],
         ['question field type', S.QUESTION_FIELD_TYPES.join(' | ')],
@@ -655,6 +724,239 @@ function sdkBlock(dts, version, u) {
   ].join('\n\n');
 }
 
+// ─────────────────────────────────── the Artifacts chapter (§8)
+
+const mbOf = (n) => `${n / 1024 / 1024} MB`;
+
+/** The artifact routes, out of the same route table §5.2 is ordered by. */
+function artifactRestBlock(S) {
+  // The data routes have a section of their own (§8.10, artifactDataRestBlock).
+  const routes = S.REST_ROUTES.filter((r) => r.path.startsWith('/v1/artifacts') && !isDataRoute(r));
+  if (!routes.length) fail('REST_ROUTES has no /v1/artifacts routes — has the artifact API moved?');
+  return columns([
+    ['route', 'scopes', 'what it does'],
+    ['─────', '──────', '────────────'],
+    ...routes.map((r) => [`${r.method} ${r.path}`, r.scopes.join(' | '), r.summary]),
+  ]);
+}
+
+const isDataRoute = (r) => r.path.startsWith('/v1/artifacts/{id}/data/');
+const isDataTool = (name) => name.startsWith('artifact_data_');
+
+/** §AA4 — the data routes, out of the same route table. */
+function artifactDataRestBlock(S) {
+  const routes = S.REST_ROUTES.filter(isDataRoute);
+  if (!routes.length) fail('REST_ROUTES has no /v1/artifacts/{id}/data/ routes — has the data API moved?');
+  // Without the common prefix: fifteen lines that all start the same way hide the part that differs.
+  const prefix = '/v1/artifacts/{id}/data';
+  return (
+    `every path below is under ${prefix}\n\n` +
+    columns([
+      ['route', 'needs', 'what it does'],
+      ['─────', '─────', '────────────'],
+      ...routes.map((r) => [
+        `${r.method} ${r.path.slice(prefix.length)}`,
+        // A route every artifact scope may call only READS; one that needs artifacts:write writes.
+        r.scopes.includes('artifacts:read') ? "data 'read'" : "data 'write'",
+        r.summary,
+      ]),
+    ])
+  );
+}
+
+/** §AA4 — the artifact_data_* tools, out of the MCP registry. */
+function artifactDataToolsBlock(S) {
+  const tools = Object.entries(S.MCP_TOOLS).filter(([name]) => isDataTool(name));
+  if (!tools.length) fail('MCP_TOOLS has no artifact_data_* tools — has the data API moved?');
+  return columns(tools.map(([name, meta]) => [name, meta.readOnly ? 'read' : 'write', meta.description]));
+}
+
+/** §AA4 — every number the data API is held to, from shared/artifacts/data and paths. */
+function artifactDataLimitsBlock(S) {
+  return columns([
+    ['batch', `${S.ARTIFACT_DATA_BATCH_MAX} writes at most, applied all or nothing`],
+    ['list', `${S.ARTIFACT_DATA_LIST_DEFAULT} documents by default, ${S.LIST_LIMIT_MAX} at most per page; follow next_cursor with start_after`],
+    ['filters', `${S.ARTIFACT_DATA_WHERE_MAX} \`where\` per list; op is one of ${S.WHERE_OPS.join('  ')}`],
+    ['file upload', `${mbOf(S.ARTIFACT_UPLOAD_MAX_BYTES)} per file — the raw request body is the file`],
+    ['file list', `${S.ARTIFACT_FILE_LIST_MAX} files at most under a prefix`],
+    ['Firestore document', "1 MiB stored (Firestore's own ceiling; 413 over it) — the JSON body may be up to 2 MB"],
+    ['reserved collection names', `${S.ARTIFACT_RESERVED_COLLECTIONS.map((c) => `'${c}'`).join(', ')} — refused at any depth, as in the driver`],
+    ['path', `≤ ${S.ARTIFACT_PATH_MAX} characters; '.' and '..' are refused; percent-encode each segment`],
+    ['escapes', `{ "${S.DATE_ESCAPE}": ISO } a timestamp, both ways · { "${S.SERVER_TIME_ESCAPE}": true } in a write, the server's clock — not inside an array`],
+    ['archived artifact', 'reads work; every write answers 409'],
+  ]);
+}
+
+/** §AA4 — `tm.artifacts.data(id)`, verbatim from sdk.d.ts. */
+function artifactDataSdkBlock(dts) {
+  const surface = sliceBraces(dts, /^export declare function createArtifactData\(/m);
+  if (!surface) fail('could not find createArtifactData in sdk/dist/sdk.d.ts — has tm.artifacts.data moved?');
+  const names = [
+    'ArtifactDataOptions',
+    'ArtifactDataDoc',
+    'ArtifactDataWhereOp',
+    'ArtifactDataWhere',
+    'ArtifactDataListQuery',
+    'ArtifactDataPage',
+    'ArtifactDataWrite',
+    'ArtifactDataWriteResult',
+    'ArtifactDataFile',
+    'ArtifactDataFileUrl',
+  ];
+  const types = names.map((n) => {
+    const t =
+      sliceBraces(dts, new RegExp(`^export interface ${n}(?:<.*>)?(?: extends [\\w, ]+)? \\{`, 'm')) ??
+      sliceStatement(dts, new RegExp(`^export type ${n}(?:<.*>)? = `, 'm'));
+    if (!t) fail(`could not find ${n} in sdk/dist/sdk.d.ts — the data section quotes it`);
+    return t;
+  });
+  const limits = sliceBraces(dts, /^export declare const ARTIFACT_DATA_LIMITS: \{/m);
+  const clock = sliceStatement(dts, /^export declare const serverTime: /m);
+  if (!limits || !clock) fail('could not find ARTIFACT_DATA_LIMITS / serverTime in sdk/dist/sdk.d.ts');
+  // The declaration is `createArtifactData(http, artifactId, opts?)`; what a caller writes is tm.artifacts.data(id, opts?).
+  const member = surface.replace(
+    /export declare function createArtifactData\([^)]*\): \{/,
+    '// tm.artifacts.data(id: string, opts?: ArtifactDataOptions) returns:\n{',
+  );
+  if (member === surface) fail('the createArtifactData declaration in sdk.d.ts has changed shape');
+  return [fence('ts', member), fence('ts', [clock, limits, ...types].join('\n\n'))].join('\n\n');
+}
+
+// ─────────────────────────────────── agent tokens (docs/plan/agents.html §AA)
+
+/**
+ * What each board role lets an AGENT do. The role NAMES come from
+ * AGENT_BOARD_ROLES; only the meaning is written here, lowest first, each
+ * adding to the one before.
+ */
+const AGENT_ROLE_NOTES = {
+  viewer: 'Read the board, its tickets, threads and files.',
+  commenter: '+ comment, upload, ask and answer questions, publish and tick its OWN task lists, heartbeat; move tickets only inside its StageGrant.',
+  editor: '+ create, edit, move, assign and archive tickets; change any task list.',
+  admin: '+ restore archived tickets, manage webhooks — everything a board admin may do with a token.',
+};
+function agentRolesBlock(S) {
+  const roles = [...S.AGENT_BOARD_ROLES].reverse();
+  const missing = roles.filter((r) => !AGENT_ROLE_NOTES[r]);
+  if (missing.length) fail(`AGENT_BOARD_ROLES has ${missing.join(', ')} — say what it means in AGENT_ROLE_NOTES`);
+  return columns([
+    ['role', 'what the agent may do on that board'],
+    ['────', '───────────────────────────────────'],
+    ...roles.map((r) => [r, AGENT_ROLE_NOTES[r]]),
+  ]);
+}
+
+/** The kinds of credential. The key kinds come from API_KEY_KINDS; OAuth is a grant, not a key. */
+const CREDENTIAL_NOTES = {
+  agent: ['an agent', 'every board and artifact it is on', 'its role on each board; { build, data } on each artifact. One token per agent'],
+  account: ['the person', 'every board they are on', 'its scopes ∩ their role on each board'],
+  board: ['the person', 'one board', 'its scopes ∩ their role on that board'],
+};
+function credentialsBlock(S) {
+  const kinds = ['agent', 'account', 'board'];
+  const unknown = S.API_KEY_KINDS.filter((k) => !CREDENTIAL_NOTES[k]);
+  const gone = kinds.filter((k) => !S.API_KEY_KINDS.includes(k));
+  if (unknown.length || gone.length)
+    fail(`API_KEY_KINDS is ${S.API_KEY_KINDS.join(', ')} — bring CREDENTIAL_NOTES in step (${[...unknown, ...gone].join(', ')})`);
+  return columns([
+    ['kind', 'acts as', 'reaches', 'what it may do'],
+    ['────', '───────', '───────', '──────────────'],
+    ...kinds.map((k) => [k, ...CREDENTIAL_NOTES[k]]),
+    ['oauth', 'the person', 'the boards granted at consent', 'the granted scopes ∩ their role on each board'],
+  ]);
+}
+
+/** The artifact_* tools, out of the MCP registry. */
+function artifactToolsBlock(S) {
+  const tools = Object.entries(S.MCP_TOOLS).filter(([name]) => name.startsWith('artifact_'));
+  if (!tools.length) fail('MCP_TOOLS has no artifact_* tools — has the artifact API moved?');
+  return columns(tools.map(([name, meta]) => [name, meta.readOnly ? 'read' : 'write', meta.description]));
+}
+
+/**
+ * Every number here is a constant the server enforces, read from @tm/shared.
+ * The one exception is the 31 MB request ceiling, which lives in the REST door
+ * (backend/doors/rest.ts MAX_PUBLISH_BODY_BYTES): it is a property of Cloud
+ * Functions' 32 MB body limit, not of an artifact, so shared does not carry it.
+ */
+function artifactLimitsBlock(S) {
+  return columns([
+    ['build, unpacked', `${mbOf(S.ARTIFACT_BUILD_MAX_BYTES)} and ${S.ARTIFACT_BUILD_MAX_FILES} files, with an index.html at its root (or in a single top folder, which is stripped)`],
+    ['build zip (REST, SDK)', `${mbOf(S.ARTIFACT_ZIP_MAX_BYTES)} compressed`],
+    ['one publish request', '31 MB — the build zip and the optional source zip ride together'],
+    ['inline files (MCP)', `${mbOf(S.ARTIFACT_INLINE_MAX_BYTES)} in one artifact_publish call`],
+    ['source zip', `${mbOf(S.ARTIFACT_SOURCE_MAX_BYTES)} stored — but it must fit in the publish request beside the build`],
+    ['builds kept', `the newest ${S.ARTIFACT_BUILDS_KEPT} (and always the current one); any of them can be made current`],
+    ['name / description', `≤ ${S.ARTIFACT_NAME_MAX} / ≤ ${S.ARTIFACT_DESCRIPTION_MAX} characters`],
+    ['roles (people)', `${S.ARTIFACT_ROLES.join(' | ')} — shared as ${S.ArtifactShareRoleSchema.options.join(' | ')}`],
+    ['access (agents)', `{ build: true | false, data: ${S.ARTIFACT_AGENT_DATA.map((d) => `'${d}'`).join(' | ')} } — at least one of them`],
+    ['db.storage upload', `${mbOf(S.ARTIFACT_UPLOAD_MAX_BYTES)} per file`],
+    ['Firestore document', '256 KB'],
+    ['live listeners', `${S.ARTIFACT_MAX_LISTENERS} per open artifact tab`],
+    ['db.firestore.list', `${S.LIST_LIMIT_MAX} documents at most per call (default 100)`],
+    ['reserved collection names', `${S.ARTIFACT_RESERVED_COLLECTIONS.map((c) => `'${c}'`).join(', ')} — refused at any depth`],
+    ['path', `≤ ${S.ARTIFACT_PATH_MAX} characters; '..' is refused`],
+    ['file link / capability', `${S.ARTIFACT_CAPABILITY_TTL_MS / 60000} minutes, renewed by the host page while the tab is open`],
+  ]);
+}
+
+/** `tm.artifacts.*` and the types it takes and answers with, verbatim from sdk.d.ts. */
+function artifactSdkBlock(dts) {
+  const surface = sliceBraces(dts, /^ {4}artifacts: \{/m);
+  if (!surface) fail('could not find `artifacts: {` in sdk/dist/sdk.d.ts — has tm.artifacts moved?');
+  const names = [
+    'CreateArtifactInput',
+    'UpdateArtifactInput',
+    'ArtifactFile',
+    'ArtifactBuildInput',
+    'PublishArtifactOptions',
+    'ShareArtifactInput',
+    'ArtifactAgentAccess',
+    'Artifact',
+    'ArtifactBuild',
+    'ArtifactMember',
+    'ArtifactDetail',
+    'ArtifactSource',
+    'ArtifactShareResult',
+  ];
+  const types = names.map((n) => {
+    const t =
+      sliceBraces(dts, new RegExp(`^export interface ${n}(?: extends [\\w, ]+)? \\{`, 'm')) ??
+      sliceStatement(dts, new RegExp(`^export type ${n} = `, 'm'));
+    if (!t) fail(`could not find ${n} in sdk/dist/sdk.d.ts — the Artifacts chapter quotes it`);
+    return t;
+  });
+  // Dedent the member by the four spaces it sits at inside createClientBase's answer.
+  const member = surface
+    .split('\n')
+    .map((l) => l.replace(/^ {4}/, ''))
+    .join('\n');
+  return [fence('ts', `// createClient(…).artifacts\n${member}`), fence('ts', types.join('\n\n'))].join('\n\n');
+}
+
+/** The whole published driver.d.ts. */
+function driverBlock(driver, u) {
+  return [
+    `\`@tm/backend-driver\` **${driver.version}** — the file below is \`${u.driver.types}\`, verbatim.`,
+    fence('ts', driver.dts),
+  ].join('\n\n');
+}
+
+/** A `export type X = …;` statement (with its doc comment), which has no braces to balance. */
+function sliceStatement(text, startRe) {
+  const m = startRe.exec(text);
+  if (!m) return null;
+  const end = text.indexOf(';\n', m.index);
+  if (end < 0) return null;
+  const before = text.slice(0, m.index).replace(/\s+$/, '');
+  let doc = '';
+  if (before.endsWith('*/')) {
+    const start = before.lastIndexOf('/**');
+    if (start >= 0) doc = before.slice(start) + '\n';
+  }
+  return (doc + text.slice(m.index, end + 1)).trim();
+}
+
 /** From the line a regex matches, through the balanced `{ … }` that follows. */
 function sliceBraces(text, startRe) {
   const m = startRe.exec(text);
@@ -702,7 +1004,19 @@ export function urls(project = DEFAULT_PROJECT) {
     claudeUrl: `${host}/integrate/claude`,
     pluginZipUrl: `${host}/lib/claude-plugin.zip`,
     pluginDirUrl: `${host}/lib/claude-plugin/`,
+    // Artifacts (docs/plan/artifacts.html): where a person opens one, and the
+    // driver an artifact loads. `v1` is pinned and immutable; `latest` moves.
+    artifactsUrl: `${host}/x/`,
+    driver: {
+      index: `${host}/backend-driver/`,
+      js: `${host}/backend-driver/v1/driver.js`,
+      mjs: `${host}/backend-driver/v1/driver.mjs`,
+      types: `${host}/backend-driver/v1/driver.d.ts`,
+      latest: `${host}/backend-driver/latest/driver.js`,
+    },
     tokensUrl: `${host}/account/tokens`,
+    // §AA5 — an agent's own page: its one token, and every board and artifact it is on.
+    agentsUrl: `${host}/agents`,
     connectedAppsUrl: `${host}/account/connected-apps`,
     sdk: {
       index: `${host}/lib/`,
@@ -760,6 +1074,7 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
   const pluginSource = await loadPluginSource();
   const S = await loadShared();
   const { dts, version } = loadSdk();
+  const driver = loadDriver();
   const doc = openApiDoc(project);
   const u = urls(project);
 
@@ -774,7 +1089,39 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
     sdk: sdkBlock(dts, version, u),
     tools: toolTable(S),
     toc: '{{TOC}}', // filled in below, once every heading exists
+    // The Artifacts chapter (§8) and the plugin's `artifact` skill.
+    artifactrest: artifactRestBlock(S),
+    artifacttools: artifactToolsBlock(S),
+    artifactlimits: artifactLimitsBlock(S),
+    artifactsdk: artifactSdkBlock(dts),
+    // §AA — agent tokens, and the artifact's data from outside the page.
+    credentials: credentialsBlock(S),
+    agentroles: agentRolesBlock(S),
+    artifactdatarest: artifactDataRestBlock(S),
+    artifactdatatools: artifactDataToolsBlock(S),
+    artifactdatalimits: artifactDataLimitsBlock(S),
+    artifactdatasdk: artifactDataSdkBlock(dts),
+    driver: driverBlock(driver, u),
   };
+
+  // The plugin's files are expanded FIRST: the chapter quotes the artifact
+  // skill's example and Vite template, so both readers get the very same
+  // files — the ones an installed plugin can copy — and neither can drift.
+  const pluginFiles = {};
+  for (const [name, text] of Object.entries(pluginSource)) {
+    pluginFiles[name] = expand(text, blocks, u, { version, updated });
+  }
+  const quoted = (f) => {
+    if (!(f in pluginFiles)) fail(`the Claude plugin is missing ${f} — the Artifacts chapter quotes it`);
+    const posix = f.split('\\').join('/');
+    const ext = posix.slice(posix.lastIndexOf('.') + 1);
+    return { posix, lang: { mjs: 'js', json: 'json', html: 'html', js: 'js' }[ext] ?? 'text' };
+  };
+  blocks.artifactexample = fence('html', pluginFiles[ARTIFACT_EXAMPLE] ?? fail(`the Claude plugin is missing ${ARTIFACT_EXAMPLE}`));
+  blocks.artifactvite = ARTIFACT_TEMPLATE.map((f) => {
+    const { posix, lang } = quoted(f);
+    return `\`${posix.slice('skills/artifact/template/'.length)}\`\n\n${fence(lang, pluginFiles[f])}`;
+  }).join('\n\n');
 
   // llms-full.txt — the numbered prose files, in order, with the generated
   // blocks spliced in where each file asks for them.
@@ -824,7 +1171,9 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
     [u.openapiUrl, 'the OpenAPI 3.1 description of /v1'],
     [u.sdk.index, 'the hosted JavaScript SDK: install lines and examples'],
     [u.claudeUrl, 'putting this inside Claude: connector, `claude mcp add`, or the plugin'],
-    [u.pluginZipUrl, 'the Claude Code plugin: MCP server + skill + slash commands'],
+    [u.pluginZipUrl, 'the Claude Code plugin: MCP server + skills + slash commands'],
+    [u.driver.js, 'window.BackendDriver — the script an ARTIFACT loads for its backend'],
+    [u.driver.types, 'its types, one flat file (driver.mjs beside it is the ES module)'],
     [u.apiBase, 'the REST API root (Bearer token)'],
     [u.mcpUrl, 'the MCP endpoint (the same token as a Bearer token)'],
   ]);
@@ -854,12 +1203,72 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
       mcpAddCommand: `claude mcp add --transport http taskmanager ${u.mcpUrl} --header "Authorization: Bearer $TM_TOKEN"`,
     },
     sdk: u.sdk,
+    // Artifacts (docs/plan/artifacts.html): the driver an artifact loads, and
+    // the limits a publish is held to — so a machine can build and publish
+    // one without parsing the chapter.
+    driver: { version: driver.version, ...u.driver },
+    artifacts: {
+      openUrl: `${u.app}/x/{id}`,
+      roles: [...S.ARTIFACT_ROLES],
+      scopes: S.ARTIFACT_SCOPES.map((name) => ({ name, label: S.SCOPE_LABELS[name] })),
+      // §AA3 — an agent on an artifact: build and data, separately.
+      agentAccess: { build: [true, false], data: [...S.ARTIFACT_AGENT_DATA], onCreate: { ...S.ARTIFACT_AGENT_FULL } },
+      // Every artifact route and tool, the data ones included (they are spelled out under `data`).
+      rest: S.REST_ROUTES.filter((r) => r.path.startsWith('/v1/artifacts')).map((r) => `${r.method} ${r.path}`),
+      mcpTools: Object.keys(S.MCP_TOOLS).filter((name) => name.startsWith('artifact_')),
+      // §AA4 — the artifact's own database and files, with a token. The page
+      // (through the driver) and these routes see the same documents.
+      data: {
+        rest: S.REST_ROUTES.filter(isDataRoute).map((r) => ({
+          method: r.method,
+          path: r.path,
+          needs: r.scopes.includes('artifacts:read') ? 'read' : 'write',
+          summary: r.summary,
+        })),
+        mcpTools: Object.keys(S.MCP_TOOLS).filter(isDataTool),
+        sdk: 'tm.artifacts.data(id)',
+        escapes: { date: { [S.DATE_ESCAPE]: '<ISO 8601>' }, serverTime: { [S.SERVER_TIME_ESCAPE]: true } },
+        whereOps: [...S.WHERE_OPS],
+        limits: {
+          batchWrites: S.ARTIFACT_DATA_BATCH_MAX,
+          listDefault: S.ARTIFACT_DATA_LIST_DEFAULT,
+          listMax: S.LIST_LIMIT_MAX,
+          whereFilters: S.ARTIFACT_DATA_WHERE_MAX,
+          uploadBytes: S.ARTIFACT_UPLOAD_MAX_BYTES,
+          fileListMax: S.ARTIFACT_FILE_LIST_MAX,
+          pathChars: S.ARTIFACT_PATH_MAX,
+        },
+      },
+      limits: {
+        buildBytes: S.ARTIFACT_BUILD_MAX_BYTES,
+        buildFiles: S.ARTIFACT_BUILD_MAX_FILES,
+        zipBytes: S.ARTIFACT_ZIP_MAX_BYTES,
+        inlineBytes: S.ARTIFACT_INLINE_MAX_BYTES,
+        sourceBytes: S.ARTIFACT_SOURCE_MAX_BYTES,
+        buildsKept: S.ARTIFACT_BUILDS_KEPT,
+        uploadBytes: S.ARTIFACT_UPLOAD_MAX_BYTES,
+        listeners: S.ARTIFACT_MAX_LISTENERS,
+      },
+      reservedCollections: [...S.ARTIFACT_RESERVED_COLLECTIONS],
+    },
     auth: {
       scheme: 'Bearer',
       header: 'Authorization: Bearer tm_live_…',
       tokenPrefix: 'tm_live_',
-      howToGetOne: `${u.app}/account/tokens — a person makes an agent, adds it to a board, and creates a board-scoped token that acts as it.`,
-      boardScoped: true,
+      howToGetOne: `${u.agentsUrl} — a person makes an agent, puts it on boards and artifacts, and generates its ONE token on the agent's page. (${u.tokensUrl} makes account tokens and board tokens that act as the person.)`,
+      // §AA1 — the kinds of API key. An agent token has no board and no scope
+      // list: it reaches every board and artifact the agent is on, and the
+      // agent's role / { build, data } there is what it may do.
+      tokenKinds: [...S.API_KEY_KINDS],
+      agentToken: {
+        onePerAgent: true,
+        scopes: [...S.AGENT_TOKEN_SCOPES],
+        boardRoles: [...S.AGENT_BOARD_ROLES],
+        namesBoardWith: { rest: '?board=KEY or /v1/boards/KEY/…', mcp: 'board', sdk: "createClient({ token, board }) / tm.board('KEY')" },
+        defaultBoard: 'GET /v1/me default_board — only on a token converted from an old board token',
+      },
+      // False since §AA: only a board token (acting as a person) is its board.
+      boardScoped: false,
       idempotencyHeader: S.IDEMPOTENCY_HEADER,
     },
     scopes: S.TOKEN_SCOPES.map((name) => ({ name, label: S.SCOPE_LABELS[name] })),
@@ -899,10 +1308,6 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
   // The plugin bundle. The skill carries llms-full.txt VERBATIM as a reference
   // file: an installed plugin then holds the whole operating context offline,
   // and `{{url:llmsFullUrl}}` in the skill tells Claude where the live one is.
-  const pluginFiles = {};
-  for (const [name, text] of Object.entries(pluginSource)) {
-    pluginFiles[name] = expand(text, blocks, u, { version, updated });
-  }
   pluginFiles[join('skills', 'taskmanager', 'reference', 'llms-full.txt')] = llmsFull;
   const missing = PLUGIN_FILES.filter((f) => !(f in pluginFiles));
   if (missing.length)

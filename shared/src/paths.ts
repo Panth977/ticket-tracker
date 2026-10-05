@@ -54,6 +54,14 @@ export const COLLECTIONS = {
   agentStatus: 'agentStatus',
   /** Phase 17 (§Y2): boards/{b}/stats/{yyyy-mm-dd} — the day's turn receipts, summed. */
   stats: 'stats',
+  /** Artifacts (artifacts.html §G): artifacts/{id}, its builds, its viewers' kv. */
+  artifacts: 'artifacts',
+  builds: 'builds',
+  viewers: 'viewers',
+  /** §AB: users/{uid}/workspaces/{id} — a person's own bundles of boards and artifacts. */
+  workspaces: 'workspaces',
+  /** §AB: users/{uid}/ui/{doc} — the person's own UI state ('sidebar'). */
+  ui: 'ui',
   /** Command idempotency records: _idem/{uid}_{clientId}, 24h TTL. */
   idem: '_idem',
   /** Long-running job parameters (accountExport's queued job). Server-only. */
@@ -96,6 +104,10 @@ export const paths = {
   oauthGrants: (uid: string) => `${C.users}/${seg(uid)}/${C.oauthGrants}`,
   oauthGrant: (uid: string, grantId: string) =>
     `${C.users}/${seg(uid)}/${C.oauthGrants}/${seg(grantId)}`,
+  workspaces: (uid: string) => `${C.users}/${seg(uid)}/${C.workspaces}`,
+  workspace: (uid: string, workspaceId: string) =>
+    `${C.users}/${seg(uid)}/${C.workspaces}/${seg(workspaceId)}`,
+  sidebarPrefs: (uid: string) => `${C.users}/${seg(uid)}/${C.ui}/sidebar`,
 
   // top-level
   invites: () => C.invites,

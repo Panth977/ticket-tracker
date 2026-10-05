@@ -27,8 +27,19 @@ const ROLE_WORDS: Record<Invite['role'], string> = {
   viewer: 'a viewer',
 };
 
-export function inviteSummary(inv: Pick<Invite, 'invitedByName' | 'boardName' | 'role'>): string {
-  return `${inv.invitedByName} invited you to ${inv.boardName} as ${ROLE_WORDS[inv.role]}`;
+/**
+ * An invite to an ARTIFACT (docs/plan/artifacts.html §B) rides the same
+ * collection and the same accept flow: `artifactId` is set, `boardName` holds
+ * the artifact's name, and boardId / boardKey are fixed placeholders.
+ */
+export const isArtifactInvite = (inv: Pick<Invite, 'artifactId'>): boolean => !!inv.artifactId;
+
+export function inviteSummary(
+  inv: Pick<Invite, 'invitedByName' | 'boardName' | 'role' | 'artifactId'>,
+): string {
+  return isArtifactInvite(inv)
+    ? `${inv.invitedByName} shared the artifact “${inv.boardName}” with you as ${ROLE_WORDS[inv.role]}`
+    : `${inv.invitedByName} invited you to ${inv.boardName} as ${ROLE_WORDS[inv.role]}`;
 }
 
 export function inviteInboxItem(inv: Invite, inviteId: string, via: Via, now: number): InboxItem {
@@ -48,6 +59,8 @@ export function inviteInboxItem(inv: Invite, inviteId: string, via: Via, now: nu
     readAt: null,
     archivedAt: null,
     snoozedUntil: null,
+    // Tells the inbox this row is about an artifact, not the placeholder board.
+    ...(inv.artifactId ? { artifactId: inv.artifactId } : {}),
   };
 }
 
@@ -85,11 +98,14 @@ export async function sendInviteEmail(
 ): Promise<void> {
   const link = `${appUrl()}/invite/${inviteId}.${token}`;
   const by = inviterEmail ? `${inv.invitedByName} (${inviterEmail})` : inv.invitedByName;
+  const artifact = isArtifactInvite(inv);
   const lines = [
-    `${by} invited you to the board “${inv.boardName}” (${inv.boardKey}) as ${ROLE_WORDS[inv.role]}.`,
+    artifact
+      ? `${by} shared the artifact “${inv.boardName}” with you as ${ROLE_WORDS[inv.role]}.`
+      : `${by} invited you to the board “${inv.boardName}” (${inv.boardKey}) as ${ROLE_WORDS[inv.role]}.`,
     ...(inv.message ? ['', `“${inv.message}”`] : []),
     '',
-    `Join: ${link}`,
+    `${artifact ? 'Open' : 'Join'}: ${link}`,
     '',
     `Sign in with ${inv.email} to accept — the invite only works for that address.`,
     `It expires in ${Math.round(INVITE_TTL_MS / 86_400_000)} days.`,
@@ -97,7 +113,9 @@ export async function sendInviteEmail(
   try {
     await ports().email.send({
       to: inv.email,
-      subject: `${inv.invitedByName} invited you to ${inv.boardName}`,
+      subject: artifact
+        ? `${inv.invitedByName} shared “${inv.boardName}” with you`
+        : `${inv.invitedByName} invited you to ${inv.boardName}`,
       text: lines.join('\n'),
       tag: 'invite',
       headers: { 'X-TM-Invite': inviteId },

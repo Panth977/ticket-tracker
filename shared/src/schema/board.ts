@@ -27,7 +27,9 @@ import {
   UidSchema,
   ViewTypeSchema,
   WebhookEventSchema,
+  AgentIdSchema,
 } from '../types/index.js';
+import { ArtifactIdSchema } from '../artifacts/schema.js';
 
 export const INVITE_STATUSES = ['pending', 'accepted', 'declined', 'revoked', 'expired'] as const;
 /** Invites expire after 14 days. */
@@ -55,6 +57,13 @@ export const InviteSchema = z.object({
   status: z.enum(INVITE_STATUSES),
   expiresAt: MillisSchema,
   createdAt: MillisSchema,
+  /**
+   * ARTIFACT INVITES (docs/plan/artifacts.html §B) ride the same collection:
+   * when this is set the invite is to an ARTIFACT, `role` is 'editor' or
+   * 'viewer', `boardName` holds the artifact's name, and boardId / boardKey
+   * are the fixed ARTIFACT_INVITE_BOARD_ID / _KEY (an artifact has no board).
+   */
+  artifactId: ArtifactIdSchema.optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
@@ -95,7 +104,7 @@ export const BoardSchema = z.object({
   icon: z.string(),
   description: RichTextSchema.nullable(),
 
-  /** Keys are PRINCIPAL ids: people and agents (agents: editor | commenter | viewer, never admin). */
+  /** Keys are PRINCIPAL ids: people and agents (§AA2: an agent may hold any role, admin included). */
   access: z.record(PrincipalIdSchema, BoardRoleSchema),
   /** Per person, commenters only. */
   stageGrants: z.record(PrincipalIdSchema, StageGrantSchema),
@@ -103,6 +112,14 @@ export const BoardSchema = z.object({
   readerUids: z.array(UidSchema),
   /** Derived: editor + admin people (never agents). */
   editorUids: z.array(UidSchema),
+  /**
+   * §AA1 — Derived: every AGENT with any role, like readerUids for people
+   * (which still never holds an agent). It exists for one query: "every board
+   * this agent is on" is `agentIds array-contains agentId`, which is how an
+   * agent token finds its boards at each call. Absent on boards written
+   * before §AA until scripts/migrate-agent-tokens.mjs backfills it.
+   */
+  agentIds: z.array(AgentIdSchema).optional(),
 
   stages: z.array(StageSchema).min(1),
   priorities: z.array(OptionSchema),
@@ -166,7 +183,7 @@ export type BoardWithId = Board & { id: string };
  * `kind` and parse as 'user'. An agent row is
  *   { kind: 'agent', uid: agentId, role, stageGrant, name, avatarPath, ownerUid, addedBy, joinedAt }
  * with email '' and invitedBy null (agents are added directly, never invited).
- * Agents are never 'admin'.
+ * §AA2: an agent may be 'admin' (the old "never admin" rule is gone).
  */
 const BoardMemberObject = z.object({
   /** 'user' | 'agent'. Absent on phase-1 docs = 'user'. */
@@ -202,8 +219,6 @@ export const BoardMemberSchema = BoardMemberObject.superRefine((m, ctx) => {
         path: ['uid'],
         message: "An agent member's id starts with 'ag_'",
       });
-    if (m.role === 'admin')
-      ctx.addIssue({ code: 'custom', path: ['role'], message: 'Agents are never admin' });
     if (!m.ownerUid)
       ctx.addIssue({ code: 'custom', path: ['ownerUid'], message: 'Agent members carry ownerUid' });
     if (!m.addedBy)
@@ -218,8 +233,13 @@ export type BoardMember = z.infer<typeof BoardMemberSchema>;
 /** The input side: `kind` may be omitted (phase-1 docs). */
 export type BoardMemberInput = z.input<typeof BoardMemberSchema>;
 
-/** Roles an agent may hold on a board (agents.html §C) — never admin. */
-export const AGENT_BOARD_ROLES = ['editor', 'commenter', 'viewer'] as const;
+/**
+ * Roles an agent may hold on a board. §AA2: ALL of them — 'admin' is new for
+ * agents ("complete ownership": board settings, stages, fields, webhooks,
+ * restore). What an agent admin still cannot do is what no agent can: manage
+ * the board's people and agents, invite, create boards, mint tokens.
+ */
+export const AGENT_BOARD_ROLES = ['admin', 'editor', 'commenter', 'viewer'] as const;
 export const AgentBoardRoleSchema = z.enum(AGENT_BOARD_ROLES);
 export type AgentBoardRole = z.infer<typeof AgentBoardRoleSchema>;
 

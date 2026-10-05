@@ -7,10 +7,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { describe, expect, it } from 'vitest';
-import { paths, type Message, type Ticket } from '@tm/shared';
+import { paths, SCOPES, TOKEN_DENIED_COMMANDS, type Message, type Ticket } from '@tm/shared';
+import { bridgedCommands, toolNameOf } from '../../src/doors/mcpApp.js';
+import { UI_URI } from '../../src/doors/mcpUi.js';
 import { createApp } from '../../src/http/app.js';
+import { REFRESH_RETRY_GRACE_MS } from '../../src/platform/oauth.js';
 import { db } from '../../src/runtime/firebase.js';
-import { call, request, setupEmulators, type TestUser } from '../harness/index.js';
+import { call, request, setPorts, setupEmulators, type TestUser } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
 import { msgsOf } from '../tickets/store.js';
 import {
@@ -36,7 +39,13 @@ describe('discovery', () => {
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
     expect(r.status).toBe(401);
-    const m = /resource_metadata="([^"]+)"/.exec(r.headers.get('www-authenticate') ?? '');
+    const challenge = r.headers.get('www-authenticate') ?? '';
+    // No token is "sign in", not "bad token"; the scope hint is what Claude asks consent for.
+    expect(challenge).not.toMatch(/error=/);
+    expect(/scope="([^"]+)"/.exec(challenge)?.[1]?.split(' ')).toEqual(
+      expect.arrayContaining(['tickets:create', 'comments:write', 'boards:create']),
+    );
+    const m = /resource_metadata="([^"]+)"/.exec(challenge);
     expect(m).toBeTruthy();
     const url = new URL(m![1]!);
     expect(url.pathname).toBe('/.well-known/oauth-protected-resource/mcp');
@@ -142,7 +151,28 @@ describe('OAuth 2.1', () => {
     });
   });
 
-  it('refresh rotates; presenting a used refresh token revokes the whole grant', async () => {
+  it('a used refresh token presented again within the grace window is a retry, not theft', async () => {
+    const { u } = await people('u');
+    const t = await oauthTokens(u, 'tickets:read boards:read');
+    const body = {
+      grant_type: 'refresh_token',
+      refresh_token: t.refresh_token,
+      client_id: t.clientId,
+    };
+    const r1 = await tokenRequest(body);
+    const r2 = await tokenRequest(body);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    const a = r1.body as { access_token: string };
+    const b = r2.body as { access_token: string };
+    expect(b.access_token).not.toBe(a.access_token);
+    expect((await rest(a.access_token, 'GET', '/v1/me')).status).toBe(200);
+    expect((await rest(b.access_token, 'GET', '/v1/me')).status).toBe(200);
+  });
+
+  it('refresh rotates; presenting a used refresh token after the grace window revokes the whole grant', async () => {
+    let skew = 0;
+    setPorts({ clock: { now: () => Date.now() + skew } });
     const { u } = await people('u');
     const t = await oauthTokens(u, 'tickets:read boards:read');
     const r1 = await tokenRequest({
@@ -155,7 +185,8 @@ describe('OAuth 2.1', () => {
     expect(t2.refresh_token).not.toBe(t.refresh_token);
     expect((await rest(t2.access_token, 'GET', '/v1/me')).status).toBe(200);
 
-    // The old one comes back: theft. Everything issued under the grant dies.
+    // The old one comes back, long after: theft. Everything issued under the grant dies.
+    skew = REFRESH_RETRY_GRACE_MS + 1_000;
     const reuse = await tokenRequest({
       grant_type: 'refresh_token',
       refresh_token: t.refresh_token,
@@ -250,20 +281,37 @@ describe('MCP round trip (SDK client)', () => {
     // scopes this old client never asked for, so they stay hidden.
     expect(names).toEqual([
       'assign_ticket',
+      'board_pref_set',
       'create_ticket',
       'get_board',
+      'get_board_settings',
       'get_messages',
       'get_question',
       'get_ticket',
       'link_tickets',
       'list_boards',
       'list_my_tickets',
+      'list_views',
+      'list_workspaces',
+      'message_edit',
+      'message_pin',
+      'message_react',
       'move_ticket',
       'post_message',
       'read_file',
       'search_tickets',
+      'show_board',
+      'show_my_work',
+      'show_ticket',
+      'tag_create',
+      'ticket_bulk',
+      'ticket_delete',
+      'ticket_state',
+      'ticket_watch',
       'update_ticket',
       'upload_file',
+      'view_delete',
+      'view_save',
       'whoami',
     ]);
     expect(tools.tools.find((x) => x.name === 'get_ticket')!.annotations).toMatchObject({
@@ -436,5 +484,151 @@ describe('MCP round trip (SDK client)', () => {
     const t = await oauthTokens(u, 'tickets:read');
     const g = await request('/mcp', { headers: { authorization: `Bearer ${t.access_token}` } });
     expect(g.status).toBe(405);
+  });
+});
+
+describe('the whole app over MCP (doors/mcpApp.ts)', () => {
+  it('a full grant gets every token-callable command as a tool, and never the deny list', async () => {
+    const { u } = await people('u');
+    const t = await oauthTokens(u, SCOPES.join(' '));
+    const client = await mcpClient(t.access_token);
+    const names = (await client.listTools()).tools.map((x) => x.name);
+    for (const n of bridgedCommands(SCOPES)) expect(names).toContain(toolNameOf(n));
+    for (const n of [
+      'board_create',
+      'board_update',
+      'board_archive',
+      'board_access_set',
+      'invite_create',
+      'invite_accept',
+      'view_save',
+      'ticket_delete',
+      'webhook_upsert',
+      'agent_create',
+      'artifact_delete',
+      'artifact_file_list',
+      'get_board_settings',
+      'list_views',
+      'list_invites',
+      'list_notifications',
+      'mark_notifications',
+    ])
+      expect(names).toContain(n);
+    for (const n of TOKEN_DENIED_COMMANDS) expect(names).not.toContain(toolNameOf(n));
+    // One way to do each thing: covered commands keep their hand-written tool only.
+    expect(names).not.toContain('ticket_create');
+    expect(names).toContain('create_ticket');
+    await client.close();
+  });
+
+  it('create a board, change its settings, delete a ticket by key, then delete the board — by keys, via mcp', async () => {
+    const { u } = await people('u');
+    const t = await oauthTokens(u, SCOPES.join(' '));
+    const client = await mcpClient(t.access_token);
+    const key = `M${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    const ok = async (name: string, args: Record<string, unknown>) => {
+      const r = await client.callTool({ name, arguments: args });
+      expect(r.isError, `${name}: ${text(r)}`).toBeFalsy();
+      return parsed<Record<string, unknown>>(r);
+    };
+
+    await ok('board_create', { name: 'From Claude', key });
+    const settings = await ok('get_board_settings', { board: key });
+    expect(settings.name).toBe('From Claude');
+    expect(JSON.stringify(settings)).not.toMatch(/secret|tokenHash/i);
+
+    await ok('board_update', {
+      boardId: key,
+      patch: { name: 'Renamed by Claude', settings: { allowDelete: true } },
+    });
+    expect((await ok('get_board_settings', { board: key })).name).toBe('Renamed by Claude');
+
+    const created = await ok('create_ticket', { board: key, title: 'Throwaway' });
+    const ticketKey = (created as { key: string }).key;
+    await ok('ticket_delete', { ticketId: ticketKey });
+    const boardId = settings.id as string;
+    const left = await db().collection(paths.tickets(boardId)).where('state', '==', 'active').get();
+    expect(left.size).toBe(0);
+
+    expect(await ok('list_notifications', {})).toEqual([]);
+    await ok('board_archive', { boardId: key, action: 'delete', confirmKey: key });
+    const gone = await client.callTool({ name: 'get_board_settings', arguments: { board: key } });
+    expect(gone.isError).toBe(true);
+    await client.close();
+  });
+
+  it('a read-only grant sees no write commands', async () => {
+    const { u } = await people('u');
+    const t = await oauthTokens(u, 'board:read tickets:read');
+    const client = await mcpClient(t.access_token);
+    const names = (await client.listTools()).tools.map((x) => x.name);
+    expect(names).not.toContain('board_create');
+    expect(names).not.toContain('board_update');
+    expect(names).not.toContain('ticket_delete');
+    expect(names).not.toContain('view_save');
+    expect(names).toContain('get_board_settings');
+    await client.close();
+  });
+});
+
+describe('the chat UI (MCP Apps, doors/mcpUi.ts)', () => {
+  it('show_* tools name the ui:// view; the view is served as an MCP App; results carry the data it draws', async () => {
+    const { u } = await people('u');
+    const b = await seedBoard({ admin: u });
+    const t = await oauthTokens(u, SCOPES.join(' '));
+    const client = await mcpClient(t.access_token);
+
+    const tools = (await client.listTools()).tools;
+    for (const name of ['show_board', 'show_ticket', 'show_my_work']) {
+      const tool = tools.find((x) => x.name === name);
+      expect(tool, name).toBeTruthy();
+      expect((tool!._meta as { ui?: { resourceUri?: string } }).ui?.resourceUri).toBe(UI_URI);
+    }
+
+    const res = await client.readResource({ uri: UI_URI });
+    const page = res.contents[0] as { mimeType: string; text: string };
+    expect(page.mimeType).toBe('text/html;profile=mcp-app');
+    expect(page.text).toMatch(/^<!doctype html>/i);
+
+    const created = parsed<{ key: string }>(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { board: b.key, title: 'Shown in chat', assignees: ['me'] },
+      }),
+    );
+
+    const board = await client.callTool({ name: 'show_board', arguments: { board: b.key } });
+    const bv = board.structuredContent as {
+      view: string;
+      board: { key: string; stages: unknown[] };
+      tickets: { key: string }[];
+      can: Record<string, boolean>;
+    };
+    expect(bv.view).toBe('board');
+    expect(bv.board.key).toBe(b.key);
+    expect(bv.tickets.map((x) => x.key)).toContain(created.key);
+    expect(bv.can).toMatchObject({ move: true, create: true, comment: true });
+    expect(text(board)).toMatch(new RegExp(`^Board ${b.key}`)); // text-only hosts
+
+    const ticket = await client.callTool({ name: 'show_ticket', arguments: { key: created.key } });
+    const tv = ticket.structuredContent as { view: string; ticket: { key: string }; me: string };
+    expect(tv.view).toBe('ticket');
+    expect(tv.ticket.key).toBe(created.key);
+    expect(tv.me).toBe(u.uid);
+
+    const mine = await client.callTool({ name: 'show_my_work', arguments: {} });
+    const mv = mine.structuredContent as { view: string; tickets: { key: string }[] };
+    expect(mv.view).toBe('mywork');
+    expect(mv.tickets.map((x) => x.key)).toContain(created.key);
+    await client.close();
+  });
+
+  it('a grant without tickets:read gets no UI tools', async () => {
+    const { u } = await people('u');
+    const t = await oauthTokens(u, 'board:read');
+    const client = await mcpClient(t.access_token);
+    const names = (await client.listTools()).tools.map((x) => x.name);
+    expect(names).not.toContain('show_board');
+    await client.close();
   });
 });

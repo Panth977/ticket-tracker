@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { ArtifactBuildSchema, ArtifactKvSchema, ArtifactSchema } from '../artifacts/schema.js';
 import { AgentInboxEventSchema, AgentSchema } from './agent.js';
 import {
   BoardKeyClaimSchema,
@@ -31,6 +32,7 @@ import {
 } from './ticket.js';
 import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
+import { SidebarPrefsSchema, WorkspaceSchema } from './workspace.js';
 import {
   ApiKeySchema,
   DeviceSchema,
@@ -49,6 +51,7 @@ export * from './agent.js';
 export * from './question.js';
 export * from './tasklist.js';
 export * from './agentStatus.js';
+export * from './workspace.js';
 
 /**
  * Every stored entity, keyed by its name in docs/data/{app,platform}/db.json
@@ -100,6 +103,17 @@ export const DOC_SCHEMAS = {
   // phase 3 (docs/plan/agents.html §L)
   tasklists: TasklistSchema,
   agentStatus: AgentStatusSchema,
+  // artifacts (docs/plan/artifacts.html §G) — the shapes live in ../artifacts/schema.ts
+  artifacts: ArtifactSchema,
+  /** artifacts/{id}/builds/{buildId} */
+  artifactBuilds: ArtifactBuildSchema,
+  /** artifacts/{id}/viewers/{uid}/kv/{key} — written by the host page as the viewer. */
+  artifactKv: ArtifactKvSchema,
+  // workspaces (docs/plan/agents.html §AB) — a person's own sidebar
+  /** users/{uid}/workspaces/{workspaceId} */
+  workspaces: WorkspaceSchema,
+  /** users/{uid}/ui/sidebar */
+  sidebarPrefs: SidebarPrefsSchema,
 } as const satisfies Record<string, z.ZodTypeAny>;
 export type DocName = keyof typeof DOC_SCHEMAS;
 export type DocOf<N extends DocName> = z.infer<(typeof DOC_SCHEMAS)[N]>;

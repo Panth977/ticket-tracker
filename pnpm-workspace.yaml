@@ -4,6 +4,7 @@ packages:
   - frontend
   - qaqc
   - sdk
+  - driver
 
 # Native builds some deps need (sharp for image thumbnails, esbuild for vite,
 # protobufjs for firebase-admin / @google-cloud/tasks).

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shared to-do</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font: 16px/1.5 system-ui, sans-serif; max-width: 34rem; margin: 2rem auto; padding: 0 1rem; }
+      form { display: flex; gap: 0.5rem; }
+      input[type='text'] { flex: 1; padding: 0.5rem; font: inherit; }
+      button { font: inherit; padding: 0.5rem 0.8rem; cursor: pointer; }
+      ul { list-style: none; padding: 0; }
+      li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid #8884; }
+      li span { flex: 1; }
+      li.done span { text-decoration: line-through; opacity: 0.55; }
+      li small { opacity: 0.6; }
+      #note { padding: 0.5rem 0.75rem; border-radius: 6px; background: #f5c54233; }
+      #who { opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <h1>Shared to-do</h1>
+    <p id="who">Connecting…</p>
+    <p id="note" hidden></p>
+    <form id="add">
+      <input id="title" type="text" placeholder="What needs doing?" maxlength="200" required />
+      <button>Add</button>
+    </form>
+    <label><input id="hide" type="checkbox" /> Hide finished</label>
+    <ul id="list"></ul>
+
+    <!-- The whole backend. It sets window.BackendDriver; there is nothing to configure. -->
+    <script src="{{url:driver.js}}"></script>
+    <script type="module">
+      const db = window.BackendDriver;
+      const $ = (id) => document.getElementById(id);
+
+      await db.ready; // the handshake with TaskManager (or, on your machine, the switch to the mock)
+      $('who').textContent = `${db.me.name ?? db.me.email ?? 'Someone'} · ${db.me.role}`;
+
+      // Who may write is the host's decision, and it can change while the page is open.
+      const showAccess = (readOnly) => {
+        $('add').hidden = readOnly;
+        $('note').hidden = !readOnly && !db.mock;
+        $('note').textContent = readOnly
+          ? 'This artifact is read-only for you.'
+          : 'Mock backend: data stays in this browser. Publish to share it.';
+      };
+      showAccess(db.me.readOnly);
+      db.on('readonly', showAccess);
+      db.on('revoked', () => (document.body.textContent = 'You no longer have access to this artifact.'));
+
+      // A per-viewer preference. There is no localStorage in an artifact: db.kv is that, and it follows you across devices.
+      let hideDone = (await db.kv.get('hideDone')) === true;
+      $('hide').checked = hideDone;
+      let todos = [];
+
+      const render = () => {
+        $('list').replaceChildren(
+          ...todos
+            .filter((t) => !(hideDone && t.data.done))
+            .map((t) => {
+              const li = document.createElement('li');
+              li.className = t.data.done ? 'done' : '';
+              const box = document.createElement('input');
+              box.type = 'checkbox';
+              box.checked = !!t.data.done;
+              box.disabled = db.me.readOnly;
+              box.onchange = () => db.firestore.update(t.path, { done: box.checked }).catch(fail);
+              const text = document.createElement('span');
+              text.textContent = t.data.title; // textContent, never innerHTML: this is other people's input
+              const by = document.createElement('small');
+              by.textContent = t.data.by;
+              const del = document.createElement('button');
+              del.textContent = '×';
+              del.hidden = db.me.readOnly;
+              del.onclick = () => db.firestore.delete(t.path).catch(fail);
+              li.append(box, text, by, del);
+              return li;
+            }),
+        );
+      };
+      const fail = (e) => alert(`${e.code}: ${e.message}`); // permission-denied, not-found, invalid-argument, quota, unavailable
+
+      // LIVE: called now, and again whenever anyone this is shared with changes the collection.
+      // The path is the artifact's own — '/todos' is this artifact's collection and nobody else's.
+      db.firestore.onList('/todos', { orderBy: ['at', 'asc'], limit: 200 }, (docs) => {
+        todos = docs;
+        render();
+      }, fail);
+
+      $('add').onsubmit = async (e) => {
+        e.preventDefault();
+        const title = $('title').value.trim();
+        if (!title) return;
+        $('title').value = '';
+        // db.serverTime becomes the server's timestamp; it comes back as a Date.
+        await db.firestore.add('/todos', { title, done: false, by: db.me.name ?? 'Someone', at: db.serverTime }).catch(fail);
+      };
+      $('hide').onchange = () => {
+        hideDone = $('hide').checked;
+        render();
+        db.kv.set('hideDone', hideDone).catch(fail);
+      };
+    </script>
+  </body>
+</html>

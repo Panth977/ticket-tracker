@@ -66,6 +66,17 @@ const PASSTHROUGH = [
   '/integrations',
   '/.well-known',
   '/__',
+  // The orchestrator-facing static files svelte.config.js keeps OUT of `files`
+  // (so PAGES never sees them): /llms*.txt, /integrate(/claude), /integrate.json
+  // and the hosted SDK. Left to the shell rule, an installed worker answers a
+  // browser navigation to /llms-full.txt with the SPA's own Not found.
+  '/llms',
+  '/integrate',
+  '/lib/',
+  // window.BackendDriver and its usage page (artifacts.html §E1): fetched by
+  // ARTIFACTS, cross-origin, from a sandboxed frame. Same reasoning — and a
+  // pinned /v1/ the worker cached would outlive hosting's own cache rules.
+  '/backend-driver',
 ];
 
 // ── one worker ───────────────────────────────────────────────────────────────

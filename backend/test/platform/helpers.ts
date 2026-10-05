@@ -28,7 +28,24 @@ export async function apiKeyFor(
   return call(user, 'apiKeyCreate', { name, boardId, scopes });
 }
 
-/** A board token acting as one of `owner`'s agents. */
+/**
+ * §AA1 — THE agent token: one per agent, no board, no scopes to choose.
+ * Generating another revokes this one unless `keepOthers`.
+ */
+export async function agentTokenFor(
+  owner: TestUser,
+  agentId: string,
+  opts: { name?: string; keepOthers?: boolean } = {},
+): Promise<{ key: string; keyId: string; prefix: string; rotated?: number | undefined }> {
+  return call(owner, 'apiKeyCreate', {
+    name: opts.name ?? 'agent token',
+    kind: 'agent',
+    actsAs: { kind: 'agent', id: agentId },
+    ...(opts.keepOthers !== undefined ? { keepOthers: opts.keepOthers } : {}),
+  });
+}
+
+/** A (pre-§AA) board token acting as one of `owner`'s agents. */
 export async function agentKeyFor(
   owner: TestUser,
   agentId: string,
@@ -106,6 +123,8 @@ export async function putAgentOnBoard(
   const b = db().batch();
   b.update(db().doc(paths.board(boardId)), {
     [`access.${agentId}`]: role,
+    // §AA1: derived from access, exactly as deriveAccess writes it.
+    agentIds: FieldValue.arrayUnion(agentId),
     ...(grant ? { [`stageGrants.${agentId}`]: grant } : {}),
   });
   b.set(db().doc(paths.member(boardId, agentId)), member);
@@ -115,7 +134,10 @@ export async function putAgentOnBoard(
 export async function removeAgentFromBoard(agentId: string, boardId: string): Promise<void> {
   await db()
     .doc(paths.board(boardId))
-    .update({ [`access.${agentId}`]: FieldValue.delete() });
+    .update({
+      [`access.${agentId}`]: FieldValue.delete(),
+      agentIds: FieldValue.arrayRemove(agentId),
+    });
   await db().doc(paths.member(boardId, agentId)).delete();
 }
 

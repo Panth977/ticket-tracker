@@ -2,9 +2,12 @@
   THE ONE NAVIGATION (app.json › Sidebar; agents.html §Q1). A flat list — no
   accordions, nothing two levels deep:
     (picture) Name ▾ · ⌘K Search · Inbox n · My work · Invitations n (only while pending)
-    — Boards: ● KEY Name •n        ← one click = that board's default view
+    — Workspaces: ▸ ● Name          ← its page; ▸ unfolds its boards + artifacts (agents.html §AB)
+    — Boards: ● KEY Name •n        ← one click = that board's default view (minus hidden ones)
         ↳ Analytics                ← under the OPEN board only (agents.html §Y3)
       All boards & archived · + New board
+    — Artifacts: ◆ Name            ← one click = that artifact (artifacts.html §F)
+      All artifacts · + New artifact
     — You: Agents · Notifications · Tokens · Sign out   (Agents: agents.html §B)
   Views, People and Settings are NOT here: they are on the board page, behind
   the view tabs and ⚙ Settings (§Q2).
@@ -17,6 +20,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
+    AppWindow,
     Bell,
     Bot,
     Inbox,
@@ -43,6 +47,11 @@
   import SyncStatus from './SyncStatus.svelte';
   import { routes } from './routes';
   import { agentRoutes } from '$lib/agents/routes';
+  import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
+  import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import { workspaceContext } from '$lib/workspaces/context.svelte';
+  import { hiddenItems, myWorkspaces } from '$lib/workspaces/store';
+  import SidebarWorkspaces from './SidebarWorkspaces.svelte';
 
   const uid = $derived(auth.uid);
   const boardsQ = $derived(myBoards(uid));
@@ -75,8 +84,29 @@
   const inboxCount = $derived($inboxQ.data.length);
   const inviteCount = $derived($invitesQ.data.length);
 
+  // Artifacts I have a role on. Archived ones live on the All artifacts page only.
+  const artifactsQ = $derived(myArtifacts(uid));
+  const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
+  let newArtifact = $state(false);
+
   const path: string = $derived(page.url.pathname);
+  const currentArtifact = $derived(path.startsWith('/x/') ? (path.split('/')[2] ?? null) : null);
   const currentKey = $derived(path.startsWith('/b/') ? (path.split('/')[2] ?? null) : null);
+
+  // §AB: the root lists leave out what I hid (the All pages and workspaces still show it).
+  const hiddenQ = $derived(hiddenItems(uid));
+  const rootBoards = $derived(sorted.filter((b) => !$hiddenQ.boards.has(b.id)));
+  const rootArtifacts = $derived(artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id)));
+  // Highlighted once: under the workspace I came through, when it holds the open item.
+  const wsQ = $derived(myWorkspaces(uid));
+  const inWs = $derived($wsQ.data.find((w) => w.id === workspaceContext.id) ?? null);
+  const currentBoardId = $derived(active.find((b) => b.key === currentKey)?.id ?? null);
+  const shownInWs = $derived(
+    !!inWs &&
+      ((!!currentBoardId && inWs.boardIds.includes(currentBoardId)) ||
+        (!!currentArtifact && inWs.artifactIds.includes(currentArtifact))),
+  );
+  const leave = () => workspaceContext.leave();
 
   async function signOut() {
     await auth.signOut();
@@ -103,6 +133,16 @@
     {/if}
   </div>
 
+  <SidebarWorkspaces
+    boards={active}
+    {artifacts}
+    prefs={$prefsQ}
+    unread={unreadByBoard}
+    {path}
+    {currentKey}
+    {currentArtifact}
+  />
+
   <div class="flex flex-col gap-px">
     <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">Boards</h2>
     {#if $boardsQ.loading}
@@ -112,20 +152,55 @@
     {:else if $boardsQ.error}
       <p class="px-2 text-xs text-danger">Couldn't load boards.</p>
     {:else}
-      {#each sorted as b (b.id)}
+      {#each rootBoards as b (b.id)}
         <SidebarBoard
           board={b}
           starred={$prefsQ.get(b.id)?.starred ?? false}
           unread={unreadByBoard.get(b.id) ?? 0}
-          current={b.key === currentKey}
+          current={b.key === currentKey && !shownInWs}
           lastViewId={$prefsQ.get(b.id)?.lastViewId ?? null}
+          onclick={leave}
         />
       {/each}
     {/if}
-    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'}
+    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'} onclick={leave}
       >All boards & archived</NavItem
     >
     <NavItem href={routes.newBoard()} icon={Plus}>New board</NavItem>
+  </div>
+
+  <div class="flex flex-col gap-px">
+    <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">
+      Artifacts
+    </h2>
+    {#if $artifactsQ.loading}
+      <div class="px-2 py-1"><Skeleton width="70%" /></div>
+    {:else if $artifactsQ.error}
+      <p class="px-2 text-xs text-danger">Couldn't load artifacts.</p>
+    {:else}
+      {#each rootArtifacts as a (a.id)}
+        {@const current = a.id === currentArtifact && !shownInWs}
+        <a
+          href={routes.artifact(a.id)}
+          onclick={leave}
+          aria-current={current ? 'page' : undefined}
+          data-artifact={a.id}
+          class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
+            {current
+            ? 'bg-surface-3 font-medium text-text'
+            : 'text-muted hover:bg-surface-2 hover:text-text'}"
+        >
+          <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
+            >{artifactGlyph(a)}</span
+          >
+          <span class="flex-1 truncate">{a.name}</span>
+        </a>
+      {/each}
+    {/if}
+    <NavItem href={routes.artifacts()} icon={AppWindow} active={path === '/x'} onclick={leave}
+      >All artifacts</NavItem
+    >
+    <NavItem icon={Plus} onclick={() => (newArtifact = true)}>New artifact</NavItem>
   </div>
 
   <div class="mt-auto flex flex-col gap-px border-t border-line pt-3">
@@ -150,3 +225,5 @@
     <div class="pt-1"><SyncStatus /></div>
   </div>
 </nav>
+
+<NewArtifactDialog bind:open={newArtifact} />

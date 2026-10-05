@@ -20,6 +20,7 @@ import {
   normalizeScopes,
   paths,
   rateBuckets,
+  SCOPES,
   type AppError,
   type OAuthGrant,
   type Scope,
@@ -66,12 +67,23 @@ export function resourceMetadataUrl(c: Context, resourcePath = ''): string {
   return `${apiBaseUrl(c)}/.well-known/oauth-protected-resource${resourcePath}`;
 }
 
-/** 401 that points the client at the protected-resource metadata. */
-export function unauthorized(c: Context<AppEnv>, err: AppError, resourcePath = ''): Response {
+/**
+ * 401 that points the client at the protected-resource metadata. `scope` is
+ * what an MCP client asks for when it starts the OAuth flow (MCP auth spec:
+ * the challenge's scope wins over scopes_supported); the consent screen still
+ * lets the person untick any of it. A request with NO token gets no error code
+ * (RFC 6750 §3.1) — that is "go and sign in", not "your token is bad".
+ */
+export function unauthorized(
+  c: Context<AppEnv>,
+  err: AppError,
+  resourcePath = '',
+  missing = false,
+): Response {
   const rid = c.get('requestId');
   return problemResponse(err, rid ? `urn:request:${rid}` : undefined, {
-    'www-authenticate': `Bearer resource_metadata="${resourceMetadataUrl(c, resourcePath)}"${
-      err.code === 'unauthenticated' ? ', error="invalid_token"' : ''
+    'www-authenticate': `Bearer resource_metadata="${resourceMetadataUrl(c, resourcePath)}", scope="${SCOPES.join(' ')}"${
+      !missing && err.code === 'unauthenticated' ? ', error="invalid_token"' : ''
     }`,
   });
 }
@@ -129,7 +141,12 @@ export function tokenAuth(opts: TokenAuthOptions): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const token = bearer(c.req.header('authorization'));
     if (!token)
-      return unauthorized(c, errors.unauthenticated('Missing bearer token'), opts.resourcePath);
+      return unauthorized(
+        c,
+        errors.unauthenticated('Missing bearer token'),
+        opts.resourcePath,
+        true,
+      );
     try {
       const ctx =
         opts.apiKeys && token.startsWith(API_KEY_PREFIX)

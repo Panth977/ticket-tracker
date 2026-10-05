@@ -505,7 +505,8 @@ export function toPublicMember(
     email: kind === 'agent' ? '' : m.email,
     avatar_url: null,
     icon: kind === 'agent' ? (m.icon ?? null) : null,
-    role: kind === 'agent' && role === 'admin' ? 'editor' : role,
+    // §AA2: an agent may be admin — shown as what it is (this used to read 'editor').
+    role,
     ...(kind === 'agent' ? { description: m.description ?? null } : {}),
     ...(role === 'commenter'
       ? {

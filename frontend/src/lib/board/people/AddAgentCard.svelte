@@ -1,13 +1,20 @@
 <!--
   People & roles › Add agent (agents.html §C): a board admin adds one of THEIR
-  agents directly — no invite — as editor, commenter (with an optional stage
-  grant) or viewer. Never admin.
+  agents directly — no invite — as viewer, commenter (with an optional stage
+  grant), editor or ADMIN (§AA2: the old "never admin" rule is gone; what no
+  agent can do, even as admin, is manage people, invite or mint tokens).
 -->
 <script lang="ts">
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { Bot, Plus } from 'lucide-svelte';
-  import { AGENT_BOARD_ROLES, type AgentBoardRole, type Board, type StageGrant } from '@tm/shared';
-  import { addAgentToBoard, AGENT_ROLE_HINT, AGENT_ROLE_LABEL } from '$lib/agents/actions';
+  import type { AgentBoardRole, Board, StageGrant } from '@tm/shared';
+  import {
+    addAgentToBoard,
+    AGENT_NEVER,
+    AGENT_ROLE_HINT,
+    AGENT_ROLE_LABEL,
+    AGENT_ROLE_ORDER,
+  } from '$lib/agents/actions';
   import { myAgents, sortAgents } from '$lib/agents/agents';
   import { agentRoutes } from '$lib/agents/routes';
   import StageGrantEditor from '$lib/board/StageGrantEditor.svelte';
@@ -91,7 +98,7 @@
           aria-label="Role"
           title={AGENT_ROLE_HINT[role]}
         >
-          {#each AGENT_BOARD_ROLES as r (r)}<option value={r}>{AGENT_ROLE_LABEL[r]}</option>{/each}
+          {#each AGENT_ROLE_ORDER as r (r)}<option value={r}>{AGENT_ROLE_LABEL[r]}</option>{/each}
         </select>
       </label>
       <Button type="submit" variant="primary" icon={Plus} loading={busy} disabled={!picked}
@@ -107,7 +114,8 @@
       />
     {/if}
     <p class="text-xs text-muted">
-      {AGENT_ROLE_LABEL[role]}: {AGENT_ROLE_HINT[role]}. Agents are never admins.
+      {AGENT_ROLE_LABEL[role]}: {AGENT_ROLE_HINT[role]}.
+      {#if role === 'admin'}{AGENT_NEVER}.{/if}
     </p>
   {/if}
 </form>

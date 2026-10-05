@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "apiVersion": "v1",
-  "updated": "2026-09-26",
-  "contentSha256": "10904deb0b1cc60fa42543688cef627f87ff9d35cf6759f8c23a9ab42d6bee22",
+  "updated": "2026-09-30",
+  "contentSha256": "5de054db2e2608dfca25f249e609b7b6171c46a4443583a313dcd87a656dd15f",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -31,12 +31,278 @@
     "openapi": "https://taskmanager-example.web.app/lib/v1/openapi.json",
     "latest": "https://taskmanager-example.web.app/lib/latest/sdk.js"
   },
+  "driver": {
+    "version": "1.0.0",
+    "index": "https://taskmanager-example.web.app/backend-driver/",
+    "js": "https://taskmanager-example.web.app/backend-driver/v1/driver.js",
+    "mjs": "https://taskmanager-example.web.app/backend-driver/v1/driver.mjs",
+    "types": "https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts",
+    "latest": "https://taskmanager-example.web.app/backend-driver/latest/driver.js"
+  },
+  "artifacts": {
+    "openUrl": "https://taskmanager-example.web.app/x/{id}",
+    "roles": [
+      "owner",
+      "editor",
+      "viewer"
+    ],
+    "scopes": [
+      {
+        "name": "artifacts:read",
+        "label": "Read artifacts and download their source"
+      },
+      {
+        "name": "artifacts:write",
+        "label": "Create, publish and share artifacts"
+      }
+    ],
+    "agentAccess": {
+      "build": [
+        true,
+        false
+      ],
+      "data": [
+        "none",
+        "read",
+        "write"
+      ],
+      "onCreate": {
+        "build": true,
+        "data": "write"
+      }
+    },
+    "rest": [
+      "GET /v1/artifacts",
+      "POST /v1/artifacts",
+      "GET /v1/artifacts/{id}",
+      "PATCH /v1/artifacts/{id}",
+      "DELETE /v1/artifacts/{id}",
+      "POST /v1/artifacts/{id}/builds",
+      "POST /v1/artifacts/{id}/builds/{build}/current",
+      "GET /v1/artifacts/{id}/source",
+      "PUT /v1/artifacts/{id}/access",
+      "GET /v1/artifacts/{id}/data/firestore/{path}",
+      "PUT /v1/artifacts/{id}/data/firestore/{path}",
+      "PATCH /v1/artifacts/{id}/data/firestore/{path}",
+      "DELETE /v1/artifacts/{id}/data/firestore/{path}",
+      "POST /v1/artifacts/{id}/data/firestore/{path}",
+      "POST /v1/artifacts/{id}/data/batch",
+      "GET /v1/artifacts/{id}/data/rtdb/{path}",
+      "PUT /v1/artifacts/{id}/data/rtdb/{path}",
+      "PATCH /v1/artifacts/{id}/data/rtdb/{path}",
+      "DELETE /v1/artifacts/{id}/data/rtdb/{path}",
+      "POST /v1/artifacts/{id}/data/rtdb/{path}",
+      "GET /v1/artifacts/{id}/data/files",
+      "PUT /v1/artifacts/{id}/data/files/{path}",
+      "GET /v1/artifacts/{id}/data/files/{path}",
+      "DELETE /v1/artifacts/{id}/data/files/{path}"
+    ],
+    "mcpTools": [
+      "artifact_list",
+      "artifact_get",
+      "artifact_create",
+      "artifact_publish",
+      "artifact_rollback",
+      "artifact_share",
+      "artifact_source",
+      "artifact_data_get",
+      "artifact_data_list",
+      "artifact_data_set",
+      "artifact_data_batch"
+    ],
+    "data": {
+      "rest": [
+        {
+          "method": "GET",
+          "path": "/v1/artifacts/{id}/data/firestore/{path}",
+          "needs": "read",
+          "summary": "Read a document, or list a collection, of the artifact's Firestore"
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/artifacts/{id}/data/firestore/{path}",
+          "needs": "write",
+          "summary": "Set a document (?merge=1 merges)"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/artifacts/{id}/data/firestore/{path}",
+          "needs": "write",
+          "summary": "Update fields of an existing document"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/artifacts/{id}/data/firestore/{path}",
+          "needs": "write",
+          "summary": "Delete a document"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/artifacts/{id}/data/firestore/{path}",
+          "needs": "write",
+          "summary": "Add a document to a collection"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/artifacts/{id}/data/batch",
+          "needs": "write",
+          "summary": "Up to 400 Firestore writes, all or nothing"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+          "needs": "read",
+          "summary": "Read a value of the artifact's Realtime Database"
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+          "needs": "write",
+          "summary": "Set a value"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+          "needs": "write",
+          "summary": "Update children of a value"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+          "needs": "write",
+          "summary": "Remove a value"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+          "needs": "write",
+          "summary": "Push a child with a generated key"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/artifacts/{id}/data/files",
+          "needs": "read",
+          "summary": "List the artifact's files under a prefix"
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/artifacts/{id}/data/files/{path}",
+          "needs": "write",
+          "summary": "Upload a file: the raw body is the file (≤ 25 MB)"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/artifacts/{id}/data/files/{path}",
+          "needs": "read",
+          "summary": "A short-lived download URL for a file"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/artifacts/{id}/data/files/{path}",
+          "needs": "write",
+          "summary": "Delete a file"
+        }
+      ],
+      "mcpTools": [
+        "artifact_data_get",
+        "artifact_data_list",
+        "artifact_data_set",
+        "artifact_data_batch"
+      ],
+      "sdk": "tm.artifacts.data(id)",
+      "escapes": {
+        "date": {
+          "$date": "<ISO 8601>"
+        },
+        "serverTime": {
+          "$serverTime": true
+        }
+      },
+      "whereOps": [
+        "<",
+        "<=",
+        "==",
+        "!=",
+        ">=",
+        ">",
+        "array-contains",
+        "in",
+        "not-in",
+        "array-contains-any"
+      ],
+      "limits": {
+        "batchWrites": 400,
+        "listDefault": 100,
+        "listMax": 500,
+        "whereFilters": 10,
+        "uploadBytes": 26214400,
+        "fileListMax": 1000,
+        "pathChars": 1024
+      }
+    },
+    "limits": {
+      "buildBytes": 26214400,
+      "buildFiles": 2000,
+      "zipBytes": 27262976,
+      "inlineBytes": 5242880,
+      "sourceBytes": 52428800,
+      "buildsKept": 10,
+      "uploadBytes": 26214400,
+      "listeners": 50
+    },
+    "reservedCollections": [
+      "tickets",
+      "reads"
+    ]
+  },
   "auth": {
     "scheme": "Bearer",
     "header": "Authorization: Bearer tm_live_…",
     "tokenPrefix": "tm_live_",
-    "howToGetOne": "https://taskmanager-example.web.app/account/tokens — a person makes an agent, adds it to a board, and creates a board-scoped token that acts as it.",
-    "boardScoped": true,
+    "howToGetOne": "https://taskmanager-example.web.app/agents — a person makes an agent, puts it on boards and artifacts, and generates its ONE token on the agent's page. (https://taskmanager-example.web.app/account/tokens makes account tokens and board tokens that act as the person.)",
+    "tokenKinds": [
+      "board",
+      "account",
+      "agent"
+    ],
+    "agentToken": {
+      "onePerAgent": true,
+      "scopes": [
+        "board:read",
+        "members:read",
+        "tickets:read",
+        "tickets:create",
+        "tickets:update",
+        "tickets:move",
+        "tickets:assign",
+        "tickets:state",
+        "comments:read",
+        "comments:write",
+        "files:read",
+        "files:write",
+        "questions:write",
+        "tasklists:write",
+        "status:write",
+        "events:read",
+        "board:admin",
+        "webhooks:manage",
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "boardRoles": [
+        "admin",
+        "editor",
+        "commenter",
+        "viewer"
+      ],
+      "namesBoardWith": {
+        "rest": "?board=KEY or /v1/boards/KEY/…",
+        "mcp": "board",
+        "sdk": "createClient({ token, board }) / tm.board('KEY')"
+      },
+      "defaultBoard": "GET /v1/me default_board — only on a token converted from an old board token"
+    },
+    "boardScoped": false,
     "idempotencyHeader": "Idempotency-Key"
   },
   "scopes": [
@@ -177,7 +443,9 @@
       "boards:create",
       "boards:admin",
       "agents:write",
-      "invites:write"
+      "invites:write",
+      "artifacts:read",
+      "artifacts:write"
     ]
   },
   "events": [
@@ -565,6 +833,205 @@
     },
     {
       "method": "GET",
+      "path": "/v1/artifacts",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "The artifacts this credential can reach"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Create an artifact; you (or, for an agent token, the agent's owner) become its owner"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "An artifact: meta, its builds, who it is shared with"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/artifacts/{id}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Rename, describe, set read-only for viewers, archive or restore (owner)"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/artifacts/{id}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Delete an artifact with its builds, files and ALL its data (owner)"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts/{id}/builds",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Publish: a zip of the build folder becomes the current build"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts/{id}/builds/{build}/current",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Roll back (or forward) to a kept build"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}/source",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "A short-lived URL for the newest source zip"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/artifacts/{id}/access",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Share with a person or an agent, change a role, or remove (owner)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}/data/firestore/{path}",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "Read a document, or list a collection, of the artifact's Firestore"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/artifacts/{id}/data/firestore/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Set a document (?merge=1 merges)"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/artifacts/{id}/data/firestore/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Update fields of an existing document"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/artifacts/{id}/data/firestore/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Delete a document"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts/{id}/data/firestore/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Add a document to a collection"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts/{id}/data/batch",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Up to 400 Firestore writes, all or nothing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "Read a value of the artifact's Realtime Database"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Set a value"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Update children of a value"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Remove a value"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/artifacts/{id}/data/rtdb/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Push a child with a generated key"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}/data/files",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "List the artifact's files under a prefix"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/artifacts/{id}/data/files/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Upload a file: the raw body is the file (≤ 25 MB)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/artifacts/{id}/data/files/{path}",
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ],
+      "summary": "A short-lived download URL for a file"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/artifacts/{id}/data/files/{path}",
+      "scopes": [
+        "artifacts:write"
+      ],
+      "summary": "Delete a file"
+    },
+    {
+      "method": "GET",
       "path": "/v1/search",
       "scopes": [
         "tickets:read"
@@ -796,6 +1263,99 @@
       "scopes": [
         "status:write"
       ]
+    },
+    {
+      "name": "artifact_list",
+      "description": "The artifacts you can reach: small websites kept inside TaskManager, each with its own people and data.",
+      "readOnly": true,
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_get",
+      "description": "One artifact: its meta, its kept builds (newest first) and who it is shared with.",
+      "readOnly": true,
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_create",
+      "description": "Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_publish",
+      "description": "Publish a build from files: [{ path, content, encoding }]. It becomes the current build at once. For a hand-written HTML/CSS/JS artifact; a framework build (a dist/ folder) goes through the SDK or REST as a zip. The page gets its backend from a script tag loading /backend-driver/v1/driver.js from the TaskManager app origin (window.BackendDriver).",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_rollback",
+      "description": "Make a kept build the current one (roll back, or forward again).",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_share",
+      "description": "Owner only (never an agent): share an artifact with a person (by email) or one of your agents, change what they may do, or remove them. A person without an account yet is invited.",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_source",
+      "description": "A short-lived download URL for the source zip that was published beside a build — what you need to carry on where the last author stopped.",
+      "readOnly": true,
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_data_get",
+      "description": "Read one document of an artifact's own database. Needs data access on the artifact (an agent: data 'read' or 'write'; a person: owner or editor). Timestamps come back as { \"$date\": ISO }.",
+      "readOnly": true,
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_data_list",
+      "description": "List a collection of an artifact's own database, with optional filters, ordering and paging (next_cursor → start_after).",
+      "readOnly": true,
+      "scopes": [
+        "artifacts:read",
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_data_set",
+      "description": "Write one document of an artifact's own database (replace, or merge). Needs data 'write' on the artifact. The page reads the same documents through its driver, live.",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
+    },
+    {
+      "name": "artifact_data_batch",
+      "description": "Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.",
+      "readOnly": false,
+      "scopes": [
+        "artifacts:write"
+      ]
     }
   ],
   "limits": {
@@ -808,6 +1368,14 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "1.3.0",
+      "date": "2026-09-30"
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-09-30"
+    },
     {
       "version": "1.1.0",
       "date": "2026-09-26"

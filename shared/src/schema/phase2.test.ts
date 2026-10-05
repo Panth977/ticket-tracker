@@ -2,8 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACCOUNT_SCOPES,
+  ARTIFACT_SCOPES,
   ADMIN_SCOPES,
+  AGENT_TOKEN_SCOPES,
   AgentIdSchema,
+  isAgentTokenScopes,
   isAccountScope,
   isAgentId,
   LEGACY_SCOPES,
@@ -17,8 +20,8 @@ import {
   TOKEN_SCOPES,
 } from '../types/index.js';
 import { agentEventId, agentEventTime, AgentInboxEventSchema, AgentSchema } from './agent.js';
-import { ApiKeySchema, apiKeyActive, OAuthGrantSchema } from './user.js';
-import { BoardMemberSchema } from './board.js';
+import { ApiKeySchema, apiKeyActive, apiKeyKind, OAuthGrantSchema } from './user.js';
+import { AGENT_BOARD_ROLES, BoardMemberSchema, BoardSchema } from './board.js';
 import { MessageSchema, TicketSchema } from './ticket.js';
 import { OAuthTokenSchema } from './platform.js';
 import { agentMemberFixture, AGENT_ID, fixtures } from './fixtures.js';
@@ -67,9 +70,10 @@ describe('board members: people and agents', () => {
   it('an agent row parses', () => {
     expect(BoardMemberSchema.safeParse(agentMemberFixture).success).toBe(true);
   });
-  it('agents are never admin, carry owner + addedBy, and use ag_ ids', () => {
+  // §AA2 changed the first assertion: an agent member MAY be admin now.
+  it('§AA2: agents may be admin; they carry owner + addedBy, and use ag_ ids', () => {
     expect(BoardMemberSchema.safeParse({ ...agentMemberFixture, role: 'admin' }).success).toBe(
-      false,
+      true,
     );
     expect(
       BoardMemberSchema.safeParse({ ...agentMemberFixture, ownerUid: undefined }).success,
@@ -112,6 +116,19 @@ describe('agents and the agent inbox', () => {
   });
 });
 
+describe('§AA boards: agent roles and agentIds', () => {
+  it("AGENT_BOARD_ROLES gained 'admin'", () => {
+    expect([...AGENT_BOARD_ROLES]).toEqual(['admin', 'editor', 'commenter', 'viewer']);
+  });
+  it('a board parses with and without agentIds (absent until the migration backfills it)', () => {
+    const b = fixtures.boards;
+    expect(BoardSchema.safeParse(b).success).toBe(true);
+    expect(BoardSchema.safeParse({ ...b, agentIds: [AGENT_ID] }).success).toBe(true);
+    // a person's uid is not an agent id
+    expect(BoardSchema.safeParse({ ...b, agentIds: ['uid_asha'] }).success).toBe(false);
+  });
+});
+
 describe('API keys v2', () => {
   it('one board, actsAs, new scopes only', () => {
     const k = fixtures.apiKeys;
@@ -124,7 +141,9 @@ describe('API keys v2', () => {
       false,
     );
   });
-  it('agent tokens never carry admin scopes', () => {
+  // §AA narrowed this rule to LEGACY rows: kind 'board' acting as an agent.
+  // A kind 'agent' token always carries the admin scopes (next describe).
+  it('a BOARD token acting as an agent never carries admin scopes', () => {
     expect(ApiKeySchema.safeParse({ ...fixtures.apiKeys, scopes: ['board:admin'] }).success).toBe(
       false,
     );
@@ -136,6 +155,43 @@ describe('API keys v2', () => {
       }).success,
     ).toBe(true);
   });
+  it("§AA1 kind 'agent': acts as an agent, no board, exactly AGENT_TOKEN_SCOPES", () => {
+    const k = {
+      ...fixtures.apiKeys,
+      kind: 'agent',
+      boardId: null,
+      actsAs: { kind: 'agent', id: AGENT_ID },
+      scopes: [...AGENT_TOKEN_SCOPES],
+    };
+    expect(ApiKeySchema.safeParse(k).success).toBe(true);
+    expect(apiKeyKind(ApiKeySchema.parse(k))).toBe('agent');
+    // order does not matter, the set does
+    expect(ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES].reverse() }).success).toBe(true);
+    // converted from a board token (§AA6): its old board rides along
+    expect(ApiKeySchema.safeParse({ ...k, defaultBoardId: 'board_eng' }).success).toBe(true);
+    expect(ApiKeySchema.safeParse({ ...k, defaultBoardId: null }).success).toBe(true);
+    expect(ApiKeySchema.safeParse({ ...k, revokedAt: 5, revokedReason: 'rotated' }).success).toBe(true);
+    // never a board, never a person, never a narrower or wider scope list
+    expect(ApiKeySchema.safeParse({ ...k, boardId: 'board_eng' }).success).toBe(false);
+    expect(ApiKeySchema.safeParse({ ...k, actsAs: { kind: 'user', id: 'uid_asha' } }).success).toBe(false);
+    expect(ApiKeySchema.safeParse({ ...k, scopes: ['board:read'] }).success).toBe(false);
+    expect(ApiKeySchema.safeParse({ ...k, scopes: [...AGENT_TOKEN_SCOPES, 'boards:create'] }).success).toBe(false);
+    // defaultBoardId belongs to agent tokens only
+    expect(ApiKeySchema.safeParse({ ...fixtures.apiKeys, defaultBoardId: 'board_eng' }).success).toBe(false);
+  });
+  it('§AA1 AGENT_TOKEN_SCOPES = every board scope + the 2 admin + the 2 artifact scopes, no account scope', () => {
+    expect([...AGENT_TOKEN_SCOPES]).toEqual([...TOKEN_SCOPES, ...ADMIN_SCOPES, ...ARTIFACT_SCOPES]);
+    expect(AGENT_TOKEN_SCOPES.some(isAccountScope)).toBe(false);
+    expect(isAgentTokenScopes([...AGENT_TOKEN_SCOPES])).toBe(true);
+    expect(isAgentTokenScopes([...TOKEN_SCOPES])).toBe(false);
+  });
+  it('§AA6: rows written before §AA still parse — no kind, or kind board, acting as an agent', () => {
+    const { kind: _k, ...old } = fixtures.apiKeys as Record<string, unknown>;
+    expect(ApiKeySchema.safeParse(old).success).toBe(true);
+    expect(apiKeyKind(old)).toBe('board');
+    expect(ApiKeySchema.safeParse({ ...old, kind: 'board' }).success).toBe(true);
+    expect(ApiKeySchema.safeParse({ ...old, revokedAt: 5, revokedReason: 'agentRemoved' }).success).toBe(true);
+  });
   it('apiKeyActive', () => {
     const k = { revokedAt: null, expiresAt: null };
     expect(apiKeyActive(k, 5)).toBe(true);
@@ -145,13 +201,13 @@ describe('API keys v2', () => {
 });
 
 describe('scope vocabulary', () => {
-  it('16 token scopes in form order + 2 admin + 4 account (13 phase 2, 3 phase 3, 4 phase 10)', () => {
+  it('16 token scopes in form order + 2 admin + 4 account + 2 artifact (13 phase 2, 3 phase 3, 4 phase 10)', () => {
     expect(TOKEN_SCOPES).toHaveLength(16);
     expect(ADMIN_SCOPES).toHaveLength(2);
     // §R1 added the account scopes; they live at the END so the form's
     // checkbox order (TOKEN_SCOPES) is untouched.
     expect(ACCOUNT_SCOPES).toHaveLength(4);
-    expect(SCOPES).toHaveLength(22);
+    expect(SCOPES).toHaveLength(24);
     expect(SCOPES.slice(0, 16)).toEqual([...TOKEN_SCOPES]);
     expect(SCOPE_PRESETS.everything).toEqual([...TOKEN_SCOPES]);
     // Every preset draws only on the vocabulary; only 'fullAccount' (an
@@ -161,7 +217,7 @@ describe('scope vocabulary', () => {
         expect(SCOPES).toContain(s);
         if (name !== 'fullAccount') expect(TOKEN_SCOPES).toContain(s);
       }
-    expect(SCOPE_PRESETS.fullAccount).toEqual([...TOKEN_SCOPES, ...ACCOUNT_SCOPES]);
+    expect(SCOPE_PRESETS.fullAccount).toEqual([...TOKEN_SCOPES, ...ACCOUNT_SCOPES, ...ARTIFACT_SCOPES]);
     for (const s of ACCOUNT_SCOPES) expect(isAccountScope(s)).toBe(true);
     for (const s of TOKEN_SCOPES) expect(isAccountScope(s)).toBe(false);
   });

@@ -15,6 +15,10 @@ import type {
   PublicActor,
   PublicAgent,
   PublicAgentStatus,
+  PublicArtifact,
+  PublicArtifactBuild,
+  PublicArtifactDetail,
+  PublicArtifactMember,
   PublicCost,
   PublicRunReceipt,
   PublicAttachment,
@@ -33,9 +37,35 @@ import type {
   Scope as SharedScope,
 } from '@tm/shared';
 import type {
+  ArtifactAgentAccess as SharedArtifactAgentAccess,
+  ArtifactDataDoc as SharedArtifactDataDoc,
+  ArtifactDataFile as SharedArtifactDataFile,
+  ArtifactDataWrite as SharedArtifactDataWrite,
+  RestArtifactAccessResSchema,
+  RestArtifactDataWriteResSchema,
+  RestArtifactFileUrlResSchema,
+  RestArtifactSourceResSchema,
+  WhereOp,
+} from '@tm/shared';
+import type {
+  ArtifactDataDoc,
+  ArtifactDataFile,
+  ArtifactDataFileUrl,
+  ArtifactDataWhereOp,
+  ArtifactDataWrite,
+  ArtifactDataWriteResult,
+} from '../src/data.js';
+import type {
   Actor,
   Agent,
   AgentStatus,
+  Artifact,
+  ArtifactAgentAccess,
+  ArtifactBuild,
+  ArtifactDetail,
+  ArtifactMember,
+  ArtifactShareResult,
+  ArtifactSource,
   Cost,
   RunReceipt,
   Attachment,
@@ -83,3 +113,26 @@ exact<Exact<Me, RestMeRes>>(true);
 exact<Exact<Cost, PublicCost>>(true);
 exact<Exact<RunReceipt, PublicRunReceipt>>(true);
 exact<Exact<Agent, PublicAgent>>(true);
+// artifacts (docs/plan/artifacts.html §C1)
+exact<Exact<Artifact, PublicArtifact>>(true);
+exact<Exact<ArtifactBuild, PublicArtifactBuild>>(true);
+exact<Exact<ArtifactMember, PublicArtifactMember>>(true);
+exact<Exact<ArtifactDetail, PublicArtifactDetail>>(true);
+// @tm/shared exports these two as schemas only. `_output` is what z.infer
+// reads; spelling it here keeps zod out of the SDK's own dependencies.
+type Out<S extends { _output: unknown }> = S['_output'];
+exact<Exact<ArtifactSource, Out<typeof RestArtifactSourceResSchema>>>(true);
+exact<Exact<ArtifactShareResult, Out<typeof RestArtifactAccessResSchema>>>(true);
+// agent access and the data API (docs/plan/agents.html §AA3, §AA4)
+exact<Exact<ArtifactAgentAccess, SharedArtifactAgentAccess>>(true);
+// `agent_access` is optional on both sides, and an optional key cannot break
+// mutual assignability by being absent — so it is pinned by name as well.
+exact<Exact<NonNullable<Artifact['agent_access']>, NonNullable<PublicArtifact['agent_access']>>>(true);
+exact<Exact<NonNullable<ArtifactMember['agent_access']>, NonNullable<PublicArtifactMember['agent_access']>>>(true);
+exact<Exact<NonNullable<Me['default_board']>, NonNullable<RestMeRes['default_board']>>>(true);
+exact<Exact<ArtifactDataDoc, SharedArtifactDataDoc>>(true);
+exact<Exact<ArtifactDataFile, SharedArtifactDataFile>>(true);
+exact<Exact<ArtifactDataWhereOp, WhereOp>>(true);
+exact<Exact<ArtifactDataWrite, SharedArtifactDataWrite>>(true);
+exact<Exact<ArtifactDataWriteResult, Out<typeof RestArtifactDataWriteResSchema>>>(true);
+exact<Exact<ArtifactDataFileUrl, Out<typeof RestArtifactFileUrlResSchema>>>(true);

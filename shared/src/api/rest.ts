@@ -63,7 +63,24 @@ import {
   PublicMessageSchema,
   PublicTicketDetailSchema,
   PublicTicketSchema,
+  PublicArtifactBuildSchema,
+  PublicArtifactDetailSchema,
+  PublicArtifactSchema,
 } from './public.js';
+import { EmailInputSchema } from '../config.js';
+import {
+  ARTIFACT_DESCRIPTION_MAX,
+  ARTIFACT_NAME_MAX,
+  ArtifactAgentAccessSchema,
+  ArtifactShareRoleSchema,
+} from '../artifacts/schema.js';
+import {
+  ArtifactDataBatchResSchema,
+  ArtifactDataBatchSchema,
+  ArtifactDataDocSchema,
+  ArtifactDataFileSchema,
+  ArtifactDataListSchema,
+} from '../artifacts/data.js';
 
 export const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 export const REST_DEFAULT_LIMIT = 50;
@@ -126,8 +143,16 @@ export const RestMeResSchema = z.object({
    *   'account' an account token: `board` is null and `boards` lists every
    *             board reachable RIGHT NOW (resolved at this call, not cached)
    *   'oauth'   an OAuth access token, narrowed to `boards` by its grant
+   *   'agent'   §AA1 — an agent token: like 'account', but for the agent.
+   *             `boards` lists every board the agent is on right now;
+   *             `board` is set when that is exactly one, or when the token
+   *             was converted from a board token and still has its default
+   *             board (`default_board`) — the board a call that names none
+   *             gets.
    */
-  kind: z.enum(['board', 'account', 'oauth']),
+  kind: z.enum(['board', 'account', 'oauth', 'agent']),
+  /** §AA1 — agent tokens converted from a board token: the board used when a call names none. */
+  default_board: PublicBoardRefSchema.nullable().optional(),
   /** The API key, when one authenticated the request. */
   token: z
     .object({
@@ -135,7 +160,7 @@ export const RestMeResSchema = z.object({
       name: z.string(),
       prefix: z.string(),
       expires_at: Iso.nullable(),
-      /** §R1: 'board' or 'account' — the same value as the top-level `kind`. */
+      /** §R1 / §AA1: 'board', 'account' or 'agent' — the same value as the top-level `kind`. */
       kind: ApiKeyKindSchema,
     })
     .nullable(),
@@ -521,7 +546,8 @@ export const RestCreateBoardResSchema = PublicBoardSchema;
 /**
  * POST /v1/boards/{KEY}/agents — boardAgentSet's REST face (account tokens:
  * agents:write or boards:admin, and the person must be a board admin who
- * owns the agent to ADD it). `role: null` removes the agent from the board.
+ * owns the agent to ADD it). `role: null` removes the agent from the board;
+ * §AA2: `role` may be 'admin'.
  * `stage_grant` is for commenters only; null clears it, absent keeps it.
  */
 export const RestBoardAgentBodySchema = z
@@ -565,6 +591,168 @@ export const RestLiveResSchema = z.object({
   paths: z.array(z.string()),
 });
 export type RestLiveRes = z.infer<typeof RestLiveResSchema>;
+
+// ───────────────────────── artifacts (docs/plan/artifacts.html §C1) ─────────────────────────
+
+/**
+ * An artifact is a small static website kept and served by TaskManager, with
+ * its own people and its own data. These routes are how the code gets there.
+ * ACCOUNT tokens reach every artifact where the person is owner or editor; an
+ * AGENT token reaches only the artifacts that agent is on (one it creates
+ * belongs to its owner). Scopes: artifacts:read (list, get, source) and
+ * artifacts:write (everything else).
+ */
+
+/** POST /v1/artifacts */
+export const RestCreateArtifactBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(ARTIFACT_NAME_MAX),
+    description: z.string().trim().max(ARTIFACT_DESCRIPTION_MAX).nullable().optional(),
+    /** One emoji. */
+    icon: z.string().max(16).nullable().optional(),
+  })
+  .strict();
+export type RestCreateArtifactBody = z.infer<typeof RestCreateArtifactBodySchema>;
+
+/** PATCH /v1/artifacts/{id} — owner only. */
+export const RestPatchArtifactBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(ARTIFACT_NAME_MAX).optional(),
+    description: z.string().trim().max(ARTIFACT_DESCRIPTION_MAX).nullable().optional(),
+    icon: z.string().max(16).nullable().optional(),
+    /** Viewers may read the data but not write it. */
+    read_only: z.boolean().optional(),
+    /** Archive (no data writes, off the sidebar) or restore. */
+    archived: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export type RestPatchArtifactBody = z.infer<typeof RestPatchArtifactBodySchema>;
+
+export const RestArtifactResSchema = PublicArtifactSchema;
+export const RestArtifactDetailResSchema = PublicArtifactDetailSchema;
+export const RestArtifactListResSchema = paginatedSchema(PublicArtifactSchema);
+
+/**
+ * POST /v1/artifacts/{id}/builds — the body IS the zip of the build folder
+ * (Content-Type: application/zip), or multipart/form-data with a part named
+ * REST_BUILD_FIELD and, optionally, a second one named REST_SOURCE_FIELD (a
+ * zip of the source, kept beside the build and never served).
+ */
+export const REST_BUILD_FIELD = 'build';
+export const REST_SOURCE_FIELD = 'source';
+export const RestPublishQuerySchema = z.object({
+  /** A line saying what changed. */
+  message: z.string().trim().max(500).optional(),
+  /** Informational: the request carries a source part. */
+  source: z.string().optional(),
+});
+/** → 201: the new build, which is now current. `warnings` name anything that will show a blank page. */
+export const RestPublishResSchema = PublicArtifactBuildSchema;
+
+/** GET /v1/artifacts/{id}/source?build= — the newest build with a source zip, unless `build` names one. */
+export const RestArtifactSourceQuerySchema = z.object({ build: z.string().min(1).optional() });
+export const RestArtifactSourceResSchema = z.object({
+  /** A short-lived URL to GET the zip from (no Authorization header needed). */
+  url: z.string(),
+  build: z.string(),
+  expires_at: Iso,
+});
+
+/**
+ * PUT /v1/artifacts/{id}/access — owner only. Exactly one of `email` (a
+ * person: `role` 'editor' | 'viewer', null removes) or `agent` (one of the
+ * owner's agents). §AA3: for an agent give `agent_access` { build, data }
+ * ({ build: false, data: 'none' } removes it); the old form still works —
+ * `role: 'editor'` is { build: true, data: 'write' }, `role: null` removes.
+ * An email with no account yet is invited.
+ */
+export const RestArtifactAccessBodySchema = z
+  .object({
+    email: EmailInputSchema.optional(),
+    /** 'ag_…' — one of the OWNER's agents. */
+    agent: AgentIdSchema.optional(),
+    role: ArtifactShareRoleSchema.nullable().optional(),
+    /** Agents only (§AA3). Wins over `role` when both are given. */
+    agent_access: ArtifactAgentAccessSchema.optional(),
+  })
+  .strict()
+  .refine((b) => (b.email === undefined) !== (b.agent === undefined), {
+    message: 'Exactly one of email or agent',
+  })
+  .refine((b) => b.role !== undefined || (b.agent !== undefined && b.agent_access !== undefined), {
+    message: 'Give role — or, for an agent, agent_access',
+  })
+  .refine((b) => b.email === undefined || b.agent_access === undefined, {
+    message: 'agent_access is for an agent',
+  });
+export type RestArtifactAccessBody = z.infer<typeof RestArtifactAccessBodySchema>;
+export const RestArtifactAccessResSchema = z.object({
+  ok: z.literal(true),
+  /** 'granted': they have the role now. 'invited': an invite waits for their sign-in. 'removed'. */
+  outcome: z.enum(['granted', 'invited', 'removed']),
+});
+
+// ───────────────────────── artifact data (docs/plan/agents.html §AA4) ─────────────────────────
+
+/**
+ * THE ARTIFACT'S DATA WITH A TOKEN — the same fence the page's driver uses
+ * (artifacts/paths.ts), reached from outside. `{path}` is the rest of the URL,
+ * in the artifact's own view: /v1/artifacts/{id}/data/firestore/scores/2026.
+ *
+ * WHO: an agent token whose agent has `data` on the artifact ('read' for the
+ * GETs, 'write' for everything else), or an account token whose person is
+ * owner or editor. Reads need artifacts:read or artifacts:write; writes need
+ * artifacts:write. An archived artifact refuses writes (409).
+ *
+ * VALUES are JSON with two escapes (artifacts/data.ts): { "$date": ISO } is a
+ * timestamp both ways, { "$serverTime": true } in a write is the server's
+ * clock.
+ *
+ * FIRESTORE. An even number of path segments is a document, an odd number a
+ * collection:
+ *   GET    a document   → ArtifactDataDoc { id, path, exists, data }
+ *   GET    a collection → { data: ArtifactDataDoc[], next_cursor }
+ *                         ?where=field,op,value (repeatable) ?order_by=field[,desc]
+ *                         ?limit= (default 100, max 500) ?start_after=docId
+ *   PUT    a document   the body IS the document (?merge=1 merges)  → { ok, id, path }
+ *   PATCH  a document   the body is the fields to change; dotted keys are
+ *                       field paths; 404 when it does not exist      → { ok, id, path }
+ *   DELETE a document                                                → { ok }
+ *   POST   a collection the body IS the new document                 → 201 { id, path }
+ *   POST   /data/batch  { writes: [{ op, path, data?, merge? }] } ≤ 400, all or nothing
+ *
+ * RTDB. The body of PUT / PATCH / POST is the JSON value itself:
+ *   GET → { path, value }   PUT (set) / PATCH (update: an object of children)
+ *   / DELETE → { ok }        POST (push) → 201 { key, path }
+ *   RTDB has no timestamp type: { "$serverTime": true } is stored as epoch
+ *   milliseconds and { "$date": ISO } as that instant's epoch milliseconds.
+ *
+ * FILES. PUT: the raw body is the file (≤ 25 MB), Content-Type is kept.
+ */
+export const RestArtifactDataListQuerySchema = z.object({
+  order_by: z.string().min(1).max(600).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  start_after: z.string().min(1).max(1500).optional(),
+  /** PUT only: '1' / 'true' merges into the stored document. */
+  merge: z.enum(['1', 'true', '0', 'false']).optional(),
+});
+export const RestArtifactDataDocResSchema = ArtifactDataDocSchema;
+export const RestArtifactDataListResSchema = ArtifactDataListSchema;
+export const RestArtifactDataWriteResSchema = z.object({
+  ok: z.literal(true),
+  id: z.string(),
+  path: z.string(),
+});
+export const RestArtifactDataAddResSchema = z.object({ id: z.string(), path: z.string() });
+export const RestArtifactDataBatchBodySchema = ArtifactDataBatchSchema;
+export const RestArtifactDataBatchResSchema = ArtifactDataBatchResSchema;
+export const RestArtifactRtdbGetResSchema = z.object({ path: z.string(), value: z.unknown() });
+export const RestArtifactRtdbPushResSchema = z.object({ key: z.string(), path: z.string() });
+export const RestArtifactFilesQuerySchema = z.object({ prefix: z.string().max(1024).default('') });
+export const RestArtifactFileListResSchema = z.object({ data: z.array(ArtifactDataFileSchema) });
+export const RestArtifactFileUploadResSchema = ArtifactDataFileSchema;
+export const RestArtifactFileUrlResSchema = z.object({ url: z.string(), expires_at: Iso });
 
 // ───────────────────────── search, webhooks ─────────────────────────
 
@@ -867,6 +1055,156 @@ export const REST_ROUTES = [
     scopes: ['members:read'],
     board: true,
     summary: 'What every agent on the board is doing',
+  },
+  // artifacts (docs/plan/artifacts.html §C1, §C4). Not about a board: an account
+  // token reaches the artifacts its person owns or edits, an agent token the
+  // ones that agent was added to.
+  {
+    method: 'GET',
+    path: '/v1/artifacts',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: 'The artifacts this credential can reach',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts',
+    scopes: ['artifacts:write'],
+    summary: "Create an artifact; you (or, for an agent token, the agent's owner) become its owner",
+  },
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: 'An artifact: meta, its builds, who it is shared with',
+  },
+  {
+    method: 'PATCH',
+    path: '/v1/artifacts/{id}',
+    scopes: ['artifacts:write'],
+    summary: 'Rename, describe, set read-only for viewers, archive or restore (owner)',
+  },
+  {
+    method: 'DELETE',
+    path: '/v1/artifacts/{id}',
+    scopes: ['artifacts:write'],
+    summary: 'Delete an artifact with its builds, files and ALL its data (owner)',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts/{id}/builds',
+    scopes: ['artifacts:write'],
+    summary: 'Publish: a zip of the build folder becomes the current build',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts/{id}/builds/{build}/current',
+    scopes: ['artifacts:write'],
+    summary: 'Roll back (or forward) to a kept build',
+  },
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}/source',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: 'A short-lived URL for the newest source zip',
+  },
+  {
+    method: 'PUT',
+    path: '/v1/artifacts/{id}/access',
+    scopes: ['artifacts:write'],
+    summary: 'Share with a person or an agent, change a role, or remove (owner)',
+  },
+  // artifact data (agents.html §AA4): the artifact's own Firestore, RTDB and
+  // files, behind the same fence as the page's driver. Reads: data ≥ read (an
+  // agent) or owner/editor (an account token). Writes: data = write.
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}/data/firestore/{path}',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: "Read a document, or list a collection, of the artifact's Firestore",
+  },
+  {
+    method: 'PUT',
+    path: '/v1/artifacts/{id}/data/firestore/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Set a document (?merge=1 merges)',
+  },
+  {
+    method: 'PATCH',
+    path: '/v1/artifacts/{id}/data/firestore/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Update fields of an existing document',
+  },
+  {
+    method: 'DELETE',
+    path: '/v1/artifacts/{id}/data/firestore/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Delete a document',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts/{id}/data/firestore/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Add a document to a collection',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts/{id}/data/batch',
+    scopes: ['artifacts:write'],
+    summary: 'Up to 400 Firestore writes, all or nothing',
+  },
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}/data/rtdb/{path}',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: "Read a value of the artifact's Realtime Database",
+  },
+  {
+    method: 'PUT',
+    path: '/v1/artifacts/{id}/data/rtdb/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Set a value',
+  },
+  {
+    method: 'PATCH',
+    path: '/v1/artifacts/{id}/data/rtdb/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Update children of a value',
+  },
+  {
+    method: 'DELETE',
+    path: '/v1/artifacts/{id}/data/rtdb/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Remove a value',
+  },
+  {
+    method: 'POST',
+    path: '/v1/artifacts/{id}/data/rtdb/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Push a child with a generated key',
+  },
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}/data/files',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: "List the artifact's files under a prefix",
+  },
+  {
+    method: 'PUT',
+    path: '/v1/artifacts/{id}/data/files/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Upload a file: the raw body is the file (≤ 25 MB)',
+  },
+  {
+    method: 'GET',
+    path: '/v1/artifacts/{id}/data/files/{path}',
+    scopes: ['artifacts:read', 'artifacts:write'],
+    summary: 'A short-lived download URL for a file',
+  },
+  {
+    method: 'DELETE',
+    path: '/v1/artifacts/{id}/data/files/{path}',
+    scopes: ['artifacts:write'],
+    summary: 'Delete a file',
   },
   { method: 'GET', path: '/v1/search', scopes: ['tickets:read'], summary: 'Search tickets' },
   { method: 'GET', path: '/v1/webhooks', scopes: ['webhooks:manage'], summary: 'List webhooks' },

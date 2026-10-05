@@ -94,7 +94,7 @@
   </div>
   {#if error}<p class="text-xs text-danger">{error}</p>{/if}
   <p class="text-xs text-muted">
-    Markdown. Tokens acting as this agent get it from <code>GET /v1/me</code> and the MCP tool
+    Markdown. The agent’s token gets it from <code>GET /v1/me</code> and the MCP tool
     <code>whoami</code>, so an orchestrator can load the prompt from the token alone.
   </p>
 </div>

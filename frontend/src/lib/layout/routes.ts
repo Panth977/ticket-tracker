@@ -91,6 +91,22 @@ export const routes = {
   file: (boardKey: string, ticketKey: string, fileId: string) =>
     fileViewerPath(boardKey, ticketKey, fileId),
   oauthConsent: () => '/oauth/consent',
+  /**
+   * Artifacts (docs/plan/artifacts.html §F). An artifact has no key like a
+   * board's — it is opened from the sidebar or a link, never typed — so its id
+   * is the URL. The section type lives with the feature (lib/artifacts/store).
+   */
+  artifacts: () => '/x',
+  artifact: (artifactId: string) => `/x/${artifactId}`,
+  /** §AB: one of my workspaces — its boards and artifacts on one page. */
+  workspace: (workspaceId: string) => `/w/${workspaceId}`,
+  artifactSettings: (
+    artifactId: string,
+    section: 'general' | 'people' | 'boards' | 'builds' | 'data',
+  ) => `/x/${artifactId}/settings/${section}`,
+  /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
+  integrate: () => '/integrate',
+  backendDriver: () => '/backend-driver/',
 };
 
 /** Screens drawn WITHOUT the Shell (app.json: no `shell: true`). */

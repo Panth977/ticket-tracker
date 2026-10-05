@@ -2,7 +2,6 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "presence": {
       "$boardId": {
         ".read": "auth != null && root.child('boardReaders').child($boardId).child(auth.uid).val() === true",
@@ -20,7 +19,6 @@
         }
       }
     },
-
     "typing": {
       "$boardId": {
         ".read": "auth != null && root.child('boardReaders').child($boardId).child(auth.uid).val() === true",
@@ -34,7 +32,6 @@
         }
       }
     },
-
     "status": {
       "$boardId": {
         ".read": "auth != null && (root.child('boardReaders').child($boardId).child(auth.uid).val() === true || auth.token.board === $boardId)",
@@ -60,14 +57,12 @@
         }
       }
     },
-
     "rev": {
       "$boardId": {
         ".read": "auth != null && (root.child('boardReaders').child($boardId).child(auth.uid).val() === true || auth.token.board === $boardId)",
         ".write": false
       }
     },
-
     "agents": {
       "$agentId": {
         "wake": {
@@ -76,18 +71,29 @@
         }
       }
     },
-
     "silence": {
       ".read": false,
       ".write": false
     },
-
     "boardReaders": {
       ".read": false,
       ".write": false
     },
-
     "rate": {
+      ".read": false,
+      ".write": false
+    },
+    "artifactData": {
+      "$id": {
+        ".read": "auth != null && root.child('artifactReaders').child($id).child(auth.uid).exists()",
+        ".write": "auth != null && root.child('artifactFlags').child($id).child('archived').val() !== true && (root.child('artifactReaders').child($id).child(auth.uid).val() === 'owner' || root.child('artifactReaders').child($id).child(auth.uid).val() === 'editor' || (root.child('artifactReaders').child($id).child(auth.uid).val() === 'viewer' && root.child('artifactFlags').child($id).child('readOnly').val() === false))"
+      }
+    },
+    "artifactReaders": {
+      ".read": false,
+      ".write": false
+    },
+    "artifactFlags": {
       ".read": false,
       ".write": false
     }

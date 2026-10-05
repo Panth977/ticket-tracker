@@ -149,7 +149,12 @@ export function boardKeyOf(ticketKey: string): string {
  * Where a row leads outside the inbox (bell, push): the ticket in its board
  * with the drawer open, or the invitations tab for an invite.
  */
-export function rowHref(r: Pick<InboxItem, 'event' | 'ticketKey'>): string {
+export function rowHref(
+  r: Pick<InboxItem, 'event' | 'ticketKey'> & Pick<Partial<InboxItem>, 'artifactId'>,
+): string {
+  // A row about an ARTIFACT (shared with you, a new build on yours) has no
+  // ticket: it leads to the artifact. An invite to one still needs answering.
+  if (r.artifactId && r.event !== 'invited') return routes.artifact(r.artifactId);
   if (r.event === 'invited' || !r.ticketKey) return routes.invitations();
   return routes.board(boardKeyOf(r.ticketKey), null, r.ticketKey);
 }

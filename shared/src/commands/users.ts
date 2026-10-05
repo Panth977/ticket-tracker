@@ -50,6 +50,8 @@ const ListRes = z.object({
 
 export const userList = defineCommand({
   name: 'userList',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['boards:admin'],
   source: 'phase2',
   permission: 'The admin only (the configured address). Nobody else, with any token.',
   errors: ['forbidden'],
@@ -59,6 +61,8 @@ export const userList = defineCommand({
 
 export const userAllow = defineCommand({
   name: 'userAllow',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['boards:admin'],
   source: 'phase2',
   permission: 'The admin only. Adds an ADDRESS; the account may not exist yet.',
   errors: ['forbidden', 'invalid', 'conflict'],
@@ -72,6 +76,8 @@ export const userAllow = defineCommand({
 
 export const userDisallow = defineCommand({
   name: 'userDisallow',
+  // MCP (the Claude app as the whole UI): reachable by a token with these scopes.
+  scopes: ['boards:admin'],
   source: 'phase2',
   permission: 'The admin only. The admin address itself can never be removed (409).',
   errors: ['forbidden', 'invalid', 'conflict', 'not_found'],

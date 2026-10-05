@@ -10,7 +10,7 @@
  * SHARED views of a board the caller can read — never its people, tickets or
  * anyone's personal views.
  */
-import { errors, paths, type Board, type BoardPref, type View } from '@tm/shared';
+import { errors, isAgentId, paths, type Board, type BoardPref, type View } from '@tm/shared';
 import { rateBuckets } from '@tm/shared';
 import { can } from '@tm/shared/logic/index';
 import { typedCol, typedDoc } from '../runtime/converters.js';
@@ -29,6 +29,10 @@ import {
 import { defaultViews, seedFor, type BoardSeed } from './boardTemplates.js';
 
 export default defineCommand('boardCreate', async (ctx, input) => {
+  // §AA1/§AA2: a board is created by a person (the creator becomes its admin
+  // and its first reader — an agent can be neither a reader nor an owner).
+  // An agent token has no boards:create scope; this says so by name as well.
+  if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot create boards');
   const template = input.template ?? 'blank';
   const boardId = ctx.ids.id();
 

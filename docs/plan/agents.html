@@ -24,6 +24,7 @@
         <a href="/plan/decisions">Decisions</a>
         <a href="/plan/roadmap">Roadmap</a>
         <a href="/plan/agents" class="on">Agents</a>
+        <a href="/plan/artifacts">Artifacts</a>
         <a href="/plan/sdk">SDK</a>
         <a href="/plan/review">Review</a>
         <a href="/plan/reference">From TeamTrack</a>
@@ -917,6 +918,162 @@ Agents · Notifications · Tokens · Sign out</pre>
         the discipline. A worktree per ticket is a workspace option to add when a board needs it, not a default.</li>
       <li><b>Decision D-Y1</b>: the cost day is cut in the owner's timezone by a constant, not a board setting. There is one owner.</li>
     </ul>
+
+    <h2 id="aa">AA · One token per agent; what it may do lives where it works</h2>
+    <p>Everything here is done by a person or by one of their agents. Until now an agent's reach was cut up by <b>tokens</b>: one
+    token per board, each with its own checkbox list, so an agent on two boards had two secrets and "what may this agent do?" had no
+    single answer. Artifacts made it worse: no token could be told "build this one, only touch the data of that one". This section
+    turns it round. <b>A token says who the agent is, and nothing else. What the agent may do is set where it works</b>: a role on
+    each board, a permission on each artifact.</p>
+    <h3 id="aa1">AA1 · The agent token</h3>
+    <ul>
+      <li><b>One per agent.</b> A third kind of API key, <code>kind: 'agent'</code>: it acts as the agent, has no board of its own
+        (<code>boardId: null</code>) and no checkbox list. It reaches every board and every artifact the agent is on, as that stands
+        at each call, exactly as an account token does for a person.</li>
+      <li><b>Its scopes are fixed</b>: <code>AGENT_TOKEN_SCOPES</code> = every board scope, the two admin scopes and the two artifact
+        scopes. They never narrow anything; the role does. No account scopes: an agent still cannot create boards, agents or invites,
+        and the token deny list (§R1) still applies, so a token can never mint a token.</li>
+      <li><b>Generating a new one replaces the old.</b> <code>apiKeyCreate</code> with <code>kind: 'agent'</code> revokes the
+        agent's other live tokens (<code>revokedReason: 'rotated'</code>) in the same transaction, unless
+        <code>keepOthers: true</code> (the migration uses it). It is still minted only by the owner, in the app.</li>
+      <li><b>What stands behind it</b>, checked on every call: the agent exists, is the owner's, is not archived, and the owner is
+        still allowed (§X). No board check: a board the agent left is a 404 on that board, not a dead token.</li>
+      <li><b>Which board?</b> As for account tokens (§R2): a call that needs a board names one (<code>?board=KEY</code>, the MCP
+        <code>board</code> argument), unless the agent is on exactly one. A token that was converted from an old board token keeps
+        <code>defaultBoardId</code> — its old board — and that is used when a call names none, so nothing that runs today breaks.</li>
+      <li><b>Finding an agent's boards</b>: boards carry <code>agentIds</code> (derived from <code>access</code>, like
+        <code>readerUids</code>, which still never holds an agent), so "every board this agent is on" is one query.</li>
+    </ul>
+    <h3 id="aa2">AA2 · On a board: the role is the permission</h3>
+    <table>
+      <thead><tr><th>Role</th><th>What the agent may do there</th></tr></thead>
+      <tbody>
+        <tr><td><b>viewer</b></td><td>Read the board, tickets, threads, files.</td></tr>
+        <tr><td><b>commenter</b></td><td>+ comment, upload, ask and answer, heartbeat; move tickets inside its stage grant.</td></tr>
+        <tr><td><b>editor</b></td><td>+ create, edit, move, assign, archive, task lists.</td></tr>
+        <tr><td><b>admin</b> (new for agents)</td><td>Everything a person who is admin may do with a token: board settings, stages,
+          fields, webhooks, restore, delete where the board allows it. "Complete ownership."</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><b>An agent may be admin.</b> The old rule ("never admin", and <code>effectiveRole</code> quietly reading an agent's admin as
+        editor) goes. What an agent admin still cannot do is what no agent can: manage the board's people and agents, invite, create
+        boards, mint tokens. Those stay with people and account tokens.</li>
+      <li>Set where it always was: the board's People section and <code>boardAgentSet</code>, and now also from the agent's own page
+        (AA5).</li>
+    </ul>
+    <h3 id="aa3">AA3 · On an artifact: build and data, separately</h3>
+    <pre>artifacts/{id}.agents[agentId] = { build: boolean, data: 'none' | 'read' | 'write' }      // was the literal 'editor'</pre>
+    <ul>
+      <li><b>build</b>: publish, roll back, download the source. <b>data</b>: read or read-and-write the artifact's database and
+        files through the API (AA4). Any of them lets the agent list and read the artifact's description. At least one must be given;
+        <code>{ build: false, data: 'none' }</code> is "remove the agent".</li>
+      <li>An old <code>'editor'</code> value reads as <code>{ build: true, data: 'write' }</code>; an agent that creates an artifact
+        gets the same. <code>artifactShare</code> takes <code>agentAccess</code> beside <code>agentId</code>; the old
+        <code>role</code> form keeps working (<code>'editor'</code> → both, <code>null</code> → removed).</li>
+      <li>An agent never owns an artifact and never shares, renames or deletes one.</li>
+    </ul>
+    <h3 id="aa4">AA4 · The artifact's data, from outside the page</h3>
+    <p>Until now an artifact's database could only be written from inside the page, by whoever was looking at it. An agent that
+    wanted numbers on a dashboard had to bake them into the build. These routes are the same fence (<code>shared/artifacts/paths</code>)
+    reached with a token: an agent with <code>data</code> on that artifact, or an account token whose person is owner or editor.</p>
+    <pre>GET    /v1/artifacts/{id}/data/firestore/{path}     a document → { id, path, exists, data };  a collection → { data: [...], next_cursor }
+                                                     ?where=field,op,value (repeatable)  ?order_by=field[,desc]  ?limit=  ?start_after=docId
+PUT    /v1/artifacts/{id}/data/firestore/{path}     set   (?merge=1)
+PATCH  /v1/artifacts/{id}/data/firestore/{path}     update
+DELETE /v1/artifacts/{id}/data/firestore/{path}
+POST   /v1/artifacts/{id}/data/firestore/{path}     add to a collection → { id, path }
+POST   /v1/artifacts/{id}/data/batch                { writes: [{ op: 'set'|'update'|'delete', path, data?, merge? }] }  ≤ 400, atomic
+
+GET | PUT | PATCH | DELETE  /v1/artifacts/{id}/data/rtdb/{path}       POST = push → { key, path }
+
+GET    /v1/artifacts/{id}/data/files?prefix=        list
+PUT    /v1/artifacts/{id}/data/files/{path}         the raw body is the file (≤ 25 MB)
+GET    /v1/artifacts/{id}/data/files/{path}         → { url, expires_at }
+DELETE /v1/artifacts/{id}/data/files/{path}</pre>
+    <ul>
+      <li><b>Values are JSON</b>, with two escapes: <code>{ "$date": "2026-09-30T05:30:00Z" }</code> is a timestamp (both ways: a
+        stored timestamp is read back in this form), and <code>{ "$serverTime": true }</code> in a write is the server's clock. The
+        page sees the same documents through the driver, with timestamps as <code>Date</code>.</li>
+      <li><b>The batch</b> is what the driver does not have: up to 400 writes, all or nothing. It is how a nightly job replaces a
+        dataset.</li>
+      <li>Reads need <code>artifacts:read</code> or <code>artifacts:write</code> and data ≥ read; writes need
+        <code>artifacts:write</code> and data = write. Archived artifacts refuse writes. The reserved collection names
+        (<code>tickets</code>, <code>reads</code>) are refused as in the driver.</li>
+      <li>SDK: <code>tm.artifacts.data(id).firestore.{get,set,update,delete,add,list,batch}</code>,
+        <code>.rtdb.{get,set,update,push,remove}</code>, <code>.files.{upload,url,list,delete}</code>. MCP:
+        <code>artifact_data_get</code>, <code>artifact_data_list</code>, <code>artifact_data_set</code>,
+        <code>artifact_data_batch</code> (Firestore).</li>
+    </ul>
+    <h3 id="aa5">AA5 · In the app</h3>
+    <ul>
+      <li><b>The agent's page is where its access is read and set.</b> Two cards. <b>Token</b>: the one token (prefix, last used),
+        <i>Generate</i> / <i>Regenerate</i> (shown once; the old one stops working), and, while converted tokens are still about,
+        "2 older tokens still work" with <i>Revoke older tokens</i>. <b>Access</b>: every board the agent is on with its role
+        (change, remove, add to another board you administer), and every artifact with <i>Build</i> and <i>Data: none / read /
+        write</i> (change, remove, add to one you own).</li>
+      <li>The Tokens page no longer offers "acts as an agent" for a board token; it lists agent tokens read-only and points at the
+        agent's page. Board tokens acting as <i>you</i> and account tokens are unchanged.</li>
+      <li>Board People: an agent's role select gains <i>Admin</i>. Artifact People: an agent's row has the two controls.</li>
+    </ul>
+    <h3 id="aa6">AA6 · Moving what exists</h3>
+    <ul>
+      <li><b>Old tokens keep working the moment this ships</b>: a <code>kind: 'board'</code> key acting as an agent is still resolved
+        as before until it is converted.</li>
+      <li><code>scripts/migrate-agent-tokens.mjs</code> (dry run by default, <code>--apply</code> to write): every live key acting as
+        an agent becomes <code>kind: 'agent'</code>, <code>boardId: null</code>, <code>defaultBoardId: &lt;its old board&gt;</code>,
+        <code>scopes: AGENT_TOKEN_SCOPES</code>. Same secret, same hash: nothing has to be re-issued. Boards get
+        <code>agentIds</code>; artifact <code>agents</code> values become the object form.</li>
+      <li><b>An agent with several tokens</b> keeps them all working (they are now identical), and is issued one new token, written to
+        a local file for the owner. When the agent's callers use the new one, <i>Revoke older tokens</i> finishes the job. Nothing is
+        revoked by the script.</li>
+      <li><b>Workspaces</b>: <code>workspaces/lib/tm.mjs</code> names the workspace's board on every board call, so a workspace keeps
+        working when its agent is on several boards with a token that has no default.</li>
+    </ul>
+
+    <h2 id="ab">AB · Workspaces in the app: your own way to group boards and artifacts</h2>
+    <p>Not §Z's orch workspaces (the <code>workspaces/</code> folder): these live in the sidebar. A person with many boards and
+    dashboards wanted <b>one place per area of their life or work</b> — Freelance, Health, Social — holding the boards and the
+    artifacts that belong together, without moving or re-permissioning anything. Boards and artifacts are still created exactly as
+    before, at the root; a workspace only gathers them. The board is still the only boundary
+    (<a href="/plan/architecture.html">"The board is everything"</a>): <b>a workspace grants nothing and narrows nothing.</b> Agents
+    keep their role per board and their access per artifact (§AA); there is no "agent on a workspace".</p>
+    <h3 id="ab1">AB1 · What a workspace is</h3>
+    <pre>users/{uid}/workspaces/{id} = { name, color, boardIds[], artifactIds[], position, createdAt, updatedAt }
+users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedAt }</pre>
+    <ul>
+      <li><b>Private.</b> Under the person's own user document; the rules let only them read it and nobody write it.
+        <code>workspaceCreate</code>, <code>workspaceUpdate</code> (rename, recolour, reorder, whole lists or
+        <code>add</code>/<code>remove</code>) and <code>workspaceDelete</code> write it. People only, never an agent.</li>
+      <li><b>Only what you already reach.</b> Every board or artifact ADDED must be one the caller can open (400 naming the others).
+        One they later lose access to stays in the list and simply is not shown.</li>
+      <li><b>Deleting a workspace</b> deletes the grouping; its boards and artifacts are untouched. At most 50 workspaces, 200
+        items each.</li>
+    </ul>
+    <h3 id="ab2">AB2 · The sidebar: Workspaces, and hiding from the root</h3>
+    <ul>
+      <li>A <b>Workspaces</b> section above Boards: <code>▸ ● Name</code>. The name opens the workspace page (<code>/w/{id}</code>:
+        its boards as tiles, its artifacts as rows, Edit, Delete). <code>▸</code> unfolds its boards and artifacts in place — the
+        one fold in the sidebar (§Q1 stays true for the root lists), remembered per browser.</li>
+      <li><b>Hide</b> (an eye on the board tile, the artifact row and the workspace page): the item leaves the sidebar's root
+        <b>Boards</b> / <b>Artifacts</b> lists. That is all — it is not archived, notifications and access are unchanged, and
+        "All boards &amp; archived", "All artifacts" and every workspace still show it, marked "hidden from sidebar". The eye shows
+        it again. <code>sidebarHide { boardId | artifactId, hidden }</code>.</li>
+      <li>⌘K finds workspaces by name.</li>
+    </ul>
+    <h3 id="ab3">AB3 · Working inside a workspace</h3>
+    <ul>
+      <li>Opening a board or artifact <b>through</b> a workspace — its sidebar group or its page — enters it. Opening one from the
+        root lists, "All boards" or "All artifacts" leaves it. Per tab (sessionStorage), and never in the URL, so every link inside
+        the board keeps it.</li>
+      <li>While in it, and the open board belongs to it: the header reads <code>● Workspace › ● KEY Board</code> (the name goes
+        back to the workspace page), and the <b>board switcher lists only the workspace's boards, then its artifacts</b>, then
+        "Show all boards" (which leaves). The open item is highlighted under the workspace, not twice.</li>
+    </ul>
+    <h3 id="ab4">AB4 · Over MCP (the Claude app)</h3>
+    <p>The four commands carry the account scopes <code>boards:create</code> / <code>boards:admin</code>, so the MCP bridge
+    (<code>doors/mcpApp.ts</code>) exposes them as <code>workspace_create</code>, <code>workspace_update</code>,
+    <code>workspace_delete</code> and <code>sidebar_hide</code>; <code>list_workspaces</code> reads them back with board keys.</p>
 
     <h2>J · What gets built, in order</h2>
     <p>This is on the build dashboard as phase 2:</p>

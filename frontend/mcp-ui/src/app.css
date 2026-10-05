@@ -1,0 +1,184 @@
+/*
+ * Claude hands us its style variables (applyHostStyleVariables); the values
+ * after the comma are only for a host that does not, in light and dark.
+ */
+:root {
+  --bg: var(--color-background-primary, #fff);
+  --bg2: var(--color-background-secondary, #f5f4ed);
+  --bg3: var(--color-background-tertiary, #faf9f5);
+  --fg: var(--color-text-primary, #141413);
+  --fg2: var(--color-text-secondary, #3d3d3a);
+  --fg3: var(--color-text-tertiary, #73726c);
+  --line: var(--color-border-tertiary, rgb(31 30 29 / 15%));
+  --line2: var(--color-border-secondary, rgb(31 30 29 / 30%));
+  --danger: var(--color-text-danger, #7f2c28);
+  --danger-bg: var(--color-background-danger, #f7ecec);
+  --info: var(--color-text-info, #3266ad);
+  --info-bg: var(--color-background-info, #d6e4f6);
+  --ok-bg: var(--color-background-success, #e9f1dc);
+  --inv-bg: var(--color-background-inverse, #141413);
+  --inv-fg: var(--color-text-inverse, #fff);
+  --r: var(--border-radius-md, 8px);
+  --r-lg: var(--border-radius-xl, 12px);
+  color-scheme: light dark;
+}
+/* Dark: the host's data-theme (applyDocumentTheme) or, with no host, the OS. */
+:root[data-theme='dark'] {
+  --bg: var(--color-background-primary, #30302e);
+  --bg2: var(--color-background-secondary, #262624);
+  --bg3: var(--color-background-tertiary, #141413);
+  --fg: var(--color-text-primary, #faf9f5);
+  --fg2: var(--color-text-secondary, #c2c0b6);
+  --fg3: var(--color-text-tertiary, #9c9a92);
+  --line: var(--color-border-tertiary, rgb(222 220 209 / 15%));
+  --line2: var(--color-border-secondary, rgb(222 220 209 / 30%));
+  --danger: var(--color-text-danger, #ee8884);
+  --danger-bg: var(--color-background-danger, #602a28);
+  --info: var(--color-text-info, #80aadd);
+  --info-bg: var(--color-background-info, #253e5f);
+  --ok-bg: var(--color-background-success, #1b4614);
+  --inv-bg: var(--color-background-inverse, #faf9f5);
+  --inv-fg: var(--color-text-inverse, #141413);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: var(--color-background-primary, #30302e);
+    --bg2: var(--color-background-secondary, #262624);
+    --bg3: var(--color-background-tertiary, #141413);
+    --fg: var(--color-text-primary, #faf9f5);
+    --fg2: var(--color-text-secondary, #c2c0b6);
+    --fg3: var(--color-text-tertiary, #9c9a92);
+    --line: var(--color-border-tertiary, rgb(222 220 209 / 15%));
+    --line2: var(--color-border-secondary, rgb(222 220 209 / 30%));
+    --danger: var(--color-text-danger, #ee8884);
+    --danger-bg: var(--color-background-danger, #602a28);
+    --info: var(--color-text-info, #80aadd);
+    --info-bg: var(--color-background-info, #253e5f);
+    --ok-bg: var(--color-background-success, #1b4614);
+    --inv-bg: var(--color-background-inverse, #faf9f5);
+    --inv-fg: var(--color-text-inverse, #141413);
+  }
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--fg);
+  overflow-x: hidden;
+}
+body {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: var(--font-text-sm-size, 14px);
+  line-height: var(--font-text-sm-line-height, 1.4);
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r);
+  border: 0.5px solid var(--line2);
+  background: var(--bg);
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.primary {
+  background: var(--inv-bg);
+  color: var(--inv-fg);
+  border-color: transparent;
+  font-weight: 600;
+}
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+}
+input,
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  border: 0.5px solid var(--line2);
+  background: var(--bg);
+}
+:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
+}
+.muted {
+  color: var(--fg3);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--bg2);
+  color: var(--fg2);
+  white-space: nowrap;
+}
+.chip.late {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.chip.key {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: transparent;
+  padding: 0;
+  color: var(--fg3);
+}
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 10px;
+  font-weight: 700;
+  flex: none;
+}
+.md :where(p, ul, ol, pre, blockquote) {
+  margin: 0 0 8px;
+}
+.md :where(pre, code) {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+.md pre {
+  padding: 8px;
+  border-radius: var(--r);
+  background: var(--bg2);
+  overflow-x: auto;
+}
+.md a {
+  color: var(--info);
+}
+.skeleton {
+  background: var(--bg2);
+  border-radius: var(--r);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}

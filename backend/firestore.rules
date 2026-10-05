@@ -160,18 +160,38 @@ service cloud.firestore {
         allow read: if isUser(uid);
         allow write: if false;
       }
+
+      // §AB — the person's own workspaces and sidebar (users/{uid}/ui/sidebar):
+      // private, and written only by workspaceCreate / workspaceUpdate /
+      // workspaceDelete / sidebarHide, which check every id is reachable.
+      match /workspaces/{workspaceId} {
+        allow read: if isUser(uid);
+        allow write: if false;
+      }
+      match /ui/{docId} {
+        allow read: if isUser(uid);
+        allow write: if false;
+      }
     }
 
     // ------------------------------------------------------------ top level
 
     // 'What have I been invited to' — where(email == mine), across boards.
     // Invite emails are stored lower-cased; tokens may not be.
+    //
+    // ARTIFACT INVITES (docs/plan/artifacts.html §B) live here too: `artifactId`
+    // is set and boardId is a fixed placeholder that names no board. The
+    // artifact's OWNER lists them with where(artifactId == …) — the People tab's
+    // "invited, not here yet". The three reasons are OR-ed and each stands on
+    // its own: a lookup that cannot be made for one (the placeholder board, an
+    // invite with no artifactId) does not take the others down with it.
     match /invites/{inviteId} {
       allow get, list: if signedIn() && (
           (request.auth.token.email != null
             && request.auth.token.email_verified == true
             && resource.data.email == request.auth.token.email.lower())
-          || boardRole(resource.data.boardId) == 'admin');
+          || boardRole(resource.data.boardId) == 'admin'
+          || artifactRole(resource.data.artifactId) == 'owner');
       allow write: if false;
     }
 
@@ -213,6 +233,98 @@ service cloud.firestore {
 
       match /events/{eventId} {
         allow read, write: if false;
+      }
+    }
+
+    // ------------------------------------------------------------ artifacts
+    // (docs/plan/artifacts.html §B, §E4)
+    //
+    // AN ARTIFACT IS NOT A BOARD. Its people are its own: every rule below asks
+    // artifacts/{a}.access[uid] and nothing else — being on a board gives
+    // nothing here, and a role on artifact A gives nothing on artifact B,
+    // because each rule names the ONE artifact in its own path.
+    //
+    // THE RULES ARE THE FENCE, NOT THE BROKER. The host page that talks to
+    // Firestore for an artifact is our code, but it runs in the viewer's
+    // browser and the viewer can change it. So everything the driver promises
+    // is decided here:
+    //
+    //   artifacts/{a}                    read: a role. No client write, ever —
+    //   artifacts/{a}/builds/{b}         the commands write the document and
+    //                                    its builds (publish, share, rename).
+    //   artifacts/{a}/db/data/**         THE ARTIFACT'S OWN FIRESTORE.
+    //                                    read: a role.
+    //                                    write: owner, editor — or a viewer,
+    //                                    unless the artifact is read-only for
+    //                                    viewers. Nobody while it is archived.
+    //   artifacts/{a}/viewers/{uid}/kv/* db.kv: that person's own keys, and
+    //                                    writable even by a read-only viewer
+    //                                    (it replaces the localStorage the
+    //                                    sandbox took away; it is theirs).
+    //
+    // Agents never sign in to Firestore as people, and an agent's role lives
+    // in a separate map (`agents`), so no rule here can be satisfied by one.
+    // agents.html §AA3 made that map's values { build, data } instead of the
+    // literal 'editor', and §AA4 lets an agent's TOKEN read and write the data
+    // below through the API — with the Admin SDK, behind the same path fence
+    // (backend/src/platform/artifactData.ts), never through these rules.
+    //
+    // NOT ENFORCED HERE: a size limit on a data document. Rules cannot see the
+    // size of request.resource; Firestore's own 1 MiB document limit is the
+    // only one. (artifacts.html §E4 asks for 256 KB — that would have to be a
+    // field-count heuristic, which refuses honest documents and stops nothing.)
+
+    function artifact(a) {
+      return get(/databases/$(database)/documents/artifacts/$(a)).data;
+    }
+
+    // 'owner' | 'editor' | 'viewer' | null. A missing artifact is an error,
+    // and an error denies.
+    function artifactRole(a) {
+      return signedIn() ? artifact(a).access.get(request.auth.uid, null) : null;
+    }
+
+    // May this person WRITE the artifact's data — artifactCan.writeData in
+    // shared/src/artifacts/schema.ts, plus 'never when archived'.
+    function artifactWritable(a) {
+      let art = artifact(a);
+      let role = art.access.get(request.auth.uid, null);
+      return signedIn()
+        && art.archivedAt == null
+        && (role == 'owner' || role == 'editor' || (role == 'viewer' && art.readOnly == false));
+    }
+
+    // TWO COLLECTION NAMES AN ARTIFACT MAY NOT USE. The collection-group rules
+    // at the bottom of this file (`/{path=**}/tickets/…`, `/{path=**}/reads/…`)
+    // match a document in ANY collection with those names, at any depth — an
+    // artifact's own data included — and they grant reads by what the DOCUMENT
+    // says (assigneeUids, createdBy, boardId), not by the artifact's access
+    // map. A document there could be read by someone the artifact was never
+    // shared with, or by someone it was taken away from. Nothing can be read
+    // that was never written, so the write is refused.
+    function artifactCollectionAllowed() {
+      return !string(request.path).matches('.*/(tickets|reads)/[^/]+');
+    }
+
+    match /artifacts/{artifactId} {
+      // Checked on the document itself (no extra get()). A LIST is only
+      // provable with where(memberUids array-contains auth.uid) — memberUids
+      // is the keys of `access`, derived by the commands for exactly this.
+      allow get, list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow write: if false; // artifactCreate / Update / Share / Publish / Delete
+
+      match /builds/{buildId} {
+        allow read: if artifactRole(artifactId) != null;
+        allow write: if false; // artifactPublish, housekeeping
+      }
+
+      match /db/data/{path=**} {
+        allow read: if artifactRole(artifactId) != null;
+        allow write: if artifactWritable(artifactId) && artifactCollectionAllowed();
+      }
+
+      match /viewers/{uid}/kv/{key} {
+        allow read, write: if isUser(uid) && artifactRole(artifactId) != null;
       }
     }
 

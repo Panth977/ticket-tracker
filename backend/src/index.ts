@@ -91,6 +91,8 @@ const QUEUE_OPTIONS: Record<QueueName, TaskQueueOptions> = {
     rateLimits: { maxDispatchesPerSecond: 500 },
   },
   boardDelete: { retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, timeoutSeconds: 540 },
+  // Artifacts (artifacts.html §G): the same shape of job — a recursive delete of unknown size.
+  artifactDelete: { retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, timeoutSeconds: 540 },
   export: {
     retryConfig: { maxAttempts: 3, minBackoffSeconds: 60 },
     timeoutSeconds: 540,
@@ -117,6 +119,7 @@ function queueFn<Q extends QueueName>(queue: Q) {
 export const queueDeliver = queueFn('deliver');
 export const queueWebhooks = queueFn('webhooks');
 export const queueBoardDelete = queueFn('boardDelete');
+export const queueArtifactDelete = queueFn('artifactDelete');
 export const queueExport = queueFn('export');
 export const queueEmail = queueFn('email');
 

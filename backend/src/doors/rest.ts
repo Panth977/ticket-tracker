@@ -30,8 +30,24 @@ import {
   errors,
   MAX_API_UPLOAD_BYTES,
   paths,
+  ARTIFACT_SOURCE_MAX_BYTES,
+  ARTIFACT_ZIP_MAX_BYTES,
+  REST_BUILD_FIELD,
   REST_ROUTES,
+  REST_SOURCE_FIELD,
   REST_UPLOAD_FIELD,
+  ARTIFACT_UPLOAD_MAX_BYTES,
+  ArtifactDataQuerySchema,
+  parseOrderByParam,
+  parseWhereParam,
+  RestArtifactAccessBodySchema,
+  RestArtifactDataBatchBodySchema,
+  RestArtifactDataListQuerySchema,
+  RestArtifactFilesQuerySchema,
+  RestArtifactSourceQuerySchema,
+  RestCreateArtifactBodySchema,
+  RestPatchArtifactBodySchema,
+  RestPublishQuerySchema,
   restPatchScopes,
   RestAckBodySchema,
   RestAskQuestionBodySchema,
@@ -108,6 +124,26 @@ import {
 } from '../platform/v1.js';
 import { registerFileAccessRoutes } from '../platform/fileAccess.js';
 import { createAgent, createBoard, setBoardAgent } from '../platform/account.js';
+import { artifactDetail, artifactView, listArtifacts, publishZip } from '../platform/artifacts.js';
+import {
+  dataAdd,
+  dataBatch,
+  dataDelete,
+  dataGet,
+  dataList,
+  dataSet,
+  dataUpdate,
+  fileDelete,
+  filesList,
+  fileUpload,
+  fileUrl,
+  isDocumentPath,
+  rtdbGet,
+  rtdbPush,
+  rtdbRemove,
+  rtdbSet,
+  rtdbUpdate,
+} from '../platform/artifactData.js';
 import { liveCredential } from '../platform/live.js';
 import { toRestWebhook } from '../platform/webhooks.js';
 import type { ServerCtx } from '../runtime/context.js';
@@ -593,6 +629,358 @@ v1.get('/live', async (c) => {
   const ctx = gate(c, 'GET', '/v1/live');
   c.header('cache-control', 'no-store');
   return c.json(await liveCredential(ctx));
+});
+
+// ─── artifacts (docs/plan/artifacts.html §C1) ───────────────────────────────
+
+/*
+ * An artifact is not on a board, so none of these resolve one. What the
+ * credential reaches is decided per call from the artifact's own access map
+ * (artifacts/shared.ts): an account token, what its person owns or edits; an
+ * agent token, the artifacts that agent was added to.
+ */
+
+/**
+ * THE REQUEST SIZE. Cloud Functions refuses a body over 32 MB before we see
+ * it; a build zip may be 26 MB and a source zip rides in the same multipart
+ * request, so together they must stay under that. Anything larger is a 413
+ * here, from the Content-Length, before the body is read.
+ */
+const MAX_PUBLISH_BODY_BYTES = 31 * 1024 * 1024;
+
+v1.get('/artifacts', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/artifacts');
+  return c.json({ data: await listArtifacts(ctx), next_cursor: null });
+});
+
+v1.post('/artifacts', async (c) => {
+  const ctx = gate(c, 'POST', '/v1/artifacts');
+  const b = await body(c, RestCreateArtifactBodySchema);
+  const res = await invoke(
+    'artifactCreate',
+    {
+      name: b.name,
+      ...(b.description !== undefined ? { description: b.description } : {}),
+      ...(b.icon !== undefined ? { icon: b.icon } : {}),
+    },
+    ctx,
+    idem(c) ?? null,
+  );
+  c.header('location', `/v1/artifacts/${res.artifactId}`);
+  return c.json(await artifactView(ctx, res.artifactId), 201);
+});
+
+v1.get('/artifacts/:id', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/artifacts/{id}');
+  return c.json(await artifactDetail(ctx, c.req.param('id')));
+});
+
+v1.patch('/artifacts/:id', async (c) => {
+  const ctx = gate(c, 'PATCH', '/v1/artifacts/{id}');
+  const b = await body(c, RestPatchArtifactBodySchema);
+  const artifactId = c.req.param('id');
+  await invoke(
+    'artifactUpdate',
+    {
+      artifactId,
+      ...(b.name !== undefined ? { name: b.name } : {}),
+      ...(b.description !== undefined ? { description: b.description } : {}),
+      ...(b.icon !== undefined ? { icon: b.icon } : {}),
+      ...(b.read_only !== undefined ? { readOnly: b.read_only } : {}),
+      ...(b.archived !== undefined ? { archived: b.archived } : {}),
+    },
+    ctx,
+    null,
+  );
+  return c.json(await artifactView(ctx, artifactId));
+});
+
+v1.delete('/artifacts/:id', async (c) => {
+  const ctx = gate(c, 'DELETE', '/v1/artifacts/{id}');
+  await invoke('artifactDelete', { artifactId: c.req.param('id') }, ctx, null);
+  return c.body(null, 204);
+});
+
+/**
+ * Publish. The body IS the zip (Content-Type: application/zip — or anything
+ * that is not multipart), or multipart/form-data with a "build" part and an
+ * optional "source" part. ?message= says what changed.
+ */
+v1.post('/artifacts/:id/builds', async (c) => {
+  const ctx = gate(c, 'POST', '/v1/artifacts/{id}/builds');
+  const q = query(c, RestPublishQuerySchema);
+  const len = Number(c.req.header('content-length') ?? 0);
+  if (len > MAX_PUBLISH_BODY_BYTES)
+    throw errors.too_large(
+      `A publish request is at most ${Math.floor(MAX_PUBLISH_BODY_BYTES / 1024 / 1024)} MB (build zip ≤ ${ARTIFACT_ZIP_MAX_BYTES / 1024 / 1024} MB)`,
+    );
+  const type = (c.req.header('content-type') ?? '').toLowerCase();
+  let zip: Uint8Array;
+  let source: Uint8Array | undefined;
+  if (type.startsWith('multipart/form-data')) {
+    let form: FormData;
+    try {
+      form = await c.req.raw.formData();
+    } catch {
+      throw errors.invalid('Malformed multipart body');
+    }
+    const build = form.get(REST_BUILD_FIELD);
+    if (!build || typeof build === 'string')
+      throw errors.invalid(`Send the build zip as a multipart part named "${REST_BUILD_FIELD}"`, {
+        field: REST_BUILD_FIELD,
+      });
+    zip = new Uint8Array(await build.arrayBuffer());
+    const src = form.get(REST_SOURCE_FIELD);
+    if (src && typeof src !== 'string') source = new Uint8Array(await src.arrayBuffer());
+  } else {
+    zip = new Uint8Array(await c.req.arrayBuffer());
+  }
+  if (zip.length > ARTIFACT_ZIP_MAX_BYTES)
+    throw errors.too_large(`The build zip is over ${ARTIFACT_ZIP_MAX_BYTES / 1024 / 1024} MB`);
+  if (source && source.length > ARTIFACT_SOURCE_MAX_BYTES)
+    throw errors.too_large(`The source zip is over ${ARTIFACT_SOURCE_MAX_BYTES / 1024 / 1024} MB`);
+  const artifactId = c.req.param('id');
+  const b = await publishZip(ctx, artifactId, { zip, source, message: q.message }, idem(c));
+  c.header('location', `/v1/artifacts/${artifactId}`);
+  return c.json(b, 201);
+});
+
+v1.post('/artifacts/:id/builds/:build/current', async (c) => {
+  const ctx = gate(c, 'POST', '/v1/artifacts/{id}/builds/{build}/current');
+  const artifactId = c.req.param('id');
+  await invoke(
+    'artifactSetCurrent',
+    { artifactId, buildId: c.req.param('build') },
+    ctx,
+    idem(c) ?? null,
+  );
+  return c.json(await artifactView(ctx, artifactId));
+});
+
+v1.get('/artifacts/:id/source', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/artifacts/{id}/source');
+  const q = query(c, RestArtifactSourceQuerySchema);
+  const res = await invoke(
+    'artifactSourceUrl',
+    { artifactId: c.req.param('id'), ...(q.build ? { buildId: q.build } : {}) },
+    ctx,
+    null,
+  );
+  c.header('cache-control', 'no-store');
+  return c.json({
+    url: res.url,
+    build: res.buildId,
+    expires_at: new Date(res.expiresAt).toISOString(),
+  });
+});
+
+v1.put('/artifacts/:id/access', async (c) => {
+  const ctx = gate(c, 'PUT', '/v1/artifacts/{id}/access');
+  const b = await body(c, RestArtifactAccessBodySchema);
+  return c.json(
+    await invoke(
+      'artifactShare',
+      {
+        artifactId: c.req.param('id'),
+        ...(b.email !== undefined ? { email: b.email } : {}),
+        ...(b.agent !== undefined ? { agentId: b.agent } : {}),
+        ...(b.role !== undefined ? { role: b.role } : {}),
+        // §AA3: what an agent may do here — { build, data }.
+        ...(b.agent_access !== undefined ? { agentAccess: b.agent_access } : {}),
+      },
+      ctx,
+      null,
+    ),
+  );
+});
+
+// ─── artifact data (docs/plan/agents.html §AA4) ─────────────────────────────
+
+/*
+ * The artifact's own Firestore, RTDB and files, reached with a token — the
+ * same fence the page's driver goes through. The door does three things and
+ * no more: the scope gate (REST_ROUTES), turning the rest of the URL and the
+ * body into arguments, and the status code. WHO may, WHERE it lands and WHAT a
+ * value means are all platform/artifactData.ts.
+ *
+ * `{path}` is everything after /data/firestore/ (or /rtdb/, /files/), in the
+ * artifact's OWN view, percent-decoded as one string and then handed to the
+ * fence — so an encoded '/' or '..' is judged as what it decodes to.
+ */
+
+/** A document body is ≤ 1 MiB in Firestore; JSON with escapes is a little larger than what is stored. */
+const MAX_DATA_DOC_BYTES = 2 * 1024 * 1024;
+/** A batch is up to 400 documents; Firestore's own commit ceiling is ~10 MiB. */
+const MAX_DATA_BATCH_BYTES = 11 * 1024 * 1024;
+/** Cloud Functions refuses a body over 32 MB before we see it; a file is ≤ 25 MB. */
+const MAX_FILE_BODY_BYTES = ARTIFACT_UPLOAD_MAX_BYTES;
+
+const DATA_PATH = /\/artifacts\/[^/]+\/data\/(?:firestore|rtdb|files)(?:\/(.*))?$/;
+/** The `{path}` of a data route: '' for the root. */
+function dataPath(c: C): string {
+  const raw = DATA_PATH.exec(c.req.path)?.[1] ?? '';
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw errors.invalid('The path is not valid percent-encoding', { field: 'path' });
+  }
+}
+
+/** The `{id}` of a data route (the routes are registered from a list, so the param is untyped). */
+const aid = (c: C): string => c.req.param('id') ?? '';
+
+/** Any JSON value (RTDB bodies may be a number, a string, null …). An empty body is a 400. */
+async function jsonValue(c: C, limit: number): Promise<unknown> {
+  const text = await readText(c, limit);
+  if (!text.trim()) throw errors.invalid('The request has no JSON body');
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw errors.invalid('Body is not valid JSON');
+  }
+}
+
+/** ?where=field,op,value (repeatable) ?order_by=field[,desc] ?limit= ?start_after=docId */
+function listQuery(c: C) {
+  const q = query(c, RestArtifactDataListQuerySchema);
+  const where = (c.req.queries('where') ?? []).map((w) => {
+    const parsed = parseWhereParam(w);
+    if (!parsed)
+      throw errors.invalid(
+        `where="${w}" is not field,op,value (op: < <= == != >= > array-contains in not-in array-contains-any)`,
+        { field: 'where' },
+      );
+    return parsed;
+  });
+  const orderBy = q.order_by === undefined ? undefined : parseOrderByParam(q.order_by);
+  if (orderBy === null)
+    throw errors.invalid('order_by is "field" or "field,desc"', { field: 'order_by' });
+  const r = ArtifactDataQuerySchema.safeParse({
+    ...(where.length ? { where } : {}),
+    ...(orderBy ? { orderBy } : {}),
+    ...(q.limit !== undefined ? { limit: q.limit } : {}),
+    ...(q.start_after !== undefined ? { startAfter: q.start_after } : {}),
+  });
+  if (!r.success) throw invalidFromZod(r.error, 'The query string is invalid');
+  return r.data;
+}
+
+const FS = '/v1/artifacts/{id}/data/firestore/{path}';
+const RT = '/v1/artifacts/{id}/data/rtdb/{path}';
+const FILES = '/v1/artifacts/{id}/data/files/{path}';
+
+/** Hono matches '/x/*' for '/x' too, but say both: the root of rtdb is a real address. */
+const both = (base: string) => [base, `${base}/*`] as const;
+
+v1.post('/artifacts/:id/data/batch', async (c) => {
+  const ctx = gate(c, 'POST', '/v1/artifacts/{id}/data/batch');
+  const b = parseJson(await readText(c, MAX_DATA_BATCH_BYTES), RestArtifactDataBatchBodySchema);
+  return c.json(await dataBatch(ctx, aid(c), b.writes));
+});
+
+for (const route of both('/artifacts/:id/data/firestore')) {
+  /** A document (even number of segments) or a collection (odd) — the path says which. */
+  v1.get(route, async (c) => {
+    const ctx = gate(c, 'GET', FS);
+    const path = dataPath(c);
+    c.header('cache-control', 'no-store');
+    return c.json(
+      isDocumentPath(path)
+        ? await dataGet(ctx, aid(c), path)
+        : await dataList(ctx, aid(c), path, listQuery(c)),
+    );
+  });
+
+  v1.put(route, async (c) => {
+    const ctx = gate(c, 'PUT', FS);
+    const q = query(c, RestArtifactDataListQuerySchema);
+    const data = await jsonValue(c, MAX_DATA_DOC_BYTES);
+    const merge = q.merge === '1' || q.merge === 'true';
+    return c.json(await dataSet(ctx, aid(c), dataPath(c), data, merge));
+  });
+
+  v1.patch(route, async (c) => {
+    const ctx = gate(c, 'PATCH', FS);
+    const data = await jsonValue(c, MAX_DATA_DOC_BYTES);
+    return c.json(await dataUpdate(ctx, aid(c), dataPath(c), data));
+  });
+
+  v1.delete(route, async (c) => {
+    const ctx = gate(c, 'DELETE', FS);
+    return c.json(await dataDelete(ctx, aid(c), dataPath(c)));
+  });
+
+  v1.post(route, async (c) => {
+    const ctx = gate(c, 'POST', FS);
+    const data = await jsonValue(c, MAX_DATA_DOC_BYTES);
+    return c.json(await dataAdd(ctx, aid(c), dataPath(c), data, idem(c)), 201);
+  });
+}
+
+for (const route of both('/artifacts/:id/data/rtdb')) {
+  v1.get(route, async (c) => {
+    const ctx = gate(c, 'GET', RT);
+    c.header('cache-control', 'no-store');
+    return c.json(await rtdbGet(ctx, aid(c), dataPath(c)));
+  });
+
+  v1.put(route, async (c) => {
+    const ctx = gate(c, 'PUT', RT);
+    const value = await jsonValue(c, MAX_DATA_BATCH_BYTES);
+    return c.json(await rtdbSet(ctx, aid(c), dataPath(c), value));
+  });
+
+  v1.patch(route, async (c) => {
+    const ctx = gate(c, 'PATCH', RT);
+    const value = await jsonValue(c, MAX_DATA_BATCH_BYTES);
+    return c.json(await rtdbUpdate(ctx, aid(c), dataPath(c), value));
+  });
+
+  v1.delete(route, async (c) => {
+    const ctx = gate(c, 'DELETE', RT);
+    return c.json(await rtdbRemove(ctx, aid(c), dataPath(c)));
+  });
+
+  v1.post(route, async (c) => {
+    const ctx = gate(c, 'POST', RT);
+    const value = await jsonValue(c, MAX_DATA_BATCH_BYTES);
+    return c.json(await rtdbPush(ctx, aid(c), dataPath(c), value), 201);
+  });
+}
+
+/** GET …/data/files?prefix= lists; GET …/data/files/{path} is one file's link. */
+v1.get('/artifacts/:id/data/files', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/artifacts/{id}/data/files');
+  const q = query(c, RestArtifactFilesQuerySchema);
+  return c.json(await filesList(ctx, aid(c), q.prefix));
+});
+
+v1.get('/artifacts/:id/data/files/*', async (c) => {
+  const ctx = gate(c, 'GET', FILES);
+  c.header('cache-control', 'no-store');
+  return c.json(await fileUrl(ctx, aid(c), dataPath(c)));
+});
+
+/** The raw body IS the file; Content-Type is kept as the file's type. */
+v1.put('/artifacts/:id/data/files/*', async (c) => {
+  const ctx = gate(c, 'PUT', FILES);
+  const len = Number(c.req.header('content-length') ?? 0);
+  if (len > MAX_FILE_BODY_BYTES)
+    throw errors.too_large(`A file is at most ${MAX_FILE_BODY_BYTES / 1024 / 1024} MB`);
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  const file = await fileUpload(
+    ctx,
+    aid(c),
+    dataPath(c),
+    bytes,
+    c.req.header('content-type'),
+  );
+  return c.json(file, 201);
+});
+
+v1.delete('/artifacts/:id/data/files/*', async (c) => {
+  const ctx = gate(c, 'DELETE', FILES);
+  return c.json(await fileDelete(ctx, aid(c), dataPath(c)));
 });
 
 // ─── search ──────────────────────────────────────────────────────────────────

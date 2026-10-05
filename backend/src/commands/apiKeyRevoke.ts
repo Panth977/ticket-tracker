@@ -1,7 +1,9 @@
 /**
  * apiKeyRevoke — owner only; revokedAt = now, revokedReason 'owner'. The very
  * next call with the key gets 401 (the middleware reads revokedAt on every
- * request). Revoking twice is ok.
+ * request). Revoking twice is ok. A person only (KEPT under §AA2: an agent
+ * never mints or kills tokens, whatever its role — and the command is on
+ * TOKEN_DENIED_COMMANDS, so no token reaches it at all).
  */
 import { ctxOwner, errors, isAgentId, paths } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';

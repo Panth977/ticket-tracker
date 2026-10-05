@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <!-- Raster icons for crawlers that skip SVG (Claude's connector list, link previews). -->
+    <link rel="icon" href="%sveltekit.assets%/favicon-96.png" type="image/png" sizes="96x96" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="16x16 32x32 48x48" />
     <!-- viewport-fit=cover: the app draws under the notch / home indicator and every
          fixed bar pads itself with env(safe-area-inset-*) (agents.html § S). -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

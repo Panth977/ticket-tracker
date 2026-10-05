@@ -6,6 +6,10 @@
   §R1: an ACCOUNT token gets the Claude-ready snippets first, because that is
   what it is for — `claude mcp add … --scope user` puts TaskManager in every
   project, and the first thing to tell a model is to call list_boards.
+
+  §AA1/§AA5: an AGENT token (kind 'agent', made on the agent's page) names no
+  board — it reaches every board and artifact the agent is on — and gets the
+  one line most callers want first: TM_TOKEN=…, what the SDK and workspaces read.
 -->
 <script lang="ts">
   import { TriangleAlert } from 'lucide-svelte';
@@ -20,14 +24,23 @@
     /** 'Builder (agent)' or 'you' */
     actsAs: string;
     /** Board tokens only. */
-    boardName: string;
-    /** §R1: 'board' or 'account'. */
-    kind?: 'board' | 'account';
+    boardName?: string;
+    /** §R1: 'board' or 'account'; §AA1: 'agent'. */
+    kind?: 'board' | 'account' | 'agent';
     /** Account tokens: how many boards it reaches today. */
     boardCount?: number;
   }
-  let { token, apiBase, name, actsAs, boardName, kind = 'board', boardCount = 0 }: Props = $props();
+  let {
+    token,
+    apiBase,
+    name,
+    actsAs,
+    boardName = '',
+    kind = 'board',
+    boardCount = 0,
+  }: Props = $props();
   const account = $derived(kind === 'account');
+  const agent = $derived(kind === 'agent');
 
   const serverName = $derived(
     `taskmanager-${
@@ -63,12 +76,20 @@
       Acts as <strong>you</strong> on
       <strong>every board you are on</strong>{boardCount ? ` (${boardCount} today)` : ''}, as that
       stands at each call.
+    {:else if agent}
+      Acts as <strong>{actsAs}</strong> on
+      <strong>every board and artifact it is on</strong>, as that stands at each call. What it may
+      do there is its role on the board and its permission on the artifact.
     {:else}
       Acts as <strong>{actsAs}</strong> on <strong>{boardName}</strong>.
     {/if}
     Send it as <code>Authorization: Bearer …</code> to
     <code>{apiBase}/v1</code> (REST) or <code>{apiBase}/mcp</code> (MCP).
   </p>
+  {#if agent}
+    <!-- §AA5: the short "how to use it" line — the SDK's createClient({ token: process.env.TM_TOKEN }). -->
+    <CopyBlock label="How to use it — set it where the agent runs" text="TM_TOKEN={token}" wrap />
+  {/if}
   <Tabs
     label="How to use it"
     items={[
@@ -95,8 +116,15 @@
       <CopyBlock label="mcp.json (Claude Code / Desktop, Cursor …)" text={mcp} />
       <CopyBlock label="Or with the Claude Code CLI" text={claudeCli} wrap />
       <p class="text-xs text-muted">
-        Tools this token’s permissions don’t allow are hidden from the agent. <code>whoami</code> returns
-        the agent’s system prompt.
+        {#if agent}
+          Every tool that works on a board takes a <code>board</code> key unless the agent is on exactly
+          one board.
+        {:else}
+          Tools this token’s permissions don’t allow are hidden.
+        {/if}
+        <code>whoami</code> returns who the token acts as{agent
+          ? ', with the agent’s system prompt'
+          : ''}.
       </p>
     {/if}
   {:else if tab === 'curl'}

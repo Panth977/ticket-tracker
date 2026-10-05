@@ -4,6 +4,11 @@
     {#snippet trigger(props)}<button {...props}>⋯</button>{/snippet}
   </Menu>
   Arrow keys / Home / End move, Enter selects, Escape closes.
+
+  The first item takes FOCUS on open (so the arrow keys work at once), but it
+  is only PAINTED as the current row for keyboard focus (`focus-visible`).
+  Opened with the mouse, a highlighted first row read as "this one is
+  selected" — in the board switcher it made the first board look current.
 -->
 <script lang="ts">
   // hrefs / goto() targets are built by lib/layout/routes or passed in by callers; the SPA has no
@@ -119,7 +124,7 @@
           role="menuitem"
           tabindex="-1"
           onclick={() => select(item)}
-          class="flex h-8 items-center gap-2 px-3 text-sm outline-none hover:bg-surface-2 focus:bg-surface-2
+          class="flex h-8 items-center gap-2 px-3 text-sm outline-none hover:bg-surface-2 focus-visible:bg-surface-2
             {item.danger ? 'text-danger' : 'text-text'}"
         >
           {#if item.icon}<item.icon size={15} aria-hidden="true" class="text-muted" />{/if}
@@ -133,7 +138,7 @@
           tabindex="-1"
           aria-disabled={item.disabled || undefined}
           onclick={() => select(item)}
-          class="flex h-8 w-full items-center gap-2 px-3 text-left text-sm outline-none hover:bg-surface-2 focus:bg-surface-2
+          class="flex h-8 w-full items-center gap-2 px-3 text-left text-sm outline-none hover:bg-surface-2 focus-visible:bg-surface-2
             aria-disabled:opacity-50 {item.danger ? 'text-danger' : 'text-text'}"
         >
           {#if item.icon}<item.icon

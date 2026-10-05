@@ -39,7 +39,7 @@ const log = (...m) => quiet || console.log(...m);
  * Concatenation order. Every module must come after the ones whose CLASSES
  * and CONSTS it uses at load time (functions hoist, so they are free).
  */
-const MODULES = ['types.ts', 'errors.ts', 'http.ts', 'sse.ts', 'watch.ts', 'client.ts', 'work.ts', 'mcp.ts'];
+const MODULES = ['types.ts', 'errors.ts', 'http.ts', 'sse.ts', 'zip.ts', 'watch.ts', 'data.ts', 'client.ts', 'work.ts', 'mcp.ts'];
 
 /**
  * Drop the lines that tie a module to its siblings: `import … from './x.js'`

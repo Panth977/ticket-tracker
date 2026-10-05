@@ -62,6 +62,8 @@ describe('firestore.indexes.json', () => {
     'group tickets: assigneeUids CONTAINS, state ASC', // MCP my_work, ICS
     'tickets: state ASC, updatedAt DESC, __name__ DESC', // REST ticket list
     'boards: readerUids CONTAINS, key ASC', // REST board list
+    // §AA1: an agent token finds a board by key among the boards its agent is on
+    'boards: agentIds CONTAINS, key ASC',
     'invites: status ASC, expiresAt ASC', // housekeeping
     // phase 2 (agents.html §B, §D)
     'agents: ownerUid ASC, createdAt DESC', // Agents page: mine, newest first

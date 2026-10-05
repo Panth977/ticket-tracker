@@ -21,7 +21,7 @@
  */
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { errors, rateBuckets, SCOPE_PRESETS, SCOPES, type Scope } from '@tm/shared';
+import { errors, rateBuckets, SCOPES, type Scope } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import type { AppEnv } from '../http/env.js';
 import { door } from '../http/mounts.js';
@@ -326,8 +326,8 @@ oauth.post('/consent/decide', userAuth, async (c) => {
       redirect: redirectWith(checked.redirectUri, { error: 'access_denied', state: d.state, iss }),
     });
 
-  // No scope asked = read-only, the least surprising default (matches the consent screen).
-  const scopes: Scope[] = checked.scopes.length ? checked.scopes : [...SCOPE_PRESETS.readOnly];
+  // No scope asked = everything the consent screen offers (it matches; the person unticks there).
+  const scopes: Scope[] = checked.scopes.length ? checked.scopes : [...SCOPES];
   let boardIds: string[] | null = null;
   if (d.boardIds) {
     const mine = new Set(

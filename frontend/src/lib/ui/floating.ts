@@ -47,6 +47,19 @@ export function computePosition(
 
 export function float(node: HTMLElement, opts: FloatOptions) {
   let o = opts;
+  /*
+    PORTALLED, not just `fixed`. z-index only orders an element inside its own
+    stacking context, and the desktop sidebar is one (`position: sticky` makes
+    one, z-index or not) that paints BELOW the main column — so the bell's
+    popover, opened from the sidebar, slid under the board however high its
+    z-index. Moving the panel to <body> takes it out of every such context.
+    Inside a modal <dialog> (the phone drawer, a settings dialog) the target is
+    that dialog instead: it is in the top layer, and <body> is beneath it.
+    Both callers render ONE root element in an {#if}, so Svelte still removes
+    the right node; destroy() removes it too, in case it ever does not.
+  */
+  const host = node.closest('dialog[open]') ?? document.body;
+  if (node.parentNode !== host) host.appendChild(node);
   node.style.position = 'fixed';
   node.style.zIndex = '60';
   const update = () => {
@@ -72,6 +85,7 @@ export function float(node: HTMLElement, opts: FloatOptions) {
       update();
     },
     destroy() {
+      node.remove();
       cancelAnimationFrame(raf);
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);

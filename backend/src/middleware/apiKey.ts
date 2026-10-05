@@ -12,13 +12,28 @@
  *                  access map, so losing access to a board takes effect on
  *                  the very next request.
  *
+ * §AA1 (docs/plan/agents.html) — THE THIRD KIND:
+ *   kind 'agent'   ONE TOKEN PER AGENT. It acts as the agent and has no board
+ *                  of its own → boardIds: null, exactly like an account token
+ *                  but for the agent: readableBoards() finds its boards by
+ *                  `agentIds array-contains` at each call, and can() asks each
+ *                  board's access map for the agent's ROLE. Its scopes are
+ *                  always AGENT_TOKEN_SCOPES — the ctx is given that constant,
+ *                  not whatever the row says, so a row cannot widen or narrow
+ *                  itself. A token converted from a board token (§AA6) also
+ *                  carries ctx.defaultBoardId: the board meant when a call
+ *                  names none (resolve.ts requestBoard) — it narrows nothing.
+ *   A kind 'board' key ACTING AS AN AGENT (every agent token before §AA) is
+ *   resolved exactly as before, until the migration converts it.
+ *
  *   'tm_live_…' → users/{ownerUid}/apiKeys where hash == sha256(key)
  *     → ctx {
  *         actor:    actsAs.kind === 'agent' ? agentId : ownerUid,   // who the change is AUTHORED by
  *         ownerUid, keyId, keyName,                                 // who is answerable; 'via token <name>'
  *         via:      'api' (REST) | 'mcp' (MCP door),
- *         scopes:   the key's scopes,
+ *         scopes:   the key's scopes (kind 'agent': AGENT_TOKEN_SCOPES),
  *         boardIds: [key.boardId] | null,                           // one board, or the live set
+ *         defaultBoardId: kind 'agent' only, when converted (§AA6)
  *       }
  *
  * A TOKEN IS ONLY AS GOOD AS WHAT STANDS BEHIND IT, checked on every request
@@ -27,6 +42,9 @@
  *   - BOARD tokens: the board still exists and the OWNER is still on it
  *   - agent tokens: the agent still exists, is still the owner's, is not
  *     archived and is still on the board
+ *   - AGENT tokens (§AA1): the agent still exists, is still the owner's and
+ *     is not archived. NO BOARD CHECK: a board the agent left is a 404 on
+ *     that board, not a dead token.
  *   - ACCOUNT tokens have no board to check here — there is nothing to go
  *     stale. Every board is authorised per request by can() against that
  *     board's live access map, which is 403 (a permission), not 401.
@@ -37,6 +55,7 @@
  * request, in the commands — this file only establishes who and where.
  */
 import {
+  AGENT_TOKEN_SCOPES,
   apiKeyKind,
   COLLECTIONS,
   errors,
@@ -66,10 +85,12 @@ export interface ApiKeyInfo {
   ownerUid: string;
   name: string;
   prefix: string;
-  /** §R1: 'board' or 'account'. */
+  /** §R1: 'board' or 'account'; §AA1: 'agent'. */
   kind: ApiKeyKind;
-  /** The token's board; null for an account token. */
+  /** The token's board; null for an account token and for an agent token. */
   boardId: string | null;
+  /** §AA1: an agent token converted from a board token — its old board. */
+  defaultBoardId: string | null;
   actsAs: ApiKey['actsAs'];
   expiresAt: number | null;
 }
@@ -172,6 +193,18 @@ export async function resolveApiKey(
       );
     // Deliberately NO board lookup: there is no board to go stale, and
     // reading the whole board set here would be the cache §R1 forbids.
+  } else if (kind === 'agent') {
+    // §AA1: what stands behind an agent token is the AGENT — it exists, it is
+    // the owner's, it is not archived (and the owner is still allowed, above).
+    // No board: the token belongs to the agent, not to a place.
+    if (key.actsAs.kind !== 'agent' || !isAgentId(key.actsAs.id))
+      throw errors.unauthenticated('This API key is an agent token but names no agent');
+    const agentPath = paths.agent(key.actsAs.id);
+    const agentSnap = prefetched?.get(agentPath) ?? (await db().doc(agentPath).get());
+    const agent = agentSnap.exists ? (agentSnap.data() as Agent) : undefined;
+    if (!agent || agent.ownerUid !== ownerUid)
+      throw errors.unauthenticated("This API key's agent no longer exists");
+    if (agent.archivedAt !== null) throw errors.unauthenticated("This API key's agent is archived");
   } else {
     if (!key.boardId)
       throw errors.unauthenticated(
@@ -221,7 +254,7 @@ async function finish(
   keyPlaces.set(token, {
     ownerUid,
     keyId,
-    boardId: kind === 'account' ? null : (key.boardId ?? null),
+    boardId: kind === 'board' ? (key.boardId ?? null) : null,
     agentId: actsAs.kind === 'agent' ? actsAs.id : null,
   });
   const resolved = {
@@ -232,7 +265,8 @@ async function finish(
       name: key.name,
       prefix: key.prefix ?? '',
       kind,
-      boardId: kind === 'account' ? null : key.boardId!,
+      boardId: kind === 'board' ? key.boardId! : null,
+      defaultBoardId: kind === 'agent' ? (key.defaultBoardId ?? null) : null,
       actsAs,
       expiresAt: key.expiresAt ?? null,
     },
@@ -280,10 +314,12 @@ export async function apiKeyCtx(
     keyId: info.keyId,
     keyName: info.name,
     via,
-    scopes: [...key.scopes],
+    // §AA1: an agent token's scopes are a CONSTANT, not a stored choice.
+    scopes: info.kind === 'agent' ? [...AGENT_TOKEN_SCOPES] : [...key.scopes],
     // null = "every board this actor is on", resolved fresh on every read
     // (platform/resolve.ts readableBoards) — never a stored list.
-    boardIds: info.kind === 'account' ? null : [info.boardId!],
+    boardIds: info.kind === 'board' ? [info.boardId!] : null,
+    ...(info.defaultBoardId ? { defaultBoardId: info.defaultBoardId } : {}),
     now,
     ...(requestId ? { requestId } : {}),
   });

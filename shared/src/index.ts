@@ -8,6 +8,8 @@
  *   errors     AppError codes → HTTP, RFC 9457 problem+json
  *   commands/  COMMANDS registry: Req / Res zod per /api command, CommandCtx
  *   api/       public (toPublic) shapes, /v1 REST, MCP tools, intake, webhooks
+ *   artifacts/ artifacts (docs/plan/artifacts.html): schema, commands, the driver
+ *              protocol and the path fence
  *   ports/     adapter interfaces (email, push, WhatsApp, search, queue …)
  *
  * Fixtures live at '@tm/shared/schema/fixtures' (not re-exported here).
@@ -23,3 +25,4 @@ export * from './commands/index.js';
 export * from './api/index.js';
 export * from './ports/index.js';
 export * from './logic/index.js';
+export * from './artifacts/index.js';

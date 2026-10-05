@@ -6,20 +6,28 @@ import { get } from 'svelte/store';
 import {
   Bell,
   FolderPlus,
+  Layers,
   Inbox,
+  AppWindow,
   LayoutGrid,
   Settings,
   SquareCheck,
   SquareKanban,
   User,
 } from 'lucide-svelte';
-import type { Board } from '@tm/shared';
+import type { Artifact, Board, Workspace } from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
 import type { QueryState } from '$lib/stores';
 import type { Readable } from 'svelte/store';
 import { ACCOUNT_SECTIONS, routes } from './routes';
 
-export function registerNavProviders(boards: () => Readable<QueryState<Board>> | null): () => void {
+export function registerNavProviders(
+  boards: () => Readable<QueryState<Board>> | null,
+  /** Artifacts I have a role on (artifacts.html §F: ⌘K finds them by name). */
+  artifacts: () => Readable<QueryState<Artifact>> | null = () => null,
+  /** My workspaces (agents.html §AB): ⌘K opens one by name. */
+  workspaces: () => Readable<QueryState<Workspace>> | null = () => null,
+): () => void {
   const screens: PaletteItem[] = [
     {
       id: 'nav-inbox',
@@ -48,6 +56,13 @@ export function registerNavProviders(boards: () => Readable<QueryState<Board>> |
       icon: FolderPlus,
       href: routes.newBoard(),
       keywords: 'create',
+    },
+    {
+      id: 'nav-artifacts',
+      label: 'All artifacts',
+      icon: AppWindow,
+      href: routes.artifacts(),
+      keywords: 'apps dashboards archived',
     },
     {
       id: 'nav-notif',
@@ -107,6 +122,45 @@ export function registerNavProviders(boards: () => Readable<QueryState<Board>> |
             : []),
         ]);
         return filterItems(q, items);
+      },
+    }),
+    palette.register({
+      id: 'artifacts',
+      group: 'Artifacts',
+      order: 12,
+      search: (q) => {
+        const s = artifacts();
+        const list = s ? get(s).data.filter((a) => a.archivedAt == null) : [];
+        return filterItems(
+          q,
+          list.map((a) => ({
+            id: `x-${a.id}`,
+            label: a.name,
+            hint: a.description ?? undefined,
+            icon: AppWindow,
+            href: routes.artifact(a.id),
+            keywords: 'artifact app',
+          })),
+        );
+      },
+    }),
+    palette.register({
+      id: 'workspaces',
+      group: 'Workspaces',
+      order: 11,
+      search: (q) => {
+        const s = workspaces();
+        return filterItems(
+          q,
+          (s ? get(s).data : []).map((w) => ({
+            id: `w-${w.id}`,
+            label: w.name,
+            hint: `${w.boardIds.length} boards · ${w.artifactIds.length} artifacts`,
+            icon: Layers,
+            href: routes.workspace(w.id),
+            keywords: 'workspace group',
+          })),
+        );
       },
     }),
   ];

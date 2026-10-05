@@ -16,6 +16,8 @@ export interface Call {
   body: unknown;
   /** The raw body string, for when the test cares about the encoding. */
   raw: string | undefined;
+  /** The body exactly as fetch got it — a Blob or FormData for an upload. */
+  sent: unknown;
 }
 
 export type Reply =
@@ -49,6 +51,7 @@ export function mockFetch(...initial: Reply[]): MockFetch {
       headers: Object.fromEntries(Object.entries((init.headers as Record<string, string>) ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)])),
       body: raw ? safeJson(raw) : undefined,
       raw,
+      sent: init.body,
     };
     calls.push(call);
 

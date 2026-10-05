@@ -6,7 +6,7 @@
  *
  * Endpoints are a local adapter until the contract exists.
  */
-import { SCOPE_PRESETS, type Scope } from '@tm/shared';
+import { SCOPES, type Scope } from '@tm/shared';
 import { parseScopeParam } from './scopes';
 import { postJson } from './rawApi';
 
@@ -52,8 +52,8 @@ export function parseAuthorize(params: URLSearchParams): ParsedAuthorize {
     req: {
       clientId,
       redirectUri,
-      // No scope asked = read-only, the least surprising default.
-      scopes: scopes.length ? scopes : [...SCOPE_PRESETS.readOnly],
+      // No scope asked = offer everything; the person unticks what they don't want.
+      scopes: scopes.length ? scopes : [...SCOPES],
       state: params.get('state'),
       codeChallenge: challenge,
       codeChallengeMethod: method ?? 'S256',

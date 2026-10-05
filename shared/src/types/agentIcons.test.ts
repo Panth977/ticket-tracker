@@ -25,13 +25,24 @@ describe('agent icons (agents.html §B)', () => {
     }
     expect(AGENT_BRAND_ICONS.map((i) => i.id)).toEqual([
       'claude',
-      'gemini',
+      'anthropic',
       'chatgpt',
+      'gemini',
       'copilot',
+      'ms-copilot',
+      'cursor',
       'mistral',
       'llama',
-      'cursor',
+      'grok',
+      'deepseek',
+      'perplexity',
+      'qwen',
+      'huggingface',
+      'ollama',
     ]);
+    // additive only: the ids stored on real profiles since the first release
+    for (const id of ['claude', 'gemini', 'chatgpt', 'copilot', 'mistral', 'llama', 'cursor'])
+      expect(isAgentIconId(id), id).toBe(true);
     expect(AGENT_GENERIC_ICONS.length + AGENT_BRAND_ICONS.length).toBe(AGENT_ICONS.length);
     expect(AGENT_GENERIC_ICONS.map((i) => i.id)).toContain('bot');
   });
