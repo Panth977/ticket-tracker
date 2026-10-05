@@ -113,3 +113,18 @@ export async function messagesOf(boardId: string, ticketId: string): Promise<Row
     ...(ticket?.recentMessages ?? []),
   ];
 }
+
+/**
+ * memory.html §J: a board takes no files of its own — give it an attachment
+ * memory (granted write, set as the default) so uploads to its tickets work.
+ */
+export async function giveAttachMemory(
+  who: Parameters<typeof call>[0],
+  boardId: string,
+  template = 'tickets/<ticketId>/<time>_<filename>',
+): Promise<string> {
+  const { memoryId } = await call(who, 'memoryCreate', { name: 'Attachments' });
+  await call(who, 'memoryGrantSet', { memoryId, boardId, access: 'write' });
+  await call(who, 'boardAttachMemorySet', { boardId, attachMemory: { memoryId, template } });
+  return memoryId;
+}

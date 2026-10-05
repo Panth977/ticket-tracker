@@ -3,13 +3,13 @@
  * OAuth) and the ICS feed.
  */
 import { describe, expect, it } from 'vitest';
-import { paths, type Integration, type Message, type Ticket } from '@tm/shared';
+import { paths, type Integration, type MemoryNode, type Message, type Ticket } from '@tm/shared';
 import { DEV_GITHUB_SECRET, findKeys } from '../../src/doors/hooks/github.js';
 import { hmacHex } from '../../src/platform/crypto.js';
 import { verifyState } from '../../src/platform/integrations.js';
 import { db } from '../../src/runtime/firebase.js';
 import { call, devOutbox, request, setupEmulators } from '../harness/index.js';
-import { people, seedBoard, STAGES } from '../tickets/helpers.js';
+import { people, seedAttachMemory, seedBoard, STAGES } from '../tickets/helpers.js';
 import { msgsOf } from '../tickets/store.js';
 
 setupEmulators();
@@ -57,6 +57,8 @@ describe('intake', () => {
     });
     expect(origin.status).toBe(403);
 
+    // memory.html §J: the widget's files go into the board's attachment memory.
+    const memoryId = await seedAttachMemory(b.id, admin);
     const ok = await request('/v1/intake', {
       method: 'POST',
       headers: intakeHeaders(slug, made.secret!, { origin: 'https://shop.example.com' }),
@@ -82,6 +84,14 @@ describe('intake', () => {
     expect(t.description!.text).toContain('Reported by Cara (customer@example.org)');
     expect(t.description!.text).toContain('https://shop.example.com/cart');
     expect(t.counts.files).toBe(1);
+    const row = (t.files ?? [])[0]!;
+    expect(row).toMatchObject({ source: 'memory', memory: { memoryId } });
+    const node = (
+      await db().doc(paths.memoryNode(memoryId, row.memory!.nodeId)).get()
+    ).data() as MemoryNode;
+    // '<ticketId>' became the new key.
+    expect(node.path).toMatch(new RegExp(`^tickets/${res.key}/\\d{8}-\\d{6}_shot\\.txt$`));
+    expect(node.createdBy).toBe('intake-bot');
     const receipts = await devOutbox<{ subject: string }>('mail', {
       field: 'to',
       equals: 'customer@example.org',
@@ -103,6 +113,28 @@ describe('intake', () => {
     expect(
       (await request('/v1/intake/schema', { headers: intakeHeaders(slug, rot.secret!) })).status,
     ).toBe(200);
+  });
+
+  it('a board with no attachment memory takes the report without its files, and says so', async () => {
+    const { admin } = await people('admin');
+    const b = await seedBoard({ admin });
+    const made = await call(admin, 'intakeUpsert', { boardId: b.id, enabled: true });
+    const ok = await request('/v1/intake', {
+      method: 'POST',
+      headers: intakeHeaders(made.intake!.slug, made.secret!),
+      body: JSON.stringify({
+        title: 'No memory here',
+        attachments: [{ name: 'shot.txt', contentBase64: Buffer.from('x').toString('base64') }],
+      }),
+    });
+    expect(ok.status).toBe(201);
+    const t = (
+      await db()
+        .doc(paths.ticket(b.id, (ok.body as { id: string }).id))
+        .get()
+    ).data() as Ticket;
+    expect(t.counts.files).toBe(0);
+    expect(t.description!.text).toContain('1 attachment was not saved');
   });
 
   it('rate limits per intake — when limits are switched on (§X: off by default)', async () => {

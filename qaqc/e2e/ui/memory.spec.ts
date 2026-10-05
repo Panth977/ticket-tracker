@@ -314,3 +314,23 @@ test('M5: right-click, rename with /, the upload path, and the drop target', asy
   );
   await expect(page.locator('[data-drop-target]')).toHaveCount(0);
 });
+
+test('M6: the open file follows a move of its folder (from anywhere)', async ({ page }) => {
+  const ada = await newPerson('Ada');
+  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Health' });
+  await call(ada, 'memoryFileWrite', { memoryId, path: 'a/b/c.md', text: '# Follow me' });
+  await signIn(page, ada.email, `/m/${memoryId}?path=a%2Fb%2Fc.md`);
+  await page.getByRole('button', { name: 'Tree' }).click();
+  await expect(page.getByRole('heading', { name: 'Follow me' })).toBeVisible();
+
+  // moved somewhere else (another tab, an agent): a/b → b
+  await call(ada, 'memoryMove', { memoryId, path: 'a/b', toPath: 'b' });
+  await page.waitForURL(/path=b%2Fc\.md$/);
+  await expect(page.getByRole('heading', { name: 'Follow me' })).toBeVisible();
+  await expect(page.getByText('Not in this memory')).toHaveCount(0);
+
+  // and a rename of the file itself, too
+  await call(ada, 'memoryMove', { memoryId, path: 'b/c.md', toPath: 'b/d.md' });
+  await page.waitForURL(/path=b%2Fd\.md$/);
+  await expect(page.getByText('Not in this memory')).toHaveCount(0);
+});

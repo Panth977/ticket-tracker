@@ -9,6 +9,10 @@
  * Being on a board the memory is GRANTED to gives nothing here: those
  * readers go through memoryTree / the file door (a rule cannot ask "is this
  * person on any granted board").
+ *
+ * EXCEPT a ticket attachment (§J): an upload that names a board in its
+ * metadata ({ boardId }) may be created by that board's admin / editor /
+ * commenter when the memory is granted `write` to it (and is not archived).
  */
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import {
@@ -20,11 +24,27 @@ import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase
 import { getBytes, ref as sref, uploadBytes } from 'firebase/storage';
 import { memoryStoragePath } from '@tm/shared';
 import { fixtures } from '@tm/shared/schema/fixtures';
-import { ADMIN, BOARD, COMMENTER, EDITOR, STRANGER, VIEWER, as, fs, makeEnv, st } from './_env.js';
+import {
+  ADMIN,
+  BOARD,
+  COMMENTER,
+  EDITOR,
+  OTHER_BOARD,
+  ROLES,
+  STRANGER,
+  VIEWER,
+  as,
+  boardDoc,
+  fs,
+  makeEnv,
+  st,
+} from './_env.js';
 
 const OWNER = ADMIN;
 const MEM = 'mem_alpha01';
 const ARCH = 'mem_archv01';
+/** Granted READ to BOARD: no ticket attachments go there. */
+const READ_ONLY = 'mem_readg01';
 
 type Role = 'owner' | 'editor' | 'viewer';
 const CAST: Record<string, Role> = { [OWNER]: 'owner', [EDITOR]: 'editor', [VIEWER]: 'viewer' };
@@ -57,6 +77,16 @@ beforeAll(async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(fs(ctx), `memories/${MEM}`), memoryDoc());
     await setDoc(doc(fs(ctx), `memories/${ARCH}`), memoryDoc({ archivedAt: 1 }));
+    await setDoc(
+      doc(fs(ctx), `memories/${READ_ONLY}`),
+      memoryDoc({ boards: { [BOARD]: 'read' }, boardIds: [BOARD] }),
+    );
+    await setDoc(doc(fs(ctx), `boards/${BOARD}`), boardDoc(ROLES));
+    // STRANGER is the admin of a board the memory is NOT granted to.
+    await setDoc(
+      doc(fs(ctx), `boards/${OTHER_BOARD}`),
+      boardDoc({ [STRANGER]: 'admin' }, 'Ops', 'OPS'),
+    );
     await setDoc(doc(fs(ctx), `memories/${MEM}/nodes/node_one01`), fixtures.memoryNodes);
     await uploadBytes(sref(st(ctx), EXISTING), bytes, { contentType: 'text/markdown' });
   });
@@ -122,5 +152,31 @@ describe('Storage: memories/{m}/{fileId}/{name}', () => {
   it('nobody reads the bytes through the rules (the file door does)', async () => {
     for (const uid of [OWNER, EDITOR, VIEWER])
       await assertFails(getBytes(sref(storageOf(uid), EXISTING)));
+  });
+});
+
+describe('Storage: a ticket attachment into a memory (§J)', () => {
+  const upFor = (uid: string | null, m: string, fileId: string, boardId: string | null) =>
+    uploadBytes(sref(storageOf(uid), memoryStoragePath(m, fileId, 'shot.png')), bytes, {
+      contentType: 'image/png',
+      ...(boardId ? { customMetadata: { boardId } } : {}),
+    });
+  it("the board's admin, editor and commenter upload into a memory granted write", async () => {
+    for (const uid of [ADMIN, EDITOR, COMMENTER])
+      await assertSucceeds(upFor(uid, MEM, `file_bd_${uid}`, BOARD));
+  });
+  it('not without naming the board (a commenter has no role on the memory)', async () => {
+    await assertFails(upFor(COMMENTER, MEM, 'file_nobd01', null));
+  });
+  it('a board viewer, a stranger and the signed-out cannot', async () => {
+    for (const uid of [VIEWER, STRANGER, null])
+      await assertFails(upFor(uid, MEM, `file_bv_${uid ?? 'anon'}`, BOARD));
+  });
+  it("not into a memory granted only read, or one that isn't granted to that board", async () => {
+    await assertFails(upFor(COMMENTER, READ_ONLY, 'file_ro0001', BOARD));
+    await assertFails(upFor(STRANGER, MEM, 'file_other01', OTHER_BOARD));
+  });
+  it('not into an archived memory', async () => {
+    await assertFails(upFor(COMMENTER, ARCH, 'file_arch0002', BOARD));
   });
 });

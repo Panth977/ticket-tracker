@@ -1,6 +1,6 @@
 {
   "name": "taskmanager",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "TaskManager inside Claude Code: your boards, tickets and threads as MCP tools, with a skill that knows the system and slash commands for the daily loop.",
   "author": {
     "name": "TaskManager",

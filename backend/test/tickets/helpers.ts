@@ -11,7 +11,16 @@ import type {
   WebhookEvent,
 } from '@tm/shared';
 import type { CommandReq } from '@tm/shared';
-import { paths, type Board, type BoardMember, type BoardRole, type StageGrant } from '@tm/shared';
+import {
+  DEFAULT_ATTACH_TEMPLATE,
+  memoryStoragePath,
+  paths,
+  type Board,
+  type BoardMember,
+  type BoardRole,
+  type Memory,
+  type StageGrant,
+} from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { createUser, setPorts, uniq, type TestUser } from '../harness/index.js';
 
@@ -271,4 +280,64 @@ export function doc(
       },
     ],
   };
+}
+
+// ─── memory.html §J: ticket attachments live in a memory ────────────────────
+
+export interface AttachMemoryOptions {
+  /** The grant to the board (default 'write'). */
+  access?: 'read' | 'write';
+  /** Make it the board's attachMemory (default: when the grant is 'write'). */
+  setDefault?: boolean;
+  template?: string;
+}
+
+/**
+ * A memory owned by `owner`, granted to the board, and (by default) set as the
+ * board's attachment memory — seeded straight into Firestore, like seedBoard.
+ */
+export async function seedAttachMemory(
+  boardId: string,
+  owner: TestUser,
+  o: AttachMemoryOptions = {},
+): Promise<string> {
+  const memoryId = uniq('mem_');
+  const access = o.access ?? 'write';
+  const memory: Memory = {
+    name: 'Attachments',
+    description: '',
+    icon: null,
+    ownerUid: owner.uid,
+    access: { [owner.uid]: 'owner' },
+    memberUids: [owner.uid],
+    boards: { [boardId]: access },
+    artifacts: {},
+    boardIds: [boardId],
+    stats: { files: 0, folders: 0, bytes: 0 },
+    archivedAt: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  await db().doc(paths.memory(memoryId)).set(memory);
+  if (o.setDefault ?? access === 'write')
+    await db()
+      .doc(paths.board(boardId))
+      .update({
+        attachMemory: { memoryId, template: o.template ?? DEFAULT_ATTACH_TEMPLATE },
+      });
+  return memoryId;
+}
+
+/** Bytes the app uploaded into a memory (the in-memory Storage port, or the real one). */
+export async function putMemoryObject(
+  files: Pick<StorageFiles, 'write'>,
+  memoryId: string,
+  name = 'shot.png',
+  bytes: Uint8Array = new Uint8Array([1, 2, 3, 4]),
+  contentType = 'image/png',
+): Promise<{ storagePath: string; fileId: string }> {
+  const fileId = uniq('f_');
+  const storagePath = memoryStoragePath(memoryId, fileId, name);
+  await files.write(storagePath, bytes, contentType);
+  return { storagePath, fileId };
 }

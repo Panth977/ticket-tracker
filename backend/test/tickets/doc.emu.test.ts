@@ -28,7 +28,15 @@ import {
 import { db } from '../../src/runtime/firebase.js';
 import { readThread } from '../../src/tickets/read.js';
 import { call, setupEmulators, uniq } from '../harness/index.js';
-import { doc, getDocData, people, seedBoard, spyPorts } from './helpers.js';
+import {
+  doc,
+  getDocData,
+  people,
+  putMemoryObject,
+  seedAttachMemory,
+  seedBoard,
+  spyPorts,
+} from './helpers.js';
 import { actsOf, filesOf, listsOf, msgsOf, pagesOf } from './store.js';
 
 setupEmulators();
@@ -140,13 +148,19 @@ describe('the ticket IS the thread (§W)', () => {
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'F' });
-    const path = `boards/${b.id}/tickets/${ticketId}/up1/log.txt`;
-    s.files.put(path, 42, 'text/plain');
+    const memoryId = await seedAttachMemory(b.id, asha);
+    const up = await putMemoryObject(
+      s.files,
+      memoryId,
+      'log.txt',
+      new Uint8Array(42),
+      'text/plain',
+    );
     await call(asha, 'messagePost', {
       boardId: b.id,
       ticketId,
       body: doc('see log'),
-      attachments: [path],
+      memoryUploads: [{ memoryId, path: 'logs/log.txt', storagePath: up.storagePath }],
       clientId: uniq('c'),
     });
     const t = await T(b.id, ticketId);

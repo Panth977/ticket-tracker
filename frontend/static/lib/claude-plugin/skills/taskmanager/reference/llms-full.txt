@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           1.4.0
+version:           1.5.0
 api:               v1
 updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    becb30cf364c96241175c885a227fae7f24e148caefcd2053002b4082e8e322f
+content-sha256:    8645d16e2764e61833573ddaf8ab07ac1732b3363704cd69dbc3de9c05e68bb6
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -75,6 +75,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [8.9 A Vite project](#8-9-a-vite-project)
   - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
 - [9. Version and changelog](#9-version-and-changelog)
+  - [1.5.0 — 2026-10-05](#1-5-0-2026-10-05)
   - [1.4.0 — 2026-10-05](#1-4-0-2026-10-05)
   - [1.3.0 — 2026-09-30](#1-3-0-2026-09-30)
   - [1.2.0 — 2026-09-30](#1-2-0-2026-09-30)
@@ -1646,6 +1647,8 @@ name            string  required  (≤ 255 chars)
 mime            string            (≤ 255 chars)
 text            string
 content_base64  string
+memory_id       string            (≤ 64 chars)
+path            string            (≤ 1024 chars)
 ```
 
 Body (multipart/form-data, required):
@@ -3011,7 +3014,7 @@ update_ticket        tickets:update | tickets:move | tickets:assign  Change a ti
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
 post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
-upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 read_file            files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         tickets:update                      Link two tickets: blocks, relates or duplicates.
 get_events           events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
@@ -3192,7 +3195,7 @@ run           { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model
 
 #### upload_file
 
-Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 
 Writes · scopes: `files:write`
 
@@ -3202,6 +3205,8 @@ name            string  required  File name with extension, e.g. 'plan.md', 'rep
 mime            string            Default: from the extension
 text            string            Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.
 content_base64  string            Binary content, base64. ≤ 25 MB decoded.
+memory_id       string            The memory the file goes into (granted write to this board). Default: the board's attachment memory.
+path            string            Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.
 ```
 
 #### read_file
@@ -3480,7 +3485,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **1.4.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **1.5.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -3991,8 +3996,16 @@ board answers `404` from then on, and the others carry on.
   or `content_base64`.
 - The **extension decides the mime** if you do not give one. `report.html` becomes `text/html`,
   `plan.md` becomes `text/markdown` — and both then render natively in the app.
-- A file belongs to a ticket. Upload first, then attach the returned `file_id` to a message; up to
+- A file is put on a ticket. Upload first, then attach the returned `file_id` to a message; up to
   20 attachments per message.
+- **The bytes live in a memory** (since 1.5.0). A board takes no files of its own: an upload goes
+  into the board's **attachment memory** (set by a board admin in board settings › Memory — a
+  memory granted `write` to the board), at the board's path template, by default
+  `tickets/<ticketId>/<time>_<filename>`. The ticket holds a reference to that memory file
+  (`memory { memory_id, node_id }` on the file). Name another memory granted `write` to the board
+  with `memory_id`, and the place in it with `path` (`<ticketId>` is filled in). A path that is
+  taken is never overwritten: the new file becomes `name (2).ext`. A board with no attachment
+  memory answers `400` — ask a board admin to set one.
 - Reading back: `GET /v1/files/{fileId}` gives metadata and a signed URL valid for **15 minutes**
   (fetch it, do not store it). `?content=1` returns the text directly for Markdown, HTML, text, CSV,
   JSON and code.
@@ -5710,7 +5723,7 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   1.4.0
+version   1.5.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
 updated   2026-10-05    the date of the newest changelog entry below
 ```
@@ -5723,6 +5736,20 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 1.5.0 — 2026-10-05
+
+- **Ticket files live in a memory** (memory.html §J). A board takes no files of its own any more.
+  `POST /v1/tickets/{KEY}/files` and MCP `upload_file` store the bytes in the board's **attachment
+  memory** (board settings › Memory: a memory granted `write` to the board, with a path template —
+  by default `tickets/<ticketId>/<time>_<filename>`) and answer the same file shape as before, now
+  with `memory { memory_id, node_id }`. The file id still goes in `post_message` / `attachments`
+  unchanged. A board with no attachment memory answers `400`.
+- **`memory_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
+  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { memoryId, path })`. `<ticketId>` in
+  the path is the ticket's key. An upload never replaces a memory file: a taken path gets ` (2)`.
+- The file's `name` is the memory file's name, which follows the board's template (e.g.
+  `20261005-211946_plan.md` under the default one).
 
 ### 1.4.0 — 2026-10-05
 

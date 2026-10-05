@@ -588,7 +588,8 @@
         "  priorityId?, tagIds?, assigneeUids?,",
         "  startAt?, dueAt?, dueAllDay?, estimate?,",
         "  fields?: Record<string, FieldValue>",
-        "  attachments?: string[]    // Storage paths already uploaded",
+        "  attachments?: string[]    // RETIRED (memory.html §J): a non-empty list is a 400",
+        "  memoryUploads?: { memoryId, path, storagePath }[]  // §J: new files in a memory granted write; '<ticketId>' = the new key",
         "  clientId?: string         // idempotency — a retried create is one ticket",
         "}",
         "interface Res { ticketId: TicketId, key: TicketKey }"
@@ -750,7 +751,8 @@
         "  body: RichText['doc']",
         "  markdown?: string           // phase 2: the Markdown source (REST / MCP doors); stored as Message.markdown",
         "  replyTo?: string",
-        "  attachments?: string[]      // Storage paths under this ticket (the app's direct uploads)",
+        "  attachments?: string[]      // RETIRED (memory.html §J): a non-empty list is a 400",
+        "  memoryUploads?: { memoryId, path, storagePath }[]  // §J: new files in a memory granted write to the board",
         "  fileIds?: string[]          // phase 2: files ALREADY on this ticket (uploaded by a token)",
         "  clientId: string            // idempotency; the optimistic bubble's id",
         "}",
@@ -759,7 +761,7 @@
       "implementation": [
         "can(comment); state == 'active' (closed tickets have closed threads)",
         "body = parseRichText(body)",
-        "attachments: object exists, under this ticket's prefix, size/mime ok",
+        "memoryUploads: object exists in that memory's folder, ≤ 1 GB; memory granted write, not archived; a NEW node per upload (a taken path gets ' (2)'), in the same transaction (memory.html §J)",
         "fileIds: files/{id} on THIS ticket, not deleted; source 'upload' → 'message', messageId set",
         "body or files, at least one — a message can be files only",
         "authorUid = ctx.actor (a person or an agent); viaToken = ctx.keyName",
@@ -1642,6 +1644,23 @@
       ],
       "touches": [
         "app/schema/memories"
+      ]
+    },
+    {
+      "name": "boardAttachMemorySet",
+      "trigger": "api",
+      "location": "POST /api/boardAttachMemorySet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId, attachMemory: { memoryId, template } | null }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "board admin; the memory must be granted write to the board",
+        "template variables: <ticketId> <time> <random6> <filename> <exe> (memory.html §J)"
+      ],
+      "touches": [
+        "app/schema/boards"
       ]
     },
     {

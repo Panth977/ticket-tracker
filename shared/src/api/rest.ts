@@ -333,6 +333,14 @@ export const RestUploadJsonBodySchema = z
     mime: z.string().min(1).max(255).optional(),
     text: z.string().optional(),
     content_base64: z.string().optional(),
+    /**
+     * memory.html §J: a board takes no files of its own — the bytes go into a
+     * memory granted `write` to the board. Default: the board's attachment
+     * memory (board settings › Memory); none set and none named → 400.
+     */
+    memory_id: z.string().min(1).max(64).optional(),
+    /** Where in that memory (default: the board's path template). '<ticketId>' is filled; a taken path gets ' (2)'. */
+    path: z.string().min(1).max(1024).optional(),
   })
   .strict()
   .refine((b) => (b.text === undefined) !== (b.content_base64 === undefined), {

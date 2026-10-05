@@ -17,6 +17,20 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 1.5.0 — 2026-10-05
+
+- **Ticket files live in a memory** (memory.html §J). A board takes no files of its own any more.
+  `POST /v1/tickets/{KEY}/files` and MCP `upload_file` store the bytes in the board's **attachment
+  memory** (board settings › Memory: a memory granted `write` to the board, with a path template —
+  by default `tickets/<ticketId>/<time>_<filename>`) and answer the same file shape as before, now
+  with `memory { memory_id, node_id }`. The file id still goes in `post_message` / `attachments`
+  unchanged. A board with no attachment memory answers `400`.
+- **`memory_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
+  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { memoryId, path })`. `<ticketId>` in
+  the path is the ticket's key. An upload never replaces a memory file: a taken path gets ` (2)`.
+- The file's `name` is the memory file's name, which follows the board's template (e.g.
+  `20261005-211946_plan.md` under the default one).
+
 ### 1.4.0 — 2026-10-05
 
 - **Memory** (docs/plan/memory.html). A memory is a bucket of files with its own people: folders,

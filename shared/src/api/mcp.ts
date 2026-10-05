@@ -185,6 +185,22 @@ export const McpToolShapes = {
       .optional()
       .describe('Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.'),
     content_base64: z.string().optional().describe('Binary content, base64. ≤ 25 MB decoded.'),
+    memory_id: z
+      .string()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe(
+        "The memory the file goes into (granted write to this board). Default: the board's attachment memory.",
+      ),
+    path: z
+      .string()
+      .min(1)
+      .max(1024)
+      .optional()
+      .describe(
+        "Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
+      ),
   },
   read_file: { fileId: z.string().min(1) },
   link_tickets: { from: Key, to: Key, type: z.enum(['blocks', 'relates', 'duplicates']) },
@@ -472,7 +488,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   upload_file: {
     description:
-      'Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.',
+      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
     readOnly: false,
     scopes: ['files:write'],
   },

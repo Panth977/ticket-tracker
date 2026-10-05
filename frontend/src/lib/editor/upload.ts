@@ -1,13 +1,14 @@
 /**
  * Attachment uploads: "upload direct, attach through a command" (storage.rules).
- * The browser writes the file straight to
- *   boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName}
- * with progress; messagePost later names the path, and the server checks the
- * object exists under this ticket's prefix. An upload never attached is swept
- * after 24 h, so cancelling one needs no cleanup here.
+ * The browser writes the file straight to the Storage path it is given, with
+ * progress; a command later names the path and the server checks the object.
+ * A ticket's files go INTO a memory (memory.html §J): the path is
+ *   memories/{memoryId}/{fileId}/{fileName}   with metadata { boardId }
+ * and messagePost's memoryUploads makes it a file in the memory. An upload
+ * never attached is swept, so cancelling one needs no cleanup here.
  */
 import { ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
-import { MAX_ATTACHMENT_BYTES, storage, THUMB_NAME } from '@tm/shared';
+import { MAX_ATTACHMENT_BYTES, THUMB_NAME } from '@tm/shared';
 import { getStorageClient } from '$lib/firebase/client';
 
 export type UploadStatus = 'uploading' | 'done' | 'error';
@@ -20,10 +21,26 @@ export interface UploadItem {
   /** 0..1 */
   progress: number;
   status: UploadStatus;
+  /** Storage path of the bytes. */
   path: string;
+  /** memory.html §J: the memory the file goes into, and its path there. */
+  memoryId?: string;
+  memoryPath?: string;
   error?: string;
   /** Object URL for an image preview (revoked when removed). */
   preview?: string;
+}
+
+/** Where an upload goes. */
+export interface UploadTarget {
+  /** Storage path of the object. */
+  path: string;
+  /** customMetadata besides originalName (e.g. { boardId } — storage.rules checks it). */
+  metadata?: Record<string, string>;
+  /** The name shown for it (default: the file's, made Storage-safe). */
+  name?: string;
+  memoryId?: string;
+  memoryPath?: string;
 }
 
 /**
@@ -67,18 +84,17 @@ export function formatBytes(n: number): string {
 }
 
 /**
- * Start uploading `file` for this ticket. `onChange` is called with the item
- * on every progress tick and when it settles. Returns the item and a cancel().
+ * Start uploading `file` to `target`. `onChange` is called with the item on
+ * every progress tick and when it settles. Returns the item and a cancel().
  */
 export function startUpload(
-  boardId: string,
-  ticketId: string,
   file: File,
+  target: UploadTarget,
   onChange: (item: UploadItem) => void,
 ): { item: UploadItem; cancel: () => void } {
   const id = newAttachmentId();
-  const name = safeFileName(file.name);
-  const path = storage.attachment(boardId, ticketId, id, name);
+  const name = target.name ?? safeFileName(file.name);
+  const path = target.path;
   const item: UploadItem = {
     id,
     name,
@@ -87,6 +103,8 @@ export function startUpload(
     progress: 0,
     status: 'uploading',
     path,
+    ...(target.memoryId ? { memoryId: target.memoryId } : {}),
+    ...(target.memoryPath ? { memoryPath: target.memoryPath } : {}),
     preview:
       file.type.startsWith('image/') && typeof URL !== 'undefined'
         ? URL.createObjectURL(file)
@@ -102,14 +120,19 @@ export function startUpload(
   try {
     task = uploadBytesResumable(ref(getStorageClient(), path), file, {
       contentType: item.mime,
-      customMetadata: { originalName: file.name.slice(0, 255) },
+      customMetadata: { originalName: file.name.slice(0, 255), ...target.metadata },
     });
     task.on(
       'state_changed',
       (s) => onChange({ ...item, progress: s.totalBytes ? s.bytesTransferred / s.totalBytes : 0 }),
       (err) => {
-        if ((err as { code?: string }).code === 'storage/canceled') return;
-        onChange({ ...item, status: 'error', error: 'Upload failed' });
+        const code = (err as { code?: string }).code;
+        if (code === 'storage/canceled') return;
+        onChange({
+          ...item,
+          status: 'error',
+          error: code === 'storage/unauthorized' ? 'Not allowed' : 'Upload failed',
+        });
       },
       () => onChange({ ...item, progress: 1, status: 'done' }),
     );

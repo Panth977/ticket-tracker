@@ -13,11 +13,18 @@ import { readFileSync } from 'node:fs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { describe, expect, it } from 'vitest';
-import { paths, SCOPE_PRESETS, type ApiKey, type Message, type TicketFile } from '@tm/shared';
+import {
+  paths,
+  SCOPE_PRESETS,
+  type ApiKey,
+  type MemoryNode,
+  type Message,
+  type TicketFile,
+} from '@tm/shared';
 import { createApp } from '../../src/http/app.js';
 import { db } from '../../src/runtime/firebase.js';
 import { request, setupEmulators } from '../harness/index.js';
-import { memoryFiles, people, seedBoard, STAGES } from '../tickets/helpers.js';
+import { memoryFiles, people, seedAttachMemory, seedBoard, STAGES } from '../tickets/helpers.js';
 import { fileOf, msgsOf } from '../tickets/store.js';
 import { setPorts } from '../harness/index.js';
 import {
@@ -236,6 +243,13 @@ describe('REST /v1 with an agent token', () => {
       key: string;
       id: string;
     };
+    // memory.html §J: the board has no attachment memory yet → 400, nothing stored.
+    const none = await rest(key, 'POST', `/v1/tickets/${t.key}/files`, { name: 'a.md', text: 'a' });
+    expect(none.status).toBe(400);
+    expect(JSON.stringify(none.body)).toContain('board settings');
+    const memoryId = await seedAttachMemory(b.id, owner, {
+      template: 'tickets/<ticketId>/<filename>',
+    });
 
     const md = await rest(key, 'POST', `/v1/tickets/${t.key}/files`, {
       name: 'plan.md',
@@ -298,8 +312,42 @@ describe('REST /v1 with an agent token', () => {
       data: { name: string }[];
     };
     expect(list.data.map((f) => f.name).sort()).toEqual(['plan.md', 'report.html', 'shot.png']);
+    expect(list.data.length).toBe(3);
     const row = (await fileOf(b.id, t.id, mdFile.file_id)) as TicketFile;
-    expect(row).toMatchObject({ source: 'upload', messageId: null, uploadedBy: agentId });
+    expect(row).toMatchObject({
+      source: 'upload',
+      messageId: null,
+      uploadedBy: agentId,
+      memory: { memoryId, nodeId: expect.any(String) },
+    });
+    // It is a file of the memory, at the board's template.
+    const node = (
+      await db().doc(paths.memoryNode(memoryId, row.memory!.nodeId)).get()
+    ).data() as MemoryNode;
+    expect(node.path).toBe(`tickets/${t.key}/plan.md`);
+    // memory_id / path in the body (and as multipart fields).
+    const placed = await rest(key, 'POST', `/v1/tickets/${t.key}/files`, {
+      name: 'notes.md',
+      text: 'n',
+      memory_id: memoryId,
+      path: 'agent-notes/<ticketId>/notes.md',
+    });
+    expect(placed.status).toBe(201);
+    const form2 = new FormData();
+    form2.append('file', new Blob(['m'], { type: 'text/markdown' }), 'm.md');
+    form2.append('path', 'agent-notes/m.md');
+    const placed2 = await request(`/v1/tickets/${t.key}/files`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}` },
+      body: form2,
+    });
+    expect(placed2.status).toBe(201);
+    const paths2 = (
+      await db().collection(paths.memoryNodes(memoryId)).where('kind', '==', 'file').get()
+    ).docs.map((d) => (d.data() as MemoryNode).path);
+    expect(paths2).toEqual(
+      expect.arrayContaining([`agent-notes/${t.key}/notes.md`, 'agent-notes/m.md']),
+    );
 
     // Idempotent: the same key is the same file.
     const r1 = await rest(
@@ -478,6 +526,7 @@ describe('MCP with an agent token', () => {
   it('whoami → list_my_tickets → upload .md and .html → post_message → get_events / ack_events', async () => {
     bytesFiles();
     const { owner, b, agentId, agent } = await agentBoard();
+    const memoryId = await seedAttachMemory(b.id, owner); // memory.html §J
     const { key: ownerKey } = await apiKeyFor(owner, [...SCOPE_PRESETS.everything], b.id);
     const t = (
       await rest(ownerKey, 'POST', '/v1/tickets', { title: 'Design doc', assignees: [agentId] })
@@ -542,6 +591,19 @@ describe('MCP with an agent token', () => {
       }),
     );
     expect([md.kind, html.kind]).toEqual(['markdown', 'html']);
+    const placed = parsed<{ fileId: string; memory: { memory_id: string } }>(
+      await client.callTool({
+        name: 'upload_file',
+        arguments: {
+          key: t.key,
+          name: 'n.md',
+          text: 'n',
+          memory_id: memoryId,
+          path: 'mcp/<ticketId>/n.md',
+        },
+      }),
+    );
+    expect(placed.memory.memory_id).toBe(memoryId);
     const bad = await client.callTool({
       name: 'upload_file',
       arguments: { key: t.key, name: 'x.md' },

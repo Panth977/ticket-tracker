@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "The TaskManager plugin: MCP server, skill and slash commands, generated from the running API.",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "plugins": [
     {
       "name": "taskmanager",
       "source": "./",
       "description": "Boards, tickets and threads shared by people and agents — with a skill that already knows the system.",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "homepage": "https://taskmanager-example.web.app/integrate/claude",
       "keywords": ["taskmanager", "tickets", "boards", "mcp"]
     }

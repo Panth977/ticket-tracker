@@ -464,10 +464,12 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       name: a.name,
       mime: a.mime,
       bytes: uploadBytes(a),
+      memoryId: a.memory_id,
+      path: a.path,
     });
     const [members, signed] = await Promise.all([
       boardMembers(board.id),
-      signedUrl(file.path, ctx.now),
+      signedUrl(file.objectPath, ctx.now),
     ]);
     return json({
       fileId: file.id,

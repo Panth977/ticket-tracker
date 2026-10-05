@@ -25,7 +25,16 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { SCOPE_PRESETS } from '@tm/shared';
-import { API_URL, call, eventually, newBoard, newPerson, stage, text } from '../support/stack.js';
+import {
+  API_URL,
+  call,
+  eventually,
+  newBoard,
+  newPerson,
+  stage,
+  text,
+  giveAttachMemory,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 const REPO = fileURLToPath(new URL('../../..', import.meta.url));
@@ -122,6 +131,7 @@ test.describe('§M · the hosted SDK', () => {
   test('an orchestrator written on the SDK drives a ticket end to end', async ({ page }) => {
     const ada = await newPerson('Ada', 'Lovelace');
     const b = await newBoard(ada, { name: 'SDK orchestrator' });
+    await giveAttachMemory(ada, b.id);
 
     // ── the orchestrator's credentials: an agent, on the board, with a token ──
     const { agentId } = await call(ada, 'agentCreate', {

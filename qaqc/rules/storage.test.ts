@@ -11,7 +11,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { doc, setDoc } from 'firebase/firestore';
 import { deleteObject, getMetadata, ref, uploadBytes } from 'firebase/storage';
-import { storage as paths, MAX_ATTACHMENT_BYTES, MAX_AVATAR_BYTES } from '@tm/shared';
+import { storage as paths, MAX_AVATAR_BYTES } from '@tm/shared';
 import {
   ADMIN,
   BOARD,
@@ -69,40 +69,10 @@ describe('ticket attachments', () => {
     await assertFails(getMetadata(ref(storageOf(STRANGER), EXISTING)));
     await assertFails(getMetadata(ref(storageOf(null), EXISTING)));
   });
-  it('admin, editor and commenter upload (a comment may carry a file)', async () => {
-    for (const uid of [ADMIN, EDITOR, COMMENTER]) {
-      await assertSucceeds(upload(uid, paths.attachment(BOARD, TICKET, `att_${uid}`, 'a.png')));
-    }
-  });
-  it('a viewer and a stranger do not', async () => {
-    await assertFails(upload(VIEWER, paths.attachment(BOARD, TICKET, 'att_v', 'a.png')));
-    await assertFails(upload(STRANGER, paths.attachment(BOARD, TICKET, 'att_s', 'a.png')));
+  it('retired for new files (memory.html §J): no role uploads, none overwrites or deletes', async () => {
+    for (const uid of [ADMIN, EDITOR, COMMENTER, VIEWER, STRANGER])
+      await assertFails(upload(uid, paths.attachment(BOARD, TICKET, `att_${uid}`, 'a.png')));
     await assertFails(upload(null, paths.attachment(BOARD, TICKET, 'att_n', 'a.png')));
-  });
-  it('no upload to a board that does not exist', async () => {
-    await assertFails(upload(ADMIN, paths.attachment('board_nope', TICKET, 'att_x', 'a.png')));
-  });
-  it('50 MB is the limit', async () => {
-    const big = new Uint8Array(MAX_ATTACHMENT_BYTES);
-    await assertFails(
-      upload(
-        EDITOR,
-        paths.attachment(BOARD, TICKET, 'att_big', 'big.bin'),
-        big,
-        'application/octet-stream',
-      ),
-    );
-    const ok = new Uint8Array(MAX_ATTACHMENT_BYTES - 1);
-    await assertSucceeds(
-      upload(
-        EDITOR,
-        paths.attachment(BOARD, TICKET, 'att_ok', 'ok.bin'),
-        ok,
-        'application/octet-stream',
-      ),
-    );
-  }, 120_000);
-  it('never overwritten, deleted, or given a forged thumbnail', async () => {
     await assertFails(upload(ADMIN, EXISTING));
     await assertFails(deleteObject(ref(storageOf(ADMIN), EXISTING)));
     await assertFails(upload(ADMIN, paths.thumb(BOARD, TICKET, 'att_1')));

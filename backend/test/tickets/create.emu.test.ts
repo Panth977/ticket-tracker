@@ -1,8 +1,19 @@
 /** allocateKey + ticketCreate under the emulators. */
 import { describe, expect, it } from 'vitest';
-import { paths, type KeyIndex, type Ticket } from '@tm/shared';
+import { paths, type KeyIndex, type MemoryNode, type Ticket } from '@tm/shared';
+import { db } from '../../src/runtime/firebase.js';
 import { call, setupEmulators, uniq } from '../harness/index.js';
-import { doc, getDocData, listDocs, people, seedBoard, spyPorts, STAGES } from './helpers.js';
+import {
+  doc,
+  getDocData,
+  listDocs,
+  people,
+  putMemoryObject,
+  seedAttachMemory,
+  seedBoard,
+  spyPorts,
+  STAGES,
+} from './helpers.js';
 import { actsOf, filesOf } from './store.js';
 
 setupEmulators();
@@ -147,15 +158,15 @@ describe('ticketCreate', () => {
     ).rejects.toMatchObject({ code: 'not_found' });
   });
 
-  it('description: mentions of members only, refs → referencedBy on the target, attachments → files/', async () => {
+  it('description: mentions of members only, refs → referencedBy on the target, memoryUploads → files/', async () => {
     const s = spyPorts();
     const { asha, priya, out } = await people('asha', 'priya', 'out');
     const b = await seedBoard({ admin: asha, editors: [priya] });
     const target = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Target' });
+    const memoryId = await seedAttachMemory(b.id, asha);
 
     const ticketId = uniq('t');
-    const path = `boards/${b.id}/tickets/${ticketId}/att1/screen shot.png`;
-    s.files.put(path, 1234, 'image/png');
+    const up = await putMemoryObject(s.files, memoryId, 'screen shot.png', new Uint8Array(1234));
     const r = await call(asha, 'ticketCreate', {
       boardId: b.id,
       ticketId,
@@ -164,7 +175,10 @@ describe('ticketCreate', () => {
         ticketId: target.ticketId,
         key: target.key,
       }),
-      attachments: [path],
+      // memory.html §J: '<ticketId>' is the new ticket's key, filled by the server.
+      memoryUploads: [
+        { memoryId, path: 'tickets/<ticketId>/screen shot.png', storagePath: up.storagePath },
+      ],
     });
     expect(r.ticketId).toBe(ticketId);
     const t = (await getDocData<Ticket>(paths.ticket(b.id, ticketId)))!;
@@ -177,37 +191,99 @@ describe('ticketCreate', () => {
     const files = await filesOf(b.id, ticketId);
     expect(files).toEqual([
       expect.objectContaining({
-        id: 'att1',
         name: 'screen shot.png',
         size: 1234,
         mime: 'image/png',
-        source: 'description',
+        source: 'memory',
         messageId: null,
+        memory: { memoryId, nodeId: expect.any(String) },
       }),
     ]);
+    const node = (
+      await db().doc(paths.memoryNode(memoryId, files[0]!.memory!.nodeId)).get()
+    ).data() as MemoryNode;
+    expect(node).toMatchObject({
+      kind: 'file',
+      path: `tickets/${r.key}/screen shot.png`,
+      file: { storagePath: up.storagePath, size: 1234 },
+      createdBy: asha.uid,
+    });
+    expect((await db().doc(paths.memory(memoryId)).get()).data()!.stats).toEqual({
+      files: 1,
+      folders: 2,
+      bytes: 1234,
+    });
     expect(s.notified.find((n) => n.event === 'mentioned')!.extra!.mentioned).toEqual([priya.uid]);
 
     // same client id again → 409, never a second ticket
     await expect(
       call(asha, 'ticketCreate', { boardId: b.id, ticketId, title: 'Again' }),
     ).rejects.toMatchObject({ code: 'conflict' });
-    // attachments must be under the ticket's prefix and exist
+    // memory.html §J: board attachments are retired
     await expect(
       call(asha, 'ticketCreate', {
         boardId: b.id,
         title: 'x',
         attachments: [`boards/${b.id}/tickets/other/a/b.png`],
       }),
-    ).rejects.toMatchObject({ code: 'invalid' });
-    const t2 = uniq('t');
+    ).rejects.toMatchObject({ code: 'invalid', details: { field: 'attachments' } });
+    // an upload must exist, in that memory's folder
     await expect(
       call(asha, 'ticketCreate', {
         boardId: b.id,
-        ticketId: t2,
         title: 'x',
-        attachments: [`boards/${b.id}/tickets/${t2}/a/missing.png`],
+        memoryUploads: [
+          { memoryId, path: 'a.png', storagePath: `memories/${memoryId}/f_missing1/a.png` },
+        ],
       }),
     ).rejects.toMatchObject({ code: 'invalid' });
+    await expect(
+      call(asha, 'ticketCreate', {
+        boardId: b.id,
+        title: 'x',
+        memoryUploads: [
+          { memoryId, path: 'a.png', storagePath: `memories/mem_other1/f_x00001/a.png` },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+  });
+
+  it('a refused create keeps none of the files it brought (memory.html §J)', async () => {
+    const s = spyPorts();
+    const { asha } = await people('asha');
+    const b = await seedBoard({ admin: asha });
+    const memoryId = await seedAttachMemory(b.id, asha);
+    const up = await putMemoryObject(s.files, memoryId, 'a.png');
+    await expect(
+      call(asha, 'ticketCreate', {
+        boardId: b.id,
+        title: 'x',
+        stageId: 'st_nope',
+        memoryUploads: [{ memoryId, path: 'a.png', storagePath: up.storagePath }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    // refused before staging: the object is untouched (the app may retry)
+    expect(s.files.has(up.storagePath)).toBe(true);
+    // a failure inside the transaction (a parent is a file) removes it again
+    await call(asha, 'ticketCreate', {
+      boardId: b.id,
+      title: 'first',
+      memoryUploads: [
+        {
+          memoryId,
+          path: 'docs',
+          storagePath: (await putMemoryObject(s.files, memoryId)).storagePath,
+        },
+      ],
+    });
+    await expect(
+      call(asha, 'ticketCreate', {
+        boardId: b.id,
+        title: 'x',
+        memoryUploads: [{ memoryId, path: 'docs/a.png', storagePath: up.storagePath }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    expect(s.files.has(up.storagePath)).toBe(false);
   });
 
   it('a retried create (same clientId) is one ticket', async () => {

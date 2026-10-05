@@ -30,6 +30,7 @@ import {
   AgentIdSchema,
 } from '../types/index.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
+import { BoardAttachMemorySchema } from '../memory/attach.js';
 
 export const INVITE_STATUSES = ['pending', 'accepted', 'declined', 'revoked', 'expired'] as const;
 /** Invites expire after 14 days. */
@@ -136,6 +137,13 @@ export const BoardSchema = z.object({
   }),
   /** Phase 17 (§Y2): every turn receipt on every ticket, for the board's lifetime. Absent = nothing yet. */
   cost: CostCounterSchema.optional(),
+  /**
+   * memory.html §J: where a file put on one of this board's tickets goes by
+   * default — one of the memories granted `write` to the board, and a path
+   * template. Absent / null = none set (the attach dialog asks). Set by
+   * boardAttachMemorySet; cleared when that memory's write grant goes.
+   */
+  attachMemory: BoardAttachMemorySchema.nullable().optional(),
   /** boardArchive: read-only, hidden from the sidebar, restorable. */
   archivedAt: MillisSchema.nullable(),
   createdBy: UidSchema,

@@ -100,6 +100,8 @@ export default defineCommand('messageEdit', async (ctx, input) => {
   if (res.kind === 'delete') {
     const files = ports().files;
     for (const f of res.removed) {
+      // memory.html §E/§J: a memory reference owns no object — the memory file stays.
+      if (f.memory) continue;
       await afterCommit('storage', () => files.delete(f.path));
       if (f.thumbPath) await afterCommit('storage', () => files.delete(f.thumbPath!));
     }

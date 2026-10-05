@@ -96,8 +96,16 @@ board answers `404` from then on, and the others carry on.
   or `content_base64`.
 - The **extension decides the mime** if you do not give one. `report.html` becomes `text/html`,
   `plan.md` becomes `text/markdown` — and both then render natively in the app.
-- A file belongs to a ticket. Upload first, then attach the returned `file_id` to a message; up to
+- A file is put on a ticket. Upload first, then attach the returned `file_id` to a message; up to
   20 attachments per message.
+- **The bytes live in a memory** (since 1.5.0). A board takes no files of its own: an upload goes
+  into the board's **attachment memory** (set by a board admin in board settings › Memory — a
+  memory granted `write` to the board), at the board's path template, by default
+  `tickets/<ticketId>/<time>_<filename>`. The ticket holds a reference to that memory file
+  (`memory { memory_id, node_id }` on the file). Name another memory granted `write` to the board
+  with `memory_id`, and the place in it with `path` (`<ticketId>` is filled in). A path that is
+  taken is never overwritten: the new file becomes `name (2).ext`. A board with no attachment
+  memory answers `400` — ask a board admin to set one.
 - Reading back: `GET /v1/files/{fileId}` gives metadata and a signed URL valid for **15 minutes**
   (fetch it, do not store it). `?content=1` returns the text directly for Markdown, HTML, text, CSV,
   JSON and code.

@@ -77,8 +77,12 @@ export async function readSubtree(
     folderPath === ''
       ? col.limit(limit)
       : col
+          // Everything that starts with 'folder/' sorts between 'folder/' and
+          // 'folder0' ('0' is the character after '/'). NOT '/\uf8ff': Firestore
+          // orders strings by their UTF-8 bytes, and every emoji (🐺.jpeg) sorts
+          // above U+F8FF — such names were left behind when their folder moved.
           .where('path', '>', folderPath + '/')
-          .where('path', '<', folderPath + '/')
+          .where('path', '<', folderPath + '0')
           .limit(limit);
   const snap = tx ? await tx.get(q) : await q.get();
   return snap.docs.map((d) => ({ id: d.id, node: d.data() }));

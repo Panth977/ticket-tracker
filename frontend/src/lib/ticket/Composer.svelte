@@ -3,7 +3,9 @@
     @  people on this board (name / email, with picture)
     #  ticket search (Typesense, or the dev fallback)
     /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask
-  Paste or drop files → uploaded to Storage with progress, attached on send.
+  Paste, drop or 📎 files → the attach dialog asks which memory and at what
+  path (memory.html §J: a ticket's files live in a memory granted `write` to
+  the board); they upload with progress and go out as memoryUploads on send.
   🧠 attaches files from a memory granted to this board BY REFERENCE
   (memory.html §E): nothing is uploaded, the ticket points at the file.
   The draft (text, reply target, finished uploads) is kept per ticket in
@@ -48,6 +50,8 @@
   import { typingSignal } from './presence';
   import AskDialog from './AskDialog.svelte';
   import MemoryPicker from '$lib/memoryRefs/MemoryPicker.svelte';
+  import { newFileId, objectPathFor } from '$lib/memory/upload.svelte';
+  import AttachDialog from './AttachDialog.svelte';
   import { mergePicks, pickAttachment, type MemoryPick } from '$lib/memoryRefs/pick';
 
   interface Props {
@@ -81,6 +85,9 @@
   /** memory.html §E: files picked from a memory, sent as memoryRefs. */
   let memoryPicks = $state<MemoryPick[]>([]);
   let memoryOpen = $state(false);
+  /** memory.html §J: files waiting for the attach dialog's memory + paths. */
+  let attachFiles = $state<File[]>([]);
+  let attachOpen = $state(false);
 
   const typing = t.me ? typingSignal(boardId, ticketId, t.me) : null;
   onDestroy(() => {
@@ -100,8 +107,9 @@
         doc = d.doc;
         replyTo = d.replyTo;
         // A memory reference in a draft is its virtual path (memory.html §E).
+        // Only uploads INTO a memory: an older draft's board upload can't be sent any more.
         uploads = d.attachments
-          .filter((a) => !parseMemoryRefPath(a.path))
+          .filter((a) => !parseMemoryRefPath(a.path) && a.memoryId && a.memoryPath)
           .map((a) => ({
             id: a.path,
             ...a,
@@ -134,14 +142,7 @@
       doc: $state.snapshot(doc),
       replyTo,
       attachments: [
-        ...uploads
-          .filter((u) => u.status === 'done')
-          .map((u): DraftAttachment => ({
-            path: u.path,
-            name: u.name,
-            size: u.size,
-            mime: u.mime,
-          })),
+        ...uploads.filter((u) => u.status === 'done').map(toAttachment),
         ...memoryPicks.map(pickAttachment),
       ],
     };
@@ -165,8 +166,18 @@
   });
 
   // ——— uploads
+  const toAttachment = (u: UploadItem): DraftAttachment => ({
+    path: u.path,
+    name: u.name,
+    size: u.size,
+    mime: u.mime,
+    ...(u.memoryId ? { memoryId: u.memoryId } : {}),
+    ...(u.memoryPath ? { memoryPath: u.memoryPath } : {}),
+  });
+
+  /** Files added (📎, paste, drop): the attach dialog says where they go. */
   function addFiles(files: File[]) {
-    if (!t.perms.comment) return;
+    if (!t.perms.comment || !files.length) return;
     const room = MAX_ATTACHMENTS_PER_CALL - uploads.length;
     if (files.length > room) {
       toast.error(
@@ -175,8 +186,24 @@
       );
       files = files.slice(0, Math.max(0, room));
     }
-    for (const f of files) {
-      const { item, cancel } = startUpload(boardId, ticketId, f, (next) => {
+    if (!files.length) return;
+    attachFiles = files;
+    attachOpen = true;
+  }
+
+  /** The dialog's answer: upload each file into the memory, headed for its path. */
+  function uploadInto(memoryId: string, list: { file: File; path: string; label: string }[]) {
+    // The chip and the ticket show `label` (the file's name as the person left
+    // it); the memory node gets the full path's own name.
+    for (const { file: f, path, label: name } of list) {
+      const target = {
+        path: objectPathFor(memoryId, newFileId(), name),
+        metadata: { boardId, originalName: name },
+        name,
+        memoryId,
+        memoryPath: path,
+      };
+      const { item, cancel } = startUpload(f, target, (next) => {
         // Sent with the upload still going: the bubble shows it now.
         if (relayUpload(next)) return;
         uploads = uploads.map((u) => (u.id === next.id ? { ...next, preview: u.preview } : u));
@@ -302,12 +329,7 @@
       }
     }
     const inflight = uploading.map((u) => $state.snapshot(u) as UploadItem);
-    const attachments = ready.map((u) => ({
-      path: u.path,
-      name: u.name,
-      size: u.size,
-      mime: u.mime,
-    }));
+    const attachments = ready.map(toAttachment);
     const reply = replyTo;
     // In-flight uploads now belong to the message: don't cancel them on clear().
     for (const u of inflight) cancels.delete(u.id);
@@ -518,6 +540,16 @@
       </div>
     </div>
     <AskDialog bind:open={askOpen} onasked={() => onsent?.()} />
+    <AttachDialog
+      bind:open={attachOpen}
+      {boardId}
+      boardKey={t.board.key}
+      ticketKey={t.ticket.key}
+      attachMemory={t.board.attachMemory}
+      isAdmin={t.perms.role === 'admin'}
+      files={attachFiles}
+      onattach={(a) => uploadInto(a.memoryId, a.list)}
+    />
     <MemoryPicker
       bind:open={memoryOpen}
       {boardId}

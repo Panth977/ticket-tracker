@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { paths, type BoardPref, type Read, type Ticket } from '@tm/shared';
 import { call, fixedClock, setPorts, setupEmulators, uniq } from '../harness/index.js';
-import { doc, getDocData, people, seedBoard, spyPorts } from './helpers.js';
+import {
+  doc,
+  getDocData,
+  people,
+  putMemoryObject,
+  seedAttachMemory,
+  seedBoard,
+  spyPorts,
+} from './helpers.js';
 import { filesOf, msgOf, msgsOf } from './store.js';
 
 setupEmulators();
@@ -45,8 +53,15 @@ describe('messagePost', () => {
     const b = await seedBoard({ admin: asha, editors: [priya], commenters: [cora] });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
     const clientId = uniq('c');
-    const path = `boards/${b.id}/tickets/${ticketId}/up1/log.txt`;
-    s.files.put(path, 42, 'text/plain');
+    // memory.html §J: the file goes into the board's memory (cora has no role on it).
+    const memoryId = await seedAttachMemory(b.id, asha);
+    const up = await putMemoryObject(
+      s.files,
+      memoryId,
+      'log.txt',
+      new Uint8Array(42),
+      'text/plain',
+    );
     s.notified.length = 0;
 
     const r = await call(cora, 'messagePost', {
@@ -54,7 +69,9 @@ describe('messagePost', () => {
       ticketId,
       clientId,
       body: doc('hey ', { uid: priya.uid }, ' and ', { uid: out.uid }),
-      attachments: [path],
+      memoryUploads: [
+        { memoryId, path: 'tickets/<ticketId>/log.txt', storagePath: up.storagePath },
+      ],
     });
     expect(r.messageId).toBe(clientId); // the optimistic bubble's id
 
@@ -68,7 +85,14 @@ describe('messagePost', () => {
       editedAt: null,
     });
     expect(m.body.mentions).toEqual([priya.uid]);
-    expect(m.attachments).toEqual([expect.objectContaining({ id: 'up1', path, size: 42 })]);
+    expect(m.attachments).toEqual([
+      expect.objectContaining({
+        path: expect.stringMatching(new RegExp(`^memories/${memoryId}/nodes/`)),
+        name: 'log.txt',
+        size: 42,
+        memory: { memoryId, nodeId: expect.any(String) },
+      }),
+    ]);
     const t = await T(b.id, ticketId);
     expect(t.counts).toEqual({ messages: 1, files: 1, pinned: 0 });
     expect(t.lastMessageAt).toBe(1_750_000_000_000);
@@ -79,7 +103,12 @@ describe('messagePost', () => {
       ticketId,
     });
     expect(await filesOf(b.id, ticketId)).toEqual([
-      expect.objectContaining({ id: 'up1', source: 'message', messageId: clientId }),
+      expect.objectContaining({
+        id: m.attachments[0]!.id,
+        source: 'memory',
+        messageId: clientId,
+        memory: m.attachments[0]!.memory,
+      }),
     ]);
 
     expect(s.notified.map((n) => n.event)).toEqual(['mentioned', 'comment']);
@@ -202,14 +231,14 @@ describe('messageEdit / messagePin / messageReact', () => {
     const { asha, priya, cora } = await people('asha', 'priya', 'cora');
     const b = await seedBoard({ admin: asha, editors: [priya], commenters: [cora] });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
-    const path = `boards/${b.id}/tickets/${ticketId}/up9/a.png`;
-    s.files.put(path);
+    const memoryId = await seedAttachMemory(b.id, asha);
+    const up = await putMemoryObject(s.files, memoryId, 'a.png');
     const { messageId } = await call(cora, 'messagePost', {
       boardId: b.id,
       ticketId,
       clientId: uniq('c'),
       body: doc('hi ', { uid: priya.uid }),
-      attachments: [path],
+      memoryUploads: [{ memoryId, path: 'a.png', storagePath: up.storagePath }],
     });
 
     s.notified.length = 0;
@@ -249,7 +278,8 @@ describe('messageEdit / messagePin / messageReact', () => {
       body: { text: '', mentions: [] },
     });
     expect((await filesOf(b.id, ticketId))[0]!.deletedAt).toEqual(expect.any(Number));
-    expect(s.files.has(path)).toBe(false);
+    // memory.html §J: the file is the memory's — deleting the message keeps it.
+    expect(s.files.has(up.storagePath)).toBe(true);
     const t = await T(b.id, ticketId);
     expect(t.counts).toMatchObject({ files: 0, pinned: 0 });
     await expect(

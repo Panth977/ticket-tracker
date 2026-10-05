@@ -101,7 +101,7 @@
         <a href="/integrate#2-how-an-agent-gets-in">token model</a> the rest of the API does.
       </p>
       <div class="stamp">
-        <span>version 1.4.0</span>
+        <span>version 1.5.0</span>
         <span>api v1</span>
         <span>updated 2026-10-05</span>
         <span><a href="/integrate">integrate</a></span>
@@ -219,7 +219,7 @@ update_ticket        write  Change a ticket: title, description, stage, assignee
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
 post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
-upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         write  Link two tickets: blocks, relates or duplicates.
 get_events           read   Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.

@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { paths, type KeyIndex, type Ticket } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { call, setupEmulators } from '../harness/index.js';
-import { doc, getDocData, people, seedBoard, spyPorts, STAGES } from './helpers.js';
+import {
+  doc,
+  getDocData,
+  people,
+  putMemoryObject,
+  seedAttachMemory,
+  seedBoard,
+  spyPorts,
+  STAGES,
+} from './helpers.js';
 import { actsOf, filesOf, msgsOf } from './store.js';
 
 setupEmulators();
@@ -213,13 +222,17 @@ describe('ticketDelete', () => {
     const other = await call(asha, 'ticketCreate', { boardId: b.id, title: 'other' });
     const path = (id: string) => `boards/${b.id}/tickets/${id}/a1/f.txt`;
     const victimId = 'victim' + Date.now();
+    // An object from before memory.html §J under the ticket's prefix: it goes with the ticket.
     s.files.put(path(victimId), 5, 'text/plain');
+    // A file put on it now lives in a memory: it stays when the ticket goes.
+    const memoryId = await seedAttachMemory(b.id, asha);
+    const up = await putMemoryObject(s.files, memoryId, 'f.txt');
     const victim = await call(asha, 'ticketCreate', {
       boardId: b.id,
       ticketId: victimId,
       title: 'victim',
       description: doc('see ', { ticketId: target.ticketId, key: target.key }),
-      attachments: [path(victimId)],
+      memoryUploads: [{ memoryId, path: 'f.txt', storagePath: up.storagePath }],
     });
     await call(asha, 'ticketUpdate', {
       boardId: b.id,
@@ -244,6 +257,7 @@ describe('ticketDelete', () => {
     expect(await actsOf(b.id, victimId)).toEqual([]);
     expect(await filesOf(b.id, victimId)).toEqual([]);
     expect(s.files.has(path(victimId))).toBe(false);
+    expect(s.files.has(up.storagePath)).toBe(true);
     expect((await T(b.id, target.ticketId))!.referencedBy).toEqual([]);
     expect((await T(b.id, other.ticketId))!.links).toEqual([]);
     expect(

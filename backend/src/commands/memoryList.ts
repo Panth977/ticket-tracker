@@ -41,7 +41,9 @@ export default defineCommand('memoryList', async (ctx, input) => {
     if (input.boardId && !m.boards?.[input.boardId]) continue;
     if (input.artifactId && !m.artifacts?.[input.artifactId]) continue;
     const reach = memoryReach(m, { uid, boardRoles: roles });
-    if (reach) out.push(toMemoryOut(id, m, reach));
+    if (!reach) continue;
+    const grant = input.boardId ? m.boards?.[input.boardId] : undefined;
+    out.push({ ...toMemoryOut(id, m, reach), ...(grant ? { boardGrant: grant } : {}) });
   }
   out.sort((a, b) => a.name.localeCompare(b.name));
   return { memories: out };

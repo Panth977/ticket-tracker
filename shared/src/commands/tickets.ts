@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 import { MEMORY_REFS_MAX, MemoryRefSchema } from '../memory/schema.js';
+import { MemoryUploadSchema } from '../memory/attach.js';
 import {
   BoardIdSchema,
   FieldValueSchema,
@@ -58,8 +59,17 @@ export const ticketCreate = defineCommand({
     dueAllDay: z.boolean().optional(),
     estimate: z.number().nonnegative().nullable().optional(),
     fields: z.record(z.string(), FieldValueSchema).optional(),
-    /** Storage paths already uploaded under this ticket's prefix. */
+    /**
+     * RETIRED (memory.html §J): a board takes no files of its own any more —
+     * a non-empty list is refused. Use memoryUploads / memoryRefs.
+     */
     attachments: z.array(StoragePathSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
+    /**
+     * memory.html §J: files just uploaded INTO a memory granted `write` to this
+     * board, each to become a new file at its path ('<ticketId>' in it is
+     * filled with the new ticket's key) and attached by reference.
+     */
+    memoryUploads: z.array(MemoryUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
     /**
      * memory.html §E: memory files to attach BY REFERENCE (no upload). The
      * memory must be granted to this board; each becomes a ticket.files row
@@ -235,6 +245,8 @@ export const messagePost = defineCommand({
        * with source 'memory'.
        */
       memoryRefs: z.array(MemoryRefSchema).max(MEMORY_REFS_MAX).optional(),
+      /** memory.html §J: files just uploaded into a memory (see ticketCreate.memoryUploads). */
+      memoryUploads: z.array(MemoryUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
       /**
        * Phase 17 (agents.html §Y1): the TURN RECEIPT an orchestrator posts when
        * one run of an agent ends. Stored on the message, and in the SAME
@@ -248,7 +260,11 @@ export const messagePost = defineCommand({
     })
     .strict()
     .refine(
-      (r) => (r.attachments?.length ?? 0) + (r.fileIds?.length ?? 0) <= MAX_ATTACHMENTS_PER_CALL,
+      (r) =>
+        (r.attachments?.length ?? 0) +
+          (r.fileIds?.length ?? 0) +
+          (r.memoryUploads?.length ?? 0) <=
+        MAX_ATTACHMENTS_PER_CALL,
       {
         message: `At most ${MAX_ATTACHMENTS_PER_CALL} files per message`,
         path: ['fileIds'],

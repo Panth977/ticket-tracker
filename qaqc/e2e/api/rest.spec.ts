@@ -10,7 +10,16 @@
  */
 import { expect, test } from '@playwright/test';
 import { SCOPE_PRESETS } from '@tm/shared';
-import { call, eventually, http, newBoard, newPerson, read, stage } from '../support/stack.js';
+import {
+  call,
+  eventually,
+  http,
+  newBoard,
+  newPerson,
+  read,
+  stage,
+  giveAttachMemory,
+} from '../support/stack.js';
 
 const bearer = (key: string) => ({
   authorization: `Bearer ${key}`,
@@ -121,6 +130,7 @@ test('REST with a personal board token: me, board, create, patch, move, message,
 test('REST with an agent token: system prompt, assigned work, a Markdown document, the inbox', async () => {
   const ada = await newPerson('Ada');
   const eng = await newBoard(ada, { name: 'Agent board' });
+  await giveAttachMemory(ada, eng.id);
   const { agentId } = await call(ada, 'agentCreate', {
     name: 'Builder',
     description: 'Builds things',

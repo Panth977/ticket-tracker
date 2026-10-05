@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "apiVersion": "v1",
   "updated": "2026-10-05",
-  "contentSha256": "becb30cf364c96241175c885a227fae7f24e148caefcd2053002b4082e8e322f",
+  "contentSha256": "8645d16e2764e61833573ddaf8ab07ac1732b3363704cd69dbc3de9c05e68bb6",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -1217,7 +1217,7 @@
     },
     {
       "name": "upload_file",
-      "description": "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.",
+      "description": "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
       "readOnly": false,
       "scopes": [
         "files:write"
@@ -1415,6 +1415,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "1.5.0",
+      "date": "2026-10-05"
+    },
     {
       "version": "1.4.0",
       "date": "2026-10-05"

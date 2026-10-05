@@ -21,8 +21,10 @@
     target: GrantTarget;
     /** One line under the title: what a grant means HERE. */
     description: string;
+    /** memory.html §J: the board's ticket-attachment memory, badged in the list. */
+    attachMemoryId?: string | null;
   }
-  let { target, description }: Props = $props();
+  let { target, description, attachMemoryId = null }: Props = $props();
 
   const memoriesQ = $derived(ownedMemories(auth.uid));
   const rows = $derived(
@@ -70,6 +72,13 @@
               {r.m.name}
               <ExternalLink size={12} aria-hidden="true" class="text-muted" />
             </a>
+            {#if attachMemoryId === r.m.id}
+              <span
+                class="ml-1 rounded bg-accent-soft px-1.5 py-0.5 align-middle text-[11px] font-medium text-accent"
+                title="Files put on this board's tickets go here"
+                data-attach-badge>Attachments</span
+              >
+            {/if}
             <span class="block text-xs text-muted">
               {r.m.stats.files}
               {r.m.stats.files === 1 ? 'file' : 'files'}{#if r.m.archivedAt != null}

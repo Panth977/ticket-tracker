@@ -10,7 +10,10 @@
  *        intakes where email == to, enabled;
  *        ticketCreate(ctx{ actor: 'intake-bot', via: 'email' }) with the
  *        intake's defaults, subject → title, body → description
- *   attachments → Storage under the ticket's prefix, passed as paths
+ *   attachments → the board's attachment memory (memory.html §J), passed as
+ *        memoryUploads (the command fills '<ticketId>' and makes them nodes);
+ *        a board with no attachment memory keeps the mail, not its files, and
+ *        the body says so
  *   anything else → dropped, logged (still 200: a provider must not retry it)
  *
  * The body is never logged. Retries are harmless: the command's clientId is
@@ -20,9 +23,10 @@ import {
   INTAKE_ACTOR,
   isAppError,
   paths,
-  storage,
+  type Board,
   type EmailThread,
   type Intake,
+  type MemoryUpload,
 } from '@tm/shared';
 import { docFromText, markdownToDoc } from '@tm/shared/logic/richtext/index';
 import { ports } from '../adapters/index.js';
@@ -38,6 +42,7 @@ import {
   stripQuoted,
 } from './inbound.js';
 import { parseReplyAddress } from './tokens.js';
+import { discardUnplaced, storeBoardFile, unsavedNote } from '../memory/attach.js';
 
 /** The actor ticketCreate sees for intake-created tickets (the shared contract). */
 export { INTAKE_ACTOR };
@@ -159,10 +164,11 @@ async function reply(
   const text = bodyText(mail);
   if (!text && mail.attachments.length === 0) return drop('empty reply');
   const people = await boardEmails(thread.boardId);
-  const body = text
-    ? markdownToDoc(text, { uidForEmail: (e) => people.get(e) })
+  const { uploads, unsaved } = await storeAttachments({ ...board, id: thread.boardId }, mail, now);
+  const said = [text, unsaved ? unsavedNote(unsaved) : ''].filter(Boolean).join('\n\n');
+  const body = said
+    ? markdownToDoc(said, { uidForEmail: (e) => people.get(e) })
     : docFromText('(attachment)');
-  const attachments = await storeAttachments(thread.boardId, thread.ticketId, mail);
   try {
     const res = (await invokeCommand(
       'messagePost',
@@ -170,7 +176,7 @@ async function reply(
         boardId: thread.boardId,
         ticketId: thread.ticketId,
         body,
-        ...(attachments.length ? { attachments } : {}),
+        ...(uploads.length ? { memoryUploads: uploads } : {}),
         clientId: clientIdFrom('em', mail.messageId ?? `${token}:${text}`),
       },
       { actor: thread.uid, via: 'email', email: user.email, emailVerified: true, now },
@@ -181,6 +187,7 @@ async function reply(
       ...(res?.messageId ? { messageId: res.messageId } : {}),
     };
   } catch (e) {
+    await discardUnplaced(uploads);
     if (isAppError(e)) return drop(`messagePost refused: ${e.code}`);
     throw e;
   }
@@ -198,8 +205,12 @@ async function intake(
   const text = bodyText(mail);
   const from = sender.name ? `${sender.name} <${sender.email}>` : sender.email;
   // The sender is stored as the ticket's reporter AND leads the description (the drawer shows the description).
-  const description = markdownToDoc(`From: ${from}${text ? `\n\n${text}` : ''}`);
-  const attachments = await storeAttachments(it.boardId, ticketId, mail);
+  const board = await getDoc(typedDoc('boards', paths.board(it.boardId)));
+  const { uploads, unsaved } = board
+    ? await storeAttachments({ ...board, id: it.boardId }, mail, now)
+    : { uploads: [], unsaved: 0 };
+  const note = unsaved ? `\n\n${unsavedNote(unsaved)}` : '';
+  const description = markdownToDoc(`From: ${from}${text ? `\n\n${text}` : ''}${note}`);
   const d = it.defaults;
   try {
     const res = (await invokeCommand(
@@ -213,7 +224,7 @@ async function intake(
         ...(d.priorityId ? { priorityId: d.priorityId } : {}),
         ...(d.tagIds?.length ? { tagIds: d.tagIds } : {}),
         ...(d.assigneeUids?.length ? { assigneeUids: d.assigneeUids } : {}),
-        ...(attachments.length ? { attachments } : {}),
+        ...(uploads.length ? { memoryUploads: uploads } : {}),
         reporter: {
           email: sender.email,
           ...(sender.name ? { name: sender.name.slice(0, 120) } : {}),
@@ -240,6 +251,7 @@ async function intake(
       ...(res?.key ? { key: res.key } : {}),
     };
   } catch (e) {
+    await discardUnplaced(uploads);
     if (isAppError(e)) return drop(`ticketCreate refused: ${e.code}`);
     throw e;
   }
@@ -251,20 +263,41 @@ async function boardEmails(boardId: string): Promise<Map<string, string>> {
   return new Map(s.docs.map((d) => [d.data().email.toLowerCase(), d.data().uid]));
 }
 
+/**
+ * memory.html §J: the mail's files go into the board's attachment memory, at
+ * its path template with '<ticketId>' left for the command to fill. Not
+ * registered yet (the command does that). No attachment memory — or one that
+ * stopped taking this board's files — keeps the mail, not its files.
+ */
 async function storeAttachments(
-  boardId: string,
-  ticketId: string,
+  board: Board & { id: string },
   mail: InboundEmail,
-): Promise<string[]> {
-  const out: string[] = [];
+  now: number,
+): Promise<{ uploads: MemoryUpload[]; unsaved: number }> {
+  const uploads: MemoryUpload[] = [];
+  let unsaved = 0;
   let total = 0;
   for (const a of mail.attachments.slice(0, MAX_INBOUND_ATTACHMENTS)) {
     const bytes = Buffer.from(a.content, 'base64');
     total += bytes.length;
     if (total > MAX_INBOUND_BYTES) break;
-    const path = storage.attachment(boardId, ticketId, ports().ids.id(), safeFileName(a.filename));
-    await ports().files.write(path, new Uint8Array(bytes), a.contentType);
-    out.push(path);
+    if (!board.attachMemory) {
+      unsaved++;
+      continue;
+    }
+    try {
+      uploads.push(
+        await storeBoardFile({ ids: ports().ids, now }, board, null, {
+          name: safeFileName(a.filename),
+          mime: a.contentType,
+          bytes: new Uint8Array(bytes),
+        }),
+      );
+    } catch (e) {
+      if (!isAppError(e)) throw e;
+      console.warn('[email] attachment not saved', e.code);
+      unsaved++;
+    }
   }
-  return out;
+  return { uploads, unsaved };
 }

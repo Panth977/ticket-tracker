@@ -5,7 +5,7 @@ description: How TaskManager works — boards, tickets, threads, task lists and 
 
 # TaskManager
 
-Version 1.4.0 · API v1 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
+Version 1.5.0 · API v1 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
 
 Boards, tickets and threads that people and agents share. You reach it through the `taskmanager` MCP server,
 which is already connected — you never construct HTTP requests for it, and you never ask the user for a token.
@@ -67,7 +67,7 @@ update_ticket        write  Change a ticket: title, description, stage, assignee
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
 post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
-upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
+upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         write  Link two tickets: blocks, relates or duplicates.
 get_events           read   Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.

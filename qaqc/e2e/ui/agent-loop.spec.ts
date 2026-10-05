@@ -16,7 +16,16 @@ import { expect, test } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { API_URL, call, eventually, newBoard, newPerson, read, stage } from '../support/stack.js';
+import {
+  API_URL,
+  call,
+  eventually,
+  newBoard,
+  newPerson,
+  read,
+  stage,
+  giveAttachMemory,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 const REPORT_MD = [
@@ -55,6 +64,7 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
 }) => {
   const ada = await newPerson('Ada', 'Lovelace');
   const b = await newBoard(ada, { name: 'Agent loop' });
+  await giveAttachMemory(ada, b.id);
 
   // ── 1. create the agent in the UI ──────────────────────────────────────────
   await signIn(page, ada.email, '/agents');

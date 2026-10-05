@@ -46,7 +46,7 @@ export const storageNameOf = (name: string) => encodeURIComponent(name);
 
 /** Upload inline bytes as a NEW object; returns the file facts (not yet on a node). */
 export async function writeBytes(
-  ctx: ServerCtx,
+  ctx: Pick<ServerCtx, 'ids'>,
   memoryId: string,
   name: string,
   bytes: Uint8Array,

@@ -5,13 +5,17 @@
  * BOTH SIDES must agree, so the caller must own the memory AND be an admin of
  * the board (or the owner of the artifact). Removing needs only the memory:
  * the owner can always take their memory back. Never an agent.
+ *
+ * memory.html §J: a board whose attachment memory this is (board.attachMemory)
+ * loses that default, in the same transaction, when the board's `write` goes
+ * (removed, or lowered to read).
  */
 import { errors, isAgentId, MEMORY_GRANTS_MAX, type Memory } from '@tm/shared';
 import { loadArtifact } from '../artifacts/shared.js';
 import { loadMemory, memoryRef } from '../memory/shared.js';
-import { runTx } from '../runtime/tx.js';
+import { runTx, txGet } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
-import { loadBoard } from './boardShared.js';
+import { boardRef, loadBoard } from './boardShared.js';
 
 export default defineCommand(
   'memoryGrantSet',
@@ -20,8 +24,14 @@ export default defineCommand(
     await runTx(async (tx) => {
       const { memory } = await loadMemory(tx, memoryId, ctx, 'manage');
       const patch: Partial<Memory> = { updatedAt: ctx.now };
+      let unsetDefault = false;
       if (boardId) {
         const boards = { ...memory.boards };
+        // §J: the board's default attachment memory stops being one without write.
+        if (access !== 'write' && boards[boardId] === 'write') {
+          const b = await txGet(tx, boardRef(boardId));
+          unsetDefault = b?.attachMemory?.memoryId === memoryId;
+        }
         if (access === null) {
           if (!Object.prototype.hasOwnProperty.call(boards, boardId)) return;
           delete boards[boardId];
@@ -50,6 +60,8 @@ export default defineCommand(
         patch.artifacts = artifacts;
       }
       tx.update(memoryRef(memoryId), patch);
+      if (boardId && unsetDefault)
+        tx.update(boardRef(boardId), { attachMemory: null, updatedAt: ctx.now });
     });
     return { ok: true as const };
   },

@@ -2,7 +2,9 @@
  * messagePost (app/backend.json services.messagePost).
  *
  *   can(comment); ticket state 'active' (closed tickets have closed threads → 409)
- *   body = parseRichText(body); attachments exist under this ticket's prefix, ≤ 50 MB
+ *   body = parseRichText(body); `attachments` is retired (memory.html §J) and
+ *   refused; memoryUploads become NEW files in a memory granted `write` to the
+ *   board, in the same transaction as the message (memory/attach.ts)
  *   ONE write on the ticket document (§W): recentMessages += the message
  *     (spilling the oldest chunk into data/{NNN} if that pushes it over the
  *     cut); files += rows (source 'message'); counts.messages++ /
@@ -56,8 +58,9 @@ import {
   requireWritableBoard,
   withTicketId,
 } from '../tickets/access.js';
-import { resolveAttachments } from '../tickets/attachments.js';
 import { resolveMemoryRefs } from '../memory/refs.js';
+import { planMemoryUploads, stageMemoryUploads, withUploads } from '../memory/attach.js';
+import { refuseBoardAttachments } from '../tickets/attachments.js';
 import { attachUploadedFiles, readUploadedFiles } from '../tickets/files.js';
 import { openTicket } from '../tickets/doc.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
@@ -81,119 +84,126 @@ export default defineCommand('messagePost', async (ctx, input) => {
   requireCan(ctx, board, 'comment');
   requireWritableBoard(board);
 
+  // memory.html §J: a board takes no files of its own any more.
+  refuseBoardAttachments(input.attachments);
+
   const empty = isEmptyDoc(input.body);
-  if (empty && !input.attachments?.length && !input.fileIds?.length && !input.memoryRefs?.length)
+  if (empty && !input.fileIds?.length && !input.memoryRefs?.length && !input.memoryUploads?.length)
     throw errors.invalid('Write something or attach a file', { field: 'body' });
   const parsed = empty
     ? { rich: EMPTY_RICH, refAt: new Map() }
     : await parseBody(input.body, board, ctx, ticketId);
-  const uploaded = await resolveAttachments(input.attachments, boardId, ticketId, ctx.actor);
   // memory.html §E: memory files by reference (the memory must be granted to this board).
   const memoryFiles = await resolveMemoryRefs(ctx, input.memoryRefs, boardId);
-  const fileIds = [...new Set(input.fileIds ?? [])].filter(
-    (id) => !uploaded.some((a) => a.id === id),
-  );
+  const fileIds = [...new Set(input.fileIds ?? [])];
   const byName = await actorName(ctx, boardId);
+  // memory.html §J: files just uploaded INTO a memory become new nodes there —
+  // planned and written in the transaction below, with the message. Staged
+  // last, after every cheap refusal; a failure from here on removes them again.
+  const staged = await stageMemoryUploads(input.memoryUploads);
 
-  const res = await runTx(async (tx) => {
-    // ── reads ──
-    const w = await openTicket(tx, ctx, boardId, ticketId);
-    const ticket = w.before;
-    requireActive(ticket);
-    let messageId = input.clientId;
-    const existing = w.find(messageId);
-    if (existing) {
-      // A late retry of our own post: the same message, not a second one.
-      if (existing.authorUid === ctx.actor)
-        return { replay: true as const, messageId, ticket, message: existing, newRefs: [] };
-      messageId = ctx.ids.id();
-    }
-    if (input.replyTo && !(await w.locate(input.replyTo)))
-      throw errors.invalid('The quoted message does not exist', { field: 'replyTo' });
-    const posted = readUploadedFiles(w, fileIds);
-    const attachments = [...uploaded, ...posted.map((f) => f.attachment), ...memoryFiles];
-    const newRefs = parsed.rich.refs.filter((r) => !ticket.refs.includes(r));
-    const targets = await readRefTargets(tx, newRefs, parsed.refAt);
-    // §Y2: a receipt moves the board's counter and the day row too, so both
-    // are read HERE (the read phase, this transaction) — the board loaded
-    // above was read outside it.
-    const receipt = input.run ?? null;
-    const day = costDayOf(ctx.now);
-    const statRef = typedDoc('stats', paths.stat(boardId, day));
-    const costReads = receipt
-      ? await Promise.all([txGet(tx, boardRef(boardId)), txGet(tx, statRef)])
-      : null;
+  const res = await withUploads(staged, () =>
+    runTx(async (tx) => {
+      // ── reads ──
+      const w = await openTicket(tx, ctx, boardId, ticketId);
+      const ticket = w.before;
+      requireActive(ticket);
+      let messageId = input.clientId;
+      const existing = w.find(messageId);
+      if (existing) {
+        // A late retry of our own post: the same message, not a second one.
+        if (existing.authorUid === ctx.actor)
+          return { replay: true as const, messageId, ticket, message: existing, newRefs: [] };
+        messageId = ctx.ids.id();
+      }
+      if (input.replyTo && !(await w.locate(input.replyTo)))
+        throw errors.invalid('The quoted message does not exist', { field: 'replyTo' });
+      const posted = readUploadedFiles(w, fileIds);
+      const plan = await planMemoryUploads(tx, ctx, staged, boardId, ticket.key);
+      const attachments = [...plan.attachments, ...posted.map((f) => f.attachment), ...memoryFiles];
+      const newRefs = parsed.rich.refs.filter((r) => !ticket.refs.includes(r));
+      const targets = await readRefTargets(tx, newRefs, parsed.refAt);
+      // §Y2: a receipt moves the board's counter and the day row too, so both
+      // are read HERE (the read phase, this transaction) — the board loaded
+      // above was read outside it.
+      const receipt = input.run ?? null;
+      const day = costDayOf(ctx.now);
+      const statRef = typedDoc('stats', paths.stat(boardId, day));
+      const costReads = receipt
+        ? await Promise.all([txGet(tx, boardRef(boardId)), txGet(tx, statRef)])
+        : null;
 
-    // ── writes ──
-    const markdown = input.markdown?.trim() ? input.markdown : null;
-    const message: Message = {
-      kind: 'comment',
-      body: parsed.rich,
-      ...(markdown ? { markdown } : {}),
-      ...(receipt ? { run: receipt } : {}),
-      authorUid: ctx.actor,
-      authorName: byName,
-      via: ctx.via,
-      ...viaTokenOf(ctx),
-      replyTo: input.replyTo ?? null,
-      attachments,
-      reactions: {},
-      pinnedAt: null,
-      pinnedBy: null,
-      editedAt: null,
-      deletedAt: null,
-      createdAt: ctx.now,
-    };
-    w.addMessage(messageId, message);
-    // API uploads were already counted when they arrived; these are the direct ones.
-    w.addFiles(fileRows(uploaded, 'message', messageId, ctx.now));
-    if (memoryFiles.length) w.addFiles(fileRows(memoryFiles, 'memory', messageId, ctx.now));
-    attachUploadedFiles(w, posted, messageId);
-    w.set({ watcherUids: [...new Set([...ticket.watcherUids, ctx.actor])] });
-    if (targets.length)
-      w.set({ refs: [...new Set([...ticket.refs, ...targets.map((t) => t.id)])] });
-    if (receipt && costReads) {
-      // §Y2: three counters, one day row, the same write as the message.
-      const [boardNow, dayNow] = costReads;
-      w.set({ cost: addCost(ticket.cost, receipt.costUsd) });
-      tx.update(boardRef(boardId), { cost: addCost(boardNow?.cost, receipt.costUsd) });
-      const prevDay: BoardDayStats = dayNow ?? {
-        day,
-        costUsd: 0,
-        runs: 0,
-        tickets: {},
-        updatedAt: ctx.now,
+      // ── writes ──
+      const markdown = input.markdown?.trim() ? input.markdown : null;
+      const message: Message = {
+        kind: 'comment',
+        body: parsed.rich,
+        ...(markdown ? { markdown } : {}),
+        ...(receipt ? { run: receipt } : {}),
+        authorUid: ctx.actor,
+        authorName: byName,
+        via: ctx.via,
+        ...viaTokenOf(ctx),
+        replyTo: input.replyTo ?? null,
+        attachments,
+        reactions: {},
+        pinnedAt: null,
+        pinnedBy: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: ctx.now,
       };
-      const next: BoardDayStats = {
-        day,
-        costUsd: round6(prevDay.costUsd + receipt.costUsd),
-        runs: prevDay.runs + 1,
-        tickets: {
-          ...prevDay.tickets,
-          [ticket.key]: addCost(prevDay.tickets[ticket.key], receipt.costUsd),
-        },
-        updatedAt: ctx.now,
+      w.addMessage(messageId, message);
+      plan.write(tx);
+      const refRows = [...plan.attachments, ...memoryFiles];
+      if (refRows.length) w.addFiles(fileRows(refRows, 'memory', messageId, ctx.now));
+      attachUploadedFiles(w, posted, messageId);
+      w.set({ watcherUids: [...new Set([...ticket.watcherUids, ctx.actor])] });
+      if (targets.length)
+        w.set({ refs: [...new Set([...ticket.refs, ...targets.map((t) => t.id)])] });
+      if (receipt && costReads) {
+        // §Y2: three counters, one day row, the same write as the message.
+        const [boardNow, dayNow] = costReads;
+        w.set({ cost: addCost(ticket.cost, receipt.costUsd) });
+        tx.update(boardRef(boardId), { cost: addCost(boardNow?.cost, receipt.costUsd) });
+        const prevDay: BoardDayStats = dayNow ?? {
+          day,
+          costUsd: 0,
+          runs: 0,
+          tickets: {},
+          updatedAt: ctx.now,
+        };
+        const next: BoardDayStats = {
+          day,
+          costUsd: round6(prevDay.costUsd + receipt.costUsd),
+          runs: prevDay.runs + 1,
+          tickets: {
+            ...prevDay.tickets,
+            [ticket.key]: addCost(prevDay.tickets[ticket.key], receipt.costUsd),
+          },
+          updatedAt: ctx.now,
+        };
+        tx.set(statRef, next);
+      }
+      const after = w.commit();
+      // Your own message is read: the unread dot never lights up for its author.
+      // (Agents never open the app: no read pointer for them.)
+      if (!isAgentId(ctx.actor)) {
+        const read: Read = { boardId, readAt: ctx.now, ticketId };
+        tx.set(typedDoc('reads', paths.read(ctx.actor, ticketId)), read);
+      }
+      writeReferences(tx, ctx, { id: ticketId, key: ticket.key, boardId }, targets, {
+        systemLine: { byName },
+      });
+      return {
+        replay: false as const,
+        messageId,
+        ticket: after,
+        message,
+        newRefs: targets.map((t) => t.id),
       };
-      tx.set(statRef, next);
-    }
-    const after = w.commit();
-    // Your own message is read: the unread dot never lights up for its author.
-    // (Agents never open the app: no read pointer for them.)
-    if (!isAgentId(ctx.actor)) {
-      const read: Read = { boardId, readAt: ctx.now, ticketId };
-      tx.set(typedDoc('reads', paths.read(ctx.actor, ticketId)), read);
-    }
-    writeReferences(tx, ctx, { id: ticketId, key: ticket.key, boardId }, targets, {
-      systemLine: { byName },
-    });
-    return {
-      replay: false as const,
-      messageId,
-      ticket: after,
-      message,
-      newRefs: targets.map((t) => t.id),
-    };
-  });
+    }),
+  );
   if (res.replay) return { messageId: res.messageId };
 
   // ── after commit ──

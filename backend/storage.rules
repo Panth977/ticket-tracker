@@ -4,11 +4,11 @@ rules_version = '2';
 //
 // Source of truth: app/db.json `attachments` (and its avatar / export notes).
 //
-// UPLOAD DIRECT, ATTACH THROUGH A COMMAND. The browser uploads an attachment
-// straight to Storage (with progress); messagePost / ticketCreate /
-// ticketUpdate then names the path and the command checks the object exists
-// and sits under that ticket's prefix. An upload nobody attached is swept
-// after 24h. Objects are never overwritten or deleted by a client.
+// UPLOAD DIRECT, ATTACH THROUGH A COMMAND. The browser uploads straight to
+// Storage (with progress); a command then names the object and checks it.
+// Ticket attachments now go INTO a memory (memory.html §J — see
+// memories/… at the bottom); the old boards/…/tickets/… path is read-only.
+// Objects are never overwritten or deleted by a client.
 //
 // Board roles are read from Firestore with firestore.get() — the same
 // boards/{boardId}.access map the Firestore rules use.
@@ -74,17 +74,14 @@ service firebase.storage {
 
     // boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName}
     // (and the thumb_400.webp that onAttachmentFinalized writes beside it).
+    //
+    // RETIRED FOR NEW FILES (docs/plan/memory.html §J): a board takes no files
+    // of its own — a file put on a ticket goes INTO a memory granted `write`
+    // to the board (memories/… below, with metadata.boardId). Existing objects
+    // stay readable; only the server writes here now (thumbnails).
     match /boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName} {
       allow read: if canReadBoard(boardId);
-      // `resource == null`: an attachment is written once. (The emulator
-      // routes an overwrite through `create`, so say it explicitly.)
-      allow create: if resource == null
-        && canWriteBoard(boardId)
-        && request.resource.size < 50 * 1024 * 1024
-        // Thumbnails are written by the server only; a client-supplied one
-        // would be shown in place of the real image.
-        && fileName != 'thumb_400.webp';
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     // Profile picture: users/{uid}/avatar/{millis}.webp, 256px.
@@ -200,11 +197,30 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/memories/$(memoryId)).data.archivedAt == null;
     }
 
+    // §J — A TICKET ATTACHMENT goes into a memory granted `write` to the
+    // board, by anyone who may put words on that board (admin, editor,
+    // commenter: canWriteBoard), whatever their role on the memory. The upload
+    // names the board in its metadata ({ boardId }); messagePost / ticketCreate
+    // `memoryUploads` then make it a NEW node (never replacing one). An
+    // archived or deleting memory takes nothing.
+    function memoryTakesBoardFile(memoryId) {
+      let boardId = request.resource.metadata.get('boardId', null);
+      let m = firestore.get(/databases/(default)/documents/memories/$(memoryId)).data;
+      return signedIn()
+        && notRefused(request.auth.uid)
+        && boardId is string
+        && boardId.matches('[A-Za-z0-9_-]{1,64}')
+        && m.boards.get(boardId, null) == 'write'
+        && m.archivedAt == null
+        && m.get('deletingAt', null) == null
+        && canWriteBoard(boardId);
+    }
+
     match /memories/{memoryId}/{fileId}/{fileName} {
       allow create: if resource == null
         && fileId.matches('[A-Za-z0-9_-]{6,64}')
-        && memoryMayWrite(memoryId)
-        && request.resource.size <= 1024 * 1024 * 1024;
+        && request.resource.size <= 1024 * 1024 * 1024
+        && (memoryMayWrite(memoryId) || memoryTakesBoardFile(memoryId));
       allow read, update, delete: if false;
     }
 

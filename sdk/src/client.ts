@@ -216,6 +216,14 @@ export interface UploadInput {
   text?: string;
   base64?: string;
   bytes?: Uint8Array;
+  /**
+   * 1.5.0: the memory the file goes into — one granted `write` to the board.
+   * Default: the board's attachment memory (board settings › Memory). A board
+   * takes no files of its own: with neither, the upload is refused (400).
+   */
+  memoryId?: string;
+  /** 1.5.0: the path in that memory. Default: the board's template; a taken path gets ' (2)'. */
+  path?: string;
 }
 
 /** A question field, as you write it: `options` may be plain strings. */
@@ -1161,7 +1169,9 @@ function createClientBase(options: ClientOptions) {
         get<{ data: TmFile[] }>(`/tickets/${seg(key)}/files`, undefined, o),
       /**
        * Put a file on a ticket. `text` makes .md / .html documents trivial;
-       * `bytes` (or `base64`) carries anything else, up to 25 MB.
+       * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
+       * are stored in the board's attachment memory (or `memoryId`) and the
+       * ticket references that memory file.
        */
       upload: (key: string, input: UploadInput, o?: RequestOptions): Promise<UploadedFile> => {
         const given = [input.text, input.base64, input.bytes].filter((v) => v !== undefined).length;
@@ -1175,6 +1185,8 @@ function createClientBase(options: ClientOptions) {
             mime: input.mime,
             text: input.text,
             content_base64: input.base64 ?? (input.bytes ? toBase64(input.bytes) : undefined),
+            memory_id: input.memoryId,
+            path: input.path,
           }),
           o,
         );

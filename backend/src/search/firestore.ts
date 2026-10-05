@@ -105,7 +105,8 @@ async function titlePrefix(boardId: string, text: string): Promise<Hit[]> {
     variants.map((v) =>
       col
         .where('title', '>=', v)
-        .where('title', '<', v + '')
+        // U+10FFFF, not U+F8FF: Firestore compares UTF-8 bytes, and emoji sort above U+F8FF.
+        .where('title', '<', v + '\u{10ffff}')
         .limit(PREFIX_PER_BOARD)
         .get(),
     ),

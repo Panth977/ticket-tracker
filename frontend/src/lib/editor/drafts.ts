@@ -8,11 +8,14 @@
 import { RichTextDocSchema, type RichTextDoc } from '@tm/shared';
 
 export interface DraftAttachment {
-  /** Storage path (already uploaded). */
+  /** Storage path (already uploaded), or a memory reference's virtual path. */
   path: string;
   name: string;
   size: number;
   mime: string;
+  /** memory.html §J: uploaded INTO this memory, to become a file at memoryPath. */
+  memoryId?: string;
+  memoryPath?: string;
 }
 
 export interface Draft {

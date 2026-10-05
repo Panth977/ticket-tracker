@@ -441,7 +441,13 @@ v1.get('/tickets/:key/files', async (c) => {
 v1.post('/tickets/:key/files', async (c) => {
   const ctx = gate(c, 'POST', '/v1/tickets/{KEY}/files');
   const type = (c.req.header('content-type') ?? '').toLowerCase();
-  let input: { name: string; mime?: string | undefined; bytes: Uint8Array };
+  let input: {
+    name: string;
+    mime?: string | undefined;
+    bytes: Uint8Array;
+    memoryId?: string | undefined;
+    path?: string | undefined;
+  };
   if (type.startsWith('multipart/form-data')) {
     const len = Number(c.req.header('content-length') ?? 0);
     if (len > MAX_API_UPLOAD_BYTES + 64 * 1024)
@@ -459,17 +465,31 @@ v1.post('/tickets/:key/files', async (c) => {
       });
     const name = (form.get('name') as string | null)?.trim() || part.name || 'file';
     const mime = (form.get('mime') as string | null)?.trim() || part.type || undefined;
-    input = { name, mime, bytes: new Uint8Array(await part.arrayBuffer()) };
+    // memory.html §J: optional memory_id / path fields, like the JSON body.
+    const field = (k: string) => (form.get(k) as string | null)?.trim() || undefined;
+    input = {
+      name,
+      mime,
+      bytes: new Uint8Array(await part.arrayBuffer()),
+      memoryId: field('memory_id'),
+      path: field('path'),
+    };
   } else {
     const b = parseJson(await readText(c, MAX_UPLOAD_BODY_BYTES), RestUploadJsonBodySchema);
-    input = { name: b.name, mime: b.mime, bytes: uploadBytes(b) };
+    input = {
+      name: b.name,
+      mime: b.mime,
+      bytes: uploadBytes(b),
+      memoryId: b.memory_id,
+      path: b.path,
+    };
   }
   const { board, ticket } = await ticketByKey(ctx, c.req.param('key'));
   const file = await storeTicketUpload(ctx, board, ticket, input, idem(c));
   // The answer carries a signed URL like GET /v1/files/{id}.
   const [members, signed] = await Promise.all([
     boardMembers(board.id),
-    signedUrl(file.path, ctx.now),
+    signedUrl(file.objectPath, ctx.now),
   ]);
   return c.json({ ...toPublicFile(ticket.key, file, members, signed), file_id: file.id }, 201);
 });

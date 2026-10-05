@@ -155,6 +155,34 @@ describe('memory: paths (§A)', () => {
     expect((await call(owner, 'memoryFileRead', { memoryId, path: 'readme.md' })).text).toBe('3');
   });
 
+  it('a folder move takes names past U+F8FF along (emoji, fullwidth), and only its own subtree', async () => {
+    const { owner } = await people('owner');
+    const memoryId = await newMemory(owner);
+    await write(owner, memoryId, 'img/wallpapers/🐺.jpeg', 'w');
+    await write(owner, memoryId, 'img/wallpapers/Ａ.txt', 'a');
+    await write(owner, memoryId, 'img/wallpapers/b.txt', 'b');
+    // siblings that only SHARE A PREFIX stay put
+    await write(owner, memoryId, 'img/wallpapers0.txt', '0');
+    await write(owner, memoryId, 'img/wallpapers-old/c.txt', 'c');
+    await call(owner, 'memoryMove', { memoryId, path: 'img/wallpapers', toPath: 'wallpapers' });
+    expect((await nodes(memoryId)).map((n) => n.path).sort()).toEqual(
+      [
+        'img',
+        'img/wallpapers-old',
+        'img/wallpapers-old/c.txt',
+        'img/wallpapers0.txt',
+        'wallpapers',
+        'wallpapers/b.txt',
+        'wallpapers/Ａ.txt',
+        'wallpapers/🐺.jpeg',
+      ].sort(),
+    );
+    // …and delete takes them too
+    expect(
+      (await call(owner, 'memoryNodeDelete', { memoryId, paths: ['wallpapers'] })).deleted,
+    ).toBe(4);
+  });
+
   it('delete is recursive; the counters and the Storage objects follow', async () => {
     const { owner } = await people('owner');
     const memoryId = await newMemory(owner);

@@ -558,7 +558,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   upload_file: {
     description:
-      'Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.',
+      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
     readOnly: false,
     scopes: ['files:write'],
     inputSchema: schema(
@@ -571,6 +571,14 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         mime: str('Default: from the extension'),
         text: str('Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.'),
         content_base64: str('Binary content, base64. ≤ 25 MB decoded.'),
+        memory_id: str(
+          "The memory the file goes into (granted write to this board). Default: the board's attachment memory.",
+          { minLength: 1, maxLength: 64 },
+        ),
+        path: str(
+          "Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
+          { minLength: 1, maxLength: 1024 },
+        ),
       },
       ['key', 'name'],
     ),
@@ -578,6 +586,8 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       tm.files.upload(s(a.key), {
         name: s(a.name),
         mime: a.mime,
+        ...(a.memory_id !== undefined ? { memoryId: s(a.memory_id) } : {}),
+        ...(a.path !== undefined ? { path: s(a.path) } : {}),
         ...(a.text !== undefined ? { text: s(a.text) } : { base64: s(a.content_base64) }),
       }),
   },

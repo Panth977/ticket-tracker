@@ -119,11 +119,30 @@
   const folder = $derived(
     openNode ? (openNode.kind === 'folder' ? openNode.path : memoryParentPath(openNode.path)) : '',
   );
-  const missing = $derived(!!path && !$nodesQ.loading && !openNode);
+  // FOLLOW WHAT IS OPEN, by id: a move or rename — here, in another tab, by an
+  // agent — changes its path (and every path under a moved folder), never its
+  // id. So when ?path= stops naming anything but the node we had open is still
+  // there under a new path, go there instead of saying it is gone.
+  let openId = $state<string | null>(null);
+  $effect(() => {
+    if (openNode) openId = openNode.id;
+    else if (!path) openId = null;
+  });
+  const movedTo = $derived(
+    path && !openNode && openId ? (nodes.find((n) => n.id === openId)?.path ?? null) : null,
+  );
+  $effect(() => {
+    if (movedTo !== null) go(movedTo, { replace: true });
+  });
+  const missing = $derived(!!path && !$nodesQ.loading && !openNode && movedTo === null);
 
-  function go(p: string, opts: { mode?: FileMode } = {}) {
+  function go(p: string, opts: { mode?: FileMode; replace?: boolean } = {}) {
     if (opts.mode) mode = opts.mode;
-    void goto(routes.memory(memoryId, p || null), { keepFocus: true, noScroll: true });
+    void goto(routes.memory(memoryId, p || null), {
+      keepFocus: true,
+      noScroll: true,
+      replaceState: !!opts.replace,
+    });
   }
 
   // ── view and mode ──────────────────────────────────────────────────────────

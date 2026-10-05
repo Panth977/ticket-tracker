@@ -14,7 +14,15 @@
  */
 import { expect, test } from '@playwright/test';
 import { SCOPE_PRESETS } from '@tm/shared';
-import { API_URL, call, http, newBoard, newPerson, read } from '../support/stack.js';
+import {
+  API_URL,
+  call,
+  http,
+  newBoard,
+  newPerson,
+  read,
+  giveAttachMemory,
+} from '../support/stack.js';
 
 const bearer = (key: string) => ({
   authorization: `Bearer ${key}`,
@@ -37,6 +45,7 @@ interface Access {
 test('a file uploaded by an agent is served to the app through /api/files', async () => {
   const ada = await newPerson('Ada');
   const eng = await newBoard(ada, { name: 'Files board' });
+  await giveAttachMemory(ada, eng.id);
   const { agentId } = await call(ada, 'agentCreate', {
     name: 'Filer',
     description: 'Uploads things',

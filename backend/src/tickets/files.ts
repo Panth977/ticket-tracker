@@ -2,23 +2,29 @@
  * Files that arrive through the API (docs/plan/agents.html §F, §G):
  *
  *   storeUploadedFile   POST /v1/tickets/{KEY}/files and MCP upload_file: the
- *                       server writes the blob under the ticket's prefix and a
- *                       a row in `ticket.files` { source: 'upload', messageId: null }.
- *                       The file is on the ticket (Files tab, counts.files) but
- *                       in no message yet.
+ *                       server writes the blob INTO a memory granted `write` to
+ *                       the board (memory.html §J — the board's attachMemory
+ *                       unless the caller names one), makes it a new node there,
+ *                       and adds a row in `ticket.files` { source: 'upload',
+ *                       messageId: null } that REFERENCES the node (path =
+ *                       memoryRefPath, `memory` set). The file is on the
+ *                       ticket (Files tab, counts.files) but in no message yet.
  *   readUploadedFiles   messagePost's `fileIds`: rows that are 'upload' and unattached
  *   attachUploadedFiles …which then flip to source 'message' with messageId set.
  *
- * Browser uploads keep their own path (direct to Storage, then a command names
- * the path — tickets/attachments.ts). Both end up as the same `ticket.files`
- * row, so the viewer, housekeeping (a row = attached, never swept) and the
- * delete treat them alike.
+ * Browser uploads go into the memory themselves (memoryUploads). Both end up
+ * as the same kind of `ticket.files` row — a reference to a memory node.
  */
-import { errors, storage, type Attachment, type TicketFile } from '@tm/shared';
+import { errors, type Attachment, type TicketFile } from '@tm/shared';
 import { fileInfo, MAX_API_UPLOAD_BYTES, type FileKind } from '@tm/shared/logic/index';
-import { ports } from '../adapters/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { runTx } from '../runtime/tx.js';
+import {
+  planMemoryUploads,
+  stageMemoryUploads,
+  storeBoardFile,
+  withUploads,
+} from '../memory/attach.js';
 import { openTicket, type TicketWriter } from './doc.js';
 import {
   loadBoard,
@@ -36,10 +42,17 @@ export interface UploadInput {
   /** Optional: guessed from the name when absent or generic (fileInfo). */
   mime?: string | null;
   data: Uint8Array;
+  /** The ticket file row's id (the door derives it from an Idempotency-Key). */
+  fileId?: string | undefined;
+  /** memory.html §J: which memory (default: the board's attachMemory). */
+  memoryId?: string | undefined;
+  /** …and where in it (default: the board's template; '<ticketId>' is filled). */
+  path?: string | undefined;
 }
 
 export interface UploadedFile {
   fileId: string;
+  /** memoryRefPath(memoryId, nodeId): what the ticket row carries. */
   path: string;
   name: string;
   mime: string;
@@ -47,6 +60,9 @@ export interface UploadedFile {
   kind: FileKind;
   uploadedBy: string;
   createdAt: number;
+  memory: { memoryId: string; nodeId: string };
+  /** The node's object (memories/{m}/{fileId}/{name}) — for a signed URL. */
+  objectPath: string;
 }
 
 /** 'reports/Q3 plan.md' → 'Q3 plan.md'; never empty, ≤ 255 chars, no control chars. */
@@ -63,10 +79,12 @@ export function cleanFileName(name: string): string {
  *
  *   can(upload) on the board (commenter+; token scope files:write), board not
  *   archived, ticket active (closed threads take no files), ≤ 25 MB.
- *   blob → boards/{b}/tickets/{t}/{fileId}/{encoded name}
- *   ticket.files += { source: 'upload', uploadedBy: actor, messageId: null },
- *   counts.files and signals.fileCount follow — ONE write, after the blob is
- *   written; if it fails the blob is removed again.
+ *   blob → memories/{m}/{fileId}/{name}: the board's attachMemory (or
+ *     input.memoryId), which must be granted `write` to the board — none → 400
+ *   ONE transaction: the new memory node (never replacing one: a taken path
+ *     gets ' (2)'…) and ticket.files += { source: 'upload', messageId: null,
+ *     path: memoryRefPath, memory }; counts.files follows. If it fails the
+ *     blob is removed again.
  */
 export async function storeUploadedFile(ctx: ServerCtx, input: UploadInput): Promise<UploadedFile> {
   const { boardId, ticketId } = input;
@@ -79,27 +97,32 @@ export async function storeUploadedFile(ctx: ServerCtx, input: UploadInput): Pro
       size,
       limit: MAX_API_UPLOAD_BYTES,
     });
-  requireActive(await loadTicket(boardId, ticketId));
+  const ticket = await loadTicket(boardId, ticketId);
+  requireActive(ticket);
 
   const name = cleanFileName(input.name);
   const info = fileInfo(input.mime ?? null, name);
   const mime = info.mime || 'application/octet-stream';
-  const fileId = ctx.ids.id();
-  const path = storage.attachment(boardId, ticketId, fileId, encodeURIComponent(name));
+  const fileId = input.fileId ?? ctx.ids.id();
 
-  const files = ports().files;
-  await files.write(path, input.data, mime);
-  try {
-    await runTx(async (tx) => {
+  const upload = await storeBoardFile(
+    ctx,
+    board,
+    ticket.key,
+    { name, mime, bytes: input.data },
+    { memoryId: input.memoryId, path: input.path },
+  );
+  const staged = await stageMemoryUploads([upload]);
+  const row = await withUploads(staged, () =>
+    runTx(async (tx) => {
       const w = await openTicket(tx, ctx, boardId, ticketId);
       requireActive(w.before);
+      const plan = await planMemoryUploads(tx, ctx, staged, boardId, w.before.key);
+      const a = plan.attachments[0]!;
+      plan.write(tx);
       const row: TicketFile = {
+        ...a,
         id: fileId,
-        path,
-        name,
-        mime,
-        size,
-        uploadedBy: ctx.actor,
         source: 'upload',
         messageId: null,
         createdAt: ctx.now,
@@ -108,20 +131,20 @@ export async function storeUploadedFile(ctx: ServerCtx, input: UploadInput): Pro
       w.addFiles([row]);
       w.touch();
       w.commit();
-    });
-  } catch (e) {
-    await files.delete(path).catch(() => {});
-    throw e;
-  }
+      return row;
+    }),
+  );
   return {
     fileId,
-    path,
-    name,
-    mime,
-    size,
-    kind: info.kind,
+    path: row.path,
+    name: row.name,
+    mime: row.mime,
+    size: row.size,
+    kind: fileInfo(row.mime, row.name).kind,
     uploadedBy: ctx.actor,
     createdAt: ctx.now,
+    memory: row.memory!,
+    objectPath: staged[0]!.file.storagePath,
   };
 }
 
@@ -158,6 +181,8 @@ export function readUploadedFiles(w: TicketWriter, fileIds: readonly string[]): 
       ...(f.width && f.height ? { width: f.width, height: f.height } : {}),
       ...(f.thumbPath ? { thumbPath: f.thumbPath } : {}),
       uploadedBy: f.uploadedBy,
+      // memory.html §J: an API upload is a reference to a memory node.
+      ...(f.memory ? { memory: f.memory } : {}),
     };
     return { fileId: f.id, attachment };
   });

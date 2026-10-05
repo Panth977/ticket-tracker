@@ -5,7 +5,15 @@
  * to another step, so their calls are observed through setCommandInvoker.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { AppError, defaultChannelMatrix, paths, type Delivery, type Intake } from '@tm/shared';
+import {
+  AppError,
+  attachTime,
+  DEFAULT_ATTACH_TEMPLATE,
+  defaultChannelMatrix,
+  paths,
+  type Delivery,
+  type Intake,
+} from '@tm/shared';
 import { fixtures } from '@tm/shared/schema/fixtures';
 import { setCommandInvoker } from '../../src/notify/commands.js';
 import { clientIdFrom, signMeta, signSvix } from '../../src/notify/inbound.js';
@@ -49,6 +57,24 @@ const post = (path: string, body: unknown, headers: Record<string, string> = {})
 const outcome = (r: { body: unknown }) =>
   (r.body as { outcome: { kind: string; reason?: string } }).outcome;
 
+/** memory.html §J: a memory granted write to the board, set as its attachment memory. */
+async function giveAttachMemory(boardId: string, ownerUid: string): Promise<string> {
+  const memoryId = uniq('mem_');
+  await typedDoc('memories', paths.memory(memoryId)).set({
+    ...fixtures.memories,
+    ownerUid,
+    access: { [ownerUid]: 'owner' },
+    memberUids: [ownerUid],
+    boards: { [boardId]: 'write' },
+    boardIds: [boardId],
+    stats: { files: 0, folders: 0, bytes: 0 },
+  });
+  await typedDoc('boards', paths.board(boardId)).update({
+    attachMemory: { memoryId, template: DEFAULT_ATTACH_TEMPLATE },
+  });
+  return memoryId;
+}
+
 async function thread(over: { emailReplies?: boolean; expiresAt?: number } = {}) {
   const f = useFakes();
   const u = await seedUser({ email: `${uniq('r')}@test.dev` });
@@ -82,6 +108,7 @@ async function thread(over: { emailReplies?: boolean; expiresAt?: number } = {})
 describe('/hooks/email — replies', () => {
   it('posts the reply (quote and signature stripped, @email resolved, attachments stored) as the thread owner via email', async () => {
     const { f, u, other, board, t, to } = await thread();
+    const memoryId = await giveAttachMemory(board.id, u.uid);
     observeCommands();
     const r = await post('/hooks/email', {
       type: 'email.received',
@@ -111,9 +138,40 @@ describe('/hooks/email — replies', () => {
     expect(bodyJson).toContain('Sounds good');
     expect(bodyJson).not.toContain('old stuff');
     expect(bodyJson).toContain(`"uid":"${other.uid}"`); // the @email became a mention
-    const [path] = c.input.attachments as string[];
-    expect(path).toMatch(new RegExp(`^boards/${board.id}/tickets/${t.id}/[^/]+/evil name_.txt$`));
-    expect(f.files.get(path!)).toBe('text/plain');
+    // memory.html §J: into the board's attachment memory; messagePost fills <ticketId>.
+    expect(c.input.attachments).toBeUndefined();
+    const [up] = c.input.memoryUploads as { memoryId: string; path: string; storagePath: string }[];
+    expect(up).toMatchObject({
+      memoryId,
+      path: `tickets/<ticketId>/${attachTime(T)}_evil name_.txt`,
+      storagePath: expect.stringMatching(new RegExp(`^memories/${memoryId}/[^/]+/[^/]+$`)),
+    });
+    expect(f.files.get(up!.storagePath)).toBe('text/plain');
+  });
+
+  it('a board with no attachment memory keeps the reply, not its files, and says so', async () => {
+    const { u, to } = await thread();
+    observeCommands();
+    const r = await post('/hooks/email', {
+      type: 'email.received',
+      data: {
+        from: u.email,
+        to: [to],
+        subject: 'Re: x',
+        text: 'Here you go',
+        attachments: [
+          { filename: 'a.txt', content_type: 'text/plain', content: 'aGk=' },
+          { filename: 'b.txt', content_type: 'text/plain', content: 'aGk=' },
+        ],
+      },
+    });
+    expect(outcome(r)).toMatchObject({ kind: 'reply' });
+    const c = calls[0]!;
+    expect(c.input.memoryUploads).toBeUndefined();
+    expect(c.input.attachments).toBeUndefined();
+    const bodyJson = JSON.stringify(c.input.body);
+    expect(bodyJson).toContain('Here you go');
+    expect(bodyJson).toContain('2 attachments were not saved');
   });
 
   it('drops a reply From someone else, to an expired thread, or to a board without email replies', async () => {

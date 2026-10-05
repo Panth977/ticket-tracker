@@ -25,6 +25,7 @@ import {
   MemoryShareRoleSchema,
   MemoryFileSchema,
 } from './schema.js';
+import { BoardAttachMemorySchema } from './attach.js';
 
 const Name = z.string().trim().min(1).max(MEMORY_NAME_MAX);
 const Description = z.string().trim().max(MEMORY_DESCRIPTION_MAX);
@@ -67,6 +68,12 @@ export const MemoryOutSchema = z.object({
   archived: z.boolean(),
   stats: z.object({ files: z.number(), folders: z.number(), bytes: z.number() }),
   updatedAt: MillisSchema,
+  /**
+   * memoryList({ boardId }) only: THAT board's grant (§D). It tells the attach
+   * dialog which memories a ticket file may go into (§J: 'write') — which the
+   * caller's own `reach` cannot (a commenter reads either way).
+   */
+  boardGrant: MemoryGrantSchema.optional(),
 });
 export type MemoryOut = z.infer<typeof MemoryOutSchema>;
 
@@ -273,6 +280,21 @@ export const memoryFolderCreate = defineCommand({
   errors: ['not_found', 'forbidden', 'invalid', 'conflict'],
   req: req({ memoryId: MemoryIdSchema, path: PathInput }),
   res: z.object({ nodeId: MemoryNodeIdSchema, path: z.string() }),
+});
+
+/**
+ * §J: a board's default for ticket attachments — which memory (granted `write`
+ * to the board) and the path template. null clears it.
+ */
+export const boardAttachMemorySet = defineCommand({
+  name: 'boardAttachMemorySet',
+  source: 'app',
+  scopes: ['board:admin', 'boards:admin'],
+  permission:
+    "can(admin) on the board. The memory must be granted `write` to the board (board settings › Memory). Never an agent.",
+  errors: ['not_found', 'forbidden', 'invalid'],
+  req: req({ boardId: BoardIdSchema, attachMemory: BoardAttachMemorySchema.nullable() }),
+  res: OkResSchema,
 });
 
 /** Rename and/or move a node (a folder takes its whole subtree along). */

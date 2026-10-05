@@ -18,7 +18,7 @@ import {
   seedAgent,
   seedAgentEvent,
 } from '../../backend/test/platform/helpers.js';
-import { people, seedBoard } from '../../backend/test/tickets/helpers.js';
+import { people, seedAttachMemory, seedBoard } from '../../backend/test/tickets/helpers.js';
 import { createClient, type TmClient } from '../src/client.js';
 import { mcpTools, registerTools } from '../src/mcp.js';
 import { TmError } from '../src/errors.js';
@@ -46,11 +46,14 @@ interface Scene {
 }
 
 let scene: Scene;
+let attachMemoryId = '';
 
 beforeAll(async () => {
   const f = await appFetch();
   const { owner, priya } = await people('owner', 'priya');
   const board = await seedBoard({ admin: owner, editors: [priya] });
+  // memory.html §J: uploads go into the board's attachment memory.
+  attachMemoryId = await seedAttachMemory(board.id, owner);
   const { id: agentId } = await seedAgent(owner, {
     name: `Builder ${Date.now()}`,
     boardId: board.id,
@@ -183,6 +186,17 @@ describe('messages and files', () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
     const file = await scene.tm.files.upload(scene.ticketKey, { name: 'x.pdf', bytes });
     expect(file.size).toBe(bytes.length);
+  });
+
+  it('uploads into a named memory at a path (1.5.0)', async () => {
+    const file = await scene.tm.files.upload(scene.ticketKey, {
+      name: 'notes.md',
+      text: '# n',
+      memoryId: attachMemoryId,
+      path: 'sdk/<ticketId>/notes.md',
+    });
+    expect(file.source).toBe('upload');
+    expect(file.memory?.memory_id).toBe(attachMemoryId);
   });
 
   it('is idempotent: the same key posts one message', async () => {

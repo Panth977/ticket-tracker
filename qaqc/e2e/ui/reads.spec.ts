@@ -148,10 +148,11 @@ test('§W: a board of ten tickets is one query of ten documents, and a reopen co
   // members, my read pointers, my prefs — whatever the board's size. Single
   // digits, and none of them per card.
   const others = listeners(cold) - 1;
+  // The app shell's own listeners count too (sidebar: workspaces, artifacts, memory, inbox, invites…).
   expect(
     others,
     `the board opened ${others} listeners besides the cards: ${spell(cold)}`,
-  ).toBeLessThan(10);
+  ).toBeLessThan(12);
   expect(
     worst(cold, /^(?!delta:tickets:)/),
     `something other than the cards returned a crowd: ${spell(cold)}`,

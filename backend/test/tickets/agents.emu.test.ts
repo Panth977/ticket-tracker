@@ -5,12 +5,20 @@
  * posted by messagePost fileIds.
  */
 import { describe, expect, it } from 'vitest';
-import { paths, type Ticket } from '@tm/shared';
+import { paths, type MemoryNode, type Ticket } from '@tm/shared';
 import { storeUploadedFile } from '../../src/tickets/files.js';
 import { makeCtx } from '../../src/runtime/context.js';
 import { call, setupEmulators } from '../harness/index.js';
 import { asAgent, makeAgent } from '../agents/helpers.js';
-import { doc, getDocData, people, seedBoard, spyPorts, STAGES } from './helpers.js';
+import {
+  doc,
+  getDocData,
+  people,
+  seedAttachMemory,
+  seedBoard,
+  spyPorts,
+  STAGES,
+} from './helpers.js';
 import { actsOf, fileOf, msgOf } from './store.js';
 
 setupEmulators();
@@ -244,7 +252,7 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha });
     const agent = await makeAgent(asha, { boardId: b.id, role: 'commenter' });
-    const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
+    const { ticketId, key } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
 
     const ctx = makeCtx({
       actor: agent.id,
@@ -253,6 +261,18 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
       scopes: ['files:write', 'comments:write'],
       keyName: 'orch',
     });
+    // memory.html §J: no attachment memory → refused before a byte is written.
+    await expect(
+      storeUploadedFile(ctx, { boardId: b.id, ticketId, name: 'a.md', data: enc('a') }),
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringContaining('board settings'),
+    });
+    expect(s.files.paths()).toEqual([]);
+    const memoryId = await seedAttachMemory(b.id, asha, {
+      template: 'agents/<ticketId>/<filename>',
+    });
+
     const up = await storeUploadedFile(ctx, {
       boardId: b.id,
       ticketId,
@@ -267,14 +287,20 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
       size: 16,
       uploadedBy: agent.id,
     });
-    expect(s.files.has(up.path)).toBe(true);
-    expect(up.path).toBe(`boards/${b.id}/tickets/${ticketId}/${up.fileId}/Q3%20plan.md`);
+    // The bytes are the memory's; the ticket row references the node.
+    expect(s.files.has(up.objectPath)).toBe(true);
+    expect(up.objectPath).toMatch(new RegExp(`^memories/${memoryId}/`));
+    expect(up.path).toBe(`memories/${memoryId}/nodes/${up.memory.nodeId}`);
+    const node = (await getDocData<MemoryNode>(paths.memoryNode(memoryId, up.memory.nodeId)))!;
+    expect(node).toMatchObject({ path: `agents/${key}/Q3 plan.md`, createdBy: agent.id });
     const row = (await fileOf(b.id, ticketId, up.fileId))!;
     expect(row).toMatchObject({
       source: 'upload',
       messageId: null,
       uploadedBy: agent.id,
       deletedAt: null,
+      path: up.path,
+      memory: up.memory,
     });
     expect((await T(b.id, ticketId)).counts.files).toBe(1);
 
@@ -285,6 +311,40 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
       data: enc('<h1>hi</h1>'),
     });
     expect(html).toMatchObject({ kind: 'html', mime: 'text/html' });
+    // The same name again never replaces the first: ' (2)'.
+    const again = await storeUploadedFile(ctx, {
+      boardId: b.id,
+      ticketId,
+      name: 'Q3 plan.md',
+      data: enc('v2'),
+    });
+    // The ticket shows the name as uploaded; the memory node took ' (2)'.
+    expect(again.name).toBe('Q3 plan.md');
+    // An explicit memory + path, '<ticketId>' filled.
+    const placed = await storeUploadedFile(ctx, {
+      boardId: b.id,
+      ticketId,
+      name: 'x.txt',
+      data: enc('x'),
+      memoryId,
+      path: 'elsewhere/<ticketId>.txt',
+    });
+    const placedNode = await getDocData<MemoryNode>(
+      paths.memoryNode(memoryId, placed.memory.nodeId),
+    );
+    expect(placedNode!.path).toBe(`elsewhere/${key}.txt`);
+    // A memory granted only read takes nothing.
+    const readOnly = await seedAttachMemory(b.id, asha, { access: 'read' });
+    await expect(
+      storeUploadedFile(ctx, {
+        boardId: b.id,
+        ticketId,
+        name: 'r.txt',
+        data: enc('r'),
+        memoryId: readOnly,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    expect(s.files.paths().filter((p) => p.startsWith(`memories/${readOnly}/`))).toEqual([]);
 
     // Files only, empty body.
     const { messageId } = await asAgent(agent, 'messagePost', {
@@ -306,7 +366,7 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
       messageId,
     });
     // Counted once, at upload.
-    expect((await T(b.id, ticketId)).counts.files).toBe(2);
+    expect((await T(b.id, ticketId)).counts.files).toBe(4);
 
     // Already posted, or not on this ticket → 400.
     await expect(
@@ -336,6 +396,7 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
     const viewer = await makeAgent(asha, { boardId: b.id, role: 'viewer' });
     const editor = await makeAgent(asha, { boardId: b.id, role: 'editor', name: 'Ed' });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
+    await seedAttachMemory(b.id, asha);
     const ctxOf = (id: string) =>
       makeCtx({ actor: id, ownerUid: asha.uid, via: 'api', scopes: ['files:write'] });
 
@@ -372,6 +433,6 @@ describe('API uploads (storeUploadedFile) and messagePost fileIds', () => {
         data: enc('a'),
       }),
     ).rejects.toMatchObject({ code: 'conflict' });
-    expect(s.files.paths().filter((p) => p.includes(ticketId))).toEqual([]);
+    expect(s.files.paths()).toEqual([]);
   });
 });

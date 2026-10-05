@@ -54,9 +54,10 @@
           own people. Inside it is a tree of folders and files that you browse as a tree or as
           folders, preview, and edit as code. What makes it more than a drive is <b>reuse</b>: a
           ticket can point at a memory file instead of carrying its own copy, an artifact's page can
-          read (or write) one, and an agent can work in one over MCP. Files put on a ticket stay on
-          that ticket forever; files kept in a memory are managed — edited, moved, replaced, deleted
-          — in one place, and every ticket that points at them sees the current version.
+          read (or write) one, and an agent can work in one over MCP. Files kept in a memory are
+          managed — edited, moved, replaced, deleted — in one place, and every ticket that points at
+          them sees the current version. Since <a href="#j">§J</a> a board takes no files of its
+          own: every file put on a ticket goes into one of the board's memories.
         </p>
 
         <h2 id="a">A · What a memory is</h2>
@@ -280,8 +281,8 @@
           </li>
           <li>
             <b>Dragging</b> a node (or files from the desktop) lights up the folder a drop would
-            land in, wherever it shows: its whole subtree in the tree, its tile, its breadcrumb,
-            the folder view. Over a file, that is the file's folder; a folded folder unfolds after a
+            land in, wherever it shows: its whole subtree in the tree, its tile, its breadcrumb, the
+            folder view. Over a file, that is the file's folder; a folded folder unfolds after a
             moment; a pill by the pointer says <i>Move … into /path</i>. A folder never lights up
             for itself or what is inside it, nor for the folder the node is already in.
           </li>
@@ -389,7 +390,115 @@ BackendDriver.memory.mkdir(memoryId, path) · remove(memoryId, path)</pre>
             <b>D-M4 · Agents through boards only.</b> A third place to put an agent would be a third
             place to forget to remove it.
           </li>
+          <li>
+            <b>D-M5 · A board takes no files of its own</b> (§J). Two homes for a ticket's file —
+            the board's prefix and a memory — meant two sets of rules, two sweepers and two answers
+            to "where is that screenshot". One home: the memory, where it can be found, moved,
+            reused and cleaned up.
+          </li>
         </ul>
+
+        <h2 id="j">J · Ticket attachments live in a memory</h2>
+        <p>
+          A file put on a ticket — from the composer, a new ticket's description, the API, the
+          intake widget or an e-mail — is uploaded <b>into a memory</b> granted
+          <code>write</code> to the board and becomes a NEW file there. The ticket holds a reference
+          exactly like §E: a row with <code>path = memories/{m}/nodes/{n}</code> and
+          <code>memory: { memoryId, nodeId }</code>. Rows and objects from before (Storage
+          <code>boards/{b}/tickets/{t}/{a}/{name}</code>) keep working for reading, downloading and
+          deleting; nothing new is written there.
+        </p>
+        <h3>The board's default: <code>board.attachMemory</code></h3>
+        <ul>
+          <li>
+            <code
+              >boardAttachMemorySet { boardId, attachMemory: { memoryId, template } | null }</code
+            >
+            — board admin, never an agent; the memory must exist, not be deleting, and be granted
+            <code>write</code> to the board. Written only by the server (boards are not
+            client-writable).
+          </li>
+          <li>
+            The <b>template</b> is a path with variables: <code>&lt;ticketId&gt;</code> (the key,
+            ENG-42), <code>&lt;time&gt;</code> (UTC, 20261005-211946), <code>&lt;random6&gt;</code>,
+            <code>&lt;filename&gt;</code>, <code>&lt;exe&gt;</code> (the extension;
+            <code>&lt;ext&gt;</code> is the same). Default:
+            <code>tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;</code>
+            (shared/src/memory/attach.ts).
+          </li>
+          <li>
+            Kept true: <code>memoryGrantSet</code> clears it (same transaction) when that board's
+            grant is removed or lowered to <code>read</code>; <code>memoryDelete</code> clears it on
+            every granted board.
+          </li>
+        </ul>
+        <h3>From the app: <code>memoryUploads</code></h3>
+        <ul>
+          <li>
+            The app uploads to <code>memories/{m}/{fileId}/{name}</code> with metadata
+            <code>{ boardId }</code>. storage.rules lets the board's admin, editor or commenter
+            create it when the memory is granted <code>write</code> to that board and is neither
+            archived nor deleting (≤ 1 GB) — besides the memory's own owner / editors as before.
+          </li>
+          <li>
+            <code>messagePost</code> / <code>ticketCreate</code> take
+            <code>memoryUploads: [{ memoryId, path, storagePath }]</code> (≤ 20). A
+            <code>&lt;ticketId&gt;</code> left in the path is filled with the ticket's key.
+            <code>attachments</code> (board storage paths) is <b>retired</b>: a non-empty list is a
+            400.
+          </li>
+          <li>
+            <b>Permission is the board's, not the person's memory role</b>: the memory is granted
+            <code>write</code> to the board, not archived, not deleting; the command has already
+            checked the caller may post there. So a commenter with no role on the memory can add a
+            file to it — but only a NEW one: an existing node is <b>never replaced</b>. A taken path
+            (file or folder) becomes <code>name (2).ext</code>, <code>(3)</code>…; a parent that is
+            a file is a 400. Parents are created as usual.
+          </li>
+          <li>
+            <b>One commit.</b> The new nodes are planned and written inside the command's own
+            transaction (backend/src/memory/attach.ts <code>planMemoryUploads</code>), together with
+            the message or the ticket. ticketCreate knows the key there: it is
+            <code>board.key-nextNumber</code>, read before any write, the very number
+            <code>allocateKey</code> then issues. So a refused or failed post leaves no file in the
+            memory and no row pointing at nothing. When the command fails after the uploads were
+            checked, the uploaded objects that no node points at are deleted (like a failed
+            <code>memoryFilePut</code>); a retried request whose objects are already nodes reuses
+            them.
+          </li>
+        </ul>
+        <h3>Bytes the server holds</h3>
+        <ul>
+          <li>
+            <code>POST /v1/tickets/{KEY}/files</code> and MCP <code>upload_file</code> write the
+            bytes into the board's attachment memory (or the request's <code>memory_id</code>, at
+            <code>path</code> when given) and, in one transaction, the new node and the ticket's
+            <code>upload</code> row (<code>source: 'upload'</code>, <code>messageId: null</code>,
+            path = the reference). <code>fileIds</code> on <code>post_message</code> works
+            unchanged. No attachment memory and no <code>memory_id</code>: 400 "This board has no
+            attachment memory — set one in board settings › Memory".
+          </li>
+          <li>
+            The intake widget and inbound e-mail store their files the same way, with
+            <code>&lt;ticketId&gt;</code> left for <code>ticketCreate</code> /
+            <code>messagePost</code> to fill. A board with no attachment memory still gets the
+            report or the reply — without its files, and with a line saying so (<i
+              >"2 attachments were not saved: this board has no attachment memory — board settings ›
+              Memory"</i
+            >).
+          </li>
+          <li>
+            Housekeeping sweeps abandoned objects under <code>boards/</code> only. A memory file is
+            the memory's, whether or not its ticket row is ever posted in a message; deleting a
+            message or a ticket never deletes it.
+          </li>
+        </ul>
+        <p>
+          Known gaps: an intake or e-mail retried after it already succeeded (idempotent replay)
+          leaves its fresh copies as objects no node points at; nothing sweeps
+          <code>memories/</code> for those yet. A board-scoped token acting as a person reaches no
+          memory (§G), so it cannot read back a ticket file that lives in one.
+        </p>
       </article>
     </div>
     <script type="module">

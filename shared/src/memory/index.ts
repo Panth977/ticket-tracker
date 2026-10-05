@@ -2,3 +2,4 @@
 export * from './schema.js';
 export * from './paths.js';
 export * from './commands.js';
+export * from './attach.js';

@@ -57,6 +57,9 @@ export interface OutboxUpload {
   progress: number;
   status: 'uploading' | 'done' | 'error';
   error?: string;
+  /** memory.html §J: the memory the file goes into, and its path there. */
+  memoryId?: string;
+  memoryPath?: string;
 }
 
 /** What the outbox keeps (JSON only: persisted entries go to IndexedDB). */

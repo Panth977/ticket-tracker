@@ -114,6 +114,7 @@ export const COMMANDS = {
   memoryDelete: memory.memoryDelete,
   memoryShare: memory.memoryShare,
   memoryGrantSet: memory.memoryGrantSet,
+  boardAttachMemorySet: memory.boardAttachMemorySet,
   memoryList: memory.memoryList,
   memoryTree: memory.memoryTree,
   memoryFileRead: memory.memoryFileRead,

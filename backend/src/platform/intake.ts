@@ -22,9 +22,10 @@ import {
   INTAKE_HEADERS,
   INTAKE_MAX_ATTACHMENT_BYTES,
   IntakeSubmitReqSchema,
+  isAppError,
   paths,
   rateBuckets,
-  storage,
+  type MemoryUpload,
   type Board,
   type BoardWithId,
   type FieldDef,
@@ -39,6 +40,7 @@ import { makeCtx, type ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
 import { invalidFromZod } from '../runtime/runner.js';
 import { withBoardId } from '../tickets/access.js';
+import { discardUnplaced, storeBoardFile, unsavedNote } from '../memory/attach.js';
 import { safeEqual, sha256hex } from './crypto.js';
 import { idemKey, invoke } from './ops.js';
 import { markdownIn, safeFileName } from './resolve.js';
@@ -163,48 +165,75 @@ export async function submitIntake(
   }
 
   const ticketId = ctx.ids.id();
-  const attachments: string[] = [];
+  // memory.html §J: files go into the board's attachment memory; ticketCreate
+  // makes them nodes and fills '<ticketId>' in their paths with the new key.
+  // No memory (or one that stopped taking files): the report still lands,
+  // with a note that its files were not kept.
+  const memoryUploads: MemoryUpload[] = [];
+  let unsaved = 0;
   let total = 0;
   for (const a of req.attachments ?? []) {
     const bytes = Buffer.from(a.contentBase64, 'base64');
     total += bytes.length;
     if (total > INTAKE_MAX_ATTACHMENT_BYTES)
       throw errors.too_large('Attachments are limited to 5 MB in total');
-    const name = safeFileName(a.name);
-    const path = storage.attachment(board.id, ticketId, ctx.ids.id(), name);
-    await ports().files.write(path, new Uint8Array(bytes), 'application/octet-stream');
-    attachments.push(path);
+  }
+  for (const a of req.attachments ?? []) {
+    if (!board.attachMemory) {
+      unsaved++;
+      continue;
+    }
+    try {
+      memoryUploads.push(
+        await storeBoardFile(ctx, board, null, {
+          name: safeFileName(a.name),
+          bytes: new Uint8Array(Buffer.from(a.contentBase64, 'base64')),
+        }),
+      );
+    } catch (e) {
+      if (!isAppError(e)) throw e;
+      console.warn('[intake] attachment not saved', e.code);
+      unsaved++;
+    }
   }
 
-  const md = describe(req, unmapped);
+  const md = [describe(req, unmapped), unsaved ? unsavedNote(unsaved) : '']
+    .filter(Boolean)
+    .join('\n\n');
   const d = intake.defaults;
-  const res = await invoke(
-    'ticketCreate',
-    {
-      boardId: board.id,
-      ticketId,
-      title: req.title,
-      ...(md ? { description: await markdownIn(md, board, new Map()) } : {}),
-      ...(d.stageId ? { stageId: d.stageId } : {}),
-      ...(d.priorityId ? { priorityId: d.priorityId } : {}),
-      ...(d.tagIds?.length ? { tagIds: d.tagIds } : {}),
-      ...(d.assigneeUids?.length
-        ? { assigneeUids: d.assigneeUids.filter((u) => board.access[u]) }
-        : {}),
-      ...(Object.keys(fields).length ? { fields } : {}),
-      ...(attachments.length ? { attachments } : {}),
-      ...(req.reporter
-        ? {
-            reporter: {
-              email: req.reporter.email,
-              ...(req.reporter.name ? { name: req.reporter.name } : {}),
-            },
-          }
-        : {}),
-    },
-    ctx,
-    idempotencyKey ?? null,
-  );
+  const create = async () =>
+    invoke(
+      'ticketCreate',
+      {
+        boardId: board.id,
+        ticketId,
+        title: req.title,
+        ...(md ? { description: await markdownIn(md, board, new Map()) } : {}),
+        ...(d.stageId ? { stageId: d.stageId } : {}),
+        ...(d.priorityId ? { priorityId: d.priorityId } : {}),
+        ...(d.tagIds?.length ? { tagIds: d.tagIds } : {}),
+        ...(d.assigneeUids?.length
+          ? { assigneeUids: d.assigneeUids.filter((u) => board.access[u]) }
+          : {}),
+        ...(Object.keys(fields).length ? { fields } : {}),
+        ...(memoryUploads.length ? { memoryUploads } : {}),
+        ...(req.reporter
+          ? {
+              reporter: {
+                email: req.reporter.email,
+                ...(req.reporter.name ? { name: req.reporter.name } : {}),
+              },
+            }
+          : {}),
+      },
+      ctx,
+      idempotencyKey ?? null,
+    );
+  // A refused create keeps none of the files it brought.
+  const res = await create().catch(async (e: unknown) => {
+    await discardUnplaced(memoryUploads);
+    throw e;
+  });
 
   if (req.reporter?.email) {
     try {
