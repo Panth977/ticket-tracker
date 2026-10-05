@@ -4,6 +4,8 @@
     #  ticket search (Typesense, or the dev fallback)
     /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask
   Paste or drop files → uploaded to Storage with progress, attached on send.
+  🧠 attaches files from a memory granted to this board BY REFERENCE
+  (memory.html §E): nothing is uploaded, the ticket points at the file.
   The draft (text, reply target, finished uploads) is kept per ticket in
   IndexedDB. ⌘↵ sends; the message shows at once as a bubble and goes out
   through the outbox (agents.html § K): the composer clears on send and is
@@ -13,11 +15,17 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { Editor } from '@tiptap/core';
-  import { Loader2, Paperclip, Send, X } from 'lucide-svelte';
+  import { Brain, Loader2, Paperclip, Send, X } from 'lucide-svelte';
   import { KIND_ICON, kindOf } from '$lib/files';
   import { matchOption } from '@tm/shared/logic/index';
   import { parseDue } from '@tm/shared/logic/time';
-  import { MAX_ATTACHMENTS_PER_CALL, type RichTextDoc, type TicketPatch } from '@tm/shared';
+  import {
+    MAX_ATTACHMENTS_PER_CALL,
+    MEMORY_REFS_MAX,
+    parseMemoryRefPath,
+    type RichTextDoc,
+    type TicketPatch,
+  } from '@tm/shared';
   import { outbox } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
   import { Button, IconButton, Kbd, toast } from '$lib/ui';
@@ -39,6 +47,8 @@
   import { relayUpload, sendMessage } from './pending.svelte';
   import { typingSignal } from './presence';
   import AskDialog from './AskDialog.svelte';
+  import MemoryPicker from '$lib/memoryRefs/MemoryPicker.svelte';
+  import { mergePicks, pickAttachment, type MemoryPick } from '$lib/memoryRefs/pick';
 
   interface Props {
     replyTo?: string | null;
@@ -68,6 +78,9 @@
   let loaded = $state(false);
   /** Phase 5 (§N1): the question builder — the ❓ toolbar button and /ask. */
   let askOpen = $state(false);
+  /** memory.html §E: files picked from a memory, sent as memoryRefs. */
+  let memoryPicks = $state<MemoryPick[]>([]);
+  let memoryOpen = $state(false);
 
   const typing = t.me ? typingSignal(boardId, ticketId, t.me) : null;
   onDestroy(() => {
@@ -86,12 +99,30 @@
       if (d) {
         doc = d.doc;
         replyTo = d.replyTo;
-        uploads = d.attachments.map((a) => ({
-          id: a.path,
-          ...a,
-          progress: 1,
-          status: 'done' as const,
-        }));
+        // A memory reference in a draft is its virtual path (memory.html §E).
+        uploads = d.attachments
+          .filter((a) => !parseMemoryRefPath(a.path))
+          .map((a) => ({
+            id: a.path,
+            ...a,
+            progress: 1,
+            status: 'done' as const,
+          }));
+        memoryPicks = d.attachments.flatMap((a) => {
+          const ref = parseMemoryRefPath(a.path);
+          return ref
+            ? [
+                {
+                  ...ref,
+                  memoryName: 'Memory',
+                  name: a.name,
+                  path: a.name,
+                  mime: a.mime,
+                  size: a.size,
+                },
+              ]
+            : [];
+        });
         resetKey += 1;
       }
       loaded = true;
@@ -102,9 +133,17 @@
     const snapshot = {
       doc: $state.snapshot(doc),
       replyTo,
-      attachments: uploads
-        .filter((u) => u.status === 'done')
-        .map((u): DraftAttachment => ({ path: u.path, name: u.name, size: u.size, mime: u.mime })),
+      attachments: [
+        ...uploads
+          .filter((u) => u.status === 'done')
+          .map((u): DraftAttachment => ({
+            path: u.path,
+            name: u.name,
+            size: u.size,
+            mime: u.mime,
+          })),
+        ...memoryPicks.map(pickAttachment),
+      ],
     };
     if (!loaded || !key) return;
     clearTimeout(saveTimer);
@@ -244,17 +283,20 @@
   const uploading = $derived(uploads.filter((u) => u.status === 'uploading'));
   const ready = $derived(uploads.filter((u) => u.status === 'done'));
   const canSend = $derived(
-    loaded && (!isEmptyDoc(doc) || ready.length > 0 || uploading.length > 0),
+    loaded &&
+      (!isEmptyDoc(doc) || ready.length > 0 || uploading.length > 0 || memoryPicks.length > 0),
   );
 
   async function send(): Promise<boolean> {
     const raw = editor ? (editor.getJSON() as RichTextDoc) : doc;
-    if (!raw || (isEmptyDoc(raw) && !ready.length && !uploading.length)) return true;
+    const memory = $state.snapshot(memoryPicks) as MemoryPick[];
+    if (!raw || (isEmptyDoc(raw) && !ready.length && !uploading.length && !memory.length))
+      return true;
     const { action, rest } = extractSlash(raw);
     if (action) {
       const ok = await runSlash(action);
       if (!ok) return true;
-      if (isEmptyDoc(rest) && !ready.length && !uploading.length) {
+      if (isEmptyDoc(rest) && !ready.length && !uploading.length && !memory.length) {
         clear();
         return true;
       }
@@ -280,6 +322,7 @@
       replyTo: reply,
       attachments,
       uploading: inflight,
+      memory,
     });
     onsent?.();
     return true;
@@ -289,6 +332,7 @@
     typing?.stop();
     for (const u of uploads) if (u.preview && !keep.includes(u.id)) URL.revokeObjectURL(u.preview);
     uploads = [];
+    memoryPicks = [];
     replyTo = null;
     doc = null;
     editor?.commands.clearContent(true);
@@ -365,6 +409,7 @@
         {editor}
         onattach={() => fileInput?.click()}
         onask={() => (askOpen = true)}
+        onmemory={() => (memoryOpen = true)}
         class="border-b border-line px-1.5 py-1"
       />
       <RichEditor
@@ -389,8 +434,31 @@
         onfiles={addFiles}
       />
 
-      {#if uploads.length}
+      {#if uploads.length || memoryPicks.length}
         <ul class="flex flex-wrap gap-2 border-t border-line px-2 py-2" aria-label="Attachments">
+          {#each memoryPicks as p (p.memoryId + p.nodeId)}
+            <li
+              class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border border-line px-2 py-1.5"
+              data-memory-pick={p.name}
+            >
+              <Brain size={16} class="shrink-0 text-accent" aria-label="From memory" />
+              <span class="flex min-w-0 flex-col leading-tight">
+                <span class="truncate text-xs">{p.name}</span>
+                <span class="truncate text-[11px] text-muted"
+                  >{p.memoryName} · {formatBytes(p.size)}</span
+                >
+              </span>
+              <IconButton
+                icon={X}
+                label="Remove {p.name}"
+                size="sm"
+                onclick={() =>
+                  (memoryPicks = memoryPicks.filter(
+                    (x) => !(x.memoryId === p.memoryId && x.nodeId === p.nodeId),
+                  ))}
+              />
+            </li>
+          {/each}
           {#each uploads as u (u.id)}
             <li
               class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border px-2 py-1.5
@@ -450,6 +518,12 @@
       </div>
     </div>
     <AskDialog bind:open={askOpen} onasked={() => onsent?.()} />
+    <MemoryPicker
+      bind:open={memoryOpen}
+      {boardId}
+      room={MEMORY_REFS_MAX - memoryPicks.length}
+      onpick={(picks) => (memoryPicks = mergePicks(memoryPicks, picks, MEMORY_REFS_MAX))}
+    />
     <input
       bind:this={fileInput}
       type="file"

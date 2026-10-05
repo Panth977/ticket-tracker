@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           1.3.0
+version:           1.4.0
 api:               v1
-updated:           2026-09-30  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    5de054db2e2608dfca25f249e609b7b6171c46a4443583a313dcd87a656dd15f
+updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
+content-sha256:    becb30cf364c96241175c885a227fae7f24e148caefcd2053002b4082e8e322f
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -75,6 +75,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [8.9 A Vite project](#8-9-a-vite-project)
   - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
 - [9. Version and changelog](#9-version-and-changelog)
+  - [1.4.0 — 2026-10-05](#1-4-0-2026-10-05)
   - [1.3.0 — 2026-09-30](#1-3-0-2026-09-30)
   - [1.2.0 — 2026-09-30](#1-2-0-2026-09-30)
   - [1.1.0 — 2026-09-26](#1-1-0-2026-09-26)
@@ -817,7 +818,7 @@ artifacts:read   Read artifacts and download their source — an account token, 
 artifacts:write  Create, publish and share artifacts — an account token, or an agent token for the artifacts that agent is on (§8)
 ```
 
-Every **agent token** carries exactly these 20, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
+Every **agent token** carries exactly these 22, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`, `memory:read`, `memory:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
 
 Presets offered by the token form (board tokens acting as a person, and account tokens):
 
@@ -828,7 +829,7 @@ Worker     board:read members:read tickets:read comments:read files:read events:
 
 Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
 
-Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write memory:read memory:write
 ```
 
 ##### Event types (the inbox: `GET /v1/events`, MCP `get_events`)
@@ -908,7 +909,7 @@ events ack               ≤ 500 ids per call
 SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal
 ```
 
-OpenAPI: `TaskManager API` version `1`, 43 paths, 69 schemas.
+OpenAPI: `TaskManager API` version `1`, 46 paths, 74 schemas.
 
 ### 5.2 REST — every endpoint
 
@@ -930,7 +931,7 @@ owner          object | null                       required
 board          object | null                       required
 boards         object[]
 role           "admin" | "editor" | "commenter" | "viewer" | null  required
-scopes         "board:read" | "members:read" | "tickets:read" | … (24 values)[]  required
+scopes         "board:read" | "members:read" | "tickets:read" | … (26 values)[]  required
 via            "api" | "mcp" | "integration"       required
 kind           "board" | "account" | "oauth" | "agent"  required
 default_board  object | null
@@ -1580,6 +1581,7 @@ body_markdown  string           (default "", ≤ 100000 chars)
 attachments    string[]         (≤ 20 items)
 reply_to       string
 run            object | null
+memory_files   object[]         (≤ 20 items)
 ```
 
 → 201 Message
@@ -1668,7 +1670,8 @@ width           integer | null
 height          integer | null
 url_expires_at  string
 message_id      string | null                       required
-source          "description" | "message" | "upload"  required
+source          "description" | "message" | "upload" | "memory"  required
+memory          { memory_id, node_id }
 uploaded_by     { id, kind, name }                  required
 created_at      string                              required
 file_id         string                              required
@@ -1707,7 +1710,8 @@ width              integer | null
 height             integer | null
 url_expires_at     string
 message_id         string | null                       required
-source             "description" | "message" | "upload"  required
+source             "description" | "message" | "upload" | "memory"  required
+memory             { memory_id, node_id }
 uploaded_by        { id, kind, name }                  required
 created_at         string                              required
 content            string
@@ -2343,6 +2347,124 @@ outcome  "granted" | "invited" | "removed"  required
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
+#### GET /v1/memories
+
+The memories this credential can reach (?board= narrows to one board’s).
+
+Scopes: `memory:read` or `memory:write`
+
+Query:
+```text
+board             string
+include_archived  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 MemoryList
+```text
+memories  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/memories/{id}/tree
+
+The files and folders of a memory (?path= under a folder, ?shallow=1 one level).
+
+Scopes: `memory:read` or `memory:write`
+
+Path:
+```text
+id  string  required
+```
+
+Query:
+```text
+path     string
+shallow  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 MemoryTree
+```text
+nodes      object[]  required
+truncated  boolean   required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/memories/{id}/files/{path}
+
+One memory file: its node, its text (text files) and a short-lived download URL.
+
+Scopes: `memory:read` or `memory:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Query:
+```text
+text  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 MemoryFile
+```text
+node       { id, kind, parentId, name, path, file, updatedAt }  required
+text       string | null                       required
+truncated  boolean                             required
+url        string                              required
+bytesUrl   string                              required
+expiresAt  integer                             required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PUT /v1/memories/{id}/files/{path}
+
+Create or replace a memory file: the raw body is the file (missing folders are created).
+
+Scopes: `memory:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+Body (*/*, required):
+```text
+(value)  string
+```
+
+→ 201 MemoryFileWritten
+```text
+nodeId  string  required
+fileId  string  required
+path    string  required
+```
+
+→ 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
+
+#### DELETE /v1/memories/{id}/files/{path}
+
+Delete a memory file, or a folder with everything in it.
+
+Scopes: `memory:write`
+
+Path:
+```text
+id    string  required
+path  string  required
+```
+
+→ 200 MemoryDeleted
+```text
+deleted  integer  required  (0…)
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
 #### GET /v1/artifacts/{id}/data/firestore/{path}
 
 Read a document, or list a collection, of the artifact's Firestore.
@@ -2888,7 +3010,7 @@ create_ticket        tickets:create                      Create a ticket.
 update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
-post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
 upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64.
 read_file            files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         tickets:update                      Link two tickets: blocks, relates or duplicates.
@@ -3055,16 +3177,17 @@ remove  string[]            A member: 'me', an id, an email, or an agent's name
 
 #### post_message
 
-Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
 
 Writes · scopes: `comments:write`
 
 ```text
-key          string                              required  Ticket key, e.g. 'ENG-42'
-markdown     string                              required  GitHub-flavoured Markdown. May be empty when attachments are given.
-attachments  string[]                                      File ids from upload_file, already on this ticket
-reply_to     string                                        Message id to quote
-run          { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Added to the ticket, board and day cost counters.
+key           string                              required  Ticket key, e.g. 'ENG-42'
+markdown      string                              required  GitHub-flavoured Markdown. May be empty when attachments are given.
+attachments   string[]                                      File ids from upload_file, already on this ticket
+memory_files  object[]                                      Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).
+reply_to      string                                        Message id to quote
+run           { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Added to the ticket, board and day cost counters.
 ```
 
 #### upload_file
@@ -3357,7 +3480,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **1.3.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **1.4.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -4580,6 +4703,25 @@ What you send takes names too (or ids), `'me'` and emails for people; an unknown
 `invalid-argument` and the message lists the names that exist. Writes are refused for a viewer of a
 read-only artifact, like every other write.
 
+**Memory files (`db.memory`).** A *memory* is a bucket of files — Markdown notes, images, video,
+anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's
+**owner** grants it one of their memories in Settings › Memory (`memoryGrantSet`, or the MCP tool
+`memory_grant_set`), as **read** or **read & write**. Again a ceiling: the page reaches a memory only
+as far as the person looking can reach it themselves, and writes need both a write grant and the
+viewer's own write access. Paths are relative to the memory (`docs/brand/logo.svg`); writing one
+creates its missing folders.
+
+```js
+const [brand] = await db.memory.list();                 // { id, name, access: 'read' | 'write', files, bytes }
+const nodes = await db.memory.tree(brand.id, 'docs');   // every folder and file under docs/
+const md = await db.memory.read(brand.id, 'docs/README.md');
+img.src = await db.memory.url(brand.id, 'logos/logo.png');
+await db.memory.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
+await db.memory.remove(brand.id, 'notes');                       // a folder goes with everything in it
+```
+
+The mock has one memory, `demo-memory`, with a `docs/README.md`.
+
 The whole API:
 
 `@tm/backend-driver` **1.0.0** — the file below is `https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts`, verbatim.
@@ -4824,6 +4966,62 @@ export interface TicketsApi {
   comment(key: string, markdown: string): Promise<void>;
 }
 
+// ─── memory (memory.html §H) ─────────────────────────────────────────────────
+
+/**
+ * A memory the artifact's owner granted it, that THIS viewer can reach.
+ * `access` is what the page may do with it: the grant, bounded by the viewer.
+ */
+export interface Memory {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  access: 'read' | 'write';
+  files: number;
+  bytes: number;
+}
+
+/** One folder or file. Paths are relative to the memory ('docs/a.md'). */
+export interface MemoryNode {
+  id: string;
+  kind: 'folder' | 'file';
+  path: string;
+  name: string;
+  /** Files only. */
+  mime: string | null;
+  size: number | null;
+  updatedAt: number;
+}
+
+/**
+ * Memories (buckets of files) the artifact's OWNER granted it (Settings ›
+ * Memory). Everything happens as the person looking: a memory they cannot
+ * reach themselves is not listed, and a write needs both a 'write' grant and
+ * their own write access. `memory` is a memory id; paths are relative to it.
+ */
+export interface MemoryApi {
+  /** The granted memories this viewer reaches. */
+  list(): Promise<Memory[]>;
+  /** Every node under `path` (default: the whole memory), sorted by path. */
+  tree(memory: string, path?: string): Promise<MemoryNode[]>;
+  /** A text file's content (at most 1 MB). */
+  read(memory: string, path: string): Promise<string>;
+  /** A short-lived URL for <img>, <video>, <audio> or fetch(). */
+  url(memory: string, path: string): Promise<string>;
+  /** Create or replace a file (≤ 10 MB); missing folders are created. */
+  write(
+    memory: string,
+    path: string,
+    content: string | Blob,
+    options?: { contentType?: string },
+  ): Promise<void>;
+  /** Create a folder (and its parents). */
+  mkdir(memory: string, path: string): Promise<void>;
+  /** Delete a file, or a folder with everything in it. */
+  remove(memory: string, path: string): Promise<void>;
+}
+
 export interface SignalMap {
   /** This viewer's write access changed. */
   readonly: boolean;
@@ -4849,6 +5047,8 @@ export interface BackendDriver {
   readonly kv: KvApi;
   /** Boards' tickets, where the owner allowed it (§K). */
   readonly tickets: TicketsApi;
+  /** Memories (buckets of files), where the owner allowed it (memory.html §H). */
+  readonly memory: MemoryApi;
   on<K extends keyof SignalMap>(name: K, callback: (value: SignalMap[K]) => void): Unsubscribe;
 }
 
@@ -5510,9 +5710,9 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   1.3.0
+version   1.4.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
-updated   2026-09-30    the date of the newest changelog entry below
+updated   2026-10-05    the date of the newest changelog entry below
 ```
 
 **How to tell whether you are current.** Fetch `https://taskmanager-example.web.app/integrate.json` — it is small, never cached,
@@ -5523,6 +5723,24 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 1.4.0 — 2026-10-05
+
+- **Memory** (docs/plan/memory.html). A memory is a bucket of files with its own people: folders,
+  Markdown, images, video, APKs, anything. Scopes `memory:read` / `memory:write`. Every operation
+  names a node by `path` (parents are created on write). MCP tools: `memory_list`, `memory_tree`,
+  `memory_file_read`, `memory_file_write`, `memory_folder_create`, `memory_move`,
+  `memory_node_delete`, plus `memory_create` / `memory_update` / `memory_delete` / `memory_share` /
+  `memory_grant_set` for people. REST: `GET /v1/memories`, `GET /v1/memories/{id}/tree`,
+  `GET|PUT|DELETE /v1/memories/{id}/files/{path}`.
+- **Agents reach a memory through a board.** A memory granted to a board `read` is readable by every
+  member of it, agents included; granted `write`, editors and admins may also change it.
+- **Memory files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
+  `memory_files: [{ memory_id, path | node_id }]` (SDK: `memoryFiles`). The file is not copied: the
+  ticket shows the memory file's current version, and `source: 'memory'` with `memory { memory_id,
+  node_id }` on the file. Once the file is deleted or the grant removed, reading it is a 404.
+- **`BackendDriver.memory`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
+  page, within the memory's grant to that artifact and the viewer's own access.
 
 ### 1.3.0 — 2026-09-30
 

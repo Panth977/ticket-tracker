@@ -74,7 +74,7 @@ export type MemoryOut = z.infer<typeof MemoryOutSchema>;
 
 export const memoryCreate = defineCommand({
   name: 'memoryCreate',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     'Any allowed person, or an account token / OAuth grant with memory:write; they become its owner. Never an agent token (an agent reaches memory through boards, D-M4).',
@@ -89,7 +89,7 @@ export const memoryCreate = defineCommand({
 
 export const memoryUpdate = defineCommand({
   name: 'memoryUpdate',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission: 'Owner only (404 to anyone who cannot reach it, 403 to editors/viewers).',
   errors: ['not_found', 'forbidden', 'invalid'],
@@ -106,7 +106,7 @@ export const memoryUpdate = defineCommand({
 
 export const memoryDelete = defineCommand({
   name: 'memoryDelete',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     'Owner only. Empties access and grants at once (nobody reaches it from then on) and queues the job that removes the files, the nodes and then the document. Tickets that point at its files keep a row that reads as gone.',
@@ -117,7 +117,7 @@ export const memoryDelete = defineCommand({
 
 export const memoryShare = defineCommand({
   name: 'memoryShare',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     "Owner only — never an agent. A person's role by email ('editor' | 'viewer'; null removes). An address with no account yet → an invite (invites/ with memoryId). The owner's own role cannot be changed.",
@@ -136,7 +136,7 @@ export const memoryShare = defineCommand({
  */
 export const memoryGrantSet = defineCommand({
   name: 'memoryGrantSet',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     "The memory's OWNER, who must also be an admin of the board (or the owner of the artifact). Exactly one of boardId / artifactId; access null removes the grant. Never an agent.",
@@ -161,7 +161,7 @@ export const memoryGrantSet = defineCommand({
 
 export const memoryList = defineCommand({
   name: 'memoryList',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:read', 'memory:write'],
   permission:
     'Anyone: answers the memories the caller reaches (memoryReach ≠ null). With boardId: only those granted to that board, and the caller must be on it. With artifactId: only those granted to that artifact that the caller reaches (the driver broker, §H).',
@@ -176,7 +176,7 @@ export const memoryList = defineCommand({
 
 export const memoryTree = defineCommand({
   name: 'memoryTree',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:read', 'memory:write'],
   permission: 'Read reach. Every node under `path` (default: the whole memory), sorted by path.',
   errors: ['not_found', 'invalid'],
@@ -191,7 +191,7 @@ export const memoryTree = defineCommand({
 
 export const memoryFileRead = defineCommand({
   name: 'memoryFileRead',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:read', 'memory:write'],
   permission:
     "Read reach. A text file comes back as `text` (at most MEMORY_READ_TEXT_MAX_BYTES; `truncated` says if there was more). Any file also gets a short-lived `url` (and same-origin `bytesUrl`) — the file door's.",
@@ -220,7 +220,7 @@ export const memoryFileRead = defineCommand({
  */
 export const memoryFileWrite = defineCommand({
   name: 'memoryFileWrite',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission: 'Write reach (memoryReach: editor/owner, or editor+ on a board granted write).',
   errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'too_large'],
@@ -251,7 +251,7 @@ export const memoryFileWrite = defineCommand({
  */
 export const memoryFilePut = defineCommand({
   name: 'memoryFilePut',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission: 'Write reach.',
   errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'too_large'],
@@ -266,7 +266,7 @@ export const memoryFilePut = defineCommand({
 
 export const memoryFolderCreate = defineCommand({
   name: 'memoryFolderCreate',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     'Write reach. Creates missing parents; an existing folder at the path is not an error.',
@@ -278,7 +278,7 @@ export const memoryFolderCreate = defineCommand({
 /** Rename and/or move a node (a folder takes its whole subtree along). */
 export const memoryMove = defineCommand({
   name: 'memoryMove',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission:
     "Write reach. `toPath` is the node's NEW full path; its parent folders are created. A 409 if something is already there, or if a folder would move inside itself.",
@@ -290,7 +290,7 @@ export const memoryMove = defineCommand({
 /** Delete nodes; a folder goes with everything under it. Storage objects are deleted after the commit. */
 export const memoryNodeDelete = defineCommand({
   name: 'memoryNodeDelete',
-  source: 'extra',
+  source: 'app',
   scopes: ['memory:write'],
   permission: 'Write reach.',
   errors: ['not_found', 'forbidden', 'invalid'],

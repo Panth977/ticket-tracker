@@ -47,6 +47,10 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
   );
   expect(ws).toMatchObject({ boardIds: [fl.id, fr.id], artifactIds: [artifactId] });
 
+  // The workspace page never offers hide / show (that is about the sidebar's
+  // root lists): no toggle and no "hidden" indicator on any of its cards.
+  await expect(page.locator('main [data-hide-toggle]')).toHaveCount(0);
+
   // …and nothing moved: the root BOARDS list still has all three.
   const boards = section(page, 'Boards');
   for (const key of [fl.key, fr.key, hea.key])
@@ -103,6 +107,12 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
   // Hiding is UI only: not archived, still on the All page and in the workspace.
   expect((await read<{ archivedAt: unknown }>(`boards/${fr.id}`))!.archivedAt).toBeNull();
   await expect(page.locator(`main [data-board="${fr.key}"]`)).toContainText('Hidden from sidebar');
+  // …while the workspace page still shows it, without any hidden marker.
+  await page.goto(`/w/${workspaceId}`);
+  await expect(page.locator(`main [data-board="${fr.key}"]`)).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('Hidden from sidebar');
+  await expect(page.locator('main [data-hide-toggle]')).toHaveCount(0);
+  await nav.getByRole('link', { name: 'All boards & archived' }).click();
   const wsRow = nav.locator(`[data-workspace="${workspaceId}"]`);
   await nav.getByRole('button', { name: 'Unfold Freelance' }).click();
   await expect(nav.locator(`[data-board="${fr.key}"]`)).toBeVisible();

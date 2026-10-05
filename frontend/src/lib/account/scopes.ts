@@ -7,7 +7,16 @@
 import { normalizeScopes, SCOPES, type Scope } from '@tm/shared';
 
 export interface ScopeGroup {
-  id: 'read' | 'write' | 'comment' | 'plan' | 'webhooks' | 'boards' | 'agents' | 'artifacts';
+  id:
+    | 'read'
+    | 'write'
+    | 'comment'
+    | 'plan'
+    | 'webhooks'
+    | 'boards'
+    | 'agents'
+    | 'artifacts'
+    | 'memory';
   label: string;
   hint: string;
   scopes: Scope[];
@@ -68,6 +77,12 @@ export const SCOPE_GROUPS: ScopeGroup[] = [
     label: 'Can read and publish artifacts',
     hint: 'Read, create, publish and share artifacts',
     scopes: ['artifacts:read', 'artifacts:write'],
+  },
+  {
+    id: 'memory',
+    label: 'Can read and change your memory',
+    hint: 'Browse memory files; create memories, upload, edit, move and delete files',
+    scopes: ['memory:read', 'memory:write'],
   },
 ];
 

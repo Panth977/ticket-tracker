@@ -8,6 +8,8 @@
       All boards & archived · + New board
     — Artifacts: ◆ Name            ← one click = that artifact (artifacts.html §F)
       All artifacts · + New artifact
+    — Memory: 🧠 Name             ← one click = that memory (memory.html §F)
+      All memory · + New memory
     — You: Agents · Notifications · Tokens · Sign out   (Agents: agents.html §B)
   Views, People and Settings are NOT here: they are on the board page, behind
   the view tabs and ⚙ Settings (§Q2).
@@ -23,6 +25,7 @@
     AppWindow,
     Bell,
     Bot,
+    Brain,
     Inbox,
     KeyRound,
     LayoutGrid,
@@ -49,6 +52,9 @@
   import { agentRoutes } from '$lib/agents/routes';
   import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
   import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import { memoryGlyph } from '@tm/shared';
+  import NewMemoryDialog from '$lib/memory/NewMemoryDialog.svelte';
+  import { myMemories, splitMemories } from '$lib/memory/store';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import { hiddenItems, myWorkspaces } from '$lib/workspaces/store';
   import SidebarWorkspaces from './SidebarWorkspaces.svelte';
@@ -88,15 +94,21 @@
   const artifactsQ = $derived(myArtifacts(uid));
   const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
   let newArtifact = $state(false);
+  // Memories I have a role on (memory.html §F); archived ones on All memory only.
+  const memoriesQ = $derived(myMemories(uid));
+  const memories = $derived(splitMemories($memoriesQ.data).active);
+  let newMemory = $state(false);
 
   const path: string = $derived(page.url.pathname);
   const currentArtifact = $derived(path.startsWith('/x/') ? (path.split('/')[2] ?? null) : null);
   const currentKey = $derived(path.startsWith('/b/') ? (path.split('/')[2] ?? null) : null);
+  const currentMemory = $derived(path.startsWith('/m/') ? (path.split('/')[2] ?? null) : null);
 
   // §AB: the root lists leave out what I hid (the All pages and workspaces still show it).
   const hiddenQ = $derived(hiddenItems(uid));
   const rootBoards = $derived(sorted.filter((b) => !$hiddenQ.boards.has(b.id)));
   const rootArtifacts = $derived(artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id)));
+  const rootMemories = $derived(memories.filter((m) => !$hiddenQ.memories.has(m.id)));
   // Highlighted once: under the workspace I came through, when it holds the open item.
   const wsQ = $derived(myWorkspaces(uid));
   const inWs = $derived($wsQ.data.find((w) => w.id === workspaceContext.id) ?? null);
@@ -104,7 +116,8 @@
   const shownInWs = $derived(
     !!inWs &&
       ((!!currentBoardId && inWs.boardIds.includes(currentBoardId)) ||
-        (!!currentArtifact && inWs.artifactIds.includes(currentArtifact))),
+        (!!currentArtifact && inWs.artifactIds.includes(currentArtifact)) ||
+        (!!currentMemory && (inWs.memoryIds ?? []).includes(currentMemory))),
   );
   const leave = () => workspaceContext.leave();
 
@@ -136,11 +149,13 @@
   <SidebarWorkspaces
     boards={active}
     {artifacts}
+    {memories}
     prefs={$prefsQ}
     unread={unreadByBoard}
     {path}
     {currentKey}
     {currentArtifact}
+    {currentMemory}
   />
 
   <div class="flex flex-col gap-px">
@@ -203,6 +218,38 @@
     <NavItem icon={Plus} onclick={() => (newArtifact = true)}>New artifact</NavItem>
   </div>
 
+  <div class="flex flex-col gap-px">
+    <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">Memory</h2>
+    {#if $memoriesQ.loading}
+      <div class="px-2 py-1"><Skeleton width="60%" /></div>
+    {:else if $memoriesQ.error}
+      <p class="px-2 text-xs text-danger">Couldn't load memory.</p>
+    {:else}
+      {#each rootMemories as m (m.id)}
+        {@const current = m.id === currentMemory && !shownInWs}
+        <a
+          href={routes.memory(m.id)}
+          onclick={leave}
+          aria-current={current ? 'page' : undefined}
+          data-memory={m.id}
+          class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
+            {current
+            ? 'bg-surface-3 font-medium text-text'
+            : 'text-muted hover:bg-surface-2 hover:text-text'}"
+        >
+          <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
+            >{memoryGlyph(m)}</span
+          >
+          <span class="flex-1 truncate">{m.name}</span>
+        </a>
+      {/each}
+    {/if}
+    <NavItem href={routes.memories()} icon={Brain} active={path === '/m'} onclick={leave}
+      >All memory</NavItem
+    >
+    <NavItem icon={Plus} onclick={() => (newMemory = true)}>New memory</NavItem>
+  </div>
+
   <div class="mt-auto flex flex-col gap-px border-t border-line pt-3">
     <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">You</h2>
     <NavItem
@@ -227,3 +274,4 @@
 </nav>
 
 <NewArtifactDialog bind:open={newArtifact} />
+<NewMemoryDialog bind:open={newMemory} />

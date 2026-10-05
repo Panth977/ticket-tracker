@@ -1,6 +1,7 @@
 <!--
   Formatting bar for a RichEditor: B I S </> Link • 1. ☐ ❝ (📎 when onattach,
-  ❓ when onask — the composer's 'Ask a question', §N1).
+  ❓ when onask — the composer's 'Ask a question', §N1; 🧠 when onmemory —
+  'Attach from memory', memory.html §E).
   <EditorToolbar {editor} onattach={() => fileInput.click()} onask={() => (askOpen = true)} />
 -->
 <script lang="ts">
@@ -15,6 +16,7 @@
     ListChecks,
     ListOrdered,
     Paperclip,
+    Brain,
     Quote,
     Strikethrough,
   } from 'lucide-svelte';
@@ -27,10 +29,12 @@
     onattach?: () => void;
     /** Phase 5 (§N1): 'Ask a question' — shown to anyone who may comment. */
     onask?: () => void;
+    /** memory.html §E: attach files from a memory granted to this board. */
+    onmemory?: () => void;
     disabled?: boolean;
     class?: string;
   }
-  let { editor, onattach, onask, disabled = false, class: cls = '' }: Props = $props();
+  let { editor, onattach, onask, onmemory, disabled = false, class: cls = '' }: Props = $props();
 
   let tick = $state(0);
   $effect(() => {
@@ -151,11 +155,14 @@
     {#if t.id === 'link' || t.id === 'code'}<span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"
       ></span>{/if}
   {/each}
-  {#if onattach || onask}
+  {#if onattach || onask || onmemory}
     <span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"></span>
   {/if}
   {#if onattach}
     <IconButton icon={Paperclip} label="Attach files" size="sm" {disabled} onclick={onattach} />
+  {/if}
+  {#if onmemory}
+    <IconButton icon={Brain} label="Attach from memory" size="sm" {disabled} onclick={onmemory} />
   {/if}
   {#if onask}
     <IconButton icon={CircleHelp} label="Ask a question" size="sm" {disabled} onclick={onask} />

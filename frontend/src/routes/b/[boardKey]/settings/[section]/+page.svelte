@@ -13,6 +13,7 @@
   import GrantsSection from '$lib/board/settings/GrantsSection.svelte';
   import IntakeSection from '$lib/board/settings/IntakeSection.svelte';
   import IntegrationsSection from '$lib/board/settings/IntegrationsSection.svelte';
+  import MemorySection from '$lib/board/settings/MemorySection.svelte';
   import OptionsSection from '$lib/board/settings/OptionsSection.svelte';
   import Section from '$lib/board/settings/Section.svelte';
   import StagesSection from '$lib/board/settings/StagesSection.svelte';
@@ -50,6 +51,8 @@
     <IntakeSection />
   {:else if section === 'integrations'}
     <IntegrationsSection />
+  {:else if section === 'memory'}
+    <MemorySection />
   {:else if section === 'analytics'}
     <AnalyticsSection />
   {:else if section === 'danger'}

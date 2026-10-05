@@ -177,7 +177,10 @@ const RUN_RECEIPT: Record<string, unknown> = {
     n: int('Your run counter on this ticket, 1-based', { minimum: 1 }),
     outcome: enumOf(RUN_OUTCOMES),
     cost_usd: num('This turn, in USD', { minimum: 0 }),
-    session_usd: { ...num('The resumed session\'s running total, as reported', { minimum: 0 }), nullable: true },
+    session_usd: {
+      ...num("The resumed session's running total, as reported", { minimum: 0 }),
+      nullable: true,
+    },
     duration_ms: int(undefined, { minimum: 0 }),
     api_turns: { ...int(undefined, { minimum: 0 }), nullable: true },
     model: { ...str(undefined, { maxLength: 80 }), nullable: true },
@@ -194,7 +197,16 @@ const RUN_RECEIPT: Record<string, unknown> = {
       additionalProperties: false,
     },
   },
-  required: ['n', 'outcome', 'cost_usd', 'session_usd', 'duration_ms', 'api_turns', 'model', 'usage'],
+  required: [
+    'n',
+    'outcome',
+    'cost_usd',
+    'session_usd',
+    'duration_ms',
+    'api_turns',
+    'model',
+    'usage',
+  ],
   additionalProperties: false,
 };
 
@@ -227,6 +239,21 @@ const ISO = str("ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00
 const STAGE = str('Stage name or id');
 const CURSOR = str('Opaque cursor from a previous call');
 const FILE_IDS = list(str(), 'File ids from upload_file, already on this ticket', { maxItems: 20 });
+/** memory.html §E — memory files by reference: { memory_id, path } or { memory_id, node_id }. */
+const MEMORY_FILES = list(
+  {
+    type: 'object',
+    properties: {
+      memory_id: str(undefined, { minLength: 1, maxLength: 64 }),
+      node_id: str(undefined, { minLength: 1, maxLength: 64 }),
+      path: str(undefined, { minLength: 1, maxLength: 1024 }),
+    },
+    required: ['memory_id'],
+    additionalProperties: false,
+  },
+  'Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).',
+  { maxItems: 20 },
+);
 const TICKET_STATES = ['active', 'archived', 'cancelled'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'skipped', 'failed'] as const;
 const AGENT_STATES = ['working', 'idle', 'done', 'error'] as const;
@@ -496,7 +523,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
     readOnly: false,
     scopes: ['comments:write'],
     inputSchema: schema(
@@ -506,6 +533,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
           maxLength: 100_000,
         }),
         attachments: FILE_IDS,
+        memory_files: MEMORY_FILES,
         reply_to: str('Message id to quote'),
         run: RUN_RECEIPT,
       },
@@ -515,6 +543,15 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       tm.messages.post(s(a.key), {
         markdown: s(a.markdown ?? ''),
         attachments: a.attachments,
+        memoryFiles: Array.isArray(a.memory_files)
+          ? (a.memory_files as { memory_id: string; node_id?: string; path?: string }[]).map(
+              (m) => ({
+                memoryId: m.memory_id,
+                ...(m.node_id ? { nodeId: m.node_id } : {}),
+                ...(m.path ? { path: m.path } : {}),
+              }),
+            )
+          : undefined,
         replyTo: a.reply_to,
         run: a.run ? runFromWire(a.run as Record<string, unknown>) : undefined,
       }),
@@ -747,7 +784,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   artifact_create: {
     description:
-      "Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.",
+      'Create an empty artifact, then publish a build into it with artifact_publish. With an account-wide credential you become its owner; as an agent, your owner owns it (it appears in their sidebar at once) and you may build it and write its data.',
     readOnly: false,
     scopes: ['artifacts:write'],
     inputSchema: schema(
@@ -899,7 +936,12 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       ['id', 'path'],
     ),
     run: async (tm, a) => {
-      const [field, dir] = a.order_by === undefined ? [] : s(a.order_by).split(',').map((x) => x.trim());
+      const [field, dir] =
+        a.order_by === undefined
+          ? []
+          : s(a.order_by)
+              .split(',')
+              .map((x) => x.trim());
       const page = await tm.artifacts.data(s(a.id), { raw: true }).firestore.list(s(a.path), {
         where: a.where,
         orderBy: field ? [field, dir === 'desc' ? 'desc' : 'asc'] : undefined,
@@ -927,7 +969,9 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       ['id', 'path', 'data'],
     ),
     run: (tm, a) =>
-      tm.artifacts.data(s(a.id), { raw: true }).firestore.set(s(a.path), a.data, { merge: a.merge === true }),
+      tm.artifacts
+        .data(s(a.id), { raw: true })
+        .firestore.set(s(a.path), a.data, { merge: a.merge === true }),
   },
   artifact_data_batch: {
     description:

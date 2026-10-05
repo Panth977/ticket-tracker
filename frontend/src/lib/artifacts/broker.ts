@@ -51,6 +51,7 @@ import {
   type WhereOp,
 } from '@tm/shared';
 import { createTicketOps, isTicketOp, type TicketBackend } from './brokerTickets';
+import { createMemoryOps, isMemoryOp, type MemoryBackend } from './brokerMemory';
 import { fromStored, isPlainObject, toStored, toStoredObject, type WriteCodec } from './convert';
 
 export const LIST_LIMIT_DEFAULT = 100;
@@ -127,6 +128,8 @@ export interface BrokerBackend {
   };
   /** §K: boards' tickets, as the viewer (./brokerTickets). */
   tickets: TicketBackend;
+  /** memory.html §H: granted memories, as the viewer (./brokerMemory). None = no memories. */
+  memory?: MemoryBackend;
 }
 
 /** Anything with postMessage — the iframe's contentWindow. */
@@ -431,8 +434,26 @@ export function createBroker(o: BrokerOptions): Broker {
     },
   });
 
+  const memory = backend.memory
+    ? createMemoryOps({
+        artifactId: id,
+        backend: backend.memory,
+        fail: (code, message) => {
+          throw new BrokerError(code, message);
+        },
+        now,
+      })
+    : null;
+
   async function run(op: DriverOp, reqId: string, a: Record<string, unknown>): Promise<unknown> {
     if (isTicketOp(op)) return tickets.run(op, reqId, a);
+    if (isMemoryOp(op)) {
+      if (!memory) {
+        if (op === 'mem.list') return [];
+        throw new BrokerError('permission-denied', 'This artifact has no access to memory');
+      }
+      return memory.run(op, a);
+    }
     const { fs, rtdb } = backend;
     switch (op) {
       case 'fs.get': {

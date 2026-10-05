@@ -24,6 +24,7 @@ import { defineCommand } from './_registry.js';
 import { applyAccess } from './boardAccessSet.js';
 import { adminCount, afterBoardDeleted, deleteBoardTx, loadBoard } from './boardShared.js';
 import { newUserDoc, userRef } from './profileShared.js';
+import { memoriesCol, memoryRef, withMembers } from '../memory/shared.js';
 
 export default defineCommand('accountDelete', async (ctx) => {
   const uid = ctx.actor;
@@ -52,6 +53,33 @@ export default defineCommand('accountDelete', async (ctx) => {
       await afterBoardDeleted(b.id, ctx);
     } else {
       await applyAccess(ctx, { boardId: b.id, leave: true });
+    }
+  }
+
+  // memory.html: the memories they OWN go (queued, like memoryDelete); their
+  // role on anyone else's memory is taken away.
+  const mine = await memoriesCol().where('memberUids', 'array-contains', uid).get();
+  for (const d of mine.docs) {
+    const m = d.data();
+    if (m.ownerUid === uid) {
+      await memoryRef(d.id).update({
+        access: {},
+        memberUids: [],
+        boards: {},
+        boardIds: [],
+        artifacts: {},
+        deletingAt: ctx.now,
+        updatedAt: ctx.now,
+      });
+      await ports().queue.enqueue(
+        'memoryDelete',
+        { memoryId: d.id, actor: uid },
+        { name: `memoryDelete-${d.id}` },
+      );
+    } else {
+      const access = { ...m.access };
+      delete access[uid];
+      await memoryRef(d.id).update({ ...withMembers(access), updatedAt: ctx.now });
     }
   }
 

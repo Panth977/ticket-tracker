@@ -1,6 +1,6 @@
 <!--
   New workspace / Edit workspace (agents.html §AB): a name, a colour, and
-  which of my boards and artifacts are in it. Boards and artifacts are still
+  which of my boards, artifacts and memories (memory.html §F) are in it. Boards and artifacts are still
   created where they always were; this only gathers them. Archived ones are
   not offered (they live on the All pages).
 -->
@@ -8,11 +8,12 @@
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
-  import { WORKSPACE_COLORS, WORKSPACE_NAME_MAX, type Workspace } from '@tm/shared';
+  import { WORKSPACE_COLORS, WORKSPACE_NAME_MAX, memoryGlyph, type Workspace } from '@tm/shared';
   import { command } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import { myMemories, splitMemories } from '$lib/memory/store';
   import { myBoards, type WithId } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
   import Checkbox from '$lib/ui/Checkbox.svelte';
@@ -30,11 +31,14 @@
   );
   const artifactsQ = $derived(myArtifacts(auth.uid));
   const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
+  const memoriesQ = $derived(myMemories(auth.uid));
+  const memories = $derived(splitMemories($memoriesQ.data).active);
 
   let name = $state('');
   let color = $state<string>(WORKSPACE_COLORS[0]);
   let boardIds = $state<string[]>([]);
   let artifactIds = $state<string[]>([]);
+  let memoryIds = $state<string[]>([]);
   let busy = $state(false);
 
   // A fresh form each time it opens: empty, or the workspace being edited.
@@ -44,6 +48,7 @@
     color = workspace?.color ?? WORKSPACE_COLORS[0];
     boardIds = [...(workspace?.boardIds ?? [])];
     artifactIds = [...(workspace?.artifactIds ?? [])];
+    memoryIds = [...(workspace?.memoryIds ?? [])];
   });
 
   const toggle = (list: string[], id: string, on: boolean) =>
@@ -57,14 +62,14 @@
       if (workspace) {
         await command(
           'workspaceUpdate',
-          { workspaceId: workspace.id, name: n, color, boardIds, artifactIds },
+          { workspaceId: workspace.id, name: n, color, boardIds, artifactIds, memoryIds },
           { toast: 'Could not save the workspace' },
         );
         open = false;
       } else {
         const { workspaceId } = await command(
           'workspaceCreate',
-          { name: n, color, boardIds, artifactIds },
+          { name: n, color, boardIds, artifactIds, memoryIds },
           { toast: 'Could not create the workspace' },
         );
         open = false;
@@ -81,8 +86,8 @@
 <Dialog
   bind:open
   title={workspace ? 'Edit workspace' : 'New workspace'}
-  size="md"
-  description="Group boards and artifacts you already have. Nothing moves and nobody gains access; it is only how your sidebar shows them."
+  size="lg"
+  description="Group boards, artifacts and memories you already have. Nothing moves and nobody gains access; it is only how your sidebar shows them."
 >
   <form
     id="workspace-form"
@@ -114,7 +119,7 @@
         {/each}
       </div>
     </fieldset>
-    <div class="grid gap-4 sm:grid-cols-2">
+    <div class="grid gap-4 sm:grid-cols-3">
       <fieldset class="flex min-w-0 flex-col gap-1">
         <legend class="mb-1 text-sm font-medium">Boards</legend>
         <div class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
@@ -146,6 +151,25 @@
             />
           {:else}
             <p class="text-xs text-muted">No artifacts yet.</p>
+          {/each}
+        </div>
+      </fieldset>
+      <fieldset class="flex min-w-0 flex-col gap-1">
+        <legend class="mb-1 text-sm font-medium">Memory</legend>
+        <div class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
+          {#each memories as m (m.id)}
+            <Checkbox
+              checked={memoryIds.includes(m.id)}
+              label="{memoryGlyph(m)} {m.name}"
+              onchange={(e) =>
+                (memoryIds = toggle(
+                  memoryIds,
+                  m.id,
+                  (e.currentTarget as HTMLInputElement).checked,
+                ))}
+            />
+          {:else}
+            <p class="text-xs text-muted">No memories yet.</p>
           {/each}
         </div>
       </fieldset>

@@ -24,12 +24,24 @@ export default defineCommand('workspaceUpdate', async (ctx, input) => {
     const dropA = new Set(input.remove?.artifactIds ?? []);
     boardIds = boardIds.filter((id) => !dropB.has(id));
     artifactIds = artifactIds.filter((id) => !dropA.has(id));
-    if (boardIds.length + artifactIds.length > WORKSPACE_ITEMS_MAX)
-      throw errors.invalid(`A workspace holds at most ${WORKSPACE_ITEMS_MAX} boards and artifacts`);
-    const had = { b: new Set(ws.boardIds), a: new Set(ws.artifactIds) };
+    // memory.html §F: memories are bundled the same way.
+    let memoryIds = input.memoryIds ? uniq(input.memoryIds) : (ws.memoryIds ?? []);
+    memoryIds = uniq([...memoryIds, ...(input.add?.memoryIds ?? [])]);
+    const dropM = new Set(input.remove?.memoryIds ?? []);
+    memoryIds = memoryIds.filter((id) => !dropM.has(id));
+    if (boardIds.length + artifactIds.length + memoryIds.length > WORKSPACE_ITEMS_MAX)
+      throw errors.invalid(
+        `A workspace holds at most ${WORKSPACE_ITEMS_MAX} boards, artifacts and memories`,
+      );
+    const had = {
+      b: new Set(ws.boardIds),
+      a: new Set(ws.artifactIds),
+      m: new Set(ws.memoryIds ?? []),
+    };
     await assertReachable(tx, ctx, {
       boardIds: boardIds.filter((id) => !had.b.has(id)),
       artifactIds: artifactIds.filter((id) => !had.a.has(id)),
+      memoryIds: memoryIds.filter((id) => !had.m.has(id)),
     });
     const next: Workspace = {
       ...ws,
@@ -38,6 +50,7 @@ export default defineCommand('workspaceUpdate', async (ctx, input) => {
       ...(input.position !== undefined ? { position: input.position } : {}),
       boardIds,
       artifactIds,
+      memoryIds,
       updatedAt: ctx.now,
     };
     tx.set(ref, next);

@@ -39,6 +39,8 @@ import {
   FILE_ACCESS_ROUTE,
   FILE_BYTES_ROUTE,
   parseAgentAvatarPath,
+  parseMemoryRefPath,
+  parseMemoryStoragePath,
   SIGNED_URL_TTL_MS,
   type FileAccessRes,
 } from '@tm/shared';
@@ -49,6 +51,7 @@ import { door, MOUNTS } from '../http/mounts.js';
 import { userAuth } from '../middleware/user.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { loadBoard } from '../tickets/access.js';
+import { memoryRef, nodeRef, reachFor } from '../memory/shared.js';
 import { safeEqual, serverMac } from './crypto.js';
 
 /** boards/{boardId}/tickets/{ticketId}/{fileId}/{fileName} — the thumbnail too. */
@@ -63,21 +66,44 @@ const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 const blobSig = (path: string, exp: number): string => serverMac('file-blob', `${path}\n${exp}`);
 
 /**
- * May `ctx.actor` read this object? Attachments (and their thumbnails) need
- * can(read) on the board — loadBoard answers 404, never "no", for a board the
- * actor cannot see, so this leaks no existence. Avatars are readable by any
+ * May `ctx.actor` read this object — and WHICH object is it? Answers the
+ * Storage path to serve. Attachments (and their thumbnails) need can(read)
+ * on the board — loadBoard answers 404, never "no", for a board the actor
+ * cannot see, so this leaks no existence. Avatars are readable by any
  * signed-in person, matching storage.rules. Anything else (exports, stray
  * paths) is refused outright.
+ *
+ * MEMORY (memory.html §E). `memories/{m}/nodes/{n}` is a ticket's REFERENCE:
+ * no object lives there; it resolves to the node's CURRENT version, so every
+ * ticket pointing at a node sees the latest bytes. `memories/{m}/{fileId}/{name}`
+ * is a version itself. Both need memoryReach ≠ null — which a member of a
+ * board the memory is granted to has (the ticket case), as does anyone with a
+ * role on the memory. A deleted node, a removed grant or a deleted memory is
+ * a 404 ('No longer in memory').
  */
-export async function requireFileRead(ctx: ServerCtx, path: string): Promise<void> {
+export async function requireFileRead(ctx: ServerCtx, path: string): Promise<string> {
   if (!path || path.includes('..') || path.startsWith('/'))
     throw errors.invalid('Bad file path', { field: 'path' });
   const att = ATTACHMENT.exec(path);
   if (att) {
     await loadBoard(ctx, att[1]!);
-    return;
+    return path;
   }
-  if (AVATAR.test(path) || parseAgentAvatarPath(path)) return;
+  const ref = parseMemoryRefPath(path);
+  if (ref) {
+    const memory = (await memoryRef(ref.memoryId).get()).data();
+    if (!(await reachFor(ctx, memory))) throw errors.not_found('No longer in memory');
+    const node = (await nodeRef(ref.memoryId, ref.nodeId).get()).data();
+    if (!node?.file) throw errors.not_found('No longer in memory');
+    return node.file.storagePath;
+  }
+  const obj = parseMemoryStoragePath(path);
+  if (obj) {
+    const memory = (await memoryRef(obj.memoryId).get()).data();
+    if (!(await reachFor(ctx, memory))) throw errors.not_found('File not found');
+    return path;
+  }
+  if (AVATAR.test(path) || parseAgentAvatarPath(path)) return path;
   throw errors.not_found('File not found');
 }
 
@@ -85,8 +111,18 @@ export async function requireFileRead(ctx: ServerCtx, path: string): Promise<voi
  * Access to one object for `ctx.actor`, after can(read). 404 when the object is
  * not there — better a clean refusal now than a dead URL in an <img> later.
  */
-export async function fileAccess(ctx: ServerCtx, path: string): Promise<FileAccessRes> {
-  await requireFileRead(ctx, path);
+export async function fileAccess(ctx: ServerCtx, asked: string): Promise<FileAccessRes> {
+  return signedAccess(ctx, await requireFileRead(ctx, asked));
+}
+
+/**
+ * The URLs for one object the caller was ALREADY allowed (requireFileRead,
+ * or a memory command that checked reach itself). 404 when it is not there.
+ */
+export async function signedAccess(
+  ctx: Pick<ServerCtx, 'now'>,
+  path: string,
+): Promise<FileAccessRes> {
   const stored = await ports().files.stat(path);
   if (!stored) throw errors.not_found('File not found');
 

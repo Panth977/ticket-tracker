@@ -175,6 +175,23 @@ export function createDriver(win: WindowLike | undefined): Api.BackendDriver {
       update: (key, patch) => done(call('tk.update', { key, patch })),
       comment: (key, markdown) => done(call('tk.comment', { key, markdown })),
     },
+    memory: {
+      list: () => call('mem.list', {}),
+      tree: (memory, path) => call('mem.tree', { memory, ...(path ? { path } : {}) }),
+      read: (memory, path) => call('mem.read', { memory, path }).then((r) => r.text),
+      url: (memory, path) => call('mem.url', { memory, path }).then((r) => r.url),
+      write: (memory, path, content, options) =>
+        done(
+          call('mem.write', {
+            memory,
+            path,
+            ...(typeof content === 'string' ? { text: content } : { blob: content }),
+            ...(options?.contentType ? { contentType: options.contentType } : {}),
+          }),
+        ),
+      mkdir: (memory, path) => done(call('mem.mkdir', { memory, path })),
+      remove: (memory, path) => done(call('mem.remove', { memory, path })),
+    },
     on(name, callback) {
       const set = handlers[name];
       if (!set) throw new TypeError(`BackendDriver.on: unknown signal '${String(name)}'`);

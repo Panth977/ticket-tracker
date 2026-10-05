@@ -24,6 +24,7 @@ import {
   withTicketId,
 } from '../tickets/access.js';
 import { resolveAttachments } from '../tickets/attachments.js';
+import { resolveMemoryRefs } from '../memory/refs.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
 import { allocateKey } from '../tickets/keys.js';
 import { toPublicTicket } from '../platform/public.js';
@@ -82,6 +83,8 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
       ? await parseBody(input.description, board, ctx, ticketId)
       : null;
   const attachments = await resolveAttachments(input.attachments, board.id, ticketId, ctx.actor);
+  // memory.html §E: memory files by reference (the memory must be granted to this board).
+  const memoryFiles = await resolveMemoryRefs(ctx, input.memoryRefs, board.id);
   const byName = intake
     ? input.reporter?.name || input.reporter?.email || 'Intake'
     : await actorName(ctx, board.id);
@@ -122,7 +125,7 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
       refs: targets.map((t) => t.id),
       referencedBy: [],
       links: [],
-      counts: { messages: 0, files: attachments.length, pinned: 0 },
+      counts: { messages: 0, files: attachments.length + memoryFiles.length, pinned: 0 },
       lastMessageAt: null,
       lastActivityAt: ctx.now,
       dueNotified: {},
@@ -136,7 +139,10 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
     // arrived with the description go inside the document being created.
     const doc = withInline(fields0, {
       activity: [{ ...activityDoc(ctx, 'create', {}), id: ctx.ids.id() }],
-      files: fileRows(attachments, 'description', null, ctx.now),
+      files: [
+        ...fileRows(attachments, 'description', null, ctx.now),
+        ...fileRows(memoryFiles, 'memory', null, ctx.now),
+      ],
     });
     tx.create(ticketRef(board.id, ticketId), doc);
     writeReferences(tx, ctx, { id: ticketId, key, boardId: board.id }, targets);

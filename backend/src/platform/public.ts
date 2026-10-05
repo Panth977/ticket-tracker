@@ -220,6 +220,7 @@ export function toPublicFile(
     ...(signed ? { url: signed.url, url_expires_at: toIso(signed.expiresAt)! } : {}),
     message_id: f.messageId,
     source: f.source,
+    ...(f.memory ? { memory: { memory_id: f.memory.memoryId, node_id: f.memory.nodeId } } : {}),
     uploaded_by: toPublicActor(members, f.uploadedBy),
     created_at: toIso(f.createdAt)!,
   };

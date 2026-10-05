@@ -10,8 +10,10 @@
   interface Props {
     text: string;
     ticketHref?: (key: string) => string;
+    /** false: no Preview / Source switch (a host that has its own, e.g. memory's Code mode). */
+    sourceToggle?: boolean;
   }
-  let { text, ticketHref }: Props = $props();
+  let { text, ticketHref, sourceToggle = true }: Props = $props();
 
   let mode = $state<'preview' | 'source'>('preview');
   let headings = $state<MarkdownHeading[]>([]);
@@ -30,45 +32,49 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col">
-  <div
-    class="flex items-center gap-1 border-b border-line px-3 py-1.5"
-    role="toolbar"
-    aria-label="Markdown view"
-  >
-    <div class="flex rounded-md border border-line p-0.5" role="radiogroup" aria-label="Show">
-      <button
-        type="button"
-        role="radio"
-        aria-checked={mode === 'preview'}
-        onclick={() => (mode = 'preview')}
-        class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {mode === 'preview'
-          ? 'bg-surface-2 text-text'
-          : 'text-muted hover:text-text'}"
-      >
-        <Eye size={13} /> Preview
-      </button>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={mode === 'source'}
-        onclick={() => (mode = 'source')}
-        class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {mode === 'source'
-          ? 'bg-surface-2 text-text'
-          : 'text-muted hover:text-text'}"
-      >
-        <Code size={13} /> Source
-      </button>
-    </div>
-    <span class="flex-1"></span>
-    {#if showToc}
-      <button
-        type="button"
-        class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-text"
-        aria-pressed={tocOpen}
-        onclick={() => (tocOpen = !tocOpen)}><ListTree size={13} /> Contents</button
-      >
-    {/if}
-  </div>
+  {#if sourceToggle || showToc}<div
+      class="flex items-center gap-1 border-b border-line px-3 py-1.5"
+      role="toolbar"
+      aria-label="Markdown view"
+    >
+      {#if sourceToggle}<div
+          class="flex rounded-md border border-line p-0.5"
+          role="radiogroup"
+          aria-label="Show"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === 'preview'}
+            onclick={() => (mode = 'preview')}
+            class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {mode === 'preview'
+              ? 'bg-surface-2 text-text'
+              : 'text-muted hover:text-text'}"
+          >
+            <Eye size={13} /> Preview
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === 'source'}
+            onclick={() => (mode = 'source')}
+            class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {mode === 'source'
+              ? 'bg-surface-2 text-text'
+              : 'text-muted hover:text-text'}"
+          >
+            <Code size={13} /> Source
+          </button>
+        </div>{/if}
+      <span class="flex-1"></span>
+      {#if showToc}
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-text"
+          aria-pressed={tocOpen}
+          onclick={() => (tocOpen = !tocOpen)}><ListTree size={13} /> Contents</button
+        >
+      {/if}
+    </div>{/if}
   <div class="flex min-h-0 flex-1">
     {#if showToc && tocOpen}
       <nav

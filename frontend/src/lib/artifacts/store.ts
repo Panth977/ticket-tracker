@@ -102,6 +102,8 @@ export const ARTIFACT_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General', owner: true },
   { id: 'people', label: 'People', owner: true },
   { id: 'boards', label: 'Board access', owner: true },
+  /** memory.html §D: memories the page may use (BackendDriver.memory). */
+  { id: 'memory', label: 'Memory', owner: true },
   { id: 'builds', label: 'Builds', owner: false },
   { id: 'data', label: 'Data', owner: false },
 ] as const;

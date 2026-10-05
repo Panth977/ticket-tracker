@@ -10,7 +10,7 @@
   // hrefs are built by lib/layout/routes; the SPA has no base path, so resolve() would be the identity.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { ChevronRight, Plus } from 'lucide-svelte';
-  import type { Artifact, Board, BoardPref } from '@tm/shared';
+  import { memoryGlyph, type Artifact, type Board, type BoardPref, type Memory } from '@tm/shared';
   import { artifactGlyph } from '$lib/artifacts/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import type { WithId } from '$lib/stores';
@@ -23,17 +23,30 @@
   interface Props {
     boards: readonly WithId<Board>[];
     artifacts: readonly WithId<Artifact>[];
+    memories: readonly WithId<Memory>[];
     prefs: ReadonlyMap<string, BoardPref | null>;
     unread: ReadonlyMap<string, number>;
     path: string;
     currentKey: string | null;
     currentArtifact: string | null;
+    currentMemory: string | null;
   }
-  let { boards, artifacts, prefs, unread, path, currentKey, currentArtifact }: Props = $props();
+  let {
+    boards,
+    artifacts,
+    memories,
+    prefs,
+    unread,
+    path,
+    currentKey,
+    currentArtifact,
+    currentMemory,
+  }: Props = $props();
 
   const wsQ = $derived(myWorkspaces(auth.uid));
   const boardById = $derived(new Map(boards.map((b) => [b.id, b])));
   const artifactById = $derived(new Map(artifacts.map((a) => [a.id, a])));
+  const memoryById = $derived(new Map(memories.map((m) => [m.id, m])));
 
   // Which are unfolded: remembered per browser; the one I am in is always open.
   const OPEN_KEY = 'tm.workspaces.open';
@@ -135,7 +148,28 @@
           </a>
         {/if}
       {/each}
-      {#if !w.boardIds.some( (id) => boardById.has(id) ) && !w.artifactIds.some( (id) => artifactById.has(id) )}
+      {#each w.memoryIds ?? [] as id (id)}
+        {@const m = memoryById.get(id)}
+        {#if m}
+          {@const current = workspaceContext.id === w.id && m.id === currentMemory}
+          <a
+            href={routes.memory(m.id)}
+            onclick={() => workspaceContext.enter(w.id)}
+            aria-current={current ? 'page' : undefined}
+            data-memory={m.id}
+            class="flex h-7 min-w-0 items-center gap-2 rounded-md pr-2 pl-7 text-sm
+              {current
+              ? 'bg-surface-3 font-medium text-text'
+              : 'text-muted hover:bg-surface-2 hover:text-text'}"
+          >
+            <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
+              >{memoryGlyph(m)}</span
+            >
+            <span class="flex-1 truncate">{m.name}</span>
+          </a>
+        {/if}
+      {/each}
+      {#if !w.boardIds.some( (id) => boardById.has(id) ) && !w.artifactIds.some( (id) => artifactById.has(id) ) && !(w.memoryIds ?? []).some( (id) => memoryById.has(id) )}
         <a
           href={routes.workspace(w.id)}
           class="flex h-7 items-center pl-7 text-xs text-subtle hover:text-text"

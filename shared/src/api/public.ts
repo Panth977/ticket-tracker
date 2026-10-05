@@ -216,7 +216,9 @@ export const PublicFileSchema = PublicAttachmentSchema.extend({
   url_expires_at: Iso.optional(),
   /** The message it is attached to; null when only uploaded (source 'upload') or on the description. */
   message_id: z.string().nullable(),
-  source: z.enum(['description', 'message', 'upload']),
+  source: z.enum(['description', 'message', 'upload', 'memory']),
+  /** memory.html §E: a reference to a memory file — its bytes are the node's current version. */
+  memory: z.object({ memory_id: z.string(), node_id: z.string() }).optional(),
   uploaded_by: PublicActorSchema,
   created_at: Iso,
 });
@@ -486,3 +488,16 @@ export const PublicArtifactDetailSchema = PublicArtifactSchema.extend({
   members: z.array(PublicArtifactMemberSchema),
 });
 export type PublicArtifactDetail = z.infer<typeof PublicArtifactDetailSchema>;
+
+/** memory.html §E — one memory file to attach to a message: its memory, and its node id or path. */
+export const PublicMemoryFileRefSchema = z
+  .object({
+    memory_id: z.string().min(1).max(64),
+    node_id: z.string().min(1).max(64).optional(),
+    path: z.string().min(1).max(1024).optional(),
+  })
+  .strict()
+  .refine((r) => (r.node_id === undefined) !== (r.path === undefined), {
+    message: 'Give node_id or path',
+  });
+export type PublicMemoryFileRef = z.infer<typeof PublicMemoryFileRefSchema>;

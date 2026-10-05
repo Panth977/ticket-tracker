@@ -155,6 +155,35 @@ function fakeBackend() {
       },
     },
     tickets: tk.backend,
+    // memory.html §H: one memory granted read (./brokerMemory.test covers the ops).
+    memory: {
+      list: async () => [
+        {
+          memory: {
+            id: 'mem01',
+            name: 'Brand',
+            description: null,
+            icon: null,
+            reach: 'manage',
+            archived: false,
+            stats: { files: 1, folders: 0, bytes: 1 },
+            updatedAt: 1,
+          },
+          grant: 'read',
+        },
+      ],
+      tree: async () => [],
+      read: async () => ({ text: 'x', truncated: false, url: 'https://u', expiresAt: 1 }),
+      async write(m, path) {
+        rec('mem.write', path);
+      },
+      async mkdir(m, path) {
+        rec('mem.mkdir', path);
+      },
+      async remove(m, path) {
+        rec('mem.remove', path);
+      },
+    },
   };
   return { backend, calls, docs, live, tk, failWith: (e: unknown) => (fail = e) };
 }
@@ -608,9 +637,11 @@ describe('read-only viewer', () => {
     for (const op of DRIVER_OPS) {
       const a = op.startsWith('tk.')
         ? tkArgs
-        : op === 'fs.add' || op === 'fs.list' || op === 'fs.onList'
-          ? { ...args, path: '/a' }
-          : args;
+        : op.startsWith('mem.')
+          ? { memory: 'mem01', path: 'a.md', text: 'x' }
+          : op === 'fs.add' || op === 'fs.list' || op === 'fs.onList'
+            ? { ...args, path: '/a' }
+            : args;
       const res = await t.req(op, a);
       if (DRIVER_WRITE_OPS.has(op))
         expect(res, op).toMatchObject({ ok: false, error: { code: 'permission-denied' } });

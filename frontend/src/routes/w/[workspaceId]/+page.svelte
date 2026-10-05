@@ -1,26 +1,28 @@
 <!--
-  /w/{id} — one of my workspaces (agents.html §AB): its boards as tiles and its
-  artifacts as rows, on one page. Being here enters the workspace, so a board
-  opened from it keeps "Workspace › Board" and the workspace-only switcher.
-  Edit (name, colour, what is in it), remove one item, hide items from the
-  sidebar's root, or delete the workspace — nothing it holds is touched.
+  /w/{id} — one of my workspaces (agents.html §AB): its boards, artifacts and
+  memories as cards, on one page. Being here enters the workspace, so one
+  opened from it keeps "Workspace › Name" and the workspace-only switcher.
+  Edit (name, colour, what is in it), remove one item, or delete the
+  workspace — nothing it holds is touched. NO hide / show here: hiding is
+  about the sidebar's root lists, and this page is not one of them.
 -->
 <script lang="ts">
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Eye, EyeOff, Pencil, Trash2, X } from 'lucide-svelte';
-  import { paths, type Workspace } from '@tm/shared';
+  import { Pencil, Trash2 } from 'lucide-svelte';
+  import { memoryGlyph, paths, type Workspace } from '@tm/shared';
   import { command } from '$lib/api';
   import BoardTile from '$lib/account/BoardTile.svelte';
   import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
   import { auth } from '$lib/firebase/auth.svelte';
+  import ItemTile from '$lib/layout/ItemTile.svelte';
   import { routes } from '$lib/layout/routes';
+  import { myMemories, splitMemories } from '$lib/memory/store';
   import { docStore, myBoards } from '$lib/stores';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems, setHidden } from '$lib/workspaces/store';
   import WorkspaceDialog from '$lib/workspaces/WorkspaceDialog.svelte';
 
   const uid = $derived(auth.uid);
@@ -30,7 +32,7 @@
 
   const boardsQ = $derived(myBoards(uid));
   const artifactsQ = $derived(myArtifacts(uid));
-  const hiddenQ = $derived(hiddenItems(uid));
+  const memoriesQ = $derived(myMemories(uid));
 
   // In its order; ones I can no longer open (or archived) simply are not shown.
   const boards = $derived.by(() => {
@@ -41,6 +43,10 @@
     const byId = new Map(splitArtifacts($artifactsQ.data).active.map((a) => [a.id, a]));
     return (ws?.artifactIds ?? []).flatMap((x) => byId.get(x) ?? []);
   });
+  const memories = $derived.by(() => {
+    const byId = new Map(splitMemories($memoriesQ.data).active.map((m) => [m.id, m]));
+    return (ws?.memoryIds ?? []).flatMap((x) => byId.get(x) ?? []);
+  });
 
   $effect(() => {
     if (ws) workspaceContext.enter(ws.id);
@@ -50,7 +56,9 @@
   let confirmDelete = $state(false);
   let busy = $state(false);
 
-  async function remove(item: { boardIds: string[] } | { artifactIds: string[] }) {
+  async function remove(
+    item: { boardIds: string[] } | { artifactIds: string[] } | { memoryIds: string[] },
+  ) {
     if (!ws) return;
     try {
       await command(
@@ -108,17 +116,17 @@
     </header>
     {#if confirmDelete}
       <p class="-mt-4 text-sm text-muted">
-        Only the grouping goes. Its boards and artifacts stay exactly as they are.
+        Only the grouping goes. Its boards, artifacts and memories stay exactly as they are.
       </p>
     {/if}
 
-    {#if !boards.length && !artifacts.length}
+    {#if !boards.length && !artifacts.length && !memories.length}
       <EmptyState
         title="Nothing here yet"
-        description="Add boards and artifacts you already have. They stay where they are too; this just keeps them together."
+        description="Add boards, artifacts and memories you already have. They stay where they are too; this just keeps them together."
       >
         {#snippet action()}
-          <Button variant="primary" onclick={() => (editing = true)}>Add boards & artifacts</Button>
+          <Button variant="primary" onclick={() => (editing = true)}>Add to this workspace</Button>
         {/snippet}
       </EmptyState>
     {/if}
@@ -131,7 +139,6 @@
             <BoardTile
               board={b}
               uid={uid ?? ''}
-              hidden={$hiddenQ}
               onremove={() => remove({ boardIds: [b.id] })}
               onopen={() => workspaceContext.enter(ws.id)}
             />
@@ -143,56 +150,44 @@
     {#if artifacts.length}
       <section aria-label="Artifacts" class="flex flex-col gap-3">
         <h2 class="text-sm font-semibold tracking-wide text-subtle uppercase">Artifacts</h2>
-        <ul class="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
           {#each artifacts as a (a.id)}
-            {@const isHidden = $hiddenQ.artifacts.has(a.id)}
-            <li class="group flex items-center hover:bg-surface-2">
-              <a
-                href={routes.artifact(a.id)}
-                onclick={() => workspaceContext.enter(ws.id)}
-                class="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4"
-                data-artifact={a.id}
-              >
-                <span class="w-6 shrink-0 text-center text-lg leading-none" aria-hidden="true"
-                  >{artifactGlyph(a)}</span
-                >
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate font-medium">{a.name}</span>
-                  {#if a.description}<span class="block truncate text-sm text-muted"
-                      >{a.description}</span
-                    >{/if}
-                </span>
-                {#if isHidden}<span class="text-xs text-subtle">hidden from sidebar</span>{/if}
-              </a>
-              {#if uid}
-                <button
-                  type="button"
-                  class="rounded p-1.5 transition-colors {isHidden
-                    ? 'text-muted'
-                    : 'text-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100'} hover:text-text"
-                  aria-label={isHidden
-                    ? `Show ${a.name} in the sidebar`
-                    : `Hide ${a.name} from the sidebar`}
-                  aria-pressed={isHidden}
-                  onclick={() => setHidden(uid, $hiddenQ, { artifactId: a.id }, !isHidden, a.name)}
-                >
-                  {#if isHidden}<EyeOff size={16} aria-hidden="true" />{:else}<Eye
-                      size={16}
-                      aria-hidden="true"
-                    />{/if}
-                </button>
-              {/if}
-              <button
-                type="button"
-                class="mr-2 rounded p-1.5 text-subtle opacity-0 transition-colors group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                aria-label="Remove {a.name} from this workspace"
-                onclick={() => remove({ artifactIds: [a.id] })}
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </li>
+            <ItemTile
+              dataKind="artifact"
+              id={a.id}
+              href={routes.artifact(a.id)}
+              name={a.name}
+              glyph={artifactGlyph(a)}
+              description={a.description}
+              onremove={() => remove({ artifactIds: [a.id] })}
+              onopen={() => workspaceContext.enter(ws.id)}
+            />
           {/each}
-        </ul>
+        </div>
+      </section>
+    {/if}
+
+    {#if memories.length}
+      <section aria-label="Memory" class="flex flex-col gap-3">
+        <h2 class="text-sm font-semibold tracking-wide text-subtle uppercase">Memory</h2>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
+          {#each memories as m (m.id)}
+            <ItemTile
+              dataKind="memory"
+              id={m.id}
+              href={routes.memory(m.id)}
+              name={m.name}
+              glyph={memoryGlyph(m)}
+              description={m.description}
+              onremove={() => remove({ memoryIds: [m.id] })}
+              onopen={() => workspaceContext.enter(ws.id)}
+            >
+              {#snippet meta()}
+                <span>{m.stats.files} {m.stats.files === 1 ? 'file' : 'files'}</span>
+              {/snippet}
+            </ItemTile>
+          {/each}
+        </div>
       </section>
     {/if}
   {/if}

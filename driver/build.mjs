@@ -39,8 +39,11 @@ const STATIC = join(here, '..', 'frontend', 'static', 'backend-driver');
 /** `v1` is the wire version (DRIVER_PROTOCOL_VERSION), not the package version. */
 const CHANNELS = ['v1', 'latest'];
 const FILES = ['driver.js', 'driver.mjs', 'driver.d.ts'];
-/** "A few kilobytes of postMessage plumbing" — the mock is most of it. Shout if it balloons. */
-const MAX_BYTES = 24 * 1024;
+/**
+ * "A few kilobytes of postMessage plumbing" — the mock is most of it. Shout if it balloons.
+ * 24 KB → 28 KB with memory.html §H (db.memory and the mock's demo memory, ~2 KB).
+ */
+const MAX_BYTES = 28 * 1024;
 
 const args = new Set(process.argv.slice(2));
 const quiet = args.has('--quiet');

@@ -328,6 +328,29 @@ service cloud.firestore {
       }
     }
 
+    // ------------------------------------------------------------ memories
+    // (docs/plan/memory.html §A, §B). A memory's PEOPLE read it straight from
+    // Firestore — the document and its tree of nodes — so the app draws the
+    // tree with one listener. Board members who reach it only through a grant
+    // (§D) and every token read it through memoryTree / memoryFileRead
+    // instead: a rule cannot ask "is this person on any granted board". The
+    // bytes are never read through the rules (the file door, storage.rules).
+    function memoryMember(memoryId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/memories/$(memoryId)).data.memberUids;
+    }
+
+    match /memories/{memoryId} {
+      // A LIST is provable only with where(memberUids array-contains auth.uid).
+      allow get, list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow write: if false; // memoryCreate / Update / Share / GrantSet / Delete
+
+      match /nodes/{nodeId} {
+        allow read: if memoryMember(memoryId);
+        allow write: if false; // memoryFileWrite / FilePut / FolderCreate / Move / NodeDelete
+      }
+    }
+
     // ------------------------------------------------------- boards/{boardId}
 
     match /boards/{boardId} {

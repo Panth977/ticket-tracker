@@ -21,6 +21,10 @@
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import { workspaceContext } from '$lib/workspaces/context.svelte';
+  import { switcherFor } from '$lib/workspaces/switcherStore';
+  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -31,6 +35,8 @@
   const me = $derived(auth.uid ?? '');
   const role = $derived(roleIn(art, me));
   const sections = $derived(settingsSectionsFor(role));
+  // The same title dropdown as on the artifact itself (agents.html §AB3).
+  const switchQ = $derived(switcherFor(me, { artifactId }, workspaceContext.id));
 
   // A viewer who typed the URL: there is nothing here for them.
   $effect(() => {
@@ -73,6 +79,16 @@
     {#snippet action()}<Button href={routes.artifacts()}>Your artifacts</Button>{/snippet}
   </EmptyState>
 {:else if sections.length}
+  <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
+    {#if $switchQ.workspace}<WorkspaceCrumb workspace={$switchQ.workspace} />{/if}
+    <TitleSwitcher
+      kind="artifact"
+      items={$switchQ.items}
+      name={art.name}
+      glyph={artifactGlyph(art)}
+    />
+    <span class="shrink-0 text-sm text-subtle">› Settings</span>
+  </header>
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:flex-row md:px-8">
     <nav class="flex shrink-0 flex-col gap-1 md:w-52" aria-label="Artifact settings">
       <a

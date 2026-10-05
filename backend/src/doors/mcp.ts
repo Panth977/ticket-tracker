@@ -451,6 +451,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       await postMessage(ctx, board, ticket, {
         markdown: a.markdown,
         fileIds: a.attachments,
+        memoryFiles: a.memory_files,
         replyTo: a.reply_to,
         run: a.run,
       }),
@@ -666,7 +667,9 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       ...(a.start_after !== undefined ? { startAfter: a.start_after } : {}),
     });
     if (!q.success)
-      throw errors.invalid(q.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+      throw errors.invalid(
+        q.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      );
     return json(await dataList(ctx, a.id, a.path, q.data));
   });
 

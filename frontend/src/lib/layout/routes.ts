@@ -42,6 +42,8 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'grants', label: 'Stage grants' },
   { id: 'intake', label: 'Intake' },
   { id: 'integrations', label: 'Integrations' },
+  /** memory.html §D: memories this board may use. */
+  { id: 'memory', label: 'Memory' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'danger', label: 'Danger zone' },
 ] as const;
@@ -100,9 +102,15 @@ export const routes = {
   artifact: (artifactId: string) => `/x/${artifactId}`,
   /** §AB: one of my workspaces — its boards and artifacts on one page. */
   workspace: (workspaceId: string) => `/w/${workspaceId}`,
+  /** Memory (docs/plan/memory.html §F): the list, one memory (?path= a file or folder), its settings. */
+  memories: () => '/m',
+  memory: (memoryId: string, path?: string | null) =>
+    `/m/${memoryId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
+  memorySettings: (memoryId: string, section: 'general' | 'people' | 'access' = 'general') =>
+    `/m/${memoryId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
-    section: 'general' | 'people' | 'boards' | 'builds' | 'data',
+    section: 'general' | 'people' | 'boards' | 'memory' | 'builds' | 'data',
   ) => `/x/${artifactId}/settings/${section}`,
   /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
   integrate: () => '/integrate',

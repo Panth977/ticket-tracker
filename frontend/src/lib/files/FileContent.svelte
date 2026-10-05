@@ -9,7 +9,7 @@
 -->
 <script lang="ts">
   import { Download, Loader2 } from 'lucide-svelte';
-  import { formatBytes } from '@tm/shared';
+  import { formatBytes, parseMemoryRefPath } from '@tm/shared';
   import { Button } from '$lib/ui';
   import { KIND_ICON, KIND_LABEL, VIEWER_TEXT_BYTES, infoOf, prettyJson } from './kinds';
   import { downloadFile, fileText, fileUrl, type FileTextResult } from './source';
@@ -36,6 +36,12 @@
   let error = $state<string | null>(null);
   let zoom = $state<ImageZoom | null>(null);
   let jsonPretty = $state(true);
+  /** memory.html §E: a memory reference that no longer resolves says why. */
+  const failMsg = $derived(
+    file.memory || parseMemoryRefPath(file.path)
+      ? 'No longer in memory — the file was deleted, or the memory is no longer shared here.'
+      : 'Could not load this file.',
+  );
 
   $effect(() => {
     const f = file;
@@ -48,13 +54,13 @@
     if (info.textual) {
       fileText(f, VIEWER_TEXT_BYTES)
         .then((r) => alive && ((text = r), (loading = false)))
-        .catch(() => alive && ((error = 'Could not load this file.'), (loading = false)));
+        .catch(() => alive && ((error = failMsg), (loading = false)));
     } else if (k !== 'other') {
       void fileUrl(f.path).then((u) => {
         if (!alive) return;
         url = u;
         loading = false;
-        if (!u) error = 'Could not load this file.';
+        if (!u) error = failMsg;
       });
     } else loading = false;
     return () => {

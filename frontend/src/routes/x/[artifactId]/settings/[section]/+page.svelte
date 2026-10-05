@@ -6,6 +6,7 @@
   import BuildsSection from '$lib/artifacts/settings/BuildsSection.svelte';
   import DataSection from '$lib/artifacts/settings/DataSection.svelte';
   import GeneralSection from '$lib/artifacts/settings/GeneralSection.svelte';
+  import MemorySection from '$lib/artifacts/settings/MemorySection.svelte';
   import PeopleSection from '$lib/artifacts/settings/PeopleSection.svelte';
   import { useArtifactSettings } from '$lib/artifacts/settings/context.svelte';
   import { firstSettingsSection, settingsSectionsFor } from '$lib/artifacts/store';
@@ -40,6 +41,8 @@
     <PeopleSection />
   {:else if section === 'boards'}
     <BoardsSection />
+  {:else if section === 'memory'}
+    <MemorySection />
   {:else if section === 'builds'}
     <BuildsSection />
   {:else if section === 'data'}

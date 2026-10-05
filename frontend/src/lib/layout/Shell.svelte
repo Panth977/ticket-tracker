@@ -24,6 +24,7 @@
   import Sidebar from './Sidebar.svelte';
   import { registerNavProviders } from './navProviders';
   import { myWorkspaces } from '$lib/workspaces/store';
+  import { myMemories } from '$lib/memory/store';
   import { routes } from './routes';
 
   let { children }: { children: Snippet } = $props();
@@ -35,12 +36,14 @@
 
   const artifacts = $derived(myArtifacts(auth.uid));
   const workspaces = $derived(myWorkspaces(auth.uid));
+  const memories = $derived(myMemories(auth.uid));
 
   $effect(() =>
     registerNavProviders(
       () => boards,
       () => artifacts,
       () => workspaces,
+      () => memories,
     ),
   );
   $effect(() =>

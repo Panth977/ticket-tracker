@@ -186,6 +186,28 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // memories/{memoryId}/{fileId}/{fileName} — one VERSION of a memory file
+    // (docs/plan/memory.html §A, D-M2). The app uploads it straight here, then
+    // memoryFilePut points a node at it. Written ONCE (a new version is a new
+    // object), by the memory's owner or an editor, up to 1 GB
+    // (MEMORY_UPLOAD_MAX_BYTES). A cross-service lookup, guarding a WRITE
+    // only (see the top of this file). Reads, updates and deletes are the
+    // server's: the file door for bytes, the commands for the rest.
+    function memoryMayWrite(memoryId) {
+      return signedIn()
+        && notRefused(request.auth.uid)
+        && firestore.get(/databases/(default)/documents/memories/$(memoryId)).data.access.get(request.auth.uid, null) in ['owner', 'editor']
+        && firestore.get(/databases/(default)/documents/memories/$(memoryId)).data.archivedAt == null;
+    }
+
+    match /memories/{memoryId}/{fileId}/{fileName} {
+      allow create: if resource == null
+        && fileId.matches('[A-Za-z0-9_-]{6,64}')
+        && memoryMayWrite(memoryId)
+        && request.resource.size <= 1024 * 1024 * 1024;
+      allow read, update, delete: if false;
+    }
+
     // exports/{uid}/{jobId}.zip — written by accountExport, handed out as a
     // 7-day signed URL (which bypasses rules). No client access.
     match /exports/{uid}/{file} {

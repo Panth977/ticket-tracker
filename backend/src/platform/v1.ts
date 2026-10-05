@@ -35,6 +35,7 @@ import {
   type PublicEvent,
   type PublicFile,
   type PublicMessage,
+  type PublicMemoryFileRef,
   type PublicRunReceipt,
   type PublicTicket,
   type PublicTicketDetail,
@@ -67,6 +68,8 @@ import {
   toPublicTicket,
 } from './public.js';
 import { decodeCursor, encodeCursor, markdownIn, peopleUids, readableBoards } from './resolve.js';
+import { requireFileRead } from './fileAccess.js';
+import { memoryRefsIn } from '../memory/refs.js';
 
 /** The API key behind a ctx, when one authenticated the request (middleware/apiKey.ts). */
 export const apiKeyOf = (ctx: ServerCtx): ApiKeyInfo | null =>
@@ -345,6 +348,8 @@ export async function postMessage(
     fileIds?: string[] | undefined;
     replyTo?: string | undefined;
     run?: PublicRunReceipt | null | undefined;
+    /** memory.html §E: memory files by reference. */
+    memoryFiles?: PublicMemoryFileRef[] | undefined;
   },
   key?: string,
 ): Promise<PublicMessage> {
@@ -358,6 +363,7 @@ export async function postMessage(
       body,
       ...(md.trim() ? { markdown: md } : {}),
       ...(m.fileIds?.length ? { fileIds: [...new Set(m.fileIds)] } : {}),
+      ...(m.memoryFiles?.length ? { memoryRefs: await memoryRefsIn(m.memoryFiles) } : {}),
       ...(m.replyTo ? { replyTo: m.replyTo } : {}),
       ...(m.run ? { run: runIn(m.run) } : {}),
       clientId: clientIdFor(key, ctx),
@@ -435,10 +441,10 @@ export async function readFile(
   withContent: boolean | 'auto',
 ): Promise<RestFileRes> {
   const { board, ticket, file } = await findFile(ctx, fileId);
-  const [members, signed] = await Promise.all([
-    boardMembers(board.id),
-    signedUrl(file.path, ctx.now),
-  ]);
+  // memory.html §E: a memory reference is the node's CURRENT version, and only
+  // while the memory is still granted (the file door decides both).
+  const path = file.memory ? await requireFileRead(ctx, file.path) : file.path;
+  const [members, signed] = await Promise.all([boardMembers(board.id), signedUrl(path, ctx.now)]);
   const pub = toPublicFile(ticket.key, file, members, signed);
   if (!withContent) return pub;
   const textual = isTextualKind(fileInfo(file.mime, file.name).kind);
@@ -448,7 +454,7 @@ export async function readFile(
       kind: pub.kind,
       url: signed.url,
     });
-  const bytes = await ports().files.read(file.path);
+  const bytes = await ports().files.read(path);
   const cut = bytes.length > MAX_INLINE_TEXT_BYTES;
   const content = new TextDecoder('utf-8', { fatal: false }).decode(
     cut ? bytes.subarray(0, MAX_INLINE_TEXT_BYTES) : bytes,

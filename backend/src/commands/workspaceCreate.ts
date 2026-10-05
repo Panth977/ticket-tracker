@@ -17,13 +17,15 @@ export default defineCommand('workspaceCreate', async (ctx, input) => {
       throw errors.conflict(`You can have at most ${WORKSPACES_MAX} workspaces`);
     const boardIds = uniq(input.boardIds ?? []);
     const artifactIds = uniq(input.artifactIds ?? []);
-    await assertReachable(tx, ctx, { boardIds, artifactIds });
+    const memoryIds = uniq(input.memoryIds ?? []);
+    await assertReachable(tx, ctx, { boardIds, artifactIds, memoryIds });
     const last = Math.max(-1, ...mine.docs.map((d) => d.data().position));
     const doc: Workspace = {
       name: input.name,
       color: input.color ?? WORKSPACE_COLORS[mine.size % WORKSPACE_COLORS.length]!,
       boardIds,
       artifactIds,
+      memoryIds,
       position: last + 1,
       createdAt: ctx.now,
       updatedAt: ctx.now,

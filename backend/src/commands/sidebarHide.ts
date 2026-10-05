@@ -11,26 +11,31 @@ import { runTx, txGet } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
 import { assertReachable, personOnly } from './workspaceShared.js';
 
-export default defineCommand('sidebarHide', async (ctx, { boardId, artifactId, hidden }) => {
-  personOnly(ctx);
-  await runTx(async (tx) => {
-    const ref = typedDoc('sidebarPrefs', paths.sidebarPrefs(ctx.actor));
-    const cur: SidebarPrefs = (await txGet(tx, ref)) ?? {
-      ...EMPTY_SIDEBAR_PREFS,
-      updatedAt: ctx.now,
-    };
-    if (hidden)
-      await assertReachable(tx, ctx, {
-        ...(boardId ? { boardIds: [boardId] } : {}),
-        ...(artifactId ? { artifactIds: [artifactId] } : {}),
+export default defineCommand(
+  'sidebarHide',
+  async (ctx, { boardId, artifactId, memoryId, hidden }) => {
+    personOnly(ctx);
+    await runTx(async (tx) => {
+      const ref = typedDoc('sidebarPrefs', paths.sidebarPrefs(ctx.actor));
+      const cur: SidebarPrefs = (await txGet(tx, ref)) ?? {
+        ...EMPTY_SIDEBAR_PREFS,
+        updatedAt: ctx.now,
+      };
+      if (hidden)
+        await assertReachable(tx, ctx, {
+          ...(boardId ? { boardIds: [boardId] } : {}),
+          ...(artifactId ? { artifactIds: [artifactId] } : {}),
+          ...(memoryId ? { memoryIds: [memoryId] } : {}),
+        });
+      const flip = (list: string[], id: string | undefined) =>
+        !id ? list : hidden ? [...new Set([...list, id])] : list.filter((x) => x !== id);
+      tx.set(ref, {
+        hiddenBoardIds: flip(cur.hiddenBoardIds, boardId),
+        hiddenArtifactIds: flip(cur.hiddenArtifactIds, artifactId),
+        hiddenMemoryIds: flip(cur.hiddenMemoryIds ?? [], memoryId),
+        updatedAt: ctx.now,
       });
-    const flip = (list: string[], id: string | undefined) =>
-      !id ? list : hidden ? [...new Set([...list, id])] : list.filter((x) => x !== id);
-    tx.set(ref, {
-      hiddenBoardIds: flip(cur.hiddenBoardIds, boardId),
-      hiddenArtifactIds: flip(cur.hiddenArtifactIds, artifactId),
-      updatedAt: ctx.now,
     });
-  });
-  return { ok: true as const };
-});
+    return { ok: true as const };
+  },
+);

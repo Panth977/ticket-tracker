@@ -44,6 +44,9 @@ import {
   RestArtifactDataBatchBodySchema,
   RestArtifactDataListQuerySchema,
   RestArtifactFilesQuerySchema,
+  RestMemoryFileQuerySchema,
+  RestMemoryListQuerySchema,
+  RestMemoryTreeQuerySchema,
   RestArtifactSourceQuerySchema,
   RestCreateArtifactBodySchema,
   RestPatchArtifactBodySchema,
@@ -107,6 +110,7 @@ import {
 } from '../platform/phase3.js';
 import { boardMembers, toPublicBoard, toPublicFile } from '../platform/public.js';
 import { boardByKey, readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
+import { memoryRawPut } from '../memory/files.js';
 import { storeTicketUpload, uploadBytes } from '../platform/uploads.js';
 import {
   ackEvents,
@@ -410,7 +414,13 @@ v1.post('/tickets/:key/messages', async (c) => {
     ctx,
     board,
     ticket,
-    { markdown: b.body_markdown, fileIds: b.attachments, replyTo: b.reply_to, run: b.run },
+    {
+      markdown: b.body_markdown,
+      fileIds: b.attachments,
+      replyTo: b.reply_to,
+      run: b.run,
+      memoryFiles: b.memory_files,
+    },
     idem(c),
   );
   return c.json(m, 201);
@@ -968,19 +978,109 @@ v1.put('/artifacts/:id/data/files/*', async (c) => {
   if (len > MAX_FILE_BODY_BYTES)
     throw errors.too_large(`A file is at most ${MAX_FILE_BODY_BYTES / 1024 / 1024} MB`);
   const bytes = new Uint8Array(await c.req.arrayBuffer());
-  const file = await fileUpload(
-    ctx,
-    aid(c),
-    dataPath(c),
-    bytes,
-    c.req.header('content-type'),
-  );
+  const file = await fileUpload(ctx, aid(c), dataPath(c), bytes, c.req.header('content-type'));
   return c.json(file, 201);
 });
 
 v1.delete('/artifacts/:id/data/files/*', async (c) => {
   const ctx = gate(c, 'DELETE', FILES);
   return c.json(await fileDelete(ctx, aid(c), dataPath(c)));
+});
+
+// ─── memory (memory.html §G) ─────────────────────────────────────────────────
+
+const MEM_FILES = '/v1/memories/{id}/files/{path}';
+const MEM_PATH = /\/memories\/[^/]+\/files\/(.+)$/;
+/** The `{path}` of a memory file route, decoded. */
+function memoryFilePath(c: C): string {
+  const raw = MEM_PATH.exec(c.req.path)?.[1] ?? '';
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw errors.invalid('The path is not valid percent-encoding', { field: 'path' });
+  }
+}
+
+v1.get('/memories', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/memories');
+  const q = query(c, RestMemoryListQuerySchema);
+  const boardId = q.board ? (await requestBoard(ctx, q.board)).id : undefined;
+  c.header('cache-control', 'no-store');
+  return c.json(
+    await invoke(
+      'memoryList',
+      { ...(boardId ? { boardId } : {}), ...(q.include_archived ? { includeArchived: true } : {}) },
+      ctx,
+    ),
+  );
+});
+
+v1.get('/memories/:id/tree', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/memories/{id}/tree');
+  const q = query(c, RestMemoryTreeQuerySchema);
+  c.header('cache-control', 'no-store');
+  return c.json(
+    await invoke(
+      'memoryTree',
+      {
+        memoryId: c.req.param('id'),
+        ...(q.path ? { path: q.path } : {}),
+        ...(q.shallow ? { shallow: true } : {}),
+      },
+      ctx,
+    ),
+  );
+});
+
+v1.get('/memories/:id/files/*', async (c) => {
+  const ctx = gate(c, 'GET', MEM_FILES);
+  const q = query(c, RestMemoryFileQuerySchema);
+  c.header('cache-control', 'no-store');
+  return c.json(
+    await invoke(
+      'memoryFileRead',
+      {
+        memoryId: c.req.param('id'),
+        path: memoryFilePath(c),
+        ...(q.text ? { asText: true } : {}),
+      },
+      ctx,
+    ),
+  );
+});
+
+/** The raw body IS the file; Content-Type is kept as its type. A new version replaces the old. */
+v1.put('/memories/:id/files/*', async (c) => {
+  const ctx = gate(c, 'PUT', MEM_FILES);
+  const len = Number(c.req.header('content-length') ?? 0);
+  if (len > MAX_FILE_BODY_BYTES)
+    throw errors.too_large(
+      `A file is at most ${MAX_FILE_BODY_BYTES / 1024 / 1024} MB through the API`,
+    );
+  const memoryId = c.req.param('id');
+  const path = memoryFilePath(c);
+  return c.json(
+    await memoryRawPut(
+      ctx,
+      memoryId,
+      path,
+      new Uint8Array(await c.req.arrayBuffer()),
+      c.req.header('content-type'),
+      MAX_FILE_BODY_BYTES,
+    ),
+    201,
+  );
+});
+
+v1.delete('/memories/:id/files/*', async (c) => {
+  const ctx = gate(c, 'DELETE', MEM_FILES);
+  return c.json(
+    await invoke(
+      'memoryNodeDelete',
+      { memoryId: c.req.param('id'), paths: [memoryFilePath(c)] },
+      ctx,
+    ),
+  );
 });
 
 // ─── search ──────────────────────────────────────────────────────────────────

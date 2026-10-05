@@ -135,6 +135,8 @@ export interface QueuePayloads {
    * builds, the people and the document (the owner's 'Delete all data').
    */
   artifactDelete: { artifactId: string; actor: Uid; dataOnly?: boolean };
+  /** memoryDelete (memory.html §G): Storage prefix, nodes, then the document. */
+  memoryDelete: { memoryId: string; actor: Uid };
   /** accountExport. */
   export: { jobId: string; uid: Uid };
   /** Generic e-mail outside notify (invites, export ready …). */

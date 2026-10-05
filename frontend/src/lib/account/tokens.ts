@@ -19,6 +19,7 @@ import {
   ADMIN_SCOPES,
   API_KEY_EXPIRY_DAYS,
   ARTIFACT_SCOPES,
+  MEMORY_SCOPES,
   BOARD_TOKEN_PRESETS,
   isAccountScope,
   presetOf,
@@ -179,7 +180,19 @@ export const ARTIFACT_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
   title: 'Artifacts',
   scopes: [...ARTIFACT_SCOPES],
 };
-const isArtifactScope = (s: string): boolean => (ARTIFACT_SCOPES as readonly string[]).includes(s);
+/**
+ * Memory (memory.html §G) — like artifacts, offered only for an account token:
+ * it reaches the memories its person reaches. An agent's token always carries
+ * them (it reaches only memories granted to its boards).
+ */
+export const MEMORY_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
+  title: 'Memory',
+  scopes: [...MEMORY_SCOPES],
+};
+/** Not a board scope: dropped when an account token becomes a board token. */
+const isArtifactScope = (s: string): boolean =>
+  (ARTIFACT_SCOPES as readonly string[]).includes(s) ||
+  (MEMORY_SCOPES as readonly string[]).includes(s);
 /** May this kind of token carry artifacts:* at all? */
 export const artifactScopesFit = (d: Pick<TokenDraft, 'kind'>): boolean => d.kind === 'account';
 

@@ -171,6 +171,32 @@ export interface TicketInput {
   fields?: Record<string, unknown>;
 }
 
+/**
+ * A memory this artifact was granted (memory.html §H) that the VIEWER reaches.
+ * `access` is what this page may do with it: the grant, bounded by the viewer.
+ */
+export interface DriverMemory {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  access: 'read' | 'write';
+  files: number;
+  bytes: number;
+}
+
+/** One node of a memory's tree. Paths are relative to the memory ('docs/a.md'). */
+export interface DriverMemoryNode {
+  id: string;
+  kind: 'folder' | 'file';
+  path: string;
+  name: string;
+  /** Files only. */
+  mime: string | null;
+  size: number | null;
+  updatedAt: number;
+}
+
 /** Operation → [args, result]. The one table both sides are typed from. */
 export interface DriverOps {
   'fs.get': [{ path: string }, DriverDoc];
@@ -209,6 +235,17 @@ export interface DriverOps {
   'tk.create': [{ board: string; ticket: TicketInput }, { id: string; key: string }];
   'tk.update': [{ key: string; patch: Partial<TicketInput> }, { ok: true }];
   'tk.comment': [{ key: string; markdown: string }, { ok: true }];
+  // memory.html §H — memories granted to this artifact, as far as the viewer reaches
+  'mem.list': [Record<string, never>, DriverMemory[]];
+  'mem.tree': [{ memory: string; path?: string }, DriverMemoryNode[]];
+  'mem.read': [{ memory: string; path: string }, { text: string; truncated: boolean }];
+  'mem.url': [{ memory: string; path: string }, { url: string; expiresAt: number }];
+  'mem.write': [
+    { memory: string; path: string; text?: string; blob?: BlobLike; contentType?: string },
+    { path: string },
+  ];
+  'mem.mkdir': [{ memory: string; path: string }, { path: string }];
+  'mem.remove': [{ memory: string; path: string }, { ok: true }];
 }
 export type DriverOp = keyof DriverOps;
 export type DriverArgs<O extends DriverOp> = DriverOps[O][0];
@@ -242,6 +279,13 @@ export const DRIVER_OPS = [
   'tk.create',
   'tk.update',
   'tk.comment',
+  'mem.list',
+  'mem.tree',
+  'mem.read',
+  'mem.url',
+  'mem.write',
+  'mem.mkdir',
+  'mem.remove',
 ] as const satisfies readonly DriverOp[];
 /** Ops that write: refused up front when the viewer is read-only (the rules refuse them anyway). */
 export const DRIVER_WRITE_OPS: ReadonlySet<DriverOp> = new Set([
@@ -259,6 +303,10 @@ export const DRIVER_WRITE_OPS: ReadonlySet<DriverOp> = new Set([
   'tk.create',
   'tk.update',
   'tk.comment',
+  // memory.html §H: the same for memory writes.
+  'mem.write',
+  'mem.mkdir',
+  'mem.remove',
 ]);
 export const isDriverOp = (s: unknown): s is DriverOp =>
   typeof s === 'string' && (DRIVER_OPS as readonly string[]).includes(s);

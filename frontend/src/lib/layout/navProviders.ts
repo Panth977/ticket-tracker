@@ -5,6 +5,7 @@
 import { get } from 'svelte/store';
 import {
   Bell,
+  Brain,
   FolderPlus,
   Layers,
   Inbox,
@@ -15,7 +16,7 @@ import {
   SquareKanban,
   User,
 } from 'lucide-svelte';
-import type { Artifact, Board, Workspace } from '@tm/shared';
+import type { Artifact, Board, Memory, Workspace } from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
 import type { QueryState } from '$lib/stores';
 import type { Readable } from 'svelte/store';
@@ -27,6 +28,8 @@ export function registerNavProviders(
   artifacts: () => Readable<QueryState<Artifact>> | null = () => null,
   /** My workspaces (agents.html §AB): ⌘K opens one by name. */
   workspaces: () => Readable<QueryState<Workspace>> | null = () => null,
+  /** My memories (memory.html §F): ⌘K opens one by name. */
+  memories: () => Readable<QueryState<Memory>> | null = () => null,
 ): () => void {
   const screens: PaletteItem[] = [
     {
@@ -63,6 +66,13 @@ export function registerNavProviders(
       icon: AppWindow,
       href: routes.artifacts(),
       keywords: 'apps dashboards archived',
+    },
+    {
+      id: 'nav-memory',
+      label: 'All memory',
+      icon: Brain,
+      href: routes.memories(),
+      keywords: 'files bucket drive assets notes',
     },
     {
       id: 'nav-notif',
@@ -140,6 +150,26 @@ export function registerNavProviders(
             icon: AppWindow,
             href: routes.artifact(a.id),
             keywords: 'artifact app',
+          })),
+        );
+      },
+    }),
+    palette.register({
+      id: 'memories',
+      group: 'Memory',
+      order: 13,
+      search: (q) => {
+        const s = memories();
+        const list = s ? get(s).data.filter((m) => m.archivedAt == null) : [];
+        return filterItems(
+          q,
+          list.map((m) => ({
+            id: `m-${m.id}`,
+            label: m.name,
+            hint: m.description ?? undefined,
+            icon: Brain,
+            href: routes.memory(m.id),
+            keywords: 'memory files bucket',
           })),
         );
       },

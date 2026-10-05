@@ -16,6 +16,7 @@ import { AppError, type Message, type Question, type RichTextDoc } from '@tm/sha
 import { outbox, type OutboxEntry, type OutboxStatus, type OutboxUpload } from '$lib/api';
 import type { DraftAttachment, UploadItem } from '$lib/editor';
 import { routes } from '$lib/layout/routes';
+import { pickAttachment, toMemoryRefs, type MemoryPick } from '$lib/memoryRefs/pick';
 
 export interface PendingMsg {
   id: string;
@@ -136,17 +137,24 @@ export interface SendInput {
   attachments: DraftAttachment[];
   /** Uploads still in flight: the message waits for them. */
   uploading?: UploadItem[];
+  /**
+   * memory.html §E: memory files attached BY REFERENCE. Sent as memoryRefs;
+   * the bubble shows them at once with the virtual path the server stores.
+   */
+  memory?: MemoryPick[];
 }
 
 /** Queue a message. Returns its id (= the bubble's and the stored message's id). */
 export function sendMessage(m: SendInput): string {
   const inflight = m.uploading ?? [];
+  const memory = m.memory ?? [];
+  const memoryRows = memory.map(pickAttachment);
   const draft: MessageDraft = {
     authorUid: m.authorUid,
     authorName: m.authorName,
     body: m.body,
     replyTo: m.replyTo,
-    attachments: m.attachments,
+    attachments: [...m.attachments, ...memoryRows],
     ticketKey: m.ticketKey,
   };
   const input = {
@@ -155,6 +163,7 @@ export function sendMessage(m: SendInput): string {
     body: m.body,
     ...(m.replyTo ? { replyTo: m.replyTo } : {}),
     ...(m.attachments.length ? { attachments: m.attachments.map((a) => a.path) } : {}),
+    ...(memory.length ? { memoryRefs: toMemoryRefs(memory) } : {}),
   };
   const { id } = outbox.queue('messagePost', input, {
     kind: 'message',
@@ -196,7 +205,10 @@ export function sendMessage(m: SendInput): string {
             // The draft now lists every attachment (a reload resends them all).
             outbox.setDraft(entry.id, {
               ...d,
-              attachments: all.map(({ path, name, size, mime }) => ({ path, name, size, mime })),
+              attachments: [
+                ...all.map(({ path, name, size, mime }) => ({ path, name, size, mime })),
+                ...memoryRows,
+              ],
             });
           }
           return { ...input, ...attachments };

@@ -28,7 +28,15 @@ import {
 } from './http.js';
 import { readSse } from './sse.js';
 import { createWatcher, type LiveCredential, type WatchOptions, type Watcher } from './watch.js';
-import { fromBase64, isZip, readDirectory, realPathOrNull, zipFiles, zipPath, type ZipEntry } from './zip.js';
+import {
+  fromBase64,
+  isZip,
+  readDirectory,
+  realPathOrNull,
+  zipFiles,
+  zipPath,
+  type ZipEntry,
+} from './zip.js';
 import { workLoop, type WorkHandler, type WorkOptions, type WorkSummary } from './work.js';
 import type {
   Agent,
@@ -149,6 +157,11 @@ export interface PostMessageInput {
   markdown?: string;
   /** File ids from `files.upload`, already on this ticket. */
   attachments?: string[];
+  /**
+   * Memory files to attach BY REFERENCE (no upload): each names its memory and
+   * the file by `path` or `nodeId`. The memory must be granted to the board.
+   */
+  memoryFiles?: { memoryId: string; path?: string; nodeId?: string }[];
   /** A message id to quote. */
   replyTo?: string;
   /** Orchestrators: the receipt of one finished run. The body should say the same in words. */
@@ -378,7 +391,12 @@ export interface PublishArtifactOptions extends RequestOptions {
  */
 export type ShareArtifactInput =
   | { email: string; agent?: undefined; role: 'editor' | 'viewer' | null; access?: undefined }
-  | { agent: string; email?: undefined; access: ArtifactAgentAccess; role?: 'editor' | null | undefined }
+  | {
+      agent: string;
+      email?: undefined;
+      access: ArtifactAgentAccess;
+      role?: 'editor' | null | undefined;
+    }
   | { agent: string; email?: undefined; role: 'editor' | null; access?: undefined };
 
 /**
@@ -506,7 +524,8 @@ function taskItems(items: readonly (string | TaskItemInput)[]): unknown[] {
   );
 }
 
-const asBlob = (bytes: Uint8Array): Blob => new Blob([bytes as BlobPart], { type: 'application/zip' });
+const asBlob = (bytes: Uint8Array): Blob =>
+  new Blob([bytes as BlobPart], { type: 'application/zip' });
 
 const tooLarge = (message: string): TmError =>
   new TmError({ code: 'too_large', status: 0, message: `artifacts.publish: ${message}` });
@@ -519,7 +538,8 @@ async function fileBytes(f: ArtifactFile): Promise<Uint8Array> {
     return f.encoding === 'base64' ? fromBase64(c) : new TextEncoder().encode(c);
   if (c instanceof Uint8Array) return c;
   if (c instanceof ArrayBuffer) return new Uint8Array(c);
-  if (typeof Blob !== 'undefined' && c instanceof Blob) return new Uint8Array(await c.arrayBuffer());
+  if (typeof Blob !== 'undefined' && c instanceof Blob)
+    return new Uint8Array(await c.arrayBuffer());
   throw new TypeError(`artifacts.publish: '${f.path}' has no usable content`);
 }
 
@@ -539,10 +559,14 @@ function checkBuild(entries: readonly ZipEntry[], what: string): void {
       `artifacts.publish: ${what} has no index.html at its root — publish the BUILD folder (Vite: dist/), not the project`,
     );
   if (entries.length > ARTIFACT_LIMITS.buildFiles)
-    throw tooLarge(`${what} has ${entries.length} files; a build is at most ${ARTIFACT_LIMITS.buildFiles}`);
+    throw tooLarge(
+      `${what} has ${entries.length} files; a build is at most ${ARTIFACT_LIMITS.buildFiles}`,
+    );
   const bytes = entries.reduce((n, e) => n + e.bytes.length, 0);
   if (bytes > ARTIFACT_LIMITS.buildBytes)
-    throw tooLarge(`${what} is ${mb(bytes)} unpacked; a build is at most ${mb(ARTIFACT_LIMITS.buildBytes)}`);
+    throw tooLarge(
+      `${what} is ${mb(bytes)} unpacked; a build is at most ${mb(ARTIFACT_LIMITS.buildBytes)}`,
+    );
 }
 
 /** Any `ArtifactBuildInput` → the bytes of one zip. */
@@ -598,7 +622,9 @@ async function sourceZip(
           ? new Uint8Array(source)
           : new Uint8Array(await source.arrayBuffer());
     if (!isZip(bytes))
-      throw new TypeError('artifacts.publish: `source` must be a directory path or the bytes of a zip');
+      throw new TypeError(
+        'artifacts.publish: `source` must be a directory path or the bytes of a zip',
+      );
     return bytes;
   }
   // A build folder with an unusual name ('out', 'public') is not in the skip
@@ -614,7 +640,8 @@ async function sourceZip(
       // .env and .env.local hold secrets, and a source zip is what the NEXT
       // person downloads. .env.example is documentation and stays.
       skipFile: (name) =>
-        JUNK_FILES.has(name) || (/^\.env(\..+)?$/.test(name) && !/\.(example|sample|template)$/.test(name)),
+        JUNK_FILES.has(name) ||
+        (/^\.env(\..+)?$/.test(name) && !/\.(example|sample|template)$/.test(name)),
       maxFileBytes: ARTIFACT_SOURCE_MAX_FILE_BYTES,
     },
     'artifacts.publish',
@@ -981,7 +1008,9 @@ function createClientBase(options: ClientOptions) {
   ): Promise<ArtifactBuild> {
     const build = await buildZip(input);
     if (build.length > ARTIFACT_LIMITS.zipBytes)
-      throw tooLarge(`the build zip is ${mb(build.length)}; at most ${mb(ARTIFACT_LIMITS.zipBytes)}`);
+      throw tooLarge(
+        `the build zip is ${mb(build.length)}; at most ${mb(ARTIFACT_LIMITS.zipBytes)}`,
+      );
     const source =
       o.source === undefined
         ? undefined
@@ -1114,6 +1143,11 @@ function createClientBase(options: ClientOptions) {
           defined({
             body_markdown: input.markdown ?? '',
             attachments: input.attachments,
+            memory_files: input.memoryFiles?.map((m) => ({
+              memory_id: m.memoryId,
+              ...(m.nodeId ? { node_id: m.nodeId } : {}),
+              ...(m.path ? { path: m.path } : {}),
+            })),
             reply_to: input.replyTo,
             run: input.run ? runBody(input.run) : undefined,
           }),
@@ -1419,7 +1453,12 @@ function createClientBase(options: ClientOptions) {
       publish: publishArtifact,
       /** Make a kept build the current one — back, or forward again. */
       rollback: (id: string, buildId: string, o?: RequestOptions): Promise<Artifact> =>
-        write<Artifact>('POST', `/artifacts/${seg(id)}/builds/${seg(buildId)}/current`, undefined, o),
+        write<Artifact>(
+          'POST',
+          `/artifacts/${seg(id)}/builds/${seg(buildId)}/current`,
+          undefined,
+          o,
+        ),
       /**
        * A short-lived URL for the source zip published beside a build — the
        * newest build that has one, unless `buildId` names another. GET it
@@ -1434,13 +1473,19 @@ function createClientBase(options: ClientOptions) {
        * `outcome: 'invited'`). An agent takes `access: { build, data }` (§AA3;
        * `{ build: false, data: 'none' }` removes it).
        */
-      share: (id: string, input: ShareArtifactInput, o?: RequestOptions): Promise<ArtifactShareResult> => {
+      share: (
+        id: string,
+        input: ShareArtifactInput,
+        o?: RequestOptions,
+      ): Promise<ArtifactShareResult> => {
         if ((input.email === undefined) === (input.agent === undefined))
           throw new TypeError('artifacts.share: give exactly one of email or agent');
         if (input.email !== undefined && input.access !== undefined)
           throw new TypeError('artifacts.share: `access` is for an agent — a person takes a role');
         if (input.role === undefined && input.access === undefined)
-          throw new TypeError('artifacts.share: give role — or, for an agent, access: { build, data }');
+          throw new TypeError(
+            'artifacts.share: give role — or, for an agent, access: { build, data }',
+          );
         return write<ArtifactShareResult>(
           'PUT',
           `/artifacts/${seg(id)}/access`,

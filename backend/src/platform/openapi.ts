@@ -37,6 +37,10 @@ import {
   RestArtifactDataWriteResSchema,
   RestArtifactFileListResSchema,
   RestArtifactFilesQuerySchema,
+  RestMemoryFileQuerySchema,
+  RestMemoryListQuerySchema,
+  RestMemoryTreeQuerySchema,
+  COMMANDS,
   RestArtifactFileUploadResSchema,
   RestArtifactFileUrlResSchema,
   RestArtifactRtdbGetResSchema,
@@ -113,6 +117,12 @@ const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 
 const COMPONENTS: Record<string, z.ZodTypeAny> = {
   Problem: ProblemSchema,
+  // memory (memory.html §G): the commands' own answers
+  MemoryList: COMMANDS.memoryList.res,
+  MemoryTree: COMMANDS.memoryTree.res,
+  MemoryFile: COMMANDS.memoryFileRead.res,
+  MemoryFileWritten: COMMANDS.memoryFileWrite.res,
+  MemoryDeleted: COMMANDS.memoryNodeDelete.res,
   Me: RestMeResSchema,
   Board: RestBoardResSchema,
   BoardList: RestBoardListResSchema,
@@ -222,7 +232,7 @@ const DATA_WHO =
   '{path} is the rest of the URL, in the artifact\'s own view (it may contain "/").';
 const DATA_WRITE =
   "An agent token needs data 'write' on the artifact; an account token, its person as owner or editor. " +
-  'An archived artifact refuses writes (409). {path} is the rest of the URL, in the artifact\'s own view.';
+  "An archived artifact refuses writes (409). {path} is the rest of the URL, in the artifact's own view.";
 const DATA_VALUES =
   'Values are JSON with two escapes: { "$date": "2026-09-30T05:30:00Z" } is a timestamp (both ways), and ' +
   '{ "$serverTime": true } in a write is the server\'s clock. The collection names "tickets" and "reads" are reserved.';
@@ -530,6 +540,35 @@ const IO: Record<string, RouteIO> = {
   'DELETE /v1/artifacts/{id}/data/files/{path}': {
     res: 'Ok',
     notes: `${DATA_WRITE} Deleting a file that is not there is fine.`,
+  },
+  'GET /v1/memories': {
+    query: RestMemoryListQuerySchema,
+    res: 'MemoryList',
+    notes: 'Each memory says what YOU may do there: reach manage | write | read.',
+  },
+  'GET /v1/memories/{id}/tree': {
+    query: RestMemoryTreeQuerySchema,
+    res: 'MemoryTree',
+    notes:
+      'Every node under ?path= (default: the whole memory), sorted by path; ?shallow=1 for one level.',
+  },
+  'GET /v1/memories/{id}/files/{path}': {
+    query: RestMemoryFileQuerySchema,
+    res: 'MemoryFile',
+    notes:
+      '`text` for text files (at most 1 MB; `truncated` says if there was more); `url` and `bytesUrl` are short-lived and need no Authorization header.',
+  },
+  'PUT /v1/memories/{id}/files/{path}': {
+    binary: true,
+    large: true,
+    res: 'MemoryFileWritten',
+    status: 201,
+    notes:
+      'The raw body is the file (≤ 25 MB here; bigger files are uploaded in the app). Content-Type is kept as its type. Missing folders are created; an existing file gets a new version.',
+  },
+  'DELETE /v1/memories/{id}/files/{path}': {
+    res: 'MemoryDeleted',
+    notes: 'A folder goes with everything inside it.',
   },
   'GET /v1/search': { query: RestSearchQuerySchema, res: 'SearchResults' },
   'GET /v1/webhooks': { res: 'WebhookList' },

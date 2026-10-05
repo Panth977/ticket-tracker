@@ -69,6 +69,7 @@ describe('roles', () => {
       'general',
       'people',
       'boards',
+      'memory',
       'builds',
       'data',
     ]);

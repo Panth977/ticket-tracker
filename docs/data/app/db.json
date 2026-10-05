@@ -1316,6 +1316,58 @@
         "  updatedAt: Millis",
         "}"
       ]
+    },
+    {
+      "name": "memories",
+      "service": "firestore",
+      "location": "memories/{memoryId}",
+      "rules": [
+        "allow get, list: auth.uid in resource.data.memberUids",
+        "allow write: never   // memoryCreate, memoryUpdate, memoryShare, memoryGrantSet, memoryDelete",
+        "",
+        "// A BUCKET OF FILES (plan/memory.html). Its people are its own; a board",
+        "// or an artifact reaches it only through a grant stored here (§D), and",
+        "// memoryReach() is the one answer to 'what may this principal do'."
+      ],
+      "schema": [
+        "interface Memory {",
+        "  name: string",
+        "  description: string | null",
+        "  icon: string | null",
+        "  ownerUid: Uid",
+        "  access: Record<Uid, 'owner' | 'editor' | 'viewer'>",
+        "  memberUids: Uid[]          // keys of access (list queries)",
+        "  boards: Record<BoardId, 'read' | 'write'>    // §D: a ceiling; members read, editors+ write",
+        "  artifacts: Record<ArtifactId, 'read' | 'write'>  // §H: the page, as the viewer",
+        "  boardIds: BoardId[]        // keys of boards (array-contains)",
+        "  stats: { files, folders, bytes }",
+        "  archivedAt: Millis | null",
+        "  deletingAt?: Millis | null  // memoryDelete: unreachable, job queued",
+        "}"
+      ]
+    },
+    {
+      "name": "memoryNodes",
+      "service": "firestore",
+      "location": "memories/{memoryId}/nodes/{nodeId}",
+      "rules": [
+        "allow read:  auth.uid in get(memories/{memoryId}).memberUids",
+        "allow write: never   // memoryFileWrite, memoryFilePut, memoryFolderCreate, memoryMove, memoryNodeDelete",
+        "",
+        "// THE TREE (D-M1): one listener draws it. `path` is unique in the memory",
+        "// and denormalized; a folder move rewrites its subtree. The bytes are in",
+        "// Storage at memories/{m}/{fileId}/{name}, one object per VERSION (D-M2)."
+      ],
+      "schema": [
+        "interface MemoryNode {",
+        "  kind: 'folder' | 'file'",
+        "  parentId: NodeId | null",
+        "  name: string",
+        "  path: string     // 'docs/brand/logo.svg'",
+        "  file: { fileId, storagePath, mime, size, width?, height? } | null",
+        "  createdAt / createdBy, updatedAt / updatedBy",
+        "}"
+      ]
     }
   ]
 }

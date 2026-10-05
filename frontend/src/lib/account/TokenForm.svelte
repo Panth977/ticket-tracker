@@ -32,6 +32,7 @@
     ACCOUNT_SCOPE_SECTION,
     ACCOUNT_TOKEN_NEVER,
     ARTIFACT_SCOPE_SECTION,
+    MEMORY_SCOPE_SECTION,
     artifactScopesFit,
     choiceOf,
     EXPIRY_OPTIONS,
@@ -277,6 +278,27 @@
             {ARTIFACT_SCOPE_SECTION.title}
           </p>
           {#each ARTIFACT_SCOPE_SECTION.scopes as s (s)}
+            <Checkbox
+              checked={draft.scopes.includes(s)}
+              label={s}
+              description={SCOPE_LABELS[s]}
+              onchange={(e) =>
+                (draft.scopes = toggleScope(
+                  draft.scopes,
+                  s,
+                  (e.currentTarget as HTMLInputElement).checked,
+                ))}
+            />
+          {/each}
+        </div>
+      {/if}
+      {#if artifactScopesFit(draft)}
+        <!-- memory.html §G — account tokens only, like artifacts. -->
+        <div class="flex flex-col gap-1.5" data-memory-scopes>
+          <p class="text-xs font-semibold tracking-wide text-subtle uppercase">
+            {MEMORY_SCOPE_SECTION.title}
+          </p>
+          {#each MEMORY_SCOPE_SECTION.scopes as s (s)}
             <Checkbox
               checked={draft.scopes.includes(s)}
               label={s}

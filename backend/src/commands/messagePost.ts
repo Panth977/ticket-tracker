@@ -57,6 +57,7 @@ import {
   withTicketId,
 } from '../tickets/access.js';
 import { resolveAttachments } from '../tickets/attachments.js';
+import { resolveMemoryRefs } from '../memory/refs.js';
 import { attachUploadedFiles, readUploadedFiles } from '../tickets/files.js';
 import { openTicket } from '../tickets/doc.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
@@ -81,12 +82,14 @@ export default defineCommand('messagePost', async (ctx, input) => {
   requireWritableBoard(board);
 
   const empty = isEmptyDoc(input.body);
-  if (empty && !input.attachments?.length && !input.fileIds?.length)
+  if (empty && !input.attachments?.length && !input.fileIds?.length && !input.memoryRefs?.length)
     throw errors.invalid('Write something or attach a file', { field: 'body' });
   const parsed = empty
     ? { rich: EMPTY_RICH, refAt: new Map() }
     : await parseBody(input.body, board, ctx, ticketId);
   const uploaded = await resolveAttachments(input.attachments, boardId, ticketId, ctx.actor);
+  // memory.html §E: memory files by reference (the memory must be granted to this board).
+  const memoryFiles = await resolveMemoryRefs(ctx, input.memoryRefs, boardId);
   const fileIds = [...new Set(input.fileIds ?? [])].filter(
     (id) => !uploaded.some((a) => a.id === id),
   );
@@ -108,7 +111,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
     if (input.replyTo && !(await w.locate(input.replyTo)))
       throw errors.invalid('The quoted message does not exist', { field: 'replyTo' });
     const posted = readUploadedFiles(w, fileIds);
-    const attachments = [...uploaded, ...posted.map((f) => f.attachment)];
+    const attachments = [...uploaded, ...posted.map((f) => f.attachment), ...memoryFiles];
     const newRefs = parsed.rich.refs.filter((r) => !ticket.refs.includes(r));
     const targets = await readRefTargets(tx, newRefs, parsed.refAt);
     // §Y2: a receipt moves the board's counter and the day row too, so both
@@ -144,6 +147,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
     w.addMessage(messageId, message);
     // API uploads were already counted when they arrived; these are the direct ones.
     w.addFiles(fileRows(uploaded, 'message', messageId, ctx.now));
+    if (memoryFiles.length) w.addFiles(fileRows(memoryFiles, 'memory', messageId, ctx.now));
     attachUploadedFiles(w, posted, messageId);
     w.set({ watcherUids: [...new Set([...ticket.watcherUids, ctx.actor])] });
     if (targets.length)

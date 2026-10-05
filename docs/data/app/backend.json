@@ -609,7 +609,8 @@
         "after commit:",
         "  notify('created'), notify('assigned', assignees),",
         "  notify('mentioned', description.mentions)",
-        "  emit webhook 'ticket.created'"
+        "  emit webhook 'ticket.created'",
+        "memoryRefs (plan/memory.html §E): memory files by reference — the memory must be granted to this board; rows source 'memory', path memories/{m}/nodes/{n}"
       ],
       "touches": [
         "app/schema/tickets",
@@ -773,7 +774,8 @@
         "  notify('mentioned', body.mentions)      // unconditional",
         "  notify('comment') minus those mentioned // no double ping",
         "  for each NEW #ref: target.referencedBy += this ticket, and a system line\n  on THAT ticket: 'referenced from ENG-40'",
-        "  webhook 'message.created'"
+        "  webhook 'message.created'",
+        "memoryRefs (plan/memory.html §E): memory files by reference — the memory must be granted to this board; rows source 'memory', path memories/{m}/nodes/{n}"
       ],
       "touches": [
         "app/schema/messages",
@@ -1572,6 +1574,231 @@
       ],
       "touches": [
         "app/schema/artifacts"
+      ]
+    },
+    {
+      "name": "memoryCreate",
+      "trigger": "api",
+      "location": "POST /api/memoryCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { name, description?, icon? }",
+        "interface Res { memoryId }"
+      ],
+      "implementation": [
+        "any allowed person (never an agent or a board token); ≤ 100 owned",
+        "they become its owner"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryUpdate",
+      "trigger": "api",
+      "location": "POST /api/memoryUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, name?, description?, icon?, archived? }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "owner only; archived = read-only for everyone until restored"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryDelete",
+      "trigger": "api",
+      "location": "POST /api/memoryDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "owner only",
+        "ONE write empties access and grants and stamps deletingAt (unreachable at once)",
+        "queue memoryDelete: Storage prefix, nodes, the document last"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryShare",
+      "trigger": "api",
+      "location": "POST /api/memoryShare",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, email, role: 'editor' | 'viewer' | null }",
+        "interface Res { invited: false }"
+      ],
+      "implementation": [
+        "owner only, never an agent",
+        "the person must already have an account (409 noAccount otherwise)"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryGrantSet",
+      "trigger": "api",
+      "location": "POST /api/memoryGrantSet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, boardId? | artifactId?, access: 'read' | 'write' | null }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "memory owner AND board admin (or artifact owner)",
+        "null removes; ≤ 20 boards and 20 artifacts"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryList",
+      "trigger": "api",
+      "location": "POST /api/memoryList",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { boardId?, artifactId?, includeArchived? }",
+        "interface Res { memories: { id, name, reach, stats, … }[] }"
+      ],
+      "implementation": [
+        "own memories ∪ those granted to boards the caller is on",
+        "each with the caller's reach"
+      ],
+      "touches": [
+        "app/schema/memories"
+      ]
+    },
+    {
+      "name": "memoryTree",
+      "trigger": "api",
+      "location": "POST /api/memoryTree",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path?, shallow? }",
+        "interface Res { nodes, truncated }"
+      ],
+      "implementation": [
+        "read reach; nodes under path, sorted"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryFileRead",
+      "trigger": "api",
+      "location": "POST /api/memoryFileRead",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path | nodeId, asText? }",
+        "interface Res { node, text, truncated, url, bytesUrl, expiresAt }"
+      ],
+      "implementation": [
+        "read reach; text ≤ 1 MB for text files; the file door's signed URLs"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryFileWrite",
+      "trigger": "api",
+      "location": "POST /api/memoryFileWrite",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path | nodeId, text | content_base64, mime?, expectedFileId? }",
+        "interface Res { nodeId, fileId, path }"
+      ],
+      "implementation": [
+        "write reach; ≤ 10 MB; parents created",
+        "a NEW object, the node points at it, the old object is deleted after commit (D-M2)",
+        "expectedFileId ≠ current → 409 stale"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryFilePut",
+      "trigger": "api",
+      "location": "POST /api/memoryFilePut",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path | nodeId, storagePath, expectedFileId? }",
+        "interface Res { nodeId, fileId, path }"
+      ],
+      "implementation": [
+        "write reach; the object the app uploaded under memories/{m}/{fileId}/{name}",
+        "size and type from the object; one object never backs two nodes"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryFolderCreate",
+      "trigger": "api",
+      "location": "POST /api/memoryFolderCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path }",
+        "interface Res { nodeId, path }"
+      ],
+      "implementation": [
+        "write reach; mkdir -p; an existing folder is fine, a file in the way is 409"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryMove",
+      "trigger": "api",
+      "location": "POST /api/memoryMove",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, path | nodeId, toPath }",
+        "interface Res { nodeId, path }"
+      ],
+      "implementation": [
+        "write reach; parents created; a folder takes its subtree",
+        "409 onto something, or a folder into itself"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
+      ]
+    },
+    {
+      "name": "memoryNodeDelete",
+      "trigger": "api",
+      "location": "POST /api/memoryNodeDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { memoryId, paths? , nodeIds? }",
+        "interface Res { deleted }"
+      ],
+      "implementation": [
+        "write reach; recursive; counters follow; objects deleted after"
+      ],
+      "touches": [
+        "app/schema/memories",
+        "app/schema/memoryNodes"
       ]
     }
   ]

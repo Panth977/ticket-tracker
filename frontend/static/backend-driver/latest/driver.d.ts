@@ -237,6 +237,62 @@ export interface TicketsApi {
   comment(key: string, markdown: string): Promise<void>;
 }
 
+// ─── memory (memory.html §H) ─────────────────────────────────────────────────
+
+/**
+ * A memory the artifact's owner granted it, that THIS viewer can reach.
+ * `access` is what the page may do with it: the grant, bounded by the viewer.
+ */
+export interface Memory {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  access: 'read' | 'write';
+  files: number;
+  bytes: number;
+}
+
+/** One folder or file. Paths are relative to the memory ('docs/a.md'). */
+export interface MemoryNode {
+  id: string;
+  kind: 'folder' | 'file';
+  path: string;
+  name: string;
+  /** Files only. */
+  mime: string | null;
+  size: number | null;
+  updatedAt: number;
+}
+
+/**
+ * Memories (buckets of files) the artifact's OWNER granted it (Settings ›
+ * Memory). Everything happens as the person looking: a memory they cannot
+ * reach themselves is not listed, and a write needs both a 'write' grant and
+ * their own write access. `memory` is a memory id; paths are relative to it.
+ */
+export interface MemoryApi {
+  /** The granted memories this viewer reaches. */
+  list(): Promise<Memory[]>;
+  /** Every node under `path` (default: the whole memory), sorted by path. */
+  tree(memory: string, path?: string): Promise<MemoryNode[]>;
+  /** A text file's content (at most 1 MB). */
+  read(memory: string, path: string): Promise<string>;
+  /** A short-lived URL for <img>, <video>, <audio> or fetch(). */
+  url(memory: string, path: string): Promise<string>;
+  /** Create or replace a file (≤ 10 MB); missing folders are created. */
+  write(
+    memory: string,
+    path: string,
+    content: string | Blob,
+    options?: { contentType?: string },
+  ): Promise<void>;
+  /** Create a folder (and its parents). */
+  mkdir(memory: string, path: string): Promise<void>;
+  /** Delete a file, or a folder with everything in it. */
+  remove(memory: string, path: string): Promise<void>;
+}
+
 export interface SignalMap {
   /** This viewer's write access changed. */
   readonly: boolean;
@@ -262,6 +318,8 @@ export interface BackendDriver {
   readonly kv: KvApi;
   /** Boards' tickets, where the owner allowed it (§K). */
   readonly tickets: TicketsApi;
+  /** Memories (buckets of files), where the owner allowed it (memory.html §H). */
+  readonly memory: MemoryApi;
   on<K extends keyof SignalMap>(name: K, callback: (value: SignalMap[K]) => void): Unsubscribe;
 }
 

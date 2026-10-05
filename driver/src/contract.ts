@@ -9,6 +9,8 @@ import type {
   DriverBoard,
   DriverPerson,
   DriverTicket,
+  DriverMemory,
+  DriverMemoryNode,
   TicketInput as WireTicketInput,
   TicketQuery as WireTicketQuery,
   DriverDoc,
@@ -42,3 +44,8 @@ same<Api.TicketQuery, WireTicketQuery>(true);
 same<Api.TicketInput, WireTicketInput>(true);
 same<Api.Ticket | null, DriverResult<'tk.get'>>(true);
 same<{ id: string; key: string }, DriverResult<'tk.create'>>(true);
+// memory.html §H
+same<Api.Memory, DriverMemory>(true);
+same<Api.MemoryNode, DriverMemoryNode>(true);
+same<Api.Memory[], DriverResult<'mem.list'>>(true);
+same<Api.MemoryNode[], DriverResult<'mem.tree'>>(true);

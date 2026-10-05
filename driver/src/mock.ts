@@ -60,6 +60,16 @@ import {
   updateTicket,
   type MockTicketState,
 } from './mockTickets.js';
+import {
+  memoryFile,
+  memoryMkdir,
+  memoryRemove,
+  memoryTree,
+  memoryWrite,
+  mockMemoryInfo,
+  seedMemory,
+  type MockMemoryState,
+} from './mockMemory.js';
 
 export const MOCK_STORAGE_KEY = 'tm-backend-driver:mock:v1';
 /** §E4's upload limit, repeated here so the bundle does not pull in zod with the schema file. */
@@ -75,6 +85,8 @@ interface MockState {
   kv: Json;
   /** §K: the DEMO board's tickets. */
   tk: MockTicketState;
+  /** memory.html §H: the demo memory (./mockMemory). */
+  mem: MockMemoryState;
 }
 interface MockFile {
   blob: Blob;
@@ -242,9 +254,11 @@ export function mockMe(win: WindowLike | undefined): DriverMe {
 
 export function createMock(win: WindowLike | undefined): Session {
   const me = mockMe(win);
-  let state: MockState = { fs: {}, rtdb: null, kv: {}, tk: seedTickets() };
+  let state: MockState = { fs: {}, rtdb: null, kv: {}, tk: seedTickets(), mem: seedMemory() };
   // Blobs cannot go to localStorage: uploaded files live for this page load only.
   const files = new Map<string, MockFile>();
+  /** Blobs written into the demo memory, by path (text files live in state.mem). */
+  const memBlobs = new Map<string, { blob: Blob; url: string }>();
 
   const load = () => {
     try {
@@ -259,6 +273,7 @@ export function createMock(win: WindowLike | undefined): Session {
           isPlain(parsed.tk) && Array.isArray((parsed.tk as Json).tickets)
             ? (parsed.tk as MockTicketState)
             : seedTickets(),
+        mem: isPlain(parsed.mem) ? (parsed.mem as MockMemoryState) : seedMemory(),
       };
     } catch {
       /* no storage (sandbox, private mode) or a corrupt value: start empty */
@@ -546,6 +561,61 @@ export function createMock(win: WindowLike | undefined): Session {
         commentTicket(state.tk, a.key, a.markdown);
         changed('tk');
         return { ok: true };
+      // memory.html §H — the demo memory (./mockMemory)
+      case 'mem.list':
+        return [mockMemoryInfo(state.mem, me.readOnly)];
+      case 'mem.tree':
+        return memoryTree(state.mem, a.memory, a.path);
+      case 'mem.read': {
+        const [path, f] = memoryFile(state.mem, a.memory, a.path);
+        const text = f.text ?? (await memBlobs.get(path)?.blob.text()) ?? '';
+        return { text: text.slice(0, 1024 * 1024), truncated: text.length > 1024 * 1024 };
+      }
+      case 'mem.url': {
+        const [path, f] = memoryFile(state.mem, a.memory, a.path);
+        let entry = memBlobs.get(path);
+        if (!entry) {
+          const blob = new Blob([f.text ?? ''], { type: f.mime ?? 'text/plain' });
+          entry = { blob, url: objectUrl(blob, `/memory/${path}`) };
+          memBlobs.set(path, entry);
+        }
+        return { url: entry.url, expiresAt: Date.now() + 3_600_000 };
+      }
+      case 'mem.write': {
+        const blob = a.blob as Blob | undefined;
+        if (a.text === undefined && (!blob || typeof blob.size !== 'number'))
+          fail('invalid-argument', 'write needs text or a Blob');
+        const contentType = typeof a.contentType === 'string' ? a.contentType : null;
+        const path = memoryWrite(
+          state.mem,
+          a.memory,
+          a.path,
+          typeof a.text === 'string'
+            ? { text: a.text, mime: contentType }
+            : { size: blob!.size, mime: contentType || blob!.type || null },
+        );
+        const old = memBlobs.get(path);
+        if (old) revoke(old.url);
+        memBlobs.delete(path);
+        if (blob && a.text === undefined)
+          memBlobs.set(path, { blob, url: objectUrl(blob, `/memory/${path}`) });
+        save();
+        return { path };
+      }
+      case 'mem.mkdir': {
+        const path = memoryMkdir(state.mem, a.memory, a.path);
+        save();
+        return { path };
+      }
+      case 'mem.remove': {
+        for (const p of memoryRemove(state.mem, a.memory, a.path)) {
+          const b = memBlobs.get(p);
+          if (b) revoke(b.url);
+          memBlobs.delete(p);
+        }
+        save();
+        return { ok: true };
+      }
       default:
         return fail('invalid-argument', `Unknown operation ${String(op)}`);
     }

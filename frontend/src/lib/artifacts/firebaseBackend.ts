@@ -41,7 +41,13 @@ import {
   update as rUpdate,
 } from 'firebase/database';
 import { ref as sRef, uploadBytes } from 'firebase/storage';
-import { paths, type BoardMember, type BoardWithId, type TicketWithId } from '@tm/shared';
+import {
+  paths,
+  type BoardMember,
+  type BoardWithId,
+  type Memory,
+  type TicketWithId,
+} from '@tm/shared';
 import { command } from '$lib/api';
 import { getDb, getRtdb, getStorageClient } from '$lib/firebase/client';
 import { BrokerError, type BrokerBackend, type CheckedQuery, type StoredRow } from './broker';
@@ -194,6 +200,47 @@ export function firebaseBackend(artifactId: string): BrokerBackend {
       },
       async comment(boardId, ticketId, body, markdown) {
         await command('messagePost', { boardId, ticketId, body, markdown }, { toast: false });
+      },
+    },
+    // memory.html §H: every op is a memory command in the viewer's name. The
+    // grant to THIS artifact is read off the memory document when the viewer
+    // may read it; null otherwise (./brokerMemory treats that as 'read').
+    memory: {
+      async list() {
+        const { memories } = await command('memoryList', { artifactId }, { toast: false });
+        return Promise.all(
+          memories.map(async (memory) => {
+            try {
+              const snap = await getDoc(doc(getDb(), paths.memory(memory.id)));
+              const grant = snap.exists()
+                ? ((snap.data() as Memory).artifacts?.[artifactId] ?? null)
+                : null;
+              return { memory, grant };
+            } catch {
+              return { memory, grant: null };
+            }
+          }),
+        );
+      },
+      tree: async (memoryId, path) =>
+        (await command('memoryTree', { memoryId, ...(path ? { path } : {}) }, { toast: false }))
+          .nodes,
+      async read(memoryId, path, asText) {
+        const r = await command('memoryFileRead', { memoryId, path, asText }, { toast: false });
+        return { text: r.text, truncated: r.truncated, url: r.url, expiresAt: r.expiresAt };
+      },
+      async write(memoryId, path, content, mime) {
+        await command(
+          'memoryFileWrite',
+          { memoryId, path, ...content, ...(mime ? { mime } : {}) },
+          { toast: false },
+        );
+      },
+      async mkdir(memoryId, path) {
+        await command('memoryFolderCreate', { memoryId, path }, { toast: false });
+      },
+      async remove(memoryId, path) {
+        await command('memoryNodeDelete', { memoryId, paths: [path] }, { toast: false });
       },
     },
   };

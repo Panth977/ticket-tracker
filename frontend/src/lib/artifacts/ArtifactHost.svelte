@@ -23,7 +23,6 @@
   import { page } from '$app/state';
   import {
     AppWindow,
-    ChevronDown,
     Lock,
     Maximize,
     Minimize,
@@ -42,13 +41,11 @@
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
-  import Menu from '$lib/ui/Menu.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
-  import { myBoards } from '$lib/stores';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { myWorkspaces } from '$lib/workspaces/store';
-  import { activeWorkspace, switcherItems } from '$lib/workspaces/switcher';
+  import { switcherFor } from '$lib/workspaces/switcherStore';
   import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
   import { createBroker, type Broker } from './broker';
   import { firebaseBackend } from './firebaseBackend';
   import {
@@ -56,9 +53,7 @@
     artifactDoc,
     artifactGlyph,
     firstSettingsSection,
-    myArtifacts,
     roleIn,
-    splitArtifacts,
     shortBuild,
     viewerReadOnly,
   } from './store';
@@ -68,19 +63,9 @@
   // The name is also a switcher, as a board's is (agents.html §AB3): every
   // artifact — or, in a workspace that holds this one, that workspace's
   // boards and artifacts — with "Workspace ›" before it.
-  const switchBoardsQ = $derived(myBoards(auth.uid));
-  const switchArtifactsQ = $derived(myArtifacts(auth.uid));
-  const switchWsQ = $derived(myWorkspaces(auth.uid));
-  const workspace = $derived(activeWorkspace($switchWsQ.data, workspaceContext.id, { artifactId }));
-  const switchItems = $derived(
-    switcherItems({
-      boards: $switchBoardsQ.data,
-      artifacts: splitArtifacts($switchArtifactsQ.data).active,
-      workspace,
-      current: { artifactId },
-      leave: () => workspaceContext.leave(),
-    }),
-  );
+  const switchQ = $derived(switcherFor(auth.uid, { artifactId }, workspaceContext.id));
+  const workspace = $derived($switchQ.workspace);
+  const switchItems = $derived($switchQ.items);
 
   type Opened = CommandRes<'artifactOpen'>;
   /** Ask for a fresh capability this long before the one we hold expires (§D2). */
@@ -323,23 +308,12 @@
     {#if !full}
       <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
         {#if workspace}<WorkspaceCrumb {workspace} />{/if}
-        <Menu items={switchItems} placement="bottom-start">
-          {#snippet trigger(p)}
-            <button
-              type="button"
-              {...p}
-              data-artifact-switcher
-              title="Switch artifact"
-              class="tm-tap flex h-8 min-w-0 items-center gap-1.5 rounded-md px-1 hover:bg-surface-2"
-            >
-              <span class="w-5 shrink-0 text-center leading-none" aria-hidden="true"
-                >{artifactGlyph(art)}</span
-              >
-              <h1 class="min-w-0 truncate text-sm font-semibold">{art.name}</h1>
-              <ChevronDown size={14} class="shrink-0 text-subtle" aria-hidden="true" />
-            </button>
-          {/snippet}
-        </Menu>
+        <TitleSwitcher
+          kind="artifact"
+          items={switchItems}
+          name={art.name}
+          glyph={artifactGlyph(art)}
+        />
         {#if art.archivedAt != null}
           <span class="shrink-0 rounded bg-warning-soft px-1.5 py-0.5 text-xs text-warning"
             >Archived</span

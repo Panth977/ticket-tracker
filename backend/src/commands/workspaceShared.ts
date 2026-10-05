@@ -5,6 +5,7 @@
  */
 import { effectiveRole, errors, isAgentId, paths } from '@tm/shared';
 import { artifactRef, roleFor } from '../artifacts/shared.js';
+import { memoryRef, reachFor } from '../memory/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
 import { txGetAll, type Tx } from '../runtime/tx.js';
@@ -17,7 +18,12 @@ export function personOnly(ctx: ServerCtx): void {
 export async function assertReachable(
   tx: Tx,
   ctx: ServerCtx,
-  ids: { boardIds?: readonly string[]; artifactIds?: readonly string[] },
+  ids: {
+    boardIds?: readonly string[];
+    artifactIds?: readonly string[];
+    /** memory.html §F */
+    memoryIds?: readonly string[];
+  },
 ): Promise<void> {
   const boardIds = [...new Set(ids.boardIds ?? [])];
   const artifactIds = [...new Set(ids.artifactIds ?? [])];
@@ -38,10 +44,17 @@ export async function assertReachable(
     const a = artifacts[i];
     return !a || !roleFor({ ...ctx, scopes: undefined }, a);
   });
-  if (badBoards.length || badArtifacts.length)
+  const memoryIds = [...new Set(ids.memoryIds ?? [])];
+  const memories = memoryIds.length ? await txGetAll(tx, memoryIds.map(memoryRef)) : [];
+  const reaches = await Promise.all(
+    memories.map((m) => reachFor({ ...ctx, scopes: undefined }, m, tx)),
+  );
+  const badMemories = memoryIds.filter((_, i) => !reaches[i]);
+  if (badBoards.length || badArtifacts.length || badMemories.length)
     throw errors.invalid('You cannot open some of these', {
       ...(badBoards.length ? { boardIds: badBoards } : {}),
       ...(badArtifacts.length ? { artifactIds: badArtifacts } : {}),
+      ...(badMemories.length ? { memoryIds: badMemories } : {}),
     });
 }
 

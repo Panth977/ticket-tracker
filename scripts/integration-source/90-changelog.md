@@ -17,6 +17,24 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 1.4.0 — 2026-10-05
+
+- **Memory** (docs/plan/memory.html). A memory is a bucket of files with its own people: folders,
+  Markdown, images, video, APKs, anything. Scopes `memory:read` / `memory:write`. Every operation
+  names a node by `path` (parents are created on write). MCP tools: `memory_list`, `memory_tree`,
+  `memory_file_read`, `memory_file_write`, `memory_folder_create`, `memory_move`,
+  `memory_node_delete`, plus `memory_create` / `memory_update` / `memory_delete` / `memory_share` /
+  `memory_grant_set` for people. REST: `GET /v1/memories`, `GET /v1/memories/{id}/tree`,
+  `GET|PUT|DELETE /v1/memories/{id}/files/{path}`.
+- **Agents reach a memory through a board.** A memory granted to a board `read` is readable by every
+  member of it, agents included; granted `write`, editors and admins may also change it.
+- **Memory files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
+  `memory_files: [{ memory_id, path | node_id }]` (SDK: `memoryFiles`). The file is not copied: the
+  ticket shows the memory file's current version, and `source: 'memory'` with `memory { memory_id,
+  node_id }` on the file. Once the file is deleted or the grant removed, reading it is a 404.
+- **`BackendDriver.memory`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
+  page, within the memory's grant to that artifact and the viewer's own access.
+
 ### 1.3.0 — 2026-09-30
 
 - **One token per agent** (§2). An agent token (`kind: 'agent'`) says who the agent is and nothing

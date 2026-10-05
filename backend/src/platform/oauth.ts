@@ -18,8 +18,10 @@
  */
 import {
   errors,
+  MEMORY_SCOPES,
   OAUTH_TTL_MS,
   paths,
+  SCOPES,
   normalizeScopes,
   type OAuthClient,
   type OAuthToken,
@@ -44,7 +46,7 @@ export class OAuthError extends Error {
 /** How long a rotated refresh token may still be presented as a retry rather than as reuse. */
 export const REFRESH_RETRY_GRACE_MS = 60_000;
 
-export const TOKEN_PREFIX ={ access: 'tmo_', refresh: 'tmr_', code: 'tmc_' } as const;
+export const TOKEN_PREFIX = { access: 'tmo_', refresh: 'tmr_', code: 'tmc_' } as const;
 
 /** Stored token row plus server-only bookkeeping. */
 export type TokenRow = OAuthToken & { usedAt?: number; createdAt?: number };
@@ -54,15 +56,29 @@ const tokenRef = (token: string) => db().doc(paths.oauthToken(sha256hex(token)))
 const IGNORED_SCOPES = new Set(['openid', 'profile', 'email', 'offline_access']);
 
 /**
+ * Scopes added after people had already connected apps with "everything"
+ * (memory.html §G). A grant counts as EVERYTHING when it says so (allScopes,
+ * written from now on) or when it holds every scope except these — what
+ * "everything" meant before they existed. Such a grant widens to the current
+ * SCOPES at the next refresh, so a connected Claude app gets new tools
+ * without being connected again. A grant that left anything out stays exactly
+ * as narrow as it was.
+ */
+const LATER_SCOPES: readonly Scope[] = [...MEMORY_SCOPES];
+export function grantIsEverything(grant: { allScopes?: unknown; scopes?: unknown }): boolean {
+  if (grant.allScopes === true) return true;
+  const had = new Set(normalizeScopes((grant.scopes ?? []) as readonly string[]).scopes);
+  return SCOPES.every((x) => had.has(x) || LATER_SCOPES.includes(x));
+}
+
+/**
  * The `scope` parameter → the phase-2 vocabulary. Phase-1 names ('boards:read',
  * 'tickets:write', …) from older MCP clients are still accepted and expanded
  * (normalizeScopes); unknown names are invalid_scope.
  */
 export function parseScopes(s: string | null | undefined): Scope[] {
   // Generic OAuth/OIDC scopes some clients always add: they ask for nothing here, so they are not an error.
-  const want = (s ?? '')
-    .split(/[\s,+]+/)
-    .filter((x) => x && !IGNORED_SCOPES.has(x));
+  const want = (s ?? '').split(/[\s,+]+/).filter((x) => x && !IGNORED_SCOPES.has(x));
   const { scopes, unknown } = normalizeScopes(want);
   if (unknown.length) throw new OAuthError('invalid_scope', `Unknown scope: ${unknown.join(', ')}`);
   return scopes;
@@ -141,6 +157,8 @@ export async function approve(opts: {
     clientId: opts.client.id,
     clientName: opts.client.name,
     scopes: opts.scopes,
+    // Everything, as the consent screen offers it: future scopes follow (grantIsEverything).
+    allScopes: SCOPES.every((x) => opts.scopes.includes(x)),
     boardIds: opts.boardIds,
     createdAt: prev.exists ? (prev.get('createdAt') as number) : opts.now,
     lastUsedAt: opts.now,
@@ -272,8 +290,17 @@ export async function refresh(opts: {
     if (row.expiresAt <= opts.now) throw new OAuthError('invalid_grant', 'Refresh token expired');
     const grant = await tx.get(db().doc(paths.oauthGrant(row.uid, row.grantId)));
     if (!grant.exists) throw new OAuthError('invalid_grant', 'The grant was revoked');
-    // A refresh may narrow scopes, never widen them.
-    const had = normalizeScopes(row.scopes as readonly string[]).scopes; // phase-1 rows carry old names
+    // A refresh may narrow scopes, never widen them — except a grant of
+    // EVERYTHING, which takes the scopes added since (grantIsEverything).
+    let had = normalizeScopes(row.scopes as readonly string[]).scopes; // phase-1 rows carry old names
+    if (
+      !opts.scope &&
+      grantIsEverything(grant.data() ?? {}) &&
+      SCOPES.some((x) => !had.includes(x))
+    ) {
+      had = [...SCOPES];
+      tx.update(grant.ref, { scopes: had, allScopes: true });
+    }
     const asked = opts.scope ? parseScopes(opts.scope) : had;
     if (asked.some((x) => !had.includes(x)))
       throw new OAuthError('invalid_scope', 'A refresh cannot add scopes');

@@ -1,0 +1,7 @@
+{
+  // Typechecks the memory tests (vitest does not): npx tsc -p test/memory
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../.." },
+  "include": ["../../src", "../harness", "../agents/helpers.ts", "../tickets/helpers.ts", "."],
+  "exclude": []
+}

@@ -92,6 +92,13 @@ db.tickets    .boards()                        → granted boards: { key, name, 
               .update('ENG-42', patch)   .comment('ENG-42', markdown)
               Only boards the OWNER granted (Settings › Board access, read or read & write); always as the viewer.
 
+db.memory     .list()                          → granted memories: { id, name, description, icon, access: 'read'|'write', files, bytes }
+              .tree(memory, path?)             → [{ id, kind: 'folder'|'file', path, name, mime, size, updatedAt }]
+              .read(memory, 'docs/a.md')       → text (≤ 1 MB)      .url(memory, 'img/logo.png') → short-lived URL
+              .write(memory, path, text | Blob, { contentType? })   (≤ 10 MB, parents created)
+              .mkdir(memory, path)   .remove(memory, path)          (a folder goes with everything in it)
+              Only memories the OWNER granted (Settings › Memory, read or read & write); always as the viewer.
+
 db.on('readonly' | 'revoked' | 'build', cb)    → unsubscribe()
 ```
 

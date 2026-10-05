@@ -6,7 +6,7 @@
 import type { Attachment } from '@tm/shared';
 
 export type ViewerFile = Pick<Attachment, 'id' | 'path' | 'name' | 'mime' | 'size'> &
-  Partial<Pick<Attachment, 'thumbPath' | 'uploadedBy' | 'width' | 'height'>> & {
+  Partial<Pick<Attachment, 'thumbPath' | 'uploadedBy' | 'width' | 'height' | 'memory'>> & {
     createdAt?: number;
     /** The message it was posted in (Files 'jump to'). */
     messageId?: string | null;

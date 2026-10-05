@@ -53,6 +53,7 @@ import {
   PublicAgentSchema,
   PublicAgentStatusSchema,
   PublicRunReceiptSchema,
+  PublicMemoryFileRefSchema,
   PublicQuestionSchema,
   PublicQuestionFieldSchema,
   PublicTasklistSchema,
@@ -299,11 +300,20 @@ export const RestPostMessageBodySchema = z
      * min'). It is added to the ticket's, the board's and the day's cost.
      */
     run: PublicRunReceiptSchema.nullable().optional(),
+    /**
+     * memory.html §E: memory files to attach BY REFERENCE (no upload). The
+     * memory must be granted to this board. Name each by node_id or path.
+     */
+    memory_files: z.array(PublicMemoryFileRefSchema).max(20).optional(),
   })
   .strict()
-  .refine((b) => b.body_markdown.trim().length > 0 || (b.attachments?.length ?? 0) > 0, {
-    message: 'A message needs body_markdown or attachments',
-  });
+  .refine(
+    (b) =>
+      b.body_markdown.trim().length > 0 ||
+      (b.attachments?.length ?? 0) > 0 ||
+      (b.memory_files?.length ?? 0) > 0,
+    { message: 'A message needs body_markdown, attachments or memory_files' },
+  );
 export type RestPostMessageBody = z.infer<typeof RestPostMessageBodySchema>;
 export const RestPostMessageResSchema = PublicMessageSchema;
 
@@ -754,6 +764,34 @@ export const RestArtifactFileListResSchema = z.object({ data: z.array(ArtifactDa
 export const RestArtifactFileUploadResSchema = ArtifactDataFileSchema;
 export const RestArtifactFileUrlResSchema = z.object({ url: z.string(), expires_at: Iso });
 
+// ───────────────────────── memory (memory.html §G) ─────────────────────────
+
+/** GET /v1/memories?board=&include_archived= */
+export const RestMemoryListQuerySchema = z.object({
+  /** Only those granted to this board (key or id). */
+  board: z.string().min(1).optional(),
+  include_archived: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.boolean()])
+    .transform((v) => v === true || v === '1' || v === 'true')
+    .optional(),
+});
+/** GET /v1/memories/{id}/tree?path=&shallow= */
+export const RestMemoryTreeQuerySchema = z.object({
+  path: z.string().max(1024).optional(),
+  shallow: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.boolean()])
+    .transform((v) => v === true || v === '1' || v === 'true')
+    .optional(),
+});
+/** GET /v1/memories/{id}/files/{path}?text= */
+export const RestMemoryFileQuerySchema = z.object({
+  /** Read the bytes as text even when the type does not say text. */
+  text: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.boolean()])
+    .transform((v) => v === true || v === '1' || v === 'true')
+    .optional(),
+});
+
 // ───────────────────────── search, webhooks ─────────────────────────
 
 /** GET /v1/search?q= */
@@ -1112,6 +1150,40 @@ export const REST_ROUTES = [
     path: '/v1/artifacts/{id}/access',
     scopes: ['artifacts:write'],
     summary: 'Share with a person or an agent, change a role, or remove (owner)',
+  },
+  // memory (docs/plan/memory.html §G). Not about a board: an account token
+  // reaches the memories its person reaches, an agent token those granted to
+  // a board the agent is on. Files are named by their path in the memory.
+  {
+    method: 'GET',
+    path: '/v1/memories',
+    scopes: ['memory:read', 'memory:write'],
+    summary: 'The memories this credential can reach (?board= narrows to one board’s)',
+  },
+  {
+    method: 'GET',
+    path: '/v1/memories/{id}/tree',
+    scopes: ['memory:read', 'memory:write'],
+    summary: 'The files and folders of a memory (?path= under a folder, ?shallow=1 one level)',
+  },
+  {
+    method: 'GET',
+    path: '/v1/memories/{id}/files/{path}',
+    scopes: ['memory:read', 'memory:write'],
+    summary: 'One memory file: its node, its text (text files) and a short-lived download URL',
+  },
+  {
+    method: 'PUT',
+    path: '/v1/memories/{id}/files/{path}',
+    scopes: ['memory:write'],
+    summary:
+      'Create or replace a memory file: the raw body is the file (missing folders are created)',
+  },
+  {
+    method: 'DELETE',
+    path: '/v1/memories/{id}/files/{path}',
+    scopes: ['memory:write'],
+    summary: 'Delete a memory file, or a folder with everything in it',
   },
   // artifact data (agents.html §AA4): the artifact's own Firestore, RTDB and
   // files, behind the same fence as the page's driver. Reads: data ≥ read (an

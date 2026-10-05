@@ -469,3 +469,54 @@ describe('tickets (§K): the DEMO board', () => {
     expect((await ro.tickets.list('DEMO')).length).toBeGreaterThan(0);
   });
 });
+
+describe('memory (memory.html §H): the demo memory', () => {
+  it('list, tree, read, write text and a Blob, url, mkdir, remove', async () => {
+    const { db } = await mock();
+    const [m] = await db.memory.list();
+    expect(m).toMatchObject({ id: 'demo-memory', access: 'write', files: 1 });
+    expect((await db.memory.tree(m!.id)).map((n) => n.path)).toEqual(['docs', 'docs/README.md']);
+    expect(await db.memory.read(m!.id, 'docs/README.md')).toContain('# Demo memory');
+
+    await db.memory.write(m!.id, '/notes//today.md ', '# Today');
+    await db.memory.write(m!.id, 'img/a.bin', new Blob([new Uint8Array([1, 2, 3])]));
+    const tree = await db.memory.tree(m!.id);
+    expect(tree.map((n) => [n.path, n.kind])).toEqual([
+      ['docs', 'folder'],
+      ['docs/README.md', 'file'],
+      ['img', 'folder'],
+      ['img/a.bin', 'file'],
+      ['notes', 'folder'],
+      ['notes/today.md', 'file'],
+    ]);
+    expect(tree.find((n) => n.path === 'img/a.bin')).toMatchObject({ size: 3, name: 'a.bin' });
+    expect(await db.memory.read(m!.id, 'notes/today.md')).toBe('# Today');
+    expect(await db.memory.url(m!.id, 'img/a.bin')).toMatch(/^blob:/);
+    expect((await db.memory.tree(m!.id, 'notes')).map((n) => n.path)).toEqual(['notes/today.md']);
+
+    await db.memory.mkdir(m!.id, 'empty/deeper');
+    expect((await db.memory.tree(m!.id, 'empty')).map((n) => n.path)).toEqual(['empty/deeper']);
+    await db.memory.remove(m!.id, 'notes');
+    expect((await db.memory.tree(m!.id)).some((n) => n.path.startsWith('notes'))).toBe(false);
+  });
+
+  it('refuses what the real broker refuses: another memory, bad paths, a read-only viewer', async () => {
+    const { db } = await mock();
+    await expect(db.memory.tree('other')).rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(db.memory.read('demo-memory', 'a/../b')).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(db.memory.read('demo-memory', 'docs')).rejects.toMatchObject({
+      code: 'not-found',
+    });
+    await expect(db.memory.write('demo-memory', 'docs', 'x')).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    const ro = (await mock('?readonly=1')).db;
+    expect((await ro.memory.list())[0]!.access).toBe('read');
+    await expect(ro.memory.write('demo-memory', 'x.md', 'x')).rejects.toMatchObject({
+      code: 'permission-denied',
+    });
+    expect(await ro.memory.read('demo-memory', 'docs/README.md')).toContain('Demo');
+  });
+});

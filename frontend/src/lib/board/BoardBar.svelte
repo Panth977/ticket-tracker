@@ -37,12 +37,11 @@
   } from 'lucide-svelte';
   import type { Board, BoardPref, View, ViewInput, ViewType } from '@tm/shared';
   import { VIEW_TYPES } from '@tm/shared';
-  import { myBoards, type WithId } from '$lib/stores';
-  import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
-  import { activeWorkspace, switcherItems } from '$lib/workspaces/switcher';
+  import type { WithId } from '$lib/stores';
+  import { switcherFor } from '$lib/workspaces/switcherStore';
   import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { myWorkspaces } from '$lib/workspaces/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import { fmtTurns, fmtUsd, fmtUsdExact } from '$lib/cost/format';
   import Popover from '$lib/ui/Popover.svelte';
@@ -172,21 +171,9 @@
   // The title is also the board switcher: every board I am on, this one marked —
   // or, when I came here through a workspace that holds this board (§AB3),
   // only that workspace's boards and artifacts.
-  const boardsQ = $derived(myBoards(auth.uid));
-  const wsQ = $derived(myWorkspaces(auth.uid));
-  const artifactsQ = $derived(myArtifacts(auth.uid));
-  const workspace = $derived(
-    activeWorkspace($wsQ.data, workspaceContext.id, { boardId: board.id }),
-  );
-  const boardItems = $derived(
-    switcherItems({
-      boards: $boardsQ.data,
-      artifacts: splitArtifacts($artifactsQ.data).active,
-      workspace,
-      current: { boardId: board.id },
-      leave: () => workspaceContext.leave(),
-    }),
-  );
+  const switchQ = $derived(switcherFor(auth.uid, { boardId: board.id }, workspaceContext.id));
+  const workspace = $derived($switchQ.workspace);
+  const boardItems = $derived($switchQ.items);
 </script>
 
 <header
@@ -199,23 +186,7 @@
       <WorkspaceCrumb {workspace} />
     {/if}
     <ColorSwatch color={board.color} size={10} />
-    <Menu items={boardItems} placement="bottom-start">
-      {#snippet trigger(p)}
-        <button
-          type="button"
-          {...p}
-          data-board-switcher
-          title="Switch board"
-          class="tm-tap flex h-8 min-w-0 items-center gap-1.5 rounded-md px-1 hover:bg-surface-2"
-        >
-          <h1 class="flex min-w-0 items-baseline gap-1.5 text-base font-semibold">
-            <span class="text-xs tracking-wide text-subtle">{board.key}</span>
-            <span class="truncate">{board.name}</span>
-          </h1>
-          <ChevronDown size={14} class="shrink-0 text-subtle" aria-hidden="true" />
-        </button>
-      {/snippet}
-    </Menu>
+    <TitleSwitcher kind="board" items={boardItems} name={board.name} prefix={board.key} />
     <button
       type="button"
       class="tm-tap grid size-7 shrink-0 place-items-center rounded text-subtle hover:bg-surface-2 hover:text-warning"

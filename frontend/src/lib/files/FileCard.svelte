@@ -13,7 +13,7 @@
   /* eslint-disable svelte/no-navigation-without-resolve, svelte/no-at-html-tags -- file URLs are external; highlightCode() escapes its input */
   import type { Snippet } from 'svelte';
   import { Download, ExternalLink, Play } from 'lucide-svelte';
-  import { HTML_SANDBOX, formatBytes } from '@tm/shared';
+  import { HTML_SANDBOX, formatBytes, parseMemoryRefPath } from '@tm/shared';
   import { Markdown, highlightCode, markdownExcerpt, markdownTitle } from '$lib/editor';
   import { toast } from '$lib/ui';
   import {
@@ -53,14 +53,25 @@
   let text = $state<string | null>(null);
   let failed = $state(false);
   let duration = $state<number | null>(null);
+  /**
+   * memory.html §E: a memory file is a REFERENCE — the door resolves it to the
+   * node's current version. When it no longer can (the file was deleted, or
+   * the memory is no longer shared with this board) the card says so.
+   */
+  const fromMemory = $derived(!!file.memory || !!parseMemoryRefPath(file.path));
+  let gone = $state(false);
 
   $effect(() => {
     if (!shown || disabled) return;
     const f = file;
     const k = kind;
     let alive = true;
-    if (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf') {
-      void fileUrl(f.path).then((u) => alive && (url = u));
+    if (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf' || fromMemory) {
+      void fileUrl(f.path).then((u) => {
+        if (!alive) return;
+        url = u;
+        if (fromMemory) gone = !u;
+      });
     }
     if ((k === 'image' || k === 'pdf' || k === 'video') && f.thumbPath) {
       void fileUrl(f.thumbPath).then((u) => alive && (thumb = u));
@@ -99,7 +110,14 @@
 >
   <!-- Preview area; a transparent button over it opens the viewer (previews may hold their own markup, never nested in a button). -->
   <div class="relative block h-32 w-full overflow-hidden bg-surface-2 text-left">
-    {#if kind === 'image' && (thumb || url)}
+    {#if gone}
+      <span
+        class="grid size-full place-items-center px-3 text-center text-xs text-muted"
+        data-memory-gone
+      >
+        No longer in memory
+      </span>
+    {:else if kind === 'image' && (thumb || url)}
       <img src={thumb ?? url} alt={file.name} class="size-full object-cover" loading="lazy" />
     {:else if kind === 'video' && url}
       {#if thumb}
@@ -177,6 +195,13 @@
           {#if failed}<span class="text-[11px]">Preview unavailable</span>{/if}
         </span>
       </span>
+    {/if}
+    {#if fromMemory}
+      <span
+        class="pointer-events-none absolute bottom-1.5 left-1.5 z-[1] rounded bg-surface/90 px-1.5 py-0.5 text-[10px] font-medium text-text shadow-pop"
+        title="From memory: always its current version"
+        data-memory-badge>🧠 Memory</span
+      >
     {/if}
     {#if kind === 'markdown' || kind === 'html' || kind === 'text' || kind === 'code' || kind === 'json' || kind === 'csv'}
       <span

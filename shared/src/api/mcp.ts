@@ -20,7 +20,11 @@
 import { z } from 'zod';
 import type { Scope } from '../types/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
-import { PublicQuestionFieldSchema, PublicRunReceiptSchema } from './public.js';
+import {
+  PublicMemoryFileRefSchema,
+  PublicQuestionFieldSchema,
+  PublicRunReceiptSchema,
+} from './public.js';
 import { MAX_QUESTION_FIELDS, QUESTION_TITLE_MAX } from '../schema/question.js';
 import {
   MAX_TASKLIST_ITEMS,
@@ -153,6 +157,13 @@ export const McpToolShapes = {
       .max(100_000)
       .describe('GitHub-flavoured Markdown. May be empty when attachments are given.'),
     attachments: FileIds.optional(),
+    memory_files: z
+      .array(PublicMemoryFileRefSchema)
+      .max(20)
+      .optional()
+      .describe(
+        'Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).',
+      ),
     reply_to: z.string().min(1).optional().describe('Message id to quote'),
     run: PublicRunReceiptSchema.nullable()
       .optional()
@@ -455,7 +466,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file. An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
     readOnly: false,
     scopes: ['comments:write'],
   },
