@@ -10,6 +10,8 @@
 import { toast } from '$lib/ui';
 
 const KEY = 'tm.update';
+/** How often an open window asks whether a new build was deployed. */
+export const UPDATE_CHECK_MS = 30 * 60_000;
 
 /** The new worker took over: reload exactly once, whoever noticed first. */
 let reloading = false;
@@ -65,6 +67,22 @@ export function watchForUpdate(): () => void {
     };
     reg.addEventListener('updatefound', onUpdateFound);
     offs.push(() => reg.removeEventListener('updatefound', onUpdateFound));
+
+    // ASK, DON'T WAIT. The browser only re-checks the worker on a navigation,
+    // and an installed app is one long-lived page that never navigates: left
+    // open, it would run yesterday's build until it was quit. So check when
+    // the window comes back to the front, and every half hour while it is.
+    const check = () => {
+      if (!stopped && document.visibilityState === 'visible') void reg.update().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    const timer = setInterval(check, UPDATE_CHECK_MS);
+    offs.push(() => {
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+      clearInterval(timer);
+    });
   });
 
   return () => {
