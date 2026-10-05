@@ -58,12 +58,18 @@ process.env.METADATA_SERVER_DETECTION ||= 'none';
 const require = createRequire(fileURLToPath(new URL('../backend/package.json', import.meta.url)));
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const { gcloudCredential, gcloudClients } = await import('./lib/gcloud-credential.mjs');
 initializeApp(
   process.env.FIRESTORE_EMULATOR_HOST
     ? { projectId: project }
-    : { projectId: project, credential: applicationDefault() },
+    : { projectId: project, credential: gcloudCredential() ?? applicationDefault() },
 );
-const db = getFirestore();
+// On a gcloud account (TM_GCLOUD_ACCOUNT), the Cloud client directly — see lib/gcloud-credential.mjs.
+const g = gcloudClients(project, {
+  createRequire,
+  adminEntry: require.resolve('firebase-admin/firestore'),
+});
+const db = g ? g.db : getFirestore();
 const log = (m = '') => console.log(`\x1b[34mrepair\x1b[0m │ ${m}`);
 
 /**

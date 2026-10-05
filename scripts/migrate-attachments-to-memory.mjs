@@ -108,6 +108,7 @@ const { getFirestore, FieldValue } = await import(fromBackend('firebase-admin/fi
 const { getStorage } = await import(fromBackend('firebase-admin/storage'));
 const { getAuth } = await import(fromBackend('firebase-admin/auth'));
 const S = await import(fromBackend('@tm/shared'));
+const { gcloudCredential, gcloudClients } = await import('./lib/gcloud-credential.mjs');
 if (typeof S.fillAttachTemplate !== 'function') {
   console.error(
     'migrate-attachments-to-memory: shared/dist is stale. Run: pnpm --filter @tm/shared build',
@@ -118,9 +119,21 @@ if (typeof S.fillAttachTemplate !== 'function') {
 const log = (m = '') => console.log(`\x1b[34mattach→memory\x1b[0m │ ${m}`);
 
 async function main() {
-  const app = getApps()[0] ?? initializeApp({ projectId: project, storageBucket: bucketName });
-  const db = getFirestore(app);
-  const bucket = getStorage(app).bucket(bucketName);
+  const credential = gcloudCredential();
+  const app =
+    getApps()[0] ??
+    initializeApp({
+      projectId: project,
+      storageBucket: bucketName,
+      ...(credential ? { credential } : {}),
+    });
+  // On a gcloud account (TM_GCLOUD_ACCOUNT), the Cloud clients directly — see lib/gcloud-credential.mjs.
+  const g = gcloudClients(project, {
+    createRequire,
+    adminEntry: requireFromBackend.resolve('firebase-admin/firestore'),
+  });
+  const db = g ? g.db : getFirestore(app);
+  const bucket = g ? g.storage.bucket(bucketName) : getStorage(app).bucket(bucketName);
   const emu = [
     process.env.FIRESTORE_EMULATOR_HOST && `firestore ${process.env.FIRESTORE_EMULATOR_HOST}`,
     process.env.FIREBASE_STORAGE_EMULATOR_HOST &&
