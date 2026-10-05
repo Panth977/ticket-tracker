@@ -9,7 +9,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 import type { DocState } from '$lib/stores';
-import type { StoredMessage, Ticket } from '@tm/shared';
+import { paths as P, type StoredMessage, type Ticket } from '@tm/shared';
+import { patchDoc } from '$lib/stores/overlay';
 
 /** Which page documents exist, by path, and which were fetched. */
 let pages = new Map<string, unknown>();
@@ -231,6 +232,35 @@ describe('the rest of the drawer', () => {
     });
     expect(get(store).data.map((l) => l.id)).toEqual(['l1', 'l2']);
     off();
+  });
+
+  it('renders a row’s optimistic overlay at once (a ticked item, a pin)', async () => {
+    const lists = data.ticketTasklists(B, T);
+    const pins = data.pinnedMessages(B, T);
+    const offL = lists.subscribe(() => {});
+    const offP = pins.subscribe(() => {});
+    const item = { id: 'i1', title: 'Read', status: 'todo' };
+    const rows = {
+      tasklists: [
+        { id: 'plan', position: 1, items: [item], createdAt: 1 },
+      ] as unknown as Ticket['tasklists'],
+    };
+    show([msg(1)], 0, rows);
+    // What outbox.queue does: a patch on the row's own path, not the ticket's.
+    const undoItem = patchDoc(P.tasklist(B, T, 'plan'), {
+      items: [{ ...item, status: 'doing' }],
+    });
+    const undoPin = patchDoc(P.message(B, T, 'm0001'), { pinnedAt: 5 });
+    show([msg(1)], 0, rows); // the ticket store re-emits on every overlay change
+    expect(get(lists).data[0]!.items[0]!.status).toBe('doing');
+    expect(get(pins).data.map((m) => m.id)).toEqual(['m0001']);
+    undoItem();
+    undoPin();
+    show([msg(1)], 0, rows);
+    expect(get(lists).data[0]!.items[0]!.status).toBe('todo');
+    expect(get(pins).data).toEqual([]);
+    offL();
+    offP();
   });
 
   it('reads every file row, newest first, tombstones included', async () => {

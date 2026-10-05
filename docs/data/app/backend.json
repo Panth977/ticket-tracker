@@ -1487,6 +1487,92 @@
         "app/schema/tickets",
         "app/schema/attachments"
       ]
+    },
+    {
+      "name": "workspaceCreate",
+      "trigger": "api",
+      "location": "POST /api/workspaceCreate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { name, color?, boardIds?, artifactIds? }",
+        "interface Res { workspaceId }"
+      ],
+      "implementation": [
+        "≤ 50 workspaces per person",
+        "every boardId: I am a member (archived allowed); every artifactId: I have a role",
+        "duplicates dropped, order kept"
+      ],
+      "touches": [
+        "app/schema/workspaces"
+      ]
+    },
+    {
+      "name": "workspaceUpdate",
+      "trigger": "api",
+      "location": "POST /api/workspaceUpdate",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { workspaceId, name?, color?, boardIds?, artifactIds?, position? }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "my own workspace only",
+        "the same reachability check as workspaceCreate for any new id"
+      ],
+      "touches": [
+        "app/schema/workspaces"
+      ]
+    },
+    {
+      "name": "workspaceDelete",
+      "trigger": "api",
+      "location": "POST /api/workspaceDelete",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { workspaceId }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "my own workspace only; its boards and artifacts are untouched"
+      ],
+      "touches": [
+        "app/schema/workspaces"
+      ]
+    },
+    {
+      "name": "sidebarHide",
+      "trigger": "api",
+      "location": "POST /api/sidebarHide",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { kind: 'board' | 'artifact', id, hidden: boolean }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "UI only: never archives, never changes access",
+        "an id I cannot reach is refused"
+      ],
+      "touches": [
+        "app/schema/sidebarPrefs"
+      ]
+    },
+    {
+      "name": "artifactBoardAccessSet",
+      "trigger": "api",
+      "location": "POST /api/artifactBoardAccessSet",
+      "middleware": "user",
+      "ioSchema": [
+        "interface Req { artifactId, boardId, access: 'read' | 'write' | null }",
+        "interface Res {}"
+      ],
+      "implementation": [
+        "artifact OWNER only; I must be on the board",
+        "'write' needs me to be editor or above on that board",
+        "the grant is a ceiling: each viewer still reaches only what their own board role allows (plan/artifacts.html §K)"
+      ],
+      "touches": [
+        "app/schema/artifacts"
+      ]
     }
   ]
 }

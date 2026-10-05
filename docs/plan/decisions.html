@@ -123,6 +123,7 @@
       <tr><th>Rejected</th><td>Multi-tenant workspaces (<code>workspaces/{ws}/…</code>), and a single organisation with an owner and app roles (<code>config/org</code>, <code>members/{uid}</code>).</td></tr>
       <tr><th>Why</th><td>This is a personal tool. The unit people share is a board, so that is the only boundary. A workspace adds a path prefix and a tenant check to every rule. An organisation layer adds a second role nobody needs. With neither, there is one role per person per board, and <code>can()</code> is one lookup.</td></tr>
       <tr><th>Cost</th><td>There is no company-wide directory: <code>@</code> only finds people on the same board, which is also a privacy property. Board keys can collide between strangers, so the second person to want <code>ENG</code> has to pick another key.</td></tr>
+      <tr><th>Later</th><td>Personal workspaces (<a href="/plan/agents.html#ab">agents.html §AB</a>) are not the rejected tenant layer: each is one person's sidebar grouping of boards and artifacts, stored under their own user document. A workspace grants nothing and narrows nothing, so the board is still the only boundary.</td></tr>
     </table>
 
     <h2>D14 · Cancel deletes; there is no "cancelled" state</h2>

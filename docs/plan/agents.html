@@ -851,8 +851,13 @@ Agents · Notifications · Tokens · Sign out</pre>
     <p>Two repositories carry a hand-written copy of the same orchestrator (<code>bOctupuz/orch</code> and <code>web-03/orch</code>),
     already diverging: one learnt to survive the daily request budget, the other to carry on after a run ends short. A third project
     would mean a third copy. The orchestrator is one program; what differs between projects is <b>configuration</b> — the repo, the
-    board, the token, how many agents, which permission mode, the rules that bite in that tree. So the program lives once, in this
-    repository, and each project is a folder of configuration next to it. The folder is what a board can edit.</p>
+    board, the token, how many agents, which permission mode, the rules that bite in that tree. So the program lives once, and
+    each project is a folder of configuration next to it. The folder is what a board can edit.</p>
+    <p><b>The runtime is not part of this repository.</b> It runs on the owner's machine, beside their repos and tokens, and is kept
+    private with them. What this repository carries is everything it stands on: the account endpoints (Z2), the turn receipt and
+    cost rollups (§Y), the <code>GET /v1/live</code> wake stream and the REST/MCP surface every agent uses. Any orchestrator can be
+    built on those; <code>qaqc/orch-sample/</code> is a small one that exercises every SDK method. This section records the design
+    of the one in use.</p>
     <h3 id="z1">Z1 · The layout</h3>
     <pre>workspaces/
   ws.mjs               the CLI and the supervisor:  node ws.mjs up | down | status | health | logs | restart | new | validate
@@ -1027,12 +1032,12 @@ DELETE /v1/artifacts/{id}/data/files/{path}</pre>
       <li><b>An agent with several tokens</b> keeps them all working (they are now identical), and is issued one new token, written to
         a local file for the owner. When the agent's callers use the new one, <i>Revoke older tokens</i> finishes the job. Nothing is
         revoked by the script.</li>
-      <li><b>Workspaces</b>: <code>workspaces/lib/tm.mjs</code> names the workspace's board on every board call, so a workspace keeps
+      <li><b>Orchestrators</b>: the §Z runtime names the workspace's board on every board call, so a workspace keeps
         working when its agent is on several boards with a token that has no default.</li>
     </ul>
 
     <h2 id="ab">AB · Workspaces in the app: your own way to group boards and artifacts</h2>
-    <p>Not §Z's orch workspaces (the <code>workspaces/</code> folder): these live in the sidebar. A person with many boards and
+    <p>Not §Z's orchestrator workspaces (folders of configuration on the owner's machine): these live in the sidebar. A person with many boards and
     dashboards wanted <b>one place per area of their life or work</b> — Freelance, Health, Social — holding the boards and the
     artifacts that belong together, without moving or re-permissioning anything. Boards and artifacts are still created exactly as
     before, at the root; a workspace only gathers them. The board is still the only boundary
@@ -1089,7 +1094,7 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
       </li>
       <li>Also in parallel, <code>p2-docs</code> brings the DB, Backend, Screens and Flows pages up to date</li>
       <li><code>p2-ux</code>: section K (motion, loaders, the outbox, and the drawer layout), after the frontend steps</li>
-      <li><b>Phase 17</b> (sections Y and Z): the turn receipt and the cost rollups, the Analytics view, the account endpoints, and the <code>workspaces/</code> runtime that replaces the per-repo orchs</li>
+      <li><b>Phase 17</b> (sections Y and Z): the turn receipt and the cost rollups, the Analytics view, the account endpoints, and the §Z workspaces runtime that replaces the per-repo orchs (kept outside this repository)</li>
       <li><b>Phase 16</b> (section X): the allow list, the Users module and the cost panel; no rate limits</li>
       <li><b>Phase 15</b> (section W): the cheap shape — one document per ticket, liveness in the RTDB, deltas not screens</li>
       <li><b>Phase 14</b> (section V): opening a ticket reads its notifications</li>

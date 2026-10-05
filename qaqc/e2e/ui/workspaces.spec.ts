@@ -19,7 +19,9 @@ const section = (page: Page, name: string) =>
     has: page.getByRole('heading', { name, exact: true }),
   });
 
-test('AB1–AB3: create a workspace, work inside it, hide a board from the root', async ({ page }) => {
+test('AB1–AB3: create a workspace, work inside it, hide a board from the root', async ({
+  page,
+}) => {
   const ada = await newPerson('Ada');
   const fl = await newBoard(ada, { name: 'FreeLance' });
   const fr = await newBoard(ada, { name: 'FreeLance Review' });
@@ -56,7 +58,9 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
   await expect(page.locator('[data-workspace-crumb]')).toHaveText('Freelance');
   await page.locator('[data-board-switcher]').click();
   const menu = page.getByRole('menu');
-  await expect(menu.getByRole('menuitem', { name: `${fl.key} · FreeLance`, exact: true })).toBeVisible();
+  await expect(
+    menu.getByRole('menuitem', { name: `${fl.key} · FreeLance`, exact: true }),
+  ).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /FreeLance Dashboard/ })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: new RegExp(hea.key) })).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -79,7 +83,9 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
   await page.waitForURL(`**/b/${hea.key}/**`);
   await expect(page.locator('[data-workspace-crumb]')).toHaveCount(0);
   await page.locator('[data-board-switcher]').click();
-  await expect(page.getByRole('menu').getByRole('menuitem', { name: new RegExp(fr.key) })).toBeVisible();
+  await expect(
+    page.getByRole('menu').getByRole('menuitem', { name: new RegExp(fr.key) }),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
 
   // AB2 — hide FreeLance Review from the root: gone from BOARDS, still in the workspace.

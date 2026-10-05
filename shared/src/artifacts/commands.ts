@@ -85,7 +85,7 @@ export const artifactUpdate = defineCommand({
  */
 export const artifactBoardAccessSet = defineCommand({
   name: 'artifactBoardAccessSet',
-  source: 'extra',
+  source: 'app',
   scopes: ['artifacts:write'],
   permission:
     'Owner only, and only for a board the owner can read; write needs the owner to be editor or admin there. null removes the board.',

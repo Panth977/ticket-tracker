@@ -924,6 +924,124 @@
           }
         ]
       }
+    },
+    {
+      "name": "Workspace",
+      "platform": "svelte",
+      "route": "/w/[workspaceId]",
+      "reads": [
+        "app/schema/workspaces",
+        "app/schema/boards",
+        "app/schema/artifacts"
+      ],
+      "calls": [
+        "app/services/workspaceUpdate",
+        "app/services/workspaceDelete"
+      ],
+      "components": [
+        "Shell"
+      ],
+      "uses": [
+        "app/schema/workspaces",
+        "app/services/workspaceUpdate"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "bar": [
+              "● Freelance",
+              "Edit",
+              "Delete"
+            ]
+          },
+          {
+            "tiles": [
+              "FL · FreeLance",
+              "FR · FreeLance Review",
+              "◆ FreeLance Dashboard"
+            ]
+          },
+          {
+            "note": "plan/agents.html §AB. Opening a board or artifact from here ENTERS the workspace: the header reads 'Freelance › FL ▾' and its switcher lists only this workspace's boards and artifacts. Opening one from the root sidebar leaves it."
+          }
+        ]
+      }
+    },
+    {
+      "name": "Artifact",
+      "platform": "svelte",
+      "route": "/x/[artifactId]",
+      "reads": [
+        "app/schema/artifacts"
+      ],
+      "calls": [],
+      "components": [
+        "Shell"
+      ],
+      "uses": [
+        "app/schema/artifacts"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "bar": [
+              "● Workspace › ◆ Name ▾",
+              "Settings"
+            ]
+          },
+          {
+            "panel": "the artifact, in a sandboxed iframe from the usercontent site",
+            "lines": 6
+          },
+          {
+            "note": "plan/artifacts.html. The title is a switcher like the board's (scoped to the workspace when entered through one). The host page brokers every BackendDriver call — the artifact's own data, and board tickets within §K's grant."
+          }
+        ]
+      }
+    },
+    {
+      "name": "Artifact settings",
+      "platform": "svelte",
+      "route": "/x/[artifactId]/settings/[section]",
+      "reads": [
+        "app/schema/artifacts",
+        "app/schema/boards"
+      ],
+      "calls": [
+        "app/services/artifactBoardAccessSet"
+      ],
+      "components": [
+        "Shell"
+      ],
+      "uses": [
+        "app/schema/artifacts",
+        "app/services/artifactBoardAccessSet"
+      ],
+      "wire": {
+        "shell": true,
+        "blocks": [
+          {
+            "chips": [
+              "General",
+              "People",
+              "Boards",
+              "Builds",
+              "Data"
+            ]
+          },
+          {
+            "list": [
+              "ENG · Engineering   [ none | read | write ]",
+              "OPS · Operations    [ none | read | write ]"
+            ]
+          },
+          {
+            "note": "Boards (§K): which boards' tickets this artifact's page may read or write. Only the owner sets it; a viewer never gets more than their own board role."
+          }
+        ]
+      }
     }
   ],
   "components": [

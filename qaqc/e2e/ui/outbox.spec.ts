@@ -16,7 +16,15 @@
  * client just can't reach it — so what we assert is the client's behaviour.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { admin, call, eventually, newBoard, newPerson, stage } from '../support/stack.js';
+import {
+  admin,
+  call,
+  eventually,
+  messagesOf,
+  newBoard,
+  newPerson,
+  stage,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 /** Every retry uses up to 1 s + 3 s + 9 s of backoff before the entry fails for good. */
@@ -123,11 +131,10 @@ test('message offline: 🕓 → ! when the API fails → survives a reload → R
   await page.reload();
   await expect(bubble).toBeVisible();
   await expect(bubble.getByRole('img', { name: 'Not sent' })).toBeVisible({ timeout: GIVE_UP_MS });
-  const q = () =>
-    admin()
-      .db.collection(`boards/${b.id}/tickets/${t.ticketId}/messages`)
-      .where('authorUid', '==', ada.uid)
-      .get();
+  const q = async () => {
+    const mine = (await messagesOf(b.id, t.ticketId)).filter((m) => m.authorUid === ada.uid);
+    return { size: mine.length };
+  };
   expect((await q()).size).toBe(0);
 
   // The API is back: Resend from the failed bubble's menu → ✓, exactly one message on the server.

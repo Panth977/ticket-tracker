@@ -1247,6 +1247,75 @@
         "",
         "// Synced by onTicketWritten. Messages' text folded in by onMessageWritten."
       ]
+    },
+    {
+      "name": "artifacts",
+      "service": "firestore",
+      "location": "artifacts/{artifactId}",
+      "rules": [
+        "allow read:  artifacts/{a}.access[auth.uid] != null",
+        "allow write: never   // artifactCreate, artifactUpdate, artifactShare, artifactBoardAccessSet …",
+        "",
+        "// SANDBOXED STATIC SITES (plan/artifacts.html). The full model — builds,",
+        "// the artifact's own db/kv/files, the second Hosting site — is there.",
+        "// A role on a board gives nothing here, and the reverse."
+      ],
+      "schema": [
+        "interface Artifact {",
+        "  name: string",
+        "  description: string | null",
+        "  icon: string | null",
+        "  access: Record<Uid, 'owner' | 'editor' | 'viewer'>",
+        "  memberUids: Uid[]",
+        "  agents: Record<AgentId, { build: boolean, data: 'none' | 'read' | 'write' }>",
+        "  boards?: Record<BoardId, 'read' | 'write'>  // §K: tickets the page may reach — a CEILING; the viewer's own board role is the floor",
+        "  readOnly: boolean",
+        "  currentBuild: string | null",
+        "}"
+      ]
+    },
+    {
+      "name": "workspaces",
+      "service": "firestore",
+      "location": "users/{uid}/workspaces/{workspaceId}",
+      "rules": [
+        "allow read:  auth.uid == uid",
+        "allow write: never   // workspaceCreate, workspaceUpdate, workspaceDelete",
+        "",
+        "// A PERSON'S OWN GROUPING (plan/agents.html §AB): boards and artifacts",
+        "// they already reach, gathered for the sidebar. It grants nothing and",
+        "// narrows nothing — the board is still the only boundary."
+      ],
+      "schema": [
+        "interface Workspace {",
+        "  name: string           // ≤ 60",
+        "  color: string          // '#RRGGBB', the sidebar dot",
+        "  boardIds: BoardId[]     // in the person's order, ≤ 200",
+        "  artifactIds: string[]",
+        "  position: number",
+        "  createdAt: Millis",
+        "  updatedAt: Millis",
+        "}"
+      ]
+    },
+    {
+      "name": "sidebarPrefs",
+      "service": "firestore",
+      "location": "users/{uid}/ui/sidebar",
+      "rules": [
+        "allow read:  auth.uid == uid",
+        "allow write: never   // sidebarHide",
+        "",
+        "// HIDDEN FROM THE ROOT LISTS only: a hidden board is not archived and",
+        "// still shows on the All pages and inside its workspaces."
+      ],
+      "schema": [
+        "interface SidebarPrefs {",
+        "  hiddenBoardIds: BoardId[]",
+        "  hiddenArtifactIds: string[]",
+        "  updatedAt: Millis",
+        "}"
+      ]
     }
   ]
 }

@@ -57,6 +57,7 @@ import {
 import { getDb } from '$lib/firebase/client';
 import { countReads, firstServerSnapshot } from '$lib/stores/reads';
 import { docStore, queryStore, type DocState, type QueryState, type WithId } from '$lib/stores';
+import { applyOverlays } from '$lib/stores/overlay';
 
 /** Messages load newest-first in pages of this size (architecture › limits: 'Paged 50 at a time'). */
 export const PAGE = 50;
@@ -97,6 +98,25 @@ function asQuery<T extends { id: string }>(
     // document id), which is exactly what WithId<T> asks for.
     data: (s.data ? rows(s.data) : []) as WithId<T>[],
   };
+}
+
+/**
+ * A row's optimistic overlay. Commands still address a message, a task list or
+ * a file by its own path (paths.message / tasklist / file) — that is where
+ * outbox.queue puts the patch — but since §W the row is an array element of
+ * the ticket, so no listener renders that path. Applying it here, per row, is
+ * what makes a reaction, a pin, an edit or a ticked item show at once instead
+ * of after the round trip (and keeps a quick second click from starting from
+ * the old value). The ticket store re-emits on every overlay change, so these
+ * derivations re-run when one is added or rolled back.
+ */
+function overlaid<R extends { id: string }>(rows: R[], pathOf: (id: string) => string): R[] {
+  const out: R[] = [];
+  for (const r of rows) {
+    const v = applyOverlays(pathOf(r.id), r);
+    if (v) out.push(v); // a null patch hides the row
+  }
+  return out;
 }
 
 /** A list read straight off the open ticket — no listener of its own. */
@@ -167,6 +187,7 @@ function pagedStream<R extends Row>(
   count: number,
   inline: (t: Ticket) => R[],
   fromPage: (p: TicketDataPage) => R[],
+  pathOf: ((id: string) => string) | null,
 ): Readable<QueryState<R>> {
   if (!boardId || !ticketId) return idle<R>();
   const tk = ticketDoc(boardId, ticketId);
@@ -194,7 +215,8 @@ function pagedStream<R extends Row>(
         const q = asQuery(s, (t) => {
           const older: R[] = [];
           for (const n of [...have.keys()].sort((a, b) => a - b)) older.push(...have.get(n)!);
-          const all = [...older, ...inline(t)];
+          const rows = [...older, ...inline(t)];
+          const all = pathOf ? overlaid(rows, pathOf) : rows;
           // Newest first, and only as many as were asked for.
           return all.slice(Math.max(0, all.length - count)).reverse();
         });
@@ -252,6 +274,7 @@ export const threadPage = (boardId: string | null, ticketId: string | null, coun
     count,
     (t) => inlineMessages(t),
     (p) => p.messages,
+    (id) => paths.message(boardId!, ticketId!, id),
   ) as Readable<QueryState<Message>>;
 
 /**
@@ -261,7 +284,7 @@ export const threadPage = (boardId: string | null, ticketId: string | null, coun
  */
 export const pinnedMessages = (boardId: string | null, ticketId: string | null) =>
   ofTicket<WithId<Message>>(boardId, ticketId, (t) =>
-    inlineMessages(t)
+    overlaid(inlineMessages(t), (id) => paths.message(boardId!, ticketId!, id))
       .filter((m) => m.pinnedAt != null)
       .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0))
       .slice(0, 20),
@@ -274,14 +297,16 @@ export const pinnedMessages = (boardId: string | null, ticketId: string | null) 
  */
 export const questionMessages = (boardId: string | null, ticketId: string | null) =>
   ofTicket<WithId<Message>>(boardId, ticketId, (t) =>
-    inlineMessages(t).filter((m) => isQuestionMessage(m)),
+    overlaid(inlineMessages(t), (id) => paths.message(boardId!, ticketId!, id)).filter((m) =>
+      isQuestionMessage(m),
+    ),
   ) as Readable<QueryState<Message>>;
 
 /** The ticket's task lists (§L2), in `position` order (top of the right pane). */
 export const ticketTasklists = (boardId: string | null, ticketId: string | null) =>
-  ofTicket<WithId<Tasklist>>(boardId, ticketId, (t) => inlineTasklists(t)) as Readable<
-    QueryState<Tasklist>
-  >;
+  ofTicket<WithId<Tasklist>>(boardId, ticketId, (t) =>
+    overlaid(inlineTasklists(t), (id) => paths.tasklist(boardId!, ticketId!, id)),
+  ) as Readable<QueryState<Tasklist>>;
 
 /** The activity feed, newest first — paged like the thread. */
 export const activityFeed = (boardId: string | null, ticketId: string | null, count = 100) =>
@@ -291,6 +316,7 @@ export const activityFeed = (boardId: string | null, ticketId: string | null, co
     count,
     (t) => inlineActivity(t),
     (p) => p.activity,
+    null,
   ) as Readable<QueryState<StoredActivity>>;
 
 /**
@@ -299,9 +325,9 @@ export const activityFeed = (boardId: string | null, ticketId: string | null, co
  * Files tab is part of the ticket, not a second query.
  */
 export const ticketFiles = (boardId: string | null, ticketId: string | null) =>
-  ofTicket<WithId<TicketFile>>(boardId, ticketId, (t) => inlineFiles(t).reverse()) as Readable<
-    QueryState<TicketFile>
-  >;
+  ofTicket<WithId<TicketFile>>(boardId, ticketId, (t) =>
+    overlaid(inlineFiles(t), (id) => paths.file(boardId!, ticketId!, id)).reverse(),
+  ) as Readable<QueryState<TicketFile>>;
 
 export const myRead = (uid: string | null | undefined, ticketId: string | null | undefined) =>
   docStore<Read>(uid && ticketId ? paths.read(uid, ticketId) : null);

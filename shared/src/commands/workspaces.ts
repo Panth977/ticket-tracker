@@ -20,7 +20,7 @@ const SCOPES = ['boards:create', 'boards:admin'] as const;
 
 export const workspaceCreate = defineCommand({
   name: 'workspaceCreate',
-  source: 'extra',
+  source: 'app',
   scopes: [...SCOPES],
   permission: 'Any signed-in person, for themselves (never an agent). 50 workspaces per person.',
   errors: ['forbidden', 'invalid', 'conflict'],
@@ -36,7 +36,7 @@ export const workspaceCreate = defineCommand({
 
 export const workspaceUpdate = defineCommand({
   name: 'workspaceUpdate',
-  source: 'extra',
+  source: 'app',
   scopes: [...SCOPES],
   permission:
     "The workspace's owner only (it lives under their own user doc). Added boards / artifacts must be ones they can open.",
@@ -70,7 +70,7 @@ export const workspaceUpdate = defineCommand({
 
 export const workspaceDelete = defineCommand({
   name: 'workspaceDelete',
-  source: 'extra',
+  source: 'app',
   scopes: [...SCOPES],
   permission: "The workspace's owner only. Its boards and artifacts are untouched.",
   errors: ['forbidden', 'not_found'],
@@ -81,7 +81,7 @@ export const workspaceDelete = defineCommand({
 /** Hide from / show again in the sidebar's root BOARDS / ARTIFACTS lists. UI only. */
 export const sidebarHide = defineCommand({
   name: 'sidebarHide',
-  source: 'extra',
+  source: 'app',
   scopes: [...SCOPES],
   permission:
     "Any signed-in person, their own sidebar (never an agent). Nothing about the board or artifact changes: it is not archived, and 'All boards' / 'All artifacts' still list it.",

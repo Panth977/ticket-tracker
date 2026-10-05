@@ -9,6 +9,7 @@ import {
   call,
   doc,
   eventually,
+  messagesOf,
   inviteAndAccept,
   newBoard,
   newPerson,
@@ -48,14 +49,12 @@ test('composer: @mention and #ticket via suggestions, send, Grace is notified, p
 
   // server: mentions and refs were DERIVED from the doc
   const msg = await eventually('message doc', async () => {
-    const q = await admin()
-      .db.collection(`boards/${b.id}/tickets/${t.ticketId}/messages`)
-      .where('authorUid', '==', ada.uid)
-      .get();
-    return q.docs.find((d) => JSON.stringify(d.data()).includes('can you check'));
+    return (await messagesOf(b.id, t.ticketId)).find(
+      (m) => m.authorUid === ada.uid && JSON.stringify(m).includes('can you check'),
+    );
   });
-  expect(msg.get('body.mentions')).toEqual([grace.uid]);
-  expect(msg.get('body.refs')).toEqual([target.ticketId]);
+  expect(msg.body.mentions).toEqual([grace.uid]);
+  expect(msg.body.refs).toEqual([target.ticketId]);
 
   // Grace: 'mentioned' in her inbox (regardless of her board mode)
   await eventually('Grace inbox item', async () => {

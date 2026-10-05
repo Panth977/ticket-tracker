@@ -122,7 +122,10 @@ test('§N: a person ticks the agent’s list and answers its question; both list
   await expect(agentList.locator('[data-progress]')).toHaveText('1 / 3');
   // The list still belongs to the agent — a hand tick does not take it over.
   await eventually('the agent still owns its plan', async () => {
-    const l = await read(`boards/${b.id}/tickets/${t.ticketId}/tasklists/plan`);
+    // §W: task lists live on the ticket document, whole.
+    const l = (await read(`boards/${b.id}/tickets/${t.ticketId}`))?.tasklists?.find(
+      (x: { id: string }) => x.id === 'plan',
+    );
     return (
       l?.owner === agentId &&
       l.items.find((i: { id: string }) => i.id === 'read')?.status === 'done'

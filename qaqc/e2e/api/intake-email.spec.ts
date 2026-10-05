@@ -9,10 +9,10 @@
  */
 import { expect, test } from '@playwright/test';
 import {
-  admin,
   call,
   doc,
   eventually,
+  messagesOf,
   http,
   inviteAndAccept,
   mailTo,
@@ -122,13 +122,9 @@ test('email reply → thread: a mention mails Grace; her reply lands in the same
   expect(hook.status, JSON.stringify(hook.body)).toBe(200);
 
   const reply = await eventually('the reply in the thread', async () => {
-    const snap = await admin()
-      .db.collection(`boards/${b.id}/tickets/${ticketId}/messages`)
-      .where('authorUid', '==', grace.uid)
-      .get();
-    return snap.docs
-      .map((d) => d.data())
-      .find((m) => JSON.stringify(m.body).includes('Friday works'));
+    return (await messagesOf(b.id, ticketId)).find(
+      (m) => m.authorUid === grace.uid && JSON.stringify(m.body).includes('Friday works'),
+    );
   });
   expect(reply.via).toBe('email');
   // quoted history is stripped

@@ -11,7 +11,15 @@
  * that was never granted is refused even to its admin.
  */
 import { expect, test } from '@playwright/test';
-import { call, eventually, inviteAndAccept, newBoard, newPerson, read, WEB_URL } from '../support/stack.js';
+import {
+  call,
+  eventually,
+  inviteAndAccept,
+  newBoard,
+  newPerson,
+  read,
+  WEB_URL,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 const INDEX = `<!doctype html>
@@ -73,7 +81,9 @@ test('§K: an artifact reads and writes board tickets within the grant and the v
   await expect(f.locator('#boards')).toHaveText(`${eng.key}:write`);
   await expect(f.locator('#canWrite')).toHaveText('true');
   await expect(f.locator('#other')).toHaveText('permission-denied');
-  await expect(f.locator('#tickets li')).toHaveText([`${eng.key}-1 Existing ticket @${eng.stages[0]!.name}`]);
+  await expect(f.locator('#tickets li')).toHaveText([
+    `${eng.key}-1 Existing ticket @${eng.stages[0]!.name}`,
+  ]);
   await f.locator('#create').click();
   await expect(f.locator('#tickets li')).toHaveCount(2);
   await expect(f.locator('#tickets li').first()).toContainText('From the dashboard'); // 'created' = newest first

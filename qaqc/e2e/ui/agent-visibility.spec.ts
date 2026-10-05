@@ -20,7 +20,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { SCOPE_PRESETS, agentStatusId } from '@tm/shared';
+import { SCOPE_PRESETS, live } from '@tm/shared';
 import { admin, API_URL, call, eventually, newBoard, newPerson, stage } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
@@ -221,11 +221,11 @@ test('§L: an agent works, and the person watches it happen', async ({ page }) =
   expect(event.question.answered_by.id).toBe(ada.uid);
 
   // ── 7. the beats stop: 🔴 No signal (§L3) ─────────────────────────────────
-  // The server stamps lastBeatAt itself, so 'three minutes of silence' is made
-  // by ageing the status document — the same thing a dead orchestrator does.
+  // The server stamps the beat itself, so 'three minutes of silence' is made
+  // by ageing the beat node in the RTDB (§W) — what a dead orchestrator does.
   await admin()
-    .db.doc(`boards/${b.id}/agentStatus/${agentStatusId(agentId, t.ticketId)}`)
-    .update({ lastBeatAt: Date.now() - 3 * 60_000 });
+    .rtdb.ref(live.status(b.id, agentId, t.ticketId))
+    .update({ at: Date.now() - 3 * 60_000 });
   await expect(health).toHaveAttribute('data-health', 'stale');
   await expect(health).toHaveAttribute('title', /No signal for 3 min/);
   await shot(page, 'health-no-signal');

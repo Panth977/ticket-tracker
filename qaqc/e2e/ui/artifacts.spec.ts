@@ -110,7 +110,11 @@ test('an artifact: publish, open, live data between two people, read-only, remov
   await expect(call(stranger, 'artifactOpen', { artifactId })).rejects.toThrow();
 
   // ── shared with a viewer, in a second browser ─────────────────────────────
-  const shared = await call(owner, 'artifactShare', { artifactId, email: viewer.email, role: 'viewer' });
+  const shared = await call(owner, 'artifactShare', {
+    artifactId,
+    email: viewer.email,
+    role: 'viewer',
+  });
   expect(shared.outcome).toBe('granted');
   const ctx = await browser.newContext();
   const page2 = await ctx.newPage();
@@ -165,12 +169,17 @@ test('the build is served sandboxed, and only with a valid capability', async ()
   expect((await fetch(`${open.contentBase}missing.js`)).status).toBe(404);
 
   // a tampered capability is refused
-  const bad = open.contentUrl.replace(/\/c\/([^/]{8})/, (_m, a: string) => `/c/${a.split('').reverse().join('')}`);
+  const bad = open.contentUrl.replace(
+    /\/c\/([^/]{8})/,
+    (_m, a: string) => `/c/${a.split('').reverse().join('')}`,
+  );
   expect(bad).not.toBe(open.contentUrl);
   expect((await fetch(bad)).status).toBe(403);
 });
 
-test('the app: create from the sidebar, the list page, settings for the owner only', async ({ page }) => {
+test('the app: create from the sidebar, the list page, settings for the owner only', async ({
+  page,
+}) => {
   const owner = await newPerson('Una');
   await signIn(page, owner.email);
   await page.getByRole('button', { name: /new artifact/i }).click();
@@ -179,7 +188,12 @@ test('the app: create from the sidebar, the list page, settings for the owner on
   await page.waitForURL(/\/x\/[A-Za-z0-9_-]+$/);
   // nothing published yet → the empty state, not a broken frame
   await expect(page.getByText(/nothing published|no build|publish/i).first()).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Sidebar' }).or(page.getByLabel('Sidebar')).getByText('Wall dashboard')).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Sidebar' })
+      .or(page.getByLabel('Sidebar'))
+      .getByText('Wall dashboard'),
+  ).toBeVisible();
 
   const id = page.url().split('/x/')[1]!;
   await page.goto(`/x/${id}/settings/builds`);

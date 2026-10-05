@@ -11,6 +11,7 @@
  */
 import { initializeApp, getApps, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getDatabase, type Database } from 'firebase-admin/database';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import type { CommandName, CommandReq, CommandRes, PMNode, RichTextDoc } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts (no types needed)
@@ -27,9 +28,16 @@ export { PROJECT_ID };
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
 
 let app: App | undefined;
-export function admin(): { db: Firestore; auth: ReturnType<typeof getAuth> } {
-  app ??= getApps()[0] ?? initializeApp({ projectId: PROJECT_ID });
-  return { db: getFirestore(app), auth: getAuth(app) };
+export function admin(): { db: Firestore; auth: ReturnType<typeof getAuth>; rtdb: Database } {
+  app ??=
+    getApps()[0] ??
+    initializeApp({
+      projectId: PROJECT_ID,
+      // The namespace the functions use (backend/src/runtime/firebase.ts); the
+      // emulator host comes from FIREBASE_DATABASE_EMULATOR_HOST.
+      databaseURL: `https://${PROJECT_ID}-default-rtdb.firebaseio.com`,
+    });
+  return { db: getFirestore(app), auth: getAuth(app), rtdb: getDatabase(app) };
 }
 
 export interface Person {

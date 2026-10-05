@@ -96,3 +96,20 @@ export async function mailTo(email: string): Promise<DevMail[]> {
 export async function read<T = Record<string, any>>(path: string): Promise<T | undefined> {
   return (await admin().db.doc(path).get()).data() as T | undefined;
 }
+
+/**
+ * Every message on a ticket, oldest first, as the app reads them (§W): the
+ * frozen pages under data/{NNN}, then `recentMessages` on the ticket document.
+ * There is no messages/ collection to query.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test reads poke at arbitrary fields
+type Row = Record<string, any>;
+export async function messagesOf(boardId: string, ticketId: string): Promise<Row[]> {
+  const db = admin().db;
+  const ticket = (await db.doc(`boards/${boardId}/tickets/${ticketId}`).get()).data();
+  const pages = await db.collection(`boards/${boardId}/tickets/${ticketId}/data`).get();
+  return [
+    ...pages.docs.sort((a, b) => a.id.localeCompare(b.id)).flatMap((d) => d.data().messages ?? []),
+    ...(ticket?.recentMessages ?? []),
+  ];
+}

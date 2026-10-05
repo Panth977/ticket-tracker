@@ -88,8 +88,11 @@ test('a file uploaded by an agent is served to the app through /api/files', asyn
   });
   expect(posted.status, JSON.stringify(posted.body)).toBe(201);
 
+  // §W: every file row lives on the ticket document (`ticket.files`).
   const pathOf = async (fileId: string) =>
-    (await read<{ path: string }>(`boards/${eng.id}/tickets/${ticketId}/files/${fileId}`))!.path;
+    (await read<{ files: { id: string; path: string }[] }>(
+      `boards/${eng.id}/tickets/${ticketId}`,
+    ))!.files.find((f) => f.id === fileId)!.path;
 
   /** Exactly what the SPA does: ask the API where the bytes are. */
   const accessFor = async (path: string, who = ada) => {
