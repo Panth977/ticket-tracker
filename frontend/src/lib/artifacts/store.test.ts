@@ -64,12 +64,12 @@ describe('roles', () => {
     expect(viewerReadOnly(art(), null)).toBe(true);
   });
 
-  it('settings: owners get every section (Board access too, §K), editors Builds and Data, viewers none', () => {
+  it('settings: owners get every section (Subscriptions and Subscribers too), editors Builds and Data, viewers none', () => {
     expect(settingsSectionsFor('owner').map((s) => s.id)).toEqual([
       'general',
       'people',
-      'boards',
-      'memory',
+      'subscriptions',
+      'subscribers',
       'builds',
       'data',
     ]);

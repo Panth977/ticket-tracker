@@ -37,7 +37,7 @@ describe('boardUpdate', () => {
     );
   });
 
-  it('per-section patches: name, settings merged key by key, description derived', async () => {
+  it('per-section patches: name, settings merged key by key, description flattened', async () => {
     const alice = await createUser();
     const { boardId } = await newBoard(alice);
     await call(alice, 'boardUpdate', {
@@ -59,7 +59,8 @@ describe('boardUpdate', () => {
       editorsCanInvite: true,
       emailReplies: true,
     });
-    expect(b.description).toMatchObject({ text: 'Hello', mentions: [], refs: [] });
+    // indicators.html: stored as plain text now (rich text from an old client is flattened).
+    expect(b.description).toBe('Hello');
   });
 
   it('removing a stage with tickets → 409 { stageId, count }; with remap tickets move', async () => {

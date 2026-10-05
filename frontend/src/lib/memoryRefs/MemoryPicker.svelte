@@ -9,8 +9,14 @@
   documents directly.
 -->
 <script lang="ts">
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { ChevronRight, Folder, Loader2 } from 'lucide-svelte';
-  import { formatBytes, memoryGlyph, type MemoryNodeOut, type MemoryOut } from '@tm/shared';
+  import {
+    MEMORY_DEFAULT_INDICATOR,
+    formatBytes,
+    type MemoryNodeOut,
+    type MemoryOut,
+  } from '@tm/shared';
   import { command } from '$lib/api';
   import { KIND_ICON, kindOf } from '$lib/files';
   import Button from '$lib/ui/Button.svelte';
@@ -96,7 +102,7 @@
       </p>
     {:else if !memories.length}
       <p class="text-sm text-muted">
-        No memory is shared with this board yet. A board admin can add one in Settings › Memory.
+        No memory is shared with this board yet. A board admin can add one in Settings › Subscriptions.
       </p>
     {:else}
       {#if memories.length > 1 || !current}
@@ -111,7 +117,12 @@
                 ? 'border-accent bg-accent-soft font-medium text-text'
                 : 'border-line text-muted hover:bg-surface-2'}"
               onclick={() => choose(m)}
-              ><span aria-hidden="true">{memoryGlyph(m)}</span>{m.name}</button
+              ><Indicator
+                of={m}
+                seed={m.id}
+                fallback={MEMORY_DEFAULT_INDICATOR}
+                size="sm"
+              />{m.name}</button
             >
           {/each}
         </div>

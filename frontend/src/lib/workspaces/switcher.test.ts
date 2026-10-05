@@ -96,4 +96,23 @@ describe('the title switcher (§AB3)', () => {
     ]);
     expect(activeWorkspace([ws], 'w1', { memoryId: 'm1' })).toBeNull();
   });
+  it('every entity row carries its indicator (indicators.html)', () => {
+    const items = switcherItems({
+      boards,
+      artifacts,
+      workspace: null,
+      current: { boardId: 'b1' },
+      leave,
+    });
+    expect(items[0]!.indicator).toMatchObject({ seed: 'b1', of: { id: 'b1' } });
+    const arts = switcherItems({
+      boards,
+      artifacts,
+      workspace: null,
+      current: { artifactId: 'a1' },
+      leave,
+    });
+    expect(arts.map((i) => i.label)).toEqual(['FL Dash', 'Health Dash']);
+    expect(arts[0]!.indicator?.seed).toBe('a1');
+  });
 });

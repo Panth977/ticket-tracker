@@ -84,6 +84,8 @@ import {
   RestMoveBodySchema,
   RestPatchTicketBodySchema,
   RestPostMessageBodySchema,
+  RestAggregatesQuerySchema,
+  RestAggregatesResSchema,
   RestSearchQuerySchema,
   RestSearchResSchema,
   RestSetTasklistBodySchema,
@@ -145,6 +147,8 @@ const COMPONENTS: Record<string, z.ZodTypeAny> = {
   Message: PublicMessageSchema,
   MessageList: RestMessageListResSchema,
   PostMessage: RestPostMessageBodySchema,
+  // aggregates.html
+  Aggregates: RestAggregatesResSchema,
   File: PublicFileSchema,
   FileList: RestFileListResSchema,
   FileWithContent: RestFileResSchema,
@@ -289,6 +293,19 @@ const IO: Record<string, RouteIO> = {
   },
   // §R2 — the board in the path, for credentials that span boards.
   'GET /v1/boards/{KEY}': { res: 'Board', notes: 'The same as GET /v1/board?board={KEY}.' },
+  'GET /v1/board/aggregates': {
+    query: RestAggregatesQuerySchema,
+    res: 'Aggregates',
+    notes: 'The same as GET /v1/boards/{KEY}/aggregates, the board named by ?board= (or the token).',
+  },
+  'GET /v1/boards/{KEY}/aggregates': {
+    query: RestAggregatesQuerySchema,
+    res: 'Aggregates',
+    notes:
+      "aggregates.html: one aggregate field (`field`: id or label; default the board's first active field) — its " +
+      'totals per period bucket (daily / weekly / monthly as the field says), each with per-ticket totals, oldest first. ' +
+      'from / to are bucket keys of that period, inclusive; default the last 30 days / 12 weeks / 12 months.',
+  },
   'GET /v1/boards/{KEY}/tickets': {
     query: RestListTicketsQuerySchema,
     res: 'TicketList',

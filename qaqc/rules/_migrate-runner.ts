@@ -16,6 +16,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import * as S from '@tm/shared';
 import { migrateAttachmentsToMemory } from '../../scripts/lib/attachments-to-memory.mjs';
+import { migrateAggregates } from '../../scripts/lib/aggregates.mjs';
 
 const opts = JSON.parse(process.argv[2] ?? '{}') as {
   projectId: string;
@@ -23,8 +24,19 @@ const opts = JSON.parse(process.argv[2] ?? '{}') as {
   ownerUid: string;
   apply: boolean;
   now?: number;
+  /** Which migration (default the attachments one); 'aggregates' → rules/migrate-aggregates.test.ts. */
+  which?: 'attachments' | 'aggregates';
 };
 const app = initializeApp({ projectId: opts.projectId, storageBucket: opts.bucket });
+const log = (m: string) => console.log(m);
+if (opts.which === 'aggregates') {
+  const s = await migrateAggregates(
+    { S, db: getFirestore(app) },
+    { apply: opts.apply, now: opts.now ?? 1_000, log },
+  );
+  console.log(`SUMMARY ${JSON.stringify(s)}`);
+  process.exit(0);
+}
 const summary = await migrateAttachmentsToMemory(
   { S, db: getFirestore(app), bucket: getStorage(app).bucket(opts.bucket), FieldValue },
   {

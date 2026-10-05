@@ -3,6 +3,7 @@
  * and artifacts, at users/{actor}/workspaces/{id}. It grants nothing.
  */
 import { errors, paths, WORKSPACE_COLORS, WORKSPACES_MAX, type Workspace } from '@tm/shared';
+import { descriptionText } from '@tm/shared/logic/index';
 import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
@@ -20,9 +21,21 @@ export default defineCommand('workspaceCreate', async (ctx, input) => {
     const memoryIds = uniq(input.memoryIds ?? []);
     await assertReachable(tx, ctx, { boardIds, artifactIds, memoryIds });
     const last = Math.max(-1, ...mine.docs.map((d) => d.data().position));
+    // indicators.html: the mark (default: the next workspace colour), legacy colour in step.
+    const indicator = input.indicator ?? {
+      kind: 'color' as const,
+      color: input.color ?? WORKSPACE_COLORS[mine.size % WORKSPACE_COLORS.length]!,
+    };
+    const description = descriptionText(input.description);
     const doc: Workspace = {
       name: input.name,
-      color: input.color ?? WORKSPACE_COLORS[mine.size % WORKSPACE_COLORS.length]!,
+      color:
+        input.color ??
+        ('color' in indicator
+          ? indicator.color
+          : WORKSPACE_COLORS[mine.size % WORKSPACE_COLORS.length]!),
+      indicator,
+      ...(description ? { description } : {}),
       boardIds,
       artifactIds,
       memoryIds,

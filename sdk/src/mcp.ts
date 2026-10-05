@@ -24,7 +24,7 @@
  * two lists cannot drift apart.
  */
 import type { RunReceiptInput, ShareArtifactInput, TmClientBase } from './client.js';
-import type { Scope, TicketState } from './types.js';
+import type { Indicator, Scope, TicketState } from './types.js';
 
 /** A JSON Schema (draft 2020-12) object, as MCP's `tools/list` wants it. */
 export interface JsonSchema {
@@ -64,6 +64,7 @@ export type McpToolName =
   | 'move_ticket'
   | 'assign_ticket'
   | 'post_message'
+  | 'get_aggregates'
   | 'upload_file'
   | 'read_file'
   | 'link_tickets'
@@ -172,7 +173,7 @@ const RUN_RECEIPT: Record<string, unknown> = {
   type: 'object',
   description:
     'Orchestrators only: the receipt for one finished run of the agent. cost_usd is THIS turn; ' +
-    'it is added to the ticket, board and day cost counters.',
+    "it lands on the board's Cost aggregate field.",
   properties: {
     n: int('Your run counter on this ticket, 1-based', { minimum: 1 }),
     outcome: enumOf(RUN_OUTCOMES),
@@ -209,6 +210,35 @@ const RUN_RECEIPT: Record<string, unknown> = {
   ],
   additionalProperties: false,
 };
+
+/** aggregates.html: post_message `agg`, as the wire states it. */
+const AGG_INPUT: Record<string, unknown> = {
+  type: 'object',
+  description:
+    "Entries for the board's aggregate fields (get_board → agg_fields): { entries: [{ field_id | field (label), value }] }. " +
+    'A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time").',
+  properties: {
+    entries: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 10,
+      items: {
+        type: 'object',
+        properties: {
+          field_id: str('The field id', { maxLength: 40 }),
+          field: str('The field label, case-insensitive', { maxLength: 40 }),
+          value: num('The amount; negative takes away'),
+        },
+        required: ['value'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['entries'],
+  additionalProperties: false,
+};
+const AGG_KEY = (d: string): Record<string, unknown> =>
+  str(d, { pattern: '^\\d{4}-(\\d{2}-\\d{2}|W\\d{2}|\\d{2})$' });
 
 /** The wire receipt → the client's camelCase input. */
 function runFromWire(r: Record<string, unknown>): RunReceiptInput {
@@ -349,7 +379,9 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   list_boards: {
     description:
       'Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board ' +
-      'you are on right now, and their keys are what the `board` argument takes.',
+      'you are on right now, and their keys are what the `board` argument takes. Each board carries its description ' +
+      '(what it is for) and its stages with THEIR descriptions — what each stage means; read them to decide which ' +
+      'stage a ticket belongs in before moving it.',
     readOnly: true,
     scopes: ['board:read'],
     inputSchema: schema({}),
@@ -357,11 +389,34 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   get_board: {
     description:
-      'The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).',
+      'The board: its description, stages (with categories and descriptions — what each stage means, so you know where a ticket goes), priorities, tags, custom fields, and members (people and agents).',
     readOnly: true,
     scopes: ['board:read'],
     inputSchema: schema({ board: BOARD }),
     run: (tm) => tm.board(),
+  },
+  get_aggregates: {
+    description:
+      "One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.",
+    readOnly: true,
+    scopes: ['board:read'],
+    inputSchema: schema({
+      board: BOARD,
+      field: str(
+        "Aggregate field id or label (get_board → agg_fields); default: the board's first active field",
+        { maxLength: 40 },
+      ),
+      from: AGG_KEY(
+        "First bucket key, inclusive: '2026-10-01' (daily), '2026-W38' (weekly), '2026-09' (monthly)",
+      ),
+      to: AGG_KEY('Last bucket key, inclusive'),
+    }),
+    run: (tm, a) =>
+      tm.aggregates({
+        ...(a.field !== undefined ? { field: s(a.field) } : {}),
+        ...(a.from !== undefined ? { from: s(a.from) } : {}),
+        ...(a.to !== undefined ? { to: s(a.to) } : {}),
+      }),
   },
   list_my_tickets: {
     description: 'Tickets assigned to you, most recently updated first.',
@@ -523,7 +578,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
     readOnly: false,
     scopes: ['comments:write'],
     inputSchema: schema(
@@ -536,6 +591,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         memory_files: MEMORY_FILES,
         reply_to: str('Message id to quote'),
         run: RUN_RECEIPT,
+        agg: AGG_INPUT,
       },
       ['key', 'markdown'],
     ),
@@ -554,6 +610,18 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
           : undefined,
         replyTo: a.reply_to,
         run: a.run ? runFromWire(a.run as Record<string, unknown>) : undefined,
+        agg: a.agg
+          ? {
+              entries: (
+                (a.agg as { entries: { field_id?: string; field?: string; value: number }[] })
+                  .entries ?? []
+              ).map((e) =>
+                e.field_id !== undefined
+                  ? { fieldId: e.field_id, value: e.value }
+                  : { field: e.field, value: e.value },
+              ),
+            }
+          : undefined,
       }),
   },
   upload_file: {
@@ -800,13 +868,25 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
     inputSchema: schema(
       {
         name: str(undefined, { minLength: 1, maxLength: 80 }),
-        description: str(undefined, { maxLength: 500 }),
-        icon: str('One emoji', { maxLength: 16 }),
+        description: str('Plain text: what this artifact is for (agents read it)', {
+          maxLength: 2000,
+        }),
+        icon: str('LEGACY: one emoji. Prefer indicator.', { maxLength: 16 }),
+        indicator: {
+          type: 'object',
+          description:
+            "Its mark: { kind: 'color', color: '#RRGGBB' } | { kind: 'icon', icon, color } | { kind: 'emoji', emoji }",
+        },
       },
       ['name'],
     ),
     run: (tm, a) =>
-      tm.artifacts.create({ name: s(a.name), description: a.description, icon: a.icon }),
+      tm.artifacts.create({
+        name: s(a.name),
+        description: a.description,
+        icon: a.icon,
+        indicator: a.indicator as Indicator | undefined,
+      }),
   },
   artifact_publish: {
     description:

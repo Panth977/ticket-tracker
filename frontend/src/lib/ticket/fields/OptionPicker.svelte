@@ -5,10 +5,15 @@
   People: give options a `uid` (avatar) and `detail` (email).
 -->
 <script lang="ts" module>
+  import type { Indicator as IndicatorT } from '@tm/shared';
   export interface PickOption {
     id: string;
     name: string;
     color?: string | null;
+    /** indicators.html: drawn instead of the colour dot (stages). */
+    indicator?: IndicatorT | null;
+    /** A tooltip on the row (a stage's description). */
+    hint?: string | null;
     /** Second line / right side (a person's email, a stage's category). */
     detail?: string;
     /** Draw the person's avatar. */
@@ -20,6 +25,7 @@
 <script lang="ts">
   import { Check, ChevronDown, Plus, X } from 'lucide-svelte';
   import { Popover } from '$lib/ui';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import PersonAvatar from '../PersonAvatar.svelte';
 
   interface Props {
@@ -140,12 +146,20 @@
             class="inline-flex h-5 items-center gap-1 rounded-full bg-surface-2 px-2 text-xs"
             style={o.color ? `background: color-mix(in srgb, ${o.color} 18%, transparent)` : ''}
           >
-            {#if o.color}<span class="size-1.5 rounded-full" style="background:{o.color}"
+            {#if 'indicator' in o && o.indicator}<Indicator
+                indicator={o.indicator}
+                size="xs"
+              />{:else if o.color}<span class="size-1.5 rounded-full" style="background:{o.color}"
               ></span>{/if}{o.name}
           </span>
         {:else}
           <span class="inline-flex min-w-0 items-center gap-1.5">
-            {#if o.color}<span class="size-2 shrink-0 rounded-full" style="background:{o.color}"
+            {#if 'indicator' in o && o.indicator}<Indicator
+                indicator={o.indicator}
+                size="sm"
+              />{:else if o.color}<span
+                class="size-2 shrink-0 rounded-full"
+                style="background:{o.color}"
               ></span>{/if}
             <span class="truncate">{o.name}</span>
           </span>
@@ -193,6 +207,7 @@
         aria-disabled={o.disabled || undefined}
         onclick={() => toggle(o)}
         onmouseenter={() => (index = i)}
+        title={o.hint || undefined}
         class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm aria-disabled:opacity-40
           {i === index ? 'bg-surface-2' : ''}"
       >
@@ -203,7 +218,9 @@
             {#if o.detail}<span class="truncate text-xs text-muted">{o.detail}</span>{/if}
           </span>
         {:else}
-          {#if o.color}<span class="size-2.5 shrink-0 rounded-full" style="background:{o.color}"
+          {#if o.indicator}<Indicator indicator={o.indicator} size="sm" />{:else if o.color}<span
+              class="size-2.5 shrink-0 rounded-full"
+              style="background:{o.color}"
             ></span>{/if}
           <span class="min-w-0 flex-1 truncate">{o.name}</span>
           {#if o.detail}<span class="shrink-0 text-xs text-subtle">{o.detail}</span>{/if}

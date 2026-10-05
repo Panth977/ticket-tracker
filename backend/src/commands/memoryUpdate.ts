@@ -1,8 +1,9 @@
-/** memoryUpdate (memory.html §A) — owner only: name, description, emoji, archive / restore. */
+/** memoryUpdate (memory.html §A) — owner only: name, description, indicator, archive / restore. */
 import type { Memory } from '@tm/shared';
 import { loadMemory, memoryRef } from '../memory/shared.js';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
+import { markPatch } from './indicatorShared.js';
 
 export default defineCommand('memoryUpdate', async (ctx, input) => {
   await runTx(async (tx) => {
@@ -10,7 +11,7 @@ export default defineCommand('memoryUpdate', async (ctx, input) => {
     const patch: Partial<Memory> = {};
     if (input.name !== undefined && input.name !== memory.name) patch.name = input.name;
     if (input.description !== undefined) patch.description = input.description || null;
-    if (input.icon !== undefined) patch.icon = input.icon || null;
+    Object.assign(patch, markPatch(input));
     if (input.archived !== undefined && input.archived !== (memory.archivedAt !== null))
       patch.archivedAt = input.archived ? ctx.now : null;
     if (Object.keys(patch).length === 0) return;

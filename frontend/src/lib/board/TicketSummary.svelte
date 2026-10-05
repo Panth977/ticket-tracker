@@ -31,10 +31,15 @@
   import TicketSignals from './TicketSignals.svelte';
   import { unreadOfTicket, type QuestionSignal, type TasklistSignal } from './signals';
   import { cardFacts, unreadBadge } from './summary';
+  import { aggCountersOf, cardChips } from '$lib/aggregates/fields';
 
   interface Props {
     ticket: TicketWithId;
-    board: Pick<Board, 'stages' | 'priorities' | 'tags' | 'fields'> & { id: string };
+    /** aggregates.html: `aggFields` decides the card's total chips (absent = the legacy Cost). */
+    board: Pick<Board, 'stages' | 'priorities' | 'tags' | 'fields'> & {
+      id: string;
+      aggFields?: Board['aggFields'];
+    };
     me: string;
     tz: string;
     now: number;
@@ -101,6 +106,8 @@
     unreadBadge(t.counts.messages, unread, counted?.count ?? null, counted?.capped ?? false),
   );
 
+  /** aggregates.html: one chip per showOnCard field with a non-zero total on this ticket. */
+  const aggs = $derived(cardChips(board, aggCountersOf(t)));
   const facts = $derived(cardFacts(t, { board, tz, now, fields, blocked, tasks }));
   /** A viewer with nobody assigned has nothing to draw — an empty fact. */
   const showAssignees = $derived(!!assignees && (assignees.editable || t.assigneeUids.length > 0));
@@ -134,18 +141,11 @@
     {#if part === 'chat'}
       <TicketSignals {badge} {unsent} />
     {:else if part === 'activity'}
-      <TicketSignals {waiting} cost={t.cost ?? null} boardId={board.id} ticketId={t.id} />
+      <TicketSignals {waiting} {aggs} boardId={board.id} ticketId={t.id} />
       <TicketFacts {facts} inline />
     {:else}
       {#if part === 'all'}
-        <TicketSignals
-          {badge}
-          {unsent}
-          {waiting}
-          cost={t.cost ?? null}
-          boardId={board.id}
-          ticketId={t.id}
-        />
+        <TicketSignals {badge} {unsent} {waiting} {aggs} boardId={board.id} ticketId={t.id} />
       {/if}
       {#if showTitle}
         <span
@@ -179,14 +179,7 @@
         </button>
       {/if}
       <span class="ml-auto flex min-w-0 items-center gap-1.5">
-        <TicketSignals
-          {badge}
-          {unsent}
-          {waiting}
-          cost={t.cost ?? null}
-          boardId={board.id}
-          ticketId={t.id}
-        />
+        <TicketSignals {badge} {unsent} {waiting} {aggs} boardId={board.id} ticketId={t.id} />
         <!-- No meta row for them to sit at the end of: stay two lines (§P2). -->
         {#if !facts.length}{@render assigneeCluster()}{/if}
       </span>

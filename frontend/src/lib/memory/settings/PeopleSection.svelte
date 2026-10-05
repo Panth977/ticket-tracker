@@ -68,7 +68,7 @@
 
 <Section
   title="People"
-  description="Who can open this memory. Boards and artifacts that use it are set in their own settings (Board & artifact access lists them)."
+  description="Who can open this memory. Boards and artifacts that use it are listed under Subscribers."
 >
   <div class="flex flex-col gap-6">
     {#if editable}

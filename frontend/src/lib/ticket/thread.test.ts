@@ -58,6 +58,20 @@ describe('groupThread', () => {
       ['b'],
     ]);
   });
+  it("keeps an 'agg' row (aggregates.html) out of its author's group", () => {
+    const msgs = [
+      m('a', 'u1', T0),
+      m('g1', 'u1', T0 + 1000, 'agg'),
+      m('g2', 'u1', T0 + 2000, 'agg'),
+      m('b', 'u1', T0 + 3000),
+    ];
+    expect(groupThread(msgs, 'UTC')[0]!.groups.map((g) => g.messages.map((x) => x.id))).toEqual([
+      ['a'],
+      ['g1'],
+      ['g2'],
+      ['b'],
+    ]);
+  });
   it('uses the viewer time zone for days', () => {
     expect(dayKey(Date.UTC(2026, 0, 1, 23, 30), 'Asia/Kolkata')).toBe('2026-01-02');
   });

@@ -7,6 +7,7 @@
 import { errors, paths, WORKSPACE_ITEMS_MAX, type Workspace } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
+import { descriptionText } from '@tm/shared/logic/index';
 import { defineCommand } from './_registry.js';
 import { assertReachable, personOnly, uniq } from './workspaceShared.js';
 
@@ -53,6 +54,19 @@ export default defineCommand('workspaceUpdate', async (ctx, input) => {
       memoryIds,
       updatedAt: ctx.now,
     };
+    // indicators.html: the mark, with the legacy colour kept in step.
+    if (input.indicator) {
+      next.indicator = input.indicator;
+      if (input.color === undefined && 'color' in input.indicator)
+        next.color = input.indicator.color;
+    } else if (input.color !== undefined && (!ws.indicator || ws.indicator.kind === 'color')) {
+      next.indicator = { kind: 'color', color: input.color };
+    }
+    if (input.description !== undefined) {
+      const d = descriptionText(input.description);
+      if (d) next.description = d;
+      else delete next.description;
+    }
     tx.set(ref, next);
   });
   return { ok: true as const };

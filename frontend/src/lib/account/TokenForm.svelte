@@ -96,7 +96,11 @@
     draft = withChoice(draft, c);
   }
   const boardOptions = $derived(
-    boards.map((b) => ({ value: b.id, label: `${b.key} · ${b.name}` })),
+    boards.map((b) => ({
+      value: b.id,
+      label: `${b.key} · ${b.name}`,
+      indicator: { of: b, seed: b.id },
+    })),
   );
 </script>
 

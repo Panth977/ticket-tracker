@@ -122,12 +122,124 @@ export interface Member extends Principal {
   stage_grant?: { stages: string[]; assigned_only: boolean } | null | undefined;
 }
 
+// ───────────────────────── indicators ─────────────────────────
+
+/**
+ * indicators.html — an entity's mark (a board, a stage, an artifact, a
+ * memory, a workspace): a solid colour, an icon from the app's list tinted in
+ * a colour, one emoji, or an image the person uploaded in the app.
+ * Colours are '#RRGGBB'. Icons are lucide names ('rocket', 'bug', 'kanban'…;
+ * the app's list — an unknown one is a 400).
+ */
+/** The icon list (lucide names). */
+export type IndicatorIcon =
+  | 'layout-grid'
+  | 'kanban'
+  | 'list-todo'
+  | 'check-square'
+  | 'circle-dot'
+  | 'target'
+  | 'flag'
+  | 'rocket'
+  | 'zap'
+  | 'star'
+  | 'heart'
+  | 'bookmark'
+  | 'tag'
+  | 'bell'
+  | 'calendar'
+  | 'clock'
+  | 'briefcase'
+  | 'building-2'
+  | 'home'
+  | 'users'
+  | 'user'
+  | 'graduation-cap'
+  | 'book-open'
+  | 'notebook-pen'
+  | 'file-text'
+  | 'folder'
+  | 'archive'
+  | 'inbox'
+  | 'mail'
+  | 'message-square'
+  | 'phone'
+  | 'camera'
+  | 'image'
+  | 'film'
+  | 'music'
+  | 'mic'
+  | 'headphones'
+  | 'palette'
+  | 'brush'
+  | 'pen-tool'
+  | 'code'
+  | 'terminal'
+  | 'bug'
+  | 'git-branch'
+  | 'database'
+  | 'server'
+  | 'cloud'
+  | 'cpu'
+  | 'smartphone'
+  | 'monitor'
+  | 'globe'
+  | 'map'
+  | 'compass'
+  | 'plane'
+  | 'car'
+  | 'bike'
+  | 'shopping-cart'
+  | 'credit-card'
+  | 'wallet'
+  | 'piggy-bank'
+  | 'chart-line'
+  | 'chart-pie'
+  | 'trending-up'
+  | 'dumbbell'
+  | 'activity'
+  | 'apple'
+  | 'coffee'
+  | 'utensils'
+  | 'leaf'
+  | 'sun'
+  | 'moon'
+  | 'flame'
+  | 'gift'
+  | 'trophy'
+  | 'shield'
+  | 'lock'
+  | 'key'
+  | 'wrench'
+  | 'hammer'
+  | 'lightbulb'
+  | 'brain'
+  | 'sparkles'
+  | 'bot'
+  | 'gamepad-2'
+  | 'puzzle'
+  | 'box'
+  | 'package';
+
+export type Indicator =
+  | { kind: 'color'; color: string }
+  | { kind: 'icon'; icon: IndicatorIcon; color: string }
+  | { kind: 'emoji'; emoji: string }
+  | { kind: 'image'; path: string };
+
 // ───────────────────────── board ─────────────────────────
 
-export interface Stage {
+/** A stage as a ticket names it. */
+export interface StageRef {
   id: string;
   name: string;
   category: StageCategory;
+}
+/** A stage as a board lists it. */
+export interface Stage extends StageRef {
+  /** What the stage MEANS (the board admin's words): read it to decide where a ticket goes. */
+  description: string | null;
+  indicator: Indicator;
 }
 export interface Option {
   id: string;
@@ -158,9 +270,51 @@ export interface Cost {
   runs: number;
 }
 
+/** aggregates.html: a period an aggregate field buckets its totals by. */
+export type AggPeriod = 'daily' | 'weekly' | 'monthly';
+
+/** aggregates.html: a number the board's tickets add up (Cost, Time…). */
+export interface AggField {
+  /** 'cost' (turn receipts land here) or 'a_xxxxxx'. */
+  id: string;
+  label: string;
+  /** '$', 'h', 'pts'… — '' for a plain count. */
+  unit: string;
+  period: AggPeriod;
+  show_on_card: boolean;
+  /** Removed from the board: totals kept, no new entries. */
+  archived: boolean;
+}
+
+/** Per aggregate field id: `{ total, count }` (count = how many entries). */
+export type AggCounters = Record<string, { total: number; count: number }>;
+
+/** `Message.agg`: the entries a message added (kind 'agg', or a receipt's cost). */
+export interface MessageAgg {
+  entries: { field_id: string; value: number }[];
+}
+
+/** `boards.aggregates()`: one field's totals per period bucket, oldest first. */
+export interface AggBuckets {
+  field: AggField;
+  /** The field's lifetime total on the board. */
+  total: { total: number; count: number };
+  buckets: {
+    /** '2026-10-05' (daily) | '2026-W40' (weekly) | '2026-10' (monthly). */
+    key: string;
+    total: number;
+    count: number;
+    /** Per ticket KEY. */
+    tickets: AggCounters;
+  }[];
+}
+
 export interface Board extends BoardRef {
   url: string;
+  /** What the board is for (plain text, Markdown allowed). */
   description_md: string | null;
+  /** indicators.html: the board's mark. */
+  indicator: Indicator;
   stages: Stage[];
   priorities: Option[];
   tags: Option[];
@@ -168,7 +322,12 @@ export interface Board extends BoardRef {
   /** Needs `members:read`; omitted from list responses. */
   members?: Member[] | undefined;
   archived: boolean;
+  /** The Cost aggregate field's lifetime total, as before; null when nothing yet. */
   cost: Cost | null;
+  /** aggregates.html: the board's aggregate fields (archived ones flagged). */
+  agg_fields: AggField[];
+  /** aggregates.html: lifetime totals per field id. */
+  aggs: AggCounters;
 }
 
 /** `POST /v1/agents` (account tokens): an agent profile you own. */
@@ -201,7 +360,7 @@ export interface Ticket {
   title: string;
   description_md: string | null;
   board: BoardRef;
-  stage: Stage;
+  stage: StageRef;
   priority: Option | null;
   /** Tag names. */
   tags: string[];
@@ -218,6 +377,8 @@ export interface Ticket {
   state: TicketState;
   /** What the agents' turns on this ticket have cost; null until the first receipt. */
   cost: Cost | null;
+  /** aggregates.html: this ticket's totals per aggregate field id. */
+  aggs: AggCounters;
   created_at: Iso;
   updated_at: Iso;
 }
@@ -281,7 +442,7 @@ export interface FileWithContent extends TmFile {
 
 // ───────────────────────── messages and questions ─────────────────────────
 
-export type MessageKind = 'comment' | 'system' | 'question';
+export type MessageKind = 'comment' | 'system' | 'question' | 'agg';
 
 export type QuestionFieldType =
   'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date';
@@ -379,6 +540,8 @@ export interface Message {
   pinned: boolean;
   /** The turn receipt, when this message is one (§Y1); null otherwise. */
   run: RunReceipt | null;
+  /** aggregates.html: the entries this message added; null otherwise. */
+  agg: MessageAgg | null;
   created_at: Iso;
   edited_at: Iso | null;
   deleted: boolean;
@@ -636,7 +799,10 @@ export interface Artifact {
   id: string;
   name: string;
   description: string | null;
+  /** LEGACY: the typed emoji, if any. Read `indicator`. */
   icon: string | null;
+  /** indicators.html: the artifact's mark. */
+  indicator: Indicator;
   /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
   url: string;
   /**

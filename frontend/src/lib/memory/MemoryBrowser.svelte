@@ -43,7 +43,7 @@
     Trash2,
     Upload,
   } from 'lucide-svelte';
-  import { formatBytes, memoryGlyph } from '@tm/shared';
+  import { MEMORY_DEFAULT_INDICATOR, formatBytes } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { downloadFile } from '$lib/files/source';
   import { routes } from '$lib/layout/routes';
@@ -504,7 +504,7 @@
         kind="memory"
         items={$switchQ.items}
         name={mem.name}
-        glyph={memoryGlyph(mem)}
+        mark={{ of: mem, seed: memoryId, fallback: MEMORY_DEFAULT_INDICATOR }}
       />
       {#if mem.archivedAt != null}
         <span class="shrink-0 rounded bg-warning-soft px-1.5 py-0.5 text-xs text-warning"
@@ -566,7 +566,7 @@
         <IconButton
           icon={Settings}
           label="Memory settings"
-          href={routes.memorySettings(memoryId, role === 'owner' ? 'general' : 'access')}
+          href={routes.memorySettings(memoryId, role === 'owner' ? 'general' : 'subscribers')}
         />
       {/if}
     </header>
@@ -684,6 +684,7 @@
                 {folder}
                 children={folderChildren}
                 {countOf}
+                peek={(f) => childrenOf(nodes, f.path).slice(0, 4)}
                 {selected}
                 {writable}
                 {itemsFor}
@@ -720,6 +721,7 @@
               {folder}
               children={folderChildren}
               {countOf}
+              peek={(f) => childrenOf(nodes, f.path).slice(0, 4)}
               {selected}
               {writable}
               {itemsFor}

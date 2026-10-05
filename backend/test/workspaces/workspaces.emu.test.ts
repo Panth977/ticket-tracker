@@ -118,4 +118,47 @@ describe('artifact board access (§K)', () => {
     await call(asha, 'artifactBoardAccessSet', { artifactId, boardId: viewOnly.id, access: null });
     expect(await boards()).toEqual({ [own.id]: 'write' });
   });
+
+  it("either side ends it: the board's admin takes their board away; nobody else can", async () => {
+    const { asha, priya, ravi, vic } = await people('asha', 'priya', 'ravi', 'vic');
+    const theirs = await seedBoard({ admin: priya, viewers: [asha, vic] });
+    const other = await seedBoard({ admin: ravi, editors: [asha] });
+    const { artifactId } = await call(asha, 'artifactCreate', { name: 'Dash' });
+    const boards = async () =>
+      (await db().doc(`artifacts/${artifactId}`).get()).data()!.boards as Record<string, string>;
+    await call(asha, 'artifactBoardAccessSet', { artifactId, boardId: theirs.id, access: 'read' });
+    await call(asha, 'artifactBoardAccessSet', { artifactId, boardId: other.id, access: 'write' });
+
+    // Board settings › Subscribers: everyone on the board sees the artifact;
+    // only the artifact's people see its name.
+    const seen = await call(vic, 'boardArtifactList', { boardId: theirs.id });
+    expect(seen.artifacts).toEqual([
+      { artifactId, access: 'read', ownerUid: asha.uid, name: null, indicator: null },
+    ]);
+    const own = await call(asha, 'boardArtifactList', { boardId: theirs.id });
+    expect(own.artifacts[0]).toMatchObject({ artifactId, name: 'Dash' });
+    expect(own.artifacts[0]!.indicator).toBeTruthy();
+    await expect(call(ravi, 'boardArtifactList', { boardId: theirs.id })).rejects.toMatchObject({
+      code: 'not_found',
+    });
+
+    // A viewer of the board cannot take it away; nor can an admin of ANOTHER board.
+    await expect(
+      call(vic, 'artifactBoardAccessSet', { artifactId, boardId: theirs.id, access: null }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(
+      call(ravi, 'artifactBoardAccessSet', { artifactId, boardId: theirs.id, access: null }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    // …and a board admin only REMOVES — granting stays with the artifact's owner.
+    await expect(
+      call(priya, 'artifactBoardAccessSet', { artifactId, boardId: theirs.id, access: 'write' }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    await call(priya, 'artifactBoardAccessSet', { artifactId, boardId: theirs.id, access: null });
+    expect(await boards()).toEqual({ [other.id]: 'write' });
+    expect((await call(priya, 'boardArtifactList', { boardId: theirs.id })).artifacts).toEqual([]);
+    // Ravi, admin of the other board, ends that one too.
+    await call(ravi, 'artifactBoardAccessSet', { artifactId, boardId: other.id, access: null });
+    expect(await boards()).toEqual({});
+  });
 });

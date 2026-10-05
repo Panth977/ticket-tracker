@@ -118,7 +118,9 @@ async function deflateRaw(bytes: Uint8Array): Promise<Uint8Array | null> {
   ).CompressionStream;
   if (!CS || typeof Blob === 'undefined' || typeof Response === 'undefined') return null;
   try {
-    const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new CS('deflate-raw') as never);
+    const stream = new Blob([bytes as BlobPart])
+      .stream()
+      .pipeThrough(new CS('deflate-raw') as never);
     return new Uint8Array(await new Response(stream as ReadableStream<Uint8Array>).arrayBuffer());
   } catch {
     return null;
@@ -153,7 +155,8 @@ export async function zipFiles(
     const name = enc.encode(f.path);
     const crc = crc32(f.bytes);
     // Deflate only when it actually helps: a PNG or a .woff2 comes out larger.
-    const packed = opts.compress === false || f.bytes.length === 0 ? null : await deflateRaw(f.bytes);
+    const packed =
+      opts.compress === false || f.bytes.length === 0 ? null : await deflateRaw(f.bytes);
     const deflated = packed !== null && packed.length < f.bytes.length;
     const data = deflated ? packed : f.bytes;
     const method = deflated ? 8 : 0;
@@ -190,7 +193,8 @@ export async function zipFiles(
   }
 
   const centralSize = central.reduce((n, b) => n + b.length, 0);
-  if (offset + centralSize > 0xffffffff) throw new TypeError('Too large for one zip (4 GB at most)');
+  if (offset + centralSize > 0xffffffff)
+    throw new TypeError('Too large for one zip (4 GB at most)');
   const end = new DataView(new ArrayBuffer(22));
   end.setUint32(0, 0x06054b50, true);
   end.setUint16(8, files.length, true);
@@ -270,7 +274,9 @@ export async function readDirectory(
   try {
     top = await fs.stat(root);
   } catch (e) {
-    throw new TypeError(`${what}: cannot read '${dir}' (${(e as Error)?.message ?? e})`, { cause: e });
+    throw new TypeError(`${what}: cannot read '${dir}' (${(e as Error)?.message ?? e})`, {
+      cause: e,
+    });
   }
   if (!top.isDirectory()) throw new TypeError(`${what}: '${dir}' is not a directory`);
 

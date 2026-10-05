@@ -33,6 +33,7 @@ import {
 import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
 import { SidebarPrefsSchema, WorkspaceSchema } from './workspace.js';
+import { AggStatsSchema } from './aggregates.js';
 import { MemoryNodeSchema, MemorySchema } from '../memory/schema.js';
 import {
   ApiKeySchema,
@@ -45,6 +46,7 @@ import {
 
 export * from './user.js';
 export * from './board.js';
+export * from './aggregates.js';
 export * from './ticket.js';
 export * from './platform.js';
 export * from './realtime.js';
@@ -83,6 +85,8 @@ export const DOC_SCHEMAS = {
   ticketData: TicketDataPageSchema,
   /** boards/{b}/stats/{yyyy-mm-dd} — phase 17 (§Y2), the day's cost. */
   stats: BoardDayStatsSchema,
+  /** boards/{b}/aggStats/{period}:{key} — aggregates.html, the period buckets. */
+  aggStats: AggStatsSchema,
   keys: KeyIndexSchema,
   presence: PresenceSchema,
   typing: TypingSchema,

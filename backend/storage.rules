@@ -109,6 +109,26 @@ service firebase.storage {
       allow delete: if signedIn() && request.auth.uid == uid;
     }
 
+    // INDICATORS (docs/plan/indicators.html): an image a person uploaded as the
+    // mark of a board, stage, artifact, memory or workspace —
+    // indicators/{uid}/{fileId}/{name}, at most 1 MB (INDICATOR_IMAGE_MAX_BYTES),
+    // one of INDICATOR_IMAGE_TYPES. Written ONCE (a new picture is a new
+    // fileId), only under the uploader's own uid. Shown to everyone who sees
+    // the entity, so any signed-in person reads it — like an avatar (the
+    // path is unguessable; the app reads it through the file door anyway).
+    match /indicators/{uid}/{fileId}/{name} {
+      allow read: if signedIn();
+      allow create: if resource == null
+        && signedIn() && request.auth.uid == uid
+        && notRefused(uid)
+        && fileId.matches('[A-Za-z0-9_-]{6,64}')
+        && request.resource.size <= 1024 * 1024
+        && request.resource.contentType in
+          ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
     // ------------------------------------------------------------ artifacts
     // (docs/plan/artifacts.html §E4, §G) — artifacts/{artifactId}/…
     //

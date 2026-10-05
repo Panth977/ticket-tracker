@@ -69,6 +69,7 @@ import {
   RestMoveBodySchema,
   RestPatchTicketBodySchema,
   RestPostMessageBodySchema,
+  RestAggregatesQuerySchema,
   RestSearchQuerySchema,
   RestSetTasklistBodySchema,
   RestStateBodySchema,
@@ -120,6 +121,7 @@ import {
   listTicketFiles,
   messagesPage,
   postMessage,
+  aggregateBuckets,
   readFile,
   setTicketState,
   signedUrl,
@@ -303,6 +305,18 @@ v1.get('/boards/:key', async (c) => {
   return c.json(await boardView(ctx, await requestBoard(ctx, c.req.param('key'))));
 });
 
+v1.get('/board/aggregates', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/board/aggregates');
+  const q = query(c, RestAggregatesQuerySchema);
+  return c.json(await aggregateBuckets(ctx, await requestBoard(ctx, q.board), q));
+});
+
+v1.get('/boards/:key/aggregates', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/boards/{KEY}/aggregates');
+  const q = query(c, RestAggregatesQuerySchema);
+  return c.json(await aggregateBuckets(ctx, await requestBoard(ctx, c.req.param('key')), q));
+});
+
 v1.get('/boards/:key/tickets', async (c) => {
   const ctx = gate(c, 'GET', '/v1/boards/{KEY}/tickets');
   return c.json(await ticketsPage(ctx, await requestBoard(ctx, c.req.param('key')), c));
@@ -419,6 +433,7 @@ v1.post('/tickets/:key/messages', async (c) => {
       fileIds: b.attachments,
       replyTo: b.reply_to,
       run: b.run,
+      agg: b.agg,
       memoryFiles: b.memory_files,
     },
     idem(c),
@@ -692,6 +707,7 @@ v1.post('/artifacts', async (c) => {
       name: b.name,
       ...(b.description !== undefined ? { description: b.description } : {}),
       ...(b.icon !== undefined ? { icon: b.icon } : {}),
+      ...(b.indicator !== undefined ? { indicator: b.indicator } : {}),
     },
     ctx,
     idem(c) ?? null,
@@ -716,6 +732,7 @@ v1.patch('/artifacts/:id', async (c) => {
       ...(b.name !== undefined ? { name: b.name } : {}),
       ...(b.description !== undefined ? { description: b.description } : {}),
       ...(b.icon !== undefined ? { icon: b.icon } : {}),
+      ...(b.indicator !== undefined ? { indicator: b.indicator } : {}),
       ...(b.read_only !== undefined ? { readOnly: b.read_only } : {}),
       ...(b.archived !== undefined ? { archived: b.archived } : {}),
     },

@@ -10,8 +10,10 @@
   import { Folder, MoreHorizontal } from 'lucide-svelte';
   import { formatBytes } from '@tm/shared';
   import { relativeTime } from '$lib/account/format';
-  import { KIND_ICON, kindOf } from '$lib/files/kinds';
-  import { fileUrl } from '$lib/files/source';
+  import { fileIcon } from '$lib/files/fileIcons';
+  import FilePreview from '$lib/files/FilePreview.svelte';
+  import { visible } from '$lib/files/visible';
+  import type { ViewerFile } from '$lib/files/types';
   import Menu from '$lib/ui/Menu.svelte';
   import type { MenuItem } from '$lib/ui/types';
   import { memoryDrag } from './drag.svelte';
@@ -22,6 +24,8 @@
     children: Node[];
     /** Files under each folder child (the tile's count). */
     countOf: (folder: Node) => number;
+    /** A folder tile's peek: its first few children. */
+    peek: (folder: Node) => Node[];
     selected: ReadonlySet<string>;
     writable: boolean;
     itemsFor: (node: Node) => MenuItem[];
@@ -37,6 +41,7 @@
     folder,
     children,
     countOf,
+    peek,
     selected,
     writable,
     itemsFor,
@@ -56,16 +61,21 @@
   }
   const here = $derived(memoryDrag.over === folder);
 
-  /** A thumbnail URL per image node, fetched once per version. */
-  const thumbs = $state<Record<string, string | null>>({});
-  $effect(() => {
-    for (const n of children) {
-      const f = n.file;
-      if (!f || !f.mime.startsWith('image/') || f.storagePath in thumbs) continue;
-      thumbs[f.storagePath] = null;
-      void fileUrl(f.storagePath).then((u) => (thumbs[f.storagePath] = u));
-    }
-  });
+  /** Tiles that have come near the viewport: their previews load (and stay). */
+  const seen = $state<Record<string, boolean>>({});
+  const asViewer = (n: Node): ViewerFile | null =>
+    n.file
+      ? {
+          id: n.id,
+          path: n.file.storagePath,
+          name: n.name,
+          mime: n.file.mime,
+          size: n.file.size,
+          width: n.file.width,
+          height: n.file.height,
+          createdAt: n.updatedAt,
+        }
+      : null;
 </script>
 
 <div
@@ -85,8 +95,8 @@
     <ul class="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
       {#each children as n (n.id)}
         {@const isFolder = n.kind === 'folder'}
-        {@const Icon = KIND_ICON[kindOf({ name: n.name, mime: n.file?.mime ?? '' })]}
-        {@const thumb = n.file ? thumbs[n.file.storagePath] : null}
+        {@const vf = asViewer(n)}
+        {@const fi = isFolder ? null : fileIcon({ name: n.name, mime: n.file?.mime })}
         {@const target = isFolder && memoryDrag.over === n.path}
         <li
           class="group relative flex flex-col overflow-hidden rounded-xl border bg-surface transition-colors
@@ -106,22 +116,62 @@
           ondrop={(e) => drop(e, isFolder ? n.path : folder)}
           oncontextmenu={(e) => oncontext(e, n)}
         >
+          <!-- The preview may hold rich markup (Markdown, a page): a transparent button over it opens. -->
+          <div
+            class="relative aspect-[4/3] overflow-hidden bg-surface-2"
+            use:visible={(on) => on && (seen[n.id] = true)}
+          >
+            {#if isFolder}
+              {@const inside = peek(n)}
+              <span class="flex size-full flex-col gap-1 p-2.5">
+                <Folder
+                  size={22}
+                  strokeWidth={1.5}
+                  class="shrink-0 text-accent"
+                  aria-hidden="true"
+                />
+                {#each inside as c (c.id)}
+                  {@const ci =
+                    c.kind === 'folder' ? null : fileIcon({ name: c.name, mime: c.file?.mime })}
+                  <span class="flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
+                    {#if ci}<ci.icon
+                        size={12}
+                        class="shrink-0 {ci.tone}"
+                        aria-hidden="true"
+                      />{:else}<Folder
+                        size={12}
+                        class="shrink-0 text-accent"
+                        aria-hidden="true"
+                      />{/if}
+                    <span class="truncate">{c.name}</span>
+                  </span>
+                {:else}
+                  <span class="text-[11px] text-subtle">Empty</span>
+                {/each}
+              </span>
+            {:else if vf}
+              <FilePreview file={vf} shown={!!seen[n.id]} iconSize={30} />
+            {/if}
+            <button
+              type="button"
+              class="absolute inset-0 size-full cursor-pointer focus-visible:outline-2 focus-visible:outline-accent"
+              aria-label="Open {n.name}"
+              onclick={(e) => (e.metaKey || e.ctrlKey ? onselect(n) : onopen(n))}
+              onkeydown={(e) => onkey(e, n)}
+            ></button>
+          </div>
           <button
             type="button"
-            class="flex flex-1 flex-col text-left focus-visible:outline-2 focus-visible:outline-accent"
+            class="flex min-w-0 items-center gap-2 px-2.5 py-2 text-left"
+            tabindex="-1"
             onclick={(e) => (e.metaKey || e.ctrlKey ? onselect(n) : onopen(n))}
-            onkeydown={(e) => onkey(e, n)}
           >
-            <span class="grid aspect-[4/3] place-items-center overflow-hidden bg-surface-2">
-              {#if thumb}
-                <img src={thumb} alt="" class="size-full object-cover" loading="lazy" />
-              {:else if isFolder}
-                <Folder size={34} strokeWidth={1.25} class="text-accent" aria-hidden="true" />
-              {:else}
-                <Icon size={30} strokeWidth={1.25} class="text-muted" aria-hidden="true" />
-              {/if}
-            </span>
-            <span class="flex flex-col gap-0.5 px-2.5 py-2">
+            {#if fi}<fi.icon
+                size={14}
+                class="shrink-0 {fi.tone}"
+                aria-hidden="true"
+              />{:else}<Folder size={14} class="shrink-0 text-accent" aria-hidden="true" />{/if}
+            <span class="flex min-w-0 flex-col gap-0.5">
               <span class="truncate text-sm font-medium" title={n.name}>{n.name}</span>
               <span class="truncate text-xs text-subtle">
                 {#if isFolder}{countOf(n)} {countOf(n) === 1 ? 'file' : 'files'}{:else}{formatBytes(

@@ -16,7 +16,14 @@
  * The artifact starts empty — currentBuild null, which the host page shows as
  * "nothing published yet" — and the RTDB mirror is written after the commit.
  */
-import { ARTIFACT_AGENT_FULL, errors, isAgentId, paths, type Artifact } from '@tm/shared';
+import {
+  ARTIFACT_AGENT_FULL,
+  defaultIndicator,
+  errors,
+  isAgentId,
+  paths,
+  type Artifact,
+} from '@tm/shared';
 import { agentRef } from '../agents/shared.js';
 import {
   artifactInboxRow,
@@ -26,6 +33,7 @@ import {
 } from '../artifacts/shared.js';
 import { typedDoc } from '../runtime/converters.js';
 import { defineCommand } from './_registry.js';
+import { markOnCreate } from './indicatorShared.js';
 
 export default defineCommand('artifactCreate', async (ctx, input) => {
   const agentId = isAgentId(ctx.actor) ? ctx.actor : null;
@@ -42,7 +50,7 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
   const artifact: Artifact = {
     name: input.name,
     description: input.description || null,
-    icon: input.icon || null,
+    ...markOnCreate(input, defaultIndicator(input.name)),
     ownerUid,
     ...withMembers({ [ownerUid]: 'owner' }),
     // Always the OBJECT form from §AA3 on (never the old literal 'editor').

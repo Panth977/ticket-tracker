@@ -1,12 +1,18 @@
 <!--
-  + New memory (memory.html §F): a name, an optional emoji and a line about it
+  + New memory (memory.html §F): a name, a line about it and an indicator
   → memoryCreate → the (empty) memory, ready for its first upload.
 -->
 <script lang="ts">
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
-  import { MEMORY_DESCRIPTION_MAX, MEMORY_NAME_MAX } from '@tm/shared';
+  import {
+    MEMORY_DESCRIPTION_MAX,
+    MEMORY_NAME_MAX,
+    MEMORY_DEFAULT_INDICATOR,
+    type Indicator,
+  } from '@tm/shared';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import { command } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -17,15 +23,17 @@
   let { open = $bindable(false) }: { open: boolean } = $props();
 
   let name = $state('');
-  let icon = $state('');
   let description = $state('');
+  /** null = not picked yet: 🧠. */
+  let picked = $state<Indicator | null>(null);
+  const indicator = $derived(picked ?? MEMORY_DEFAULT_INDICATOR);
   let busy = $state(false);
 
   $effect(() => {
     if (open) {
       name = '';
-      icon = '';
       description = '';
+      picked = null;
     }
   });
 
@@ -36,7 +44,7 @@
     try {
       const { memoryId } = await command(
         'memoryCreate',
-        { name: n, description: description.trim() || null, icon: icon.trim() || null },
+        { name: n, description: description.trim() || null, indicator },
         { toast: 'Could not create the memory' },
       );
       open = false;
@@ -60,26 +68,14 @@
     class="flex flex-col gap-4"
     onsubmit={(e) => (e.preventDefault(), create())}
   >
-    <div class="flex gap-3">
-      <Input
-        label="Emoji"
-        bind:value={icon}
-        maxlength={8}
-        placeholder="🧠"
-        autocomplete="off"
-        class="w-20"
-        inputClass="text-center"
-      />
-      <Input
-        label="Name"
-        bind:value={name}
-        maxlength={MEMORY_NAME_MAX}
-        required
-        placeholder="Brand kit"
-        autocomplete="off"
-        class="flex-1"
-      />
-    </div>
+    <Input
+      label="Name"
+      bind:value={name}
+      maxlength={MEMORY_NAME_MAX}
+      required
+      placeholder="Brand kit"
+      autocomplete="off"
+    />
     <Textarea
       label="Description"
       bind:value={description}
@@ -87,6 +83,15 @@
       rows={2}
       placeholder="What it is for (optional)"
     />
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm font-medium">Indicator</span>
+      <IndicatorField
+        value={indicator}
+        seed={name}
+        label="Memory indicator"
+        onchange={(i) => (picked = i)}
+      />
+    </div>
   </form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>

@@ -8,7 +8,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { X } from 'lucide-svelte';
-  import type { FieldValue, TicketPatch } from '@tm/shared';
+  import { indicatorColor, indicatorOf, type FieldValue, type TicketPatch } from '@tm/shared';
   import { command } from '$lib/api';
   import { DatePicker, toast } from '$lib/ui';
   import { getTicketCtx, updateTicket } from './context';
@@ -33,7 +33,9 @@
     byPos(t.board.stages).map((s) => ({
       id: s.id,
       name: s.name,
-      color: s.color,
+      color: indicatorColor(indicatorOf(s, s.id)),
+      indicator: indicatorOf(s, s.id),
+      hint: s.description ?? null,
       detail: CATEGORY[s.category],
       disabled: s.id !== t.ticket.stageId && !t.perms.moveTo(s.id),
     })),

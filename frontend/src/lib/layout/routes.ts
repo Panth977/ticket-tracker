@@ -42,8 +42,12 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'grants', label: 'Stage grants' },
   { id: 'intake', label: 'Intake' },
   { id: 'integrations', label: 'Integrations' },
-  /** memory.html §D: memories this board may use. */
-  { id: 'memory', label: 'Memory' },
+  /** lib/access: what this board uses (memories, memory.html §D). */
+  { id: 'subscriptions', label: 'Subscriptions' },
+  /** lib/access: what uses this board (artifacts §K, agents §AA2). */
+  { id: 'subscribers', label: 'Subscribers' },
+  /** aggregates.html: the numbers the board adds up (Cost, Time…). */
+  { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'danger', label: 'Danger zone' },
 ] as const;
@@ -106,11 +110,11 @@ export const routes = {
   memories: () => '/m',
   memory: (memoryId: string, path?: string | null) =>
     `/m/${memoryId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  memorySettings: (memoryId: string, section: 'general' | 'people' | 'access' = 'general') =>
+  memorySettings: (memoryId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
     `/m/${memoryId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
-    section: 'general' | 'people' | 'boards' | 'memory' | 'builds' | 'data',
+    section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data',
   ) => `/x/${artifactId}/settings/${section}`,
   /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
   integrate: () => '/integrate',

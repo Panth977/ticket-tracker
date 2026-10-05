@@ -17,6 +17,8 @@ import {
   UidSchema,
 } from '../types/index.js';
 import { defineCommand, OkResSchema, req } from './define.js';
+import { AGG_FIELDS_MAX, AggFieldDefSchema } from '../schema/aggregates.js';
+import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
 
 export const MAX_INVITES_PER_CALL = 50;
@@ -109,6 +111,10 @@ export const boardCreate = defineCommand({
     template: BoardTemplateSchema.optional(),
     color: ColorSchema.optional(),
     icon: z.string().max(64).optional(),
+    /** indicators.html: the board's mark. Default: one from `color`/`icon`, else a palette colour from the name. */
+    indicator: IndicatorSchema.optional(),
+    /** indicators.html: plain text — what this board is for (agents read it). */
+    description: DescriptionSchema.optional(),
   }),
   res: z.object({ boardId: BoardIdSchema }),
 });
@@ -119,12 +125,17 @@ export const BoardPatchSchema = z
     name: z.string().trim().min(1).max(80),
     color: ColorSchema,
     icon: z.string().max(64),
-    description: RichTextDocSchema.nullable(),
+    /** indicators.html: plain text now (old clients may still send rich text; stored flattened). */
+    description: z.union([DescriptionSchema, RichTextDocSchema]).nullable(),
+    /** indicators.html */
+    indicator: IndicatorSchema,
     stages: z.array(StageSchema).min(1),
     priorities: z.array(OptionSchema),
     tags: z.array(OptionSchema),
     /** A field missing from the new list is ARCHIVED, never deleted. */
     fields: z.array(FieldDefSchema),
+    /** aggregates.html: a field missing from the new list is ARCHIVED (history kept), never deleted. */
+    aggFields: z.array(AggFieldDefSchema).max(AGG_FIELDS_MAX),
     settings: BoardSettingsSchema.partial(),
     defaultViewId: z.string().min(1),
   })

@@ -72,6 +72,7 @@ const ticket = {
   referenced_by: [],
   state: 'active',
   cost: null,
+  aggs: {},
   created_at: toIso(0),
   updated_at: toIso(0),
 };
@@ -351,6 +352,7 @@ describe('public api shapes', () => {
         reactions: {},
         pinned: false,
         run: null,
+        agg: null,
         created_at: toIso(0),
         edited_at: null,
         deleted: false,
@@ -427,6 +429,7 @@ describe('public api shapes', () => {
       reactions: {},
       pinned: false,
       run: receipt,
+      agg: { entries: [{ field_id: 'cost', value: 1.24 }] },
       created_at: toIso(0),
       edited_at: null,
       deleted: false,
@@ -441,6 +444,35 @@ describe('public api shapes', () => {
     ).toBe(true);
     const { cost: _c, ...noCost } = ticket;
     expect(PublicTicketSchema.safeParse(noCost).success).toBe(false);
+  });
+
+  it('aggregates.html: agg entries on the way in (by id or label) and out', () => {
+    expect(
+      RestPostMessageBodySchema.safeParse({ agg: { entries: [{ field: 'Time', value: -0.5 }] } })
+        .success,
+    ).toBe(true);
+    expect(
+      RestPostMessageBodySchema.safeParse({
+        agg: { entries: [{ field_id: 'a_abc123', field: 'Time', value: 1 }] },
+      }).success,
+    ).toBe(false);
+    expect(RestPostMessageBodySchema.safeParse({ agg: { entries: [] } }).success).toBe(false);
+    expect(
+      McpToolSchemas.post_message.safeParse({
+        key: 'ENG-1',
+        markdown: '',
+        agg: { entries: [{ field_id: 'cost', value: 2 }] },
+      }).success,
+    ).toBe(true);
+    expect(
+      McpToolSchemas.get_aggregates.safeParse({ field: 'Time', from: '2026-W30' }).success,
+    ).toBe(true);
+    expect(McpToolSchemas.get_aggregates.safeParse({ from: '30 days' }).success).toBe(false);
+    const { aggs: _a, ...noAggs } = ticket;
+    expect(PublicTicketSchema.safeParse(noAggs).success).toBe(false);
+    expect(
+      PublicTicketSchema.safeParse({ ...ticket, aggs: { cost: { total: 1.5, count: 2 } } }).success,
+    ).toBe(true);
   });
 
   /**

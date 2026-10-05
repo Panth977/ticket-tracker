@@ -7,7 +7,16 @@
   Removing a stage that still holds tickets asks where they go (remap).
 -->
 <script lang="ts">
-  import { STAGE_CATEGORIES, type Stage, type StageCategory } from '@tm/shared';
+  import {
+    DESCRIPTION_MAX,
+    STAGE_CATEGORIES,
+    defaultIndicator,
+    indicatorColor,
+    indicatorOf,
+    type Stage,
+    type StageCategory,
+  } from '@tm/shared';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import ChoicePicker from '$lib/views/pickers/ChoicePicker.svelte';
   import OptionListEditor from './OptionListEditor.svelte';
   import RemapDialog from './RemapDialog.svelte';
@@ -78,12 +87,42 @@
       label="Stages"
       items={draft.value}
       onchange={(xs) => (draft.value = xs)}
-      make={(b) => ({ ...b, category: 'todo' as StageCategory })}
+      make={(b) => {
+        const indicator = defaultIndicator(b.name);
+        return {
+          ...b,
+          color: indicatorColor(indicator),
+          indicator,
+          category: 'todo' as StageCategory,
+        };
+      }}
       min={1}
       addLabel="Add stage"
       readOnly={s.readOnly}
     >
+      {#snippet lead(st, patch)}
+        <IndicatorField
+          value={indicatorOf(st, st.id)}
+          seed={st.id}
+          label="Indicator of {st.name}"
+          disabled={s.readOnly}
+          onchange={(i) => patch({ indicator: i, color: indicatorColor(i) })}
+        />
+      {/snippet}
       {#snippet row(st, patch)}
+        <textarea
+          class="mb-2 block w-full resize-y rounded border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
+          rows="2"
+          maxlength={DESCRIPTION_MAX}
+          placeholder="What this stage means — when a ticket belongs here (agents read it)"
+          aria-label="Description of {st.name}"
+          data-testid="stage-description"
+          disabled={s.readOnly}
+          value={st.description ?? ''}
+          onchange={(e) => {
+            const v = e.currentTarget.value.trim();
+            patch({ description: v ? v : undefined });
+          }}></textarea>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <label class="flex items-center gap-1.5">
             <span class="text-muted">Category</span>

@@ -25,6 +25,14 @@ const people: Record<string, unknown> = {
   },
 };
 
+// indicators.html: the entity mark pulls in lucide icons this test does not stub.
+vi.mock('$lib/ui/indicatorIcons', () => ({
+  INDICATOR_ICON_COMPONENTS: {},
+  iconLabel: (s: string) => s,
+}));
+vi.mock('$lib/ui/Indicator.svelte', async () => ({
+  default: (await import('../account/IconStub.test.svelte')).default,
+}));
 vi.mock('lucide-svelte', async () => {
   const Stub = (await import('../account/IconStub.test.svelte')).default;
   return Object.fromEntries(['Bot', 'X', 'Check', 'Copy'].map((n) => [n, Stub]));

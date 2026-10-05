@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { BoardIdSchema } from '../types/index.js';
 import { WORKSPACE_ITEMS_MAX, WORKSPACE_NAME_MAX } from '../schema/workspace.js';
 import { defineCommand, OkResSchema, req } from './define.js';
+import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 
 const Name = z.string().trim().min(1).max(WORKSPACE_NAME_MAX);
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -26,8 +27,12 @@ export const workspaceCreate = defineCommand({
   errors: ['forbidden', 'invalid', 'conflict'],
   req: req({
     name: Name,
-    /** Default: the next colour of WORKSPACE_COLORS. */
+    /** Default: the next colour of WORKSPACE_COLORS. LEGACY: prefer `indicator`. */
     color: Color.optional(),
+    /** indicators.html: the workspace's mark. Default: a colour indicator. */
+    indicator: IndicatorSchema.optional(),
+    /** indicators.html: what this workspace is for (agents read it). */
+    description: DescriptionSchema.optional(),
     boardIds: Ids(BoardIdSchema).optional(),
     artifactIds: Ids(ArtifactRefIdSchema).optional(),
     /** memory.html §F: memories bundled too. */
@@ -47,6 +52,10 @@ export const workspaceUpdate = defineCommand({
     workspaceId: WorkspaceIdSchema,
     name: Name.optional(),
     color: Color.optional(),
+    /** indicators.html */
+    indicator: IndicatorSchema.optional(),
+    /** indicators.html: null clears it. */
+    description: DescriptionSchema.optional(),
     position: z.number().optional(),
     /** Replace the whole list (its order is the sidebar's) … */
     boardIds: Ids(BoardIdSchema).optional(),

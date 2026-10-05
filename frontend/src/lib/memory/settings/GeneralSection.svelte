@@ -1,5 +1,5 @@
 <!--
-  Memory settings › General (owner only): name, emoji, description — one
+  Memory settings › General (owner only): name, description, indicator — one
   memoryUpdate with the keys that changed — then archive / restore and delete.
   Deleting removes every file for good, so it asks for the name.
 -->
@@ -8,7 +8,15 @@
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { MEMORY_DESCRIPTION_MAX, MEMORY_NAME_MAX, formatBytes } from '@tm/shared';
+  import {
+    MEMORY_DESCRIPTION_MAX,
+    MEMORY_NAME_MAX,
+    formatBytes,
+    MEMORY_DEFAULT_INDICATOR,
+    indicatorOf,
+    type Indicator,
+  } from '@tm/shared';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import { command, type CommandInput } from '$lib/api';
   import Section from '$lib/board/settings/Section.svelte';
   import { useDraft } from '$lib/board/settings/draft.svelte';
@@ -20,11 +28,11 @@
   const m = $derived(s.memory);
   const archived = $derived(m.archivedAt != null);
 
-  type G = { name: string; description: string; icon: string };
+  type G = { name: string; description: string; indicator: Indicator };
   const draft = useDraft<G>(() => ({
     name: s.memory.name,
     description: s.memory.description ?? '',
-    icon: s.memory.icon ?? '',
+    indicator: indicatorOf(s.memory, s.memory.id, MEMORY_DEFAULT_INDICATOR),
   }));
   const d = $derived(draft.value);
 
@@ -36,7 +44,8 @@
     const patch: Omit<CommandInput<'memoryUpdate'>, 'memoryId'> = {};
     if (v.name.trim() !== base.name) patch.name = v.name.trim();
     if (v.description.trim() !== base.description) patch.description = v.description.trim() || null;
-    if (v.icon.trim() !== base.icon) patch.icon = v.icon.trim() || null;
+    if (JSON.stringify(v.indicator) !== JSON.stringify(base.indicator))
+      patch.indicator = v.indicator;
     if (!Object.keys(patch).length) return draft.reset();
     saving = true;
     try {
@@ -109,16 +118,18 @@
       value={d.description}
       maxlength={MEMORY_DESCRIPTION_MAX}
       rows={2}
+      hint="What it holds and what it is for — agents read it."
       oninput={(e) => (draft.value = { ...d, description: e.currentTarget.value })}
     />
-    <Input
-      label="Emoji"
-      value={d.icon}
-      maxlength={16}
-      class="max-w-40"
-      hint="Shown next to the name. Empty = 🧠."
-      oninput={(e) => (draft.value = { ...d, icon: e.currentTarget.value })}
-    />
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm font-medium">Indicator</span>
+      <IndicatorField
+        value={d.indicator}
+        seed={m.id}
+        label="Memory indicator"
+        onchange={(i) => (draft.value = { ...d, indicator: i })}
+      />
+    </div>
     <p class="text-sm text-muted">
       {m.stats.files}
       {m.stats.files === 1 ? 'file' : 'files'} in {m.stats.folders}

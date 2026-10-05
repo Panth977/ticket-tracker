@@ -92,16 +92,7 @@ export function decodeDataValue(value: unknown): unknown {
 // ───────────────────────── shapes ─────────────────────────
 
 export type ArtifactDataWhereOp =
-  | '<'
-  | '<='
-  | '=='
-  | '!='
-  | '>='
-  | '>'
-  | 'array-contains'
-  | 'in'
-  | 'not-in'
-  | 'array-contains-any';
+  '<' | '<=' | '==' | '!=' | '>=' | '>' | 'array-contains' | 'in' | 'not-in' | 'array-contains-any';
 
 /** `[field, op, value]` — exactly the driver's `where` item. A `Date` value is a timestamp. */
 export type ArtifactDataWhere = readonly [field: string, op: ArtifactDataWhereOp, value: unknown];
@@ -378,7 +369,11 @@ export function createArtifactData(http: Http, artifactId: string, opts: Artifac
       /** Delete one document (its subcollections stay, as in Firestore). */
       delete: (path: string, o?: RequestOptions): Promise<{ ok: true }> => {
         wantDoc(path, 'delete');
-        return http.json<{ ok: true }>({ method: 'DELETE', path: fsUrl(path), options: dataReq(o) });
+        return http.json<{ ok: true }>({
+          method: 'DELETE',
+          path: fsUrl(path),
+          options: dataReq(o),
+        });
       },
       /** Add a document with a generated id to a collection → `{ id, path }`. */
       add: (

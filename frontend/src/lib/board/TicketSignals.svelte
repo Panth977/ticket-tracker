@@ -8,7 +8,8 @@
         total once everything is read, and nothing at all with no thread
   · ⚠   a message of mine has not gone out yet (the outbox)
   · ❓  a blocking question — accent when it is waiting for MY answer
-  · $   phase 17 (§Y2): what the agents' turns on it have cost, once non-zero
+  · $   aggregates.html: one chip per aggregate field shown on cards (Cost —
+        what the agents' turns have cost — and any other), once non-zero
   · ●   the agent health dot, with what it is doing in its tooltip
 
   Everything is optional and nothing empty is drawn, so a quiet ticket renders
@@ -16,9 +17,8 @@
 -->
 <script lang="ts">
   import { MessageSquare, TriangleAlert } from 'lucide-svelte';
-  import type { CostCounter } from '@tm/shared';
   import Badge from '$lib/ui/Badge.svelte';
-  import { fmtTurns, fmtUsd, fmtUsdExact } from '$lib/cost/format';
+  import type { AggChip } from '$lib/aggregates/fields';
   import { waitingBadgeLabel } from '$lib/ticket/question';
   import TicketAgentHealth from '$lib/agents/TicketAgentHealth.svelte';
   import type { QuestionSignal } from './signals';
@@ -28,8 +28,8 @@
     badge?: UnreadBadge | null;
     unsent?: boolean;
     waiting?: QuestionSignal | null;
-    /** ticket.cost — drawn once there is money on it. */
-    cost?: CostCounter | null;
+    /** aggregates.html: the ticket's totals to draw (cardChips: showOnCard, non-zero). */
+    aggs?: readonly AggChip[];
     /** The health dot is drawn only when both are known. */
     boardId?: string | null;
     ticketId?: string | null;
@@ -40,7 +40,7 @@
     badge = null,
     unsent = false,
     waiting = null,
-    cost = null,
+    aggs = [],
     boardId = null,
     ticketId = null,
   }: Props = $props();
@@ -78,16 +78,17 @@
     <Badge><span aria-hidden="true">❓</span>Waiting for an answer</Badge>
   </span>
 {/if}
-{#if cost && cost.usd > 0}
+{#each aggs as a (a.id)}
   <span
-    data-cost
+    data-agg={a.id}
+    data-cost={a.id === 'cost' ? '' : undefined}
     class="inline-flex shrink-0 items-center rounded-full bg-surface-2 px-1.5 text-[11px] font-medium text-muted tabular-nums"
-    title="{fmtUsdExact(cost.usd)} over {fmtTurns(cost.runs)}"
-    aria-label="Cost {fmtUsdExact(cost.usd)} over {fmtTurns(cost.runs)}"
+    title={a.title}
+    aria-label={a.title}
   >
-    {fmtUsd(cost.usd)}
+    {a.text}
   </span>
-{/if}
+{/each}
 {#if boardId && ticketId}
   <!-- Phase 3 (§L3): a green dot while an agent is working on this ticket. -->
   <TicketAgentHealth {boardId} {ticketId} dotOnly />

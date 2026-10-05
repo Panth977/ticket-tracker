@@ -10,7 +10,7 @@
  * Items either navigate (`href`) or `run()`.
  */
 import { untrack } from 'svelte';
-import type { IconComponent } from '$lib/ui/types';
+import type { IconComponent, MenuItem } from '$lib/ui/types';
 
 export interface PaletteItem {
   id: string;
@@ -18,6 +18,8 @@ export interface PaletteItem {
   /** Secondary text, right of / under the label. */
   hint?: string;
   icon?: IconComponent;
+  /** indicators.html: an entity's mark (board, artifact, memory, workspace), drawn instead of `icon`. */
+  indicator?: MenuItem['indicator'];
   kbd?: string;
   href?: string;
   run?: () => void | Promise<void>;

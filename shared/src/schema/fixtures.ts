@@ -294,6 +294,14 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     tickets: { 'ENG-1': { usd: 1.24, runs: 1 } },
     updatedAt: T0,
   },
+  aggStats: {
+    period: 'daily',
+    key: '2026-09-26',
+    fields: {
+      cost: { total: 1.24, count: 1, tickets: { 'ENG-1': { total: 1.24, count: 1 } } },
+    },
+    updatedAt: T0,
+  },
   keys: { ticketId: TICKET_ID, boardId: BOARD_ID, current: 'ENG-1' },
   presence: { state: 'online', viewing: TICKET_ID, lastChanged: T0 },
   typing: { at: T0 },
@@ -598,6 +606,7 @@ export const invalidFixtures: { [N in DocName]: unknown } = {
   files: { ...fixtures.files, source: 'email' },
   ticketData: { ...fixtures.ticketData, page: -1 },
   stats: { ...fixtures.stats, day: '26/09/2026' },
+  aggStats: { ...fixtures.aggStats, period: 'yearly' },
   keys: { ...fixtures.keys, current: 'ENG' },
   presence: { ...fixtures.presence, state: 'busy' },
   typing: { at: 'now' },

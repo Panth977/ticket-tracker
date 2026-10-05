@@ -8,11 +8,12 @@
   // hrefs are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { Eye, EyeOff, Star, X } from 'lucide-svelte';
-  import { paths, type Board } from '@tm/shared';
+  import { descriptionText, indicatorColor, indicatorOf, paths, type Board } from '@tm/shared';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { command } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import { boardPref, type WithId } from '$lib/stores';
-  import { fmtTurns, fmtUsd, fmtUsdExact } from '$lib/cost/format';
+  import { aggCountersOf, cardChips } from '$lib/aggregates/fields';
   import { setHidden, type Hidden } from '$lib/workspaces/store';
 
   interface Props {
@@ -26,6 +27,7 @@
     onopen?: (() => void) | null;
   }
   let { board, uid, hidden = null, onremove = null, onopen = null }: Props = $props();
+  const tileChip = $derived(cardChips(board, aggCountersOf(board))[0] ?? null);
   const isHidden = $derived(!!hidden?.boards.has(board.id));
 
   function toggleHidden(e: MouseEvent) {
@@ -68,9 +70,13 @@
   class="group relative flex min-h-28 flex-col gap-2 overflow-hidden rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
   data-board={board.key}
 >
-  <span class="absolute inset-y-0 left-0 w-1" style:background={board.color} aria-hidden="true"
+  <span
+    class="absolute inset-y-0 left-0 w-1"
+    style:background={indicatorColor(indicatorOf(board, board.id))}
+    aria-hidden="true"
   ></span>
   <div class="flex items-start gap-2">
+    <Indicator of={board} seed={board.id} size="md" />
     <span
       class="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs font-semibold text-muted group-hover:bg-surface-3"
     >
@@ -121,6 +127,9 @@
     {/if}
   </div>
   <h3 class="line-clamp-2 font-medium">{board.name}</h3>
+  {#if descriptionText(board.description)}<p class="line-clamp-2 text-xs text-muted">
+      {descriptionText(board.description)}
+    </p>{/if}
   {#if isHidden}<span class="text-xs text-subtle">Hidden from sidebar</span>{/if}
   <p class="mt-auto flex gap-3 text-xs text-muted">
     <span>{board.counts.active} open</span>
@@ -130,14 +139,17 @@
       {Object.keys(board.access).length === 1 ? 'person' : 'people'}</span
     >
   </p>
-  {#if board.cost && board.cost.usd > 0}
-    <!-- Phase 17 (§Y2): what the agents' turns on this board have cost, for its lifetime. -->
+  {#if tileChip}
+    <!-- aggregates.html: the lifetime total of the board's first field shown on cards (Cost, usually). -->
     <p
       class="text-xs text-subtle tabular-nums"
       data-cost
-      title="{fmtUsdExact(board.cost.usd)} over {fmtTurns(board.cost.runs)}"
+      data-agg={tileChip.id}
+      title={tileChip.title}
     >
-      {fmtUsd(board.cost.usd)} in agent turns · {fmtTurns(board.cost.runs)}
+      {tileChip.text}
+      {tileChip.label} · {tileChip.count}
+      {tileChip.count === 1 ? 'entry' : 'entries'}
     </p>
   {/if}
 </a>

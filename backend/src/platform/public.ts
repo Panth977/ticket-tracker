@@ -28,6 +28,12 @@ import {
   type PublicAgent,
   type PublicAgentStatus,
   type PublicCost,
+  type PublicAggCounters,
+  type PublicAggField,
+  type AggCounters,
+  type AggFieldDef,
+  boardAggFields,
+  COST_AGG_FIELD_ID,
   type PublicRunReceipt,
   type RunReceipt,
   type PublicQuestion,
@@ -55,7 +61,8 @@ import {
   type Attachment,
   type InboxItem,
 } from '@tm/shared';
-import { docToMarkdown } from '@tm/shared/logic/index';
+import { descriptionText, docToMarkdown } from '@tm/shared/logic/index';
+import { indicatorOf } from '@tm/shared';
 import { db } from '../runtime/firebase.js';
 import { locateTickets, type TicketLocation } from '../tickets/locate.js';
 
@@ -128,6 +135,39 @@ export function toPublicActor(
 export const toPublicCost = (
   c: { usd: number; runs: number } | undefined | null,
 ): PublicCost | null => (c ? { usd: c.usd, runs: c.runs } : null);
+
+/**
+ * aggregates.html: the API's `cost` is the Cost aggregate field when the doc
+ * has it (aggs.cost), else the legacy counter (before the migration).
+ */
+export const toPublicCostOf = (d: {
+  cost?: { usd: number; runs: number } | undefined;
+  aggs?: AggCounters | undefined;
+}): PublicCost | null => {
+  const c = d.aggs?.[COST_AGG_FIELD_ID];
+  return c ? { usd: Math.max(0, c.total), runs: c.count } : toPublicCost(d.cost);
+};
+
+/** aggregates.html: per-field counters, with the legacy cost filled in when aggs lacks it. */
+export const toPublicAggs = (d: {
+  cost?: { usd: number; runs: number } | undefined;
+  aggs?: AggCounters | undefined;
+}): PublicAggCounters => {
+  const out: PublicAggCounters = {};
+  if (d.cost && !d.aggs?.[COST_AGG_FIELD_ID])
+    out[COST_AGG_FIELD_ID] = { total: d.cost.usd, count: d.cost.runs };
+  for (const [k, v] of Object.entries(d.aggs ?? {})) out[k] = { total: v.total, count: v.count };
+  return out;
+};
+
+export const toPublicAggField = (f: AggFieldDef): PublicAggField => ({
+  id: f.id,
+  label: f.label,
+  unit: f.unit,
+  period: f.period,
+  show_on_card: !!f.showOnCard,
+  archived: !!f.archived,
+});
 
 /** Phase 17 (§Y1): a stored turn receipt → the snake_case wire shape (and back, see runIn). */
 export function toPublicRun(r: RunReceipt): PublicRunReceipt {
@@ -293,7 +333,8 @@ export function toPublicTicketWith(
       .map((l) => ({ type: l.type, key: lk.tickets.get(l.ticketId)!.key })),
     referenced_by: t.referencedBy.filter((id) => lk.tickets.has(id)).map((id) => keyOf(id)!),
     state: t.state,
-    cost: toPublicCost(t.cost),
+    cost: toPublicCostOf(t),
+    aggs: toPublicAggs(t),
     created_at: toIso(t.createdAt)!,
     updated_at: toIso(t.updatedAt)!,
   };
@@ -453,6 +494,9 @@ export function toPublicMessageWith(
     ),
     pinned: m.pinnedAt !== null,
     run: m.run ? toPublicRun(m.run) : null,
+    agg: m.agg
+      ? { entries: m.agg.entries.map((e) => ({ field_id: e.fieldId, value: e.value })) }
+      : null,
     created_at: toIso(m.createdAt)!,
     edited_at: toIso(m.editedAt),
     deleted: m.deletedAt !== null,
@@ -607,8 +651,16 @@ export function toPublicBoard(
     key: board.key,
     name: board.name,
     url: `${appUrl()}/b/${board.key}`,
-    description_md: board.description ? docToMarkdown(board.description.doc) : null,
-    stages: byPos(board.stages).map((s) => ({ id: s.id, name: s.name, category: s.category })),
+    // indicators.html: plain text now; an unmigrated board's rich text is flattened.
+    description_md: descriptionText(board.description),
+    indicator: indicatorOf(board, board.id),
+    stages: byPos(board.stages).map((s) => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      description: s.description ?? null,
+      indicator: indicatorOf(s, s.id),
+    })),
     priorities: byPos(board.priorities).map((p) => ({ id: p.id, name: p.name })),
     tags: byPos(board.tags).map((t) => ({ id: t.id, name: t.name })),
     fields: byPos(board.fields.filter((f) => !f.archived)).map((f) => ({
@@ -622,6 +674,8 @@ export function toPublicBoard(
       ? { members: list.filter((m) => board.access[m.uid]).map((m) => toPublicMember(m, board)) }
       : {}),
     archived: board.archivedAt !== null,
-    cost: toPublicCost(board.cost),
+    cost: toPublicCostOf(board),
+    agg_fields: boardAggFields(board).map(toPublicAggField),
+    aggs: toPublicAggs(board),
   };
 }

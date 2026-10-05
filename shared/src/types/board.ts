@@ -3,6 +3,7 @@
  * custom fields, filters, views, ticket state, attachments.
  */
 import { z } from 'zod';
+import { DescriptionSchema, IndicatorSchema } from './indicator.js';
 import {
   BoardIdSchema,
   ColorSchema,
@@ -34,7 +35,12 @@ export const StageSchema = z.object({
   /** 7-char base36, board-local. */
   id: LocalIdSchema,
   name: z.string().min(1).max(60),
+  /** LEGACY (indicators.html): read through indicatorOf(); new writes set `indicator`. */
   color: ColorSchema,
+  /** indicators.html: the stage's mark (column header, pickers, the card's stage chip). */
+  indicator: IndicatorSchema.optional(),
+  /** indicators.html: what this stage MEANS — agents read it to decide when to move a ticket here. */
+  description: DescriptionSchema.optional(),
   category: StageCategorySchema,
   position: z.number(),
   /** Kanban column warns above this. */

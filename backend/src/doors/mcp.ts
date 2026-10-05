@@ -93,6 +93,7 @@ import {
   eventsPage,
   messagesPage,
   postMessage,
+  aggregateBuckets,
   readFile,
   signedUrl,
   ticketDetail,
@@ -304,6 +305,10 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
 
   tool('get_board', async (a) => json(await boardView(ctx, await requestBoard(ctx, a.board))));
 
+  tool('get_aggregates', async (a) =>
+    json(await aggregateBuckets(ctx, await requestBoard(ctx, a.board), a)),
+  );
+
   // ─── reading tickets ───────────────────────────────────────────────────────
 
   tool('list_my_tickets', async (a) => {
@@ -454,6 +459,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
         memoryFiles: a.memory_files,
         replyTo: a.reply_to,
         run: a.run,
+        agg: a.agg,
       }),
     );
   });
@@ -583,6 +589,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
         name: a.name,
         ...(a.description !== undefined ? { description: a.description } : {}),
         ...(a.icon !== undefined ? { icon: a.icon } : {}),
+        ...(a.indicator !== undefined ? { indicator: a.indicator } : {}),
       },
       ctx,
     );

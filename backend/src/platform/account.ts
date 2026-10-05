@@ -70,6 +70,8 @@ export async function createBoard(
       ...(b.template ? { template: b.template } : {}),
       ...(b.color ? { color: b.color } : {}),
       ...(b.icon !== undefined ? { icon: b.icon } : {}),
+      ...(b.indicator ? { indicator: b.indicator } : {}),
+      ...(b.description != null ? { description: b.description } : {}),
     },
     ctx,
     key ?? null,

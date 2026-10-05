@@ -15,6 +15,7 @@ import {
   costDayOf,
   paths,
   SCOPE_PRESETS,
+  type AggStats,
   type Board,
   type BoardDayStats,
   type Scope,
@@ -98,8 +99,18 @@ describe('§Y — the turn receipt moves the ticket, the board and the day', () 
 
     const ticket = (await db().doc(paths.ticket(b.id, t.id)).get()).data() as Ticket;
     expect(ticket.cost).toEqual({ usd: 1.34, runs: 2 });
+    // aggregates.html: the receipts are entries on the Cost field; cost is its mirror.
+    expect(ticket.aggs).toEqual({ cost: { total: 1.34, count: 2 } });
     const board = (await db().doc(paths.board(b.id)).get()).data() as Board;
     expect(board.cost).toEqual({ usd: 1.34, runs: 2 });
+    expect(board.aggs).toEqual({ cost: { total: 1.34, count: 2 } });
+    const buckets = await db().collection(paths.aggStats(b.id)).get();
+    expect(buckets.docs.map((d) => d.id)).toEqual([`daily:${costDayOf(ticket.updatedAt)}`]);
+    expect((buckets.docs[0]!.data() as AggStats).fields.cost).toEqual({
+      total: 1.34,
+      count: 2,
+      tickets: { [t.key]: { total: 1.34, count: 2 } },
+    });
     const days = await db().collection(paths.stats(b.id)).get();
     expect(days.size).toBe(1);
     const day = days.docs[0]!.data() as BoardDayStats;
@@ -116,6 +127,7 @@ describe('§Y — the turn receipt moves the ticket, the board and the day', () 
     const stored = (await msgsOf(b.id, t.id)).filter((m) => m.kind === 'comment');
     expect(stored).toHaveLength(3);
     expect(stored[0]!.run).toMatchObject({ n: 1, costUsd: 1.24, usage: { cacheRead: 5000 } });
+    expect(stored[0]!.agg).toEqual({ entries: [{ fieldId: 'cost', value: 1.24 }] });
     expect(stored[2]!.run ?? null).toBe(null);
     const pub = (await rest(key, 'GET', `/v1/tickets/${t.key}?messages=10`)).body as {
       cost: { usd: number; runs: number };

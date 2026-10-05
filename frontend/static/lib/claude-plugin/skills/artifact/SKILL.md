@@ -5,7 +5,7 @@ description: How to build, run locally, publish and share a TaskManager artifact
 
 # TaskManager artifacts
 
-Version 1.5.0 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
+Version 1.6.0 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
 
 An **artifact** is a static website kept and served by TaskManager: you write the frontend, publish the
 folder, share it. It has its own people and its own data, and it is **not** on a board. People open it at

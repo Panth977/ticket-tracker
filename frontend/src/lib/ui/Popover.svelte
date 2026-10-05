@@ -34,6 +34,8 @@
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.stopPropagation();
+      // Inside a modal <dialog>, Escape would also close the dialog (its default action).
+      e.preventDefault();
       close();
       anchor?.focus();
     }

@@ -18,13 +18,16 @@
  * is the natural first call.
  */
 import { z } from 'zod';
+import { IndicatorSchema } from '../types/indicator.js';
 import type { Scope } from '../types/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
 import {
+  PublicAggInputSchema,
   PublicMemoryFileRefSchema,
   PublicQuestionFieldSchema,
   PublicRunReceiptSchema,
 } from './public.js';
+import { AGG_KEY_RE } from '../schema/aggregates.js';
 import { MAX_QUESTION_FIELDS, QUESTION_TITLE_MAX } from '../schema/question.js';
 import {
   MAX_TASKLIST_ITEMS,
@@ -169,8 +172,31 @@ export const McpToolShapes = {
       .optional()
       .describe(
         'Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, ' +
-          'session_usd, duration_ms, api_turns, model, usage }. Added to the ticket, board and day cost counters.',
+          "session_usd, duration_ms, api_turns, model, usage }. Its cost_usd lands on the board's Cost aggregate field.",
       ),
+    agg: PublicAggInputSchema.optional().describe(
+      "Entries for the board's aggregate fields (get_board → agg_fields): { entries: [{ field_id | field (label), value }] }. " +
+        'A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time").',
+    ),
+  },
+  get_aggregates: {
+    board: Board.optional(),
+    field: z
+      .string()
+      .min(1)
+      .max(40)
+      .optional()
+      .describe(
+        "Aggregate field id or label (get_board → agg_fields); default: the board's first active field",
+      ),
+    from: z
+      .string()
+      .regex(AGG_KEY_RE)
+      .optional()
+      .describe(
+        "First bucket key, inclusive: '2026-10-01' (daily), '2026-W38' (weekly), '2026-09' (monthly)",
+      ),
+    to: z.string().regex(AGG_KEY_RE).optional().describe('Last bucket key, inclusive'),
   },
   upload_file: {
     key: Key,
@@ -305,8 +331,15 @@ export const McpToolShapes = {
   artifact_get: { id: ArtifactRef },
   artifact_create: {
     name: z.string().min(1).max(ARTIFACT_NAME_MAX),
-    description: z.string().max(ARTIFACT_DESCRIPTION_MAX).optional(),
-    icon: z.string().max(16).optional().describe('One emoji'),
+    description: z
+      .string()
+      .max(ARTIFACT_DESCRIPTION_MAX)
+      .optional()
+      .describe('Plain text: what this artifact is for (agents read it)'),
+    icon: z.string().max(16).optional().describe('LEGACY: one emoji. Prefer indicator.'),
+    indicator: IndicatorSchema.optional().describe(
+      "Its mark: { kind: 'color', color: '#RRGGBB' } | { kind: 'icon', icon, color } | { kind: 'emoji', emoji }",
+    ),
   },
   artifact_publish: {
     id: ArtifactRef,
@@ -432,13 +465,15 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   list_boards: {
     description:
       'Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board ' +
-      'you are on right now, and their keys are what the `board` argument takes.',
+      'you are on right now, and their keys are what the `board` argument takes. Each board carries its description ' +
+      '(what it is for) and its stages with THEIR descriptions — what each stage means; read them to decide which ' +
+      'stage a ticket belongs in before moving it.',
     readOnly: true,
     scopes: ['board:read'],
   },
   get_board: {
     description:
-      'The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).',
+      'The board: its description, stages (with categories and descriptions — what each stage means, so you know where a ticket goes), priorities, tags, custom fields, and members (people and agents).',
     readOnly: true,
     scopes: ['board:read'],
   },
@@ -482,9 +517,15 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
     readOnly: false,
     scopes: ['comments:write'],
+  },
+  get_aggregates: {
+    description:
+      "One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.",
+    readOnly: true,
+    scopes: ['board:read'],
   },
   upload_file: {
     description:
@@ -649,9 +690,12 @@ const REFINES: Partial<Record<McpToolName, (v: Record<string, unknown>) => strin
           : null,
   post_message: (v) =>
     String(v.markdown ?? '').trim().length > 0 ||
-    ((v.attachments as unknown[] | undefined)?.length ?? 0) > 0
+    ((v.attachments as unknown[] | undefined)?.length ?? 0) > 0 ||
+    ((v.memory_files as unknown[] | undefined)?.length ?? 0) > 0 ||
+    // aggregates.html: an agg message may be entries only (the server writes the words).
+    ((v.agg as { entries?: unknown[] } | undefined)?.entries?.length ?? 0) > 0
       ? null
-      : 'A message needs markdown or attachments',
+      : 'A message needs markdown, attachments, memory_files or agg',
 };
 
 /** Full validators: z.object(shape).strict() plus the cross-field rules. */

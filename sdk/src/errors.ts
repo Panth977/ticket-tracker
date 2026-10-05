@@ -116,7 +116,15 @@ export class TmError extends Error {
   /** zod issues on a 400, `missing` on a 422, `current` on a stale 409 … */
   get details(): Record<string, unknown> {
     if (!this.problem) return {};
-    const { type: _t, title: _ti, status: _s, detail: _d, instance: _i, code: _c, ...rest } = this.problem;
+    const {
+      type: _t,
+      title: _ti,
+      status: _s,
+      detail: _d,
+      instance: _i,
+      code: _c,
+      ...rest
+    } = this.problem;
     return rest;
   }
 
@@ -128,7 +136,12 @@ export class TmError extends Error {
 
   /** Worth sending again as-is? (the client retries these automatically) */
   get retryable(): boolean {
-    return this.code === 'rate_limited' || this.code === 'network' || this.code === 'timeout' || this.status >= 500;
+    return (
+      this.code === 'rate_limited' ||
+      this.code === 'network' ||
+      this.code === 'timeout' ||
+      this.status >= 500
+    );
   }
 }
 
@@ -166,7 +179,8 @@ export function errorFromResponse(
     typeof body === 'object' && body !== null && typeof (body as Problem).code === 'string'
       ? (body as Problem)
       : undefined;
-  const code = problem && CODES.has(problem.code) ? (problem.code as TmErrorCode) : codeForStatus(status);
+  const code =
+    problem && CODES.has(problem.code) ? (problem.code as TmErrorCode) : codeForStatus(status);
   const message =
     problem?.detail ??
     problem?.title ??

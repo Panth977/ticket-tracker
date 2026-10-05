@@ -2,6 +2,14 @@
 import { cleanup, render, screen, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// indicators.html: the entity mark pulls in lucide icons this test does not stub.
+vi.mock('$lib/ui/indicatorIcons', () => ({
+  INDICATOR_ICON_COMPONENTS: {},
+  iconLabel: (s: string) => s,
+}));
+vi.mock('$lib/ui/Indicator.svelte', async () => ({
+  default: (await import('./IconStub.test.svelte')).default,
+}));
 vi.mock('lucide-svelte', async () => {
   const Stub = (await import('./IconStub.test.svelte')).default;
   return Object.fromEntries(['Check', 'Copy', 'TriangleAlert', 'X'].map((n) => [n, Stub]));

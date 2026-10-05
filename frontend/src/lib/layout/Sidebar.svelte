@@ -51,8 +51,9 @@
   import { routes } from './routes';
   import { agentRoutes } from '$lib/agents/routes';
   import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
-  import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
-  import { memoryGlyph } from '@tm/shared';
+  import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import Indicator from '$lib/ui/Indicator.svelte';
+  import { MEMORY_DEFAULT_INDICATOR } from '@tm/shared';
   import NewMemoryDialog from '$lib/memory/NewMemoryDialog.svelte';
   import { myMemories, splitMemories } from '$lib/memory/store';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
@@ -205,9 +206,7 @@
             ? 'bg-surface-3 font-medium text-text'
             : 'text-muted hover:bg-surface-2 hover:text-text'}"
         >
-          <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
-            >{artifactGlyph(a)}</span
-          >
+          <Indicator of={a} seed={a.id} size="sm" />
           <span class="flex-1 truncate">{a.name}</span>
         </a>
       {/each}
@@ -237,9 +236,7 @@
             ? 'bg-surface-3 font-medium text-text'
             : 'text-muted hover:bg-surface-2 hover:text-text'}"
         >
-          <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
-            >{memoryGlyph(m)}</span
-          >
+          <Indicator of={m} seed={m.id} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
           <span class="flex-1 truncate">{m.name}</span>
         </a>
       {/each}

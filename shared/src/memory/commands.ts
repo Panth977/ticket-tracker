@@ -26,6 +26,7 @@ import {
   MemoryFileSchema,
 } from './schema.js';
 import { BoardAttachMemorySchema } from './attach.js';
+import { IndicatorSchema } from '../types/indicator.js';
 
 const Name = z.string().trim().min(1).max(MEMORY_NAME_MAX);
 const Description = z.string().trim().max(MEMORY_DESCRIPTION_MAX);
@@ -63,7 +64,10 @@ export const MemoryOutSchema = z.object({
   id: MemoryIdSchema,
   name: z.string(),
   description: z.string().nullable(),
+  /** LEGACY: the typed emoji, if any. Read `indicator`. */
   icon: z.string().nullable(),
+  /** indicators.html: always present (read through indicatorOf for old memories). */
+  indicator: IndicatorSchema,
   reach: z.enum(['manage', 'write', 'read']),
   archived: z.boolean(),
   stats: z.object({ files: z.number(), folders: z.number(), bytes: z.number() }),
@@ -89,7 +93,10 @@ export const memoryCreate = defineCommand({
   req: req({
     name: Name,
     description: Description.nullable().optional(),
+    /** LEGACY (old clients): one emoji. Prefer `indicator`. */
     icon: Icon.nullable().optional(),
+    /** indicators.html: the memory's mark (colour, icon, emoji or uploaded image). */
+    indicator: IndicatorSchema.optional(),
   }),
   res: z.object({ memoryId: MemoryIdSchema }),
 });
@@ -104,7 +111,10 @@ export const memoryUpdate = defineCommand({
     memoryId: MemoryIdSchema,
     name: Name.optional(),
     description: Description.nullable().optional(),
+    /** LEGACY (old clients): one emoji. Prefer `indicator`. */
     icon: Icon.nullable().optional(),
+    /** indicators.html */
+    indicator: IndicatorSchema.optional(),
     /** Archive (read-only, hidden from the sidebar) or restore. */
     archived: z.boolean().optional(),
   }),
@@ -146,7 +156,7 @@ export const memoryGrantSet = defineCommand({
   source: 'app',
   scopes: ['memory:write'],
   permission:
-    "The memory's OWNER, who must also be an admin of the board (or the owner of the artifact). Exactly one of boardId / artifactId; access null removes the grant. Never an agent.",
+    "Granting: the memory's OWNER, who must also be an admin of the board (or the owner of the artifact). Removing (access null): the memory's owner, OR an admin of that board, OR the owner of that artifact — either side may end it. Exactly one of boardId / artifactId. Never an agent.",
   errors: ['not_found', 'forbidden', 'invalid', 'conflict'],
   req: req({
     memoryId: MemoryIdSchema,
@@ -291,7 +301,7 @@ export const boardAttachMemorySet = defineCommand({
   source: 'app',
   scopes: ['board:admin', 'boards:admin'],
   permission:
-    "can(admin) on the board. The memory must be granted `write` to the board (board settings › Memory). Never an agent.",
+    'can(admin) on the board. The memory must be granted `write` to the board (board settings › Memory). Never an agent.',
   errors: ['not_found', 'forbidden', 'invalid'],
   req: req({ boardId: BoardIdSchema, attachMemory: BoardAttachMemorySchema.nullable() }),
   res: OkResSchema,

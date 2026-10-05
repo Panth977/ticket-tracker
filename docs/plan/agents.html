@@ -795,6 +795,12 @@ Agents · Notifications · Tokens · Sign out</pre>
     said so. The orch already reads <code>total_cost_usd</code> off every <code>claude -p</code> result line and only writes it to a
     local log. Money spent on a ticket is a fact about the ticket, so it goes where the ticket's other facts go: the thread, the card,
     the board, and a chart.</p>
+    <p><b>Since 2026-10-05 cost is one aggregate field</b> (<a href="/plan/aggregates">aggregates.html</a>): a board defines any
+    number of fields (label, unit, daily / weekly / monthly) and adds to them with <code>agg</code> messages; a receipt's
+    <code>costUsd</code> is an entry on the field <code>cost</code>. The counters below became <code>ticket.aggs.cost</code>,
+    <code>board.aggs.cost</code> and <code>aggStats/daily:{day}</code>; <code>cost: { usd, runs }</code> and
+    <code>stats/{day}</code> are still written as legacy mirrors. Analytics draws any field. What follows is the history of how
+    cost came first.</p>
     <h3 id="y1">Y1 · A turn is a message with a receipt</h3>
     <ul>
       <li><b>One run of the agent is one turn.</b> The orch starts <code>claude -p</code> once per turn (fresh, rework, an answer, a
@@ -1014,12 +1020,15 @@ DELETE /v1/artifacts/{id}/data/files/{path}</pre>
     <ul>
       <li><b>The agent's page is where its access is read and set.</b> Two cards. <b>Token</b>: the one token (prefix, last used),
         <i>Generate</i> / <i>Regenerate</i> (shown once; the old one stops working), and, while converted tokens are still about,
-        "2 older tokens still work" with <i>Revoke older tokens</i>. <b>Access</b>: every board the agent is on with its role
-        (change, remove, add to another board you administer), and every artifact with <i>Build</i> and <i>Data: none / read /
-        write</i> (change, remove, add to one you own).</li>
+        "2 older tokens still work" with <i>Revoke older tokens</i>. <b>Subscriptions</b> (was Access): every board the agent is on
+        and every artifact, each with its permissions as chips; <i>Add</i> opens one dialog — pick the board or artifact, then tick
+        <i>View / Comment / Edit / Admin</i> (cumulative; the highest is the role; a commenter also gets its stage restriction) or
+        <i>Build / Read data / Write data</i>; <i>Edit</i> reopens the same checkboxes; <i>Remove</i>.</li>
       <li>The Tokens page no longer offers "acts as an agent" for a board token; it lists agent tokens read-only and points at the
         agent's page. Board tokens acting as <i>you</i> and account tokens are unchanged.</li>
-      <li>Board People: an agent's role select gains <i>Admin</i>. Artifact People: an agent's row has the two controls.</li>
+      <li>People pages list people only. A board's settings › <b>Subscribers</b> lists its agents (role and stage chips) and the
+        artifacts that use it, with <i>Remove</i> for a board admin; an artifact's settings › <b>Subscribers</b> lists its agents
+        (Build / data chips) with <i>Remove</i> for its owner. Agents are added from their own page's Subscriptions.</li>
     </ul>
     <h3 id="aa6">AA6 · Moving what exists</h3>
     <ul>

@@ -40,6 +40,7 @@
           <a href="/plan/agents">Agents</a>
           <a href="/plan/artifacts">Artifacts</a>
           <a href="/plan/memory" class="on">Memory</a>
+          <a href="/plan/indicators">Indicators</a>
           <a href="/plan/sdk">SDK</a>
           <a href="/plan/review">Review</a>
           <a href="/plan/reference">From TeamTrack</a>
@@ -165,10 +166,14 @@
         <p>
           A grant is stored on the memory: <code>memories/{m}.boards[boardId]</code> and
           <code>memories/{m}.artifacts[artifactId]</code>, each <code>'read' | 'write'</code>. It is
-          set with <code>memoryGrantSet</code> from <b>board settings › Memory</b> or
-          <b>artifact settings › Memory</b> (the memory's own settings list them too). Setting one
-          needs BOTH sides: the caller owns the memory, and is an admin of the board (or the owner
-          of the artifact). Like an artifact's board access (artifacts.html §K), a grant is a
+          set with <code>memoryGrantSet</code> from the board's or the artifact's settings ›
+          <b>Subscriptions</b> (Add → pick the memory → tick Read / Write → Add; Edit; Remove), and
+          the memory's settings › <b>Subscribers</b> list every board and artifact that uses it.
+          Setting one needs BOTH sides: the caller owns the memory, and is an admin of the board (or
+          the owner of the artifact). <b>Ending one is either side's call</b>
+          (<code>access: null</code>): the memory's owner, an admin of that board, or the owner of
+          that artifact — so a board admin can drop a memory they do not own from their board, and
+          the memory's owner can drop a board they are not on. Like an artifact's board access (artifacts.html §K), a grant is a
           <b>ceiling</b>; what a particular person or agent can then do is bounded by their own
           role.
         </p>

@@ -54,6 +54,8 @@ export const COLLECTIONS = {
   agentStatus: 'agentStatus',
   /** Phase 17 (§Y2): boards/{b}/stats/{yyyy-mm-dd} — the day's turn receipts, summed. */
   stats: 'stats',
+  /** aggregates.html: boards/{b}/aggStats/{period}:{key}. */
+  aggStats: 'aggStats',
   /** Artifacts (artifacts.html §G): artifacts/{id}, its builds, its viewers' kv. */
   artifacts: 'artifacts',
   builds: 'builds',
@@ -161,6 +163,8 @@ export const paths = {
   views: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.views}`,
   stats: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.stats}`,
   stat: (boardId: string, day: string) => `${C.boards}/${seg(boardId)}/${C.stats}/${seg(day)}`,
+  aggStats: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.aggStats}`,
+  aggStat: (boardId: string, id: string) => `${C.boards}/${seg(boardId)}/${C.aggStats}/${seg(id)}`,
   view: (boardId: string, viewId: string) =>
     `${C.boards}/${seg(boardId)}/${C.views}/${seg(viewId)}`,
   webhooks: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.webhooks}`,
@@ -294,6 +298,9 @@ export const storage = {
   avatarPrefix: (uid: string) => `users/${seg(uid)}/avatar/`,
   /** users/{uid}/avatar/{millis}.webp */
   avatar: (uid: string, millis: number) => `users/${seg(uid)}/avatar/${millis}.webp`,
+  /** indicators.html: indicators/{uid}/{fileId}/{name} — an uploaded indicator image (≤ 1 MB). */
+  indicator: (uid: string, fileId: string, name: string) =>
+    `indicators/${seg(uid)}/${seg(fileId)}/${seg(name)}`,
   /** users/{ownerUid}/agents/{agentId}/avatar/ — everything under one agent's picture. */
   agentAvatarPrefix: (ownerUid: string, agentId: string) =>
     `users/${seg(ownerUid)}/agents/${seg(agentId)}/avatar/`,

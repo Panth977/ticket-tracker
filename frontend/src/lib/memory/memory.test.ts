@@ -135,9 +135,13 @@ describe('store helpers', () => {
     expect(r.active.map((m) => m.name)).toEqual(['a', 'b']);
     expect(r.archived.map((m) => m.name)).toEqual(['z']);
   });
-  it('settings: the owner sees all, others only the access list', () => {
-    expect(memorySettingsFor('owner').map((s) => s.id)).toEqual(['general', 'people', 'access']);
-    expect(memorySettingsFor('viewer').map((s) => s.id)).toEqual(['access']);
+  it('settings: the owner sees all, others only Subscribers', () => {
+    expect(memorySettingsFor('owner').map((s) => s.id)).toEqual([
+      'general',
+      'people',
+      'subscribers',
+    ]);
+    expect(memorySettingsFor('viewer').map((s) => s.id)).toEqual(['subscribers']);
     expect(memorySettingsFor(null)).toEqual([]);
   });
 });

@@ -52,6 +52,7 @@ import {
 } from '../types/index.js';
 import { StoredTasklistSchema, tasklistProgress, type StoredTasklist } from './tasklist.js';
 import { questionIsOpen } from './question.js';
+import { AggCountersSchema } from './aggregates.js';
 import {
   CostCounterSchema,
   StoredActivitySchema,
@@ -257,6 +258,8 @@ export const TicketSchema = z.object({
    * the receipts in data pages are not in the document. Absent = nothing yet.
    */
   cost: CostCounterSchema.optional(),
+  /** aggregates.html: per aggregate field, this ticket's { total, count }. `cost` above is the legacy mirror of aggs.cost. */
+  aggs: AggCountersSchema.optional(),
   /** createdAt of the oldest INLINE message or activity row; null when none. */
   oldestInlineAt: MillisSchema.nullable().optional(),
   /**

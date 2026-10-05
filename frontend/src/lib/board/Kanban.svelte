@@ -22,6 +22,7 @@
   import type { ViewInput } from '@tm/shared';
   import type { ViewGroup } from '@tm/shared/logic/view';
   import PersonChip from '$lib/ui/PersonChip.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { toast } from '$lib/ui/toast.svelte';
   import { groupLabel, isPeopleGroup } from '$lib/views/format';
   import { dropPosition, mergePatches, movePatch } from '$lib/views/move';
@@ -189,9 +190,18 @@
       suffix={g.value === bs.me ? '(you)' : undefined}
     />
   {:else}
-    {#if g.color}<span class="size-2.5 shrink-0 rounded-full" style="background:{g.color}"
-      ></span>{/if}
-    <span class="truncate">{groupLabel(board, g)}</span>
+    {@const st = g.by === 'stage' && g.value != null ? bs.stage(g.key) : undefined}
+    {#if st}
+      <!-- indicators.html: the stage's mark; its description says what the column means. -->
+      <Indicator of={st} seed={st.id} size="sm" />
+      <span class="truncate" title={st.description || undefined} data-stage-heading={st.id}
+        >{groupLabel(board, g)}</span
+      >
+    {:else}
+      {#if g.color}<span class="size-2.5 shrink-0 rounded-full" style="background:{g.color}"
+        ></span>{/if}
+      <span class="truncate">{groupLabel(board, g)}</span>
+    {/if}
   {/if}
 {/snippet}
 

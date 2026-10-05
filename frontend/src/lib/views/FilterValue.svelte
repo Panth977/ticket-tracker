@@ -7,6 +7,7 @@
   import type { Cmp } from '@tm/shared';
   import ChoicePicker, { type ChoiceItem } from './pickers/ChoicePicker.svelte';
   import { STATE_OPTIONS, type FieldInfo } from './fields';
+  import { stageChoices } from '$lib/board/stageMark';
 
   interface Props {
     info: FieldInfo;
@@ -28,6 +29,8 @@
 
   const optionItems = $derived.by((): ChoiceItem[] => {
     if (info.kind === 'state') return STATE_OPTIONS.map((o) => ({ id: o.id, label: o.name }));
+    // indicators.html: a stage filter shows each stage's mark.
+    if (info.kind === 'stage') return stageChoices(info.options ?? []);
     return (info.options ?? []).map((o) => ({ id: o.id, label: o.name, color: o.color }));
   });
   const peopleItems = $derived<ChoiceItem[]>([

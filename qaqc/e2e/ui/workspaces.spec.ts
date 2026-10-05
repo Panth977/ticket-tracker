@@ -11,7 +11,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { call, eventually, newBoard, newPerson, read } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, subscribe } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const section = (page: Page, name: string) =>
@@ -35,9 +35,11 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
   await nav.getByRole('button', { name: 'New workspace' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'New workspace' });
   await dialog.getByLabel('Name').fill('Freelance');
-  await dialog.getByLabel(`${fl.key} · FreeLance`, { exact: true }).check();
-  await dialog.getByLabel(`${fr.key} · FreeLance Review`, { exact: true }).check();
-  await dialog.getByLabel(/FreeLance Dashboard/).check();
+  // Added through the same picker as every Subscriptions (no permission step).
+  await subscribe(page, 'workspace', `board:${fl.id}`);
+  await subscribe(page, 'workspace', `board:${fr.id}`);
+  await subscribe(page, 'workspace', `artifact:${artifactId}`);
+  await expect(dialog.locator('[data-subscription]')).toHaveCount(3);
   await dialog.getByRole('button', { name: 'Create' }).click();
   await page.waitForURL('**/w/**');
   const workspaceId = new URL(page.url()).pathname.split('/')[2]!;

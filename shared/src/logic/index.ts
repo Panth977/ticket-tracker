@@ -23,3 +23,4 @@ export * from './validators.js';
 export * from './files.js';
 export * from './question.js';
 export * from './stages.js';
+export * from './description.js';

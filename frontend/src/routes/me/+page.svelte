@@ -13,6 +13,7 @@
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { AlarmClock, CalendarCheck, CalendarDays, CircleAlert, SquareCheck } from 'lucide-svelte';
   import { paths, type Board, type Read } from '@tm/shared';
   import { can } from '@tm/shared/logic/can';
@@ -323,14 +324,15 @@
                   <a
                     href={routes.board(b.key)}
                     onclick={(e) => e.stopPropagation()}
-                    class="hover:underline">{b.name}</a
+                    class="inline-flex items-center gap-1.5 hover:underline"
+                    ><Indicator of={b} seed={b.id} size="xs" />{b.name}</a
                   >
                 {:else}—{/if}
               </td>
               <td class="px-3 py-2">
                 {#if st}
                   <span class="inline-flex items-center gap-1.5">
-                    <span class="size-2 shrink-0 rounded-full" style="background:{st.color}"></span>
+                    <Indicator of={st} seed={st.id} size="sm" />
                     <span class="truncate">{st.name}</span>
                   </span>
                 {:else}<span class="text-subtle">—</span>{/if}

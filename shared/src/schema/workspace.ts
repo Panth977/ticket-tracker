@@ -13,6 +13,7 @@
  * archived, and "All boards & archived" / "All artifacts" still list it.
  */
 import { z } from 'zod';
+import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import { BoardIdSchema, MillisSchema } from '../types/primitives.js';
 
 export const WORKSPACE_NAME_MAX = 60;
@@ -26,8 +27,12 @@ const ArtifactRefIdSchema = z.string().min(1).max(64);
 /** users/{uid}/workspaces/{workspaceId} */
 export const WorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(WORKSPACE_NAME_MAX),
-  /** '#RRGGBB' — the dot in the sidebar. */
+  /** LEGACY (indicators.html): '#RRGGBB' — the dot in the sidebar. Read through indicatorOf(). */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  /** indicators.html: what the sidebar and dropdowns draw. */
+  indicator: IndicatorSchema.optional(),
+  /** indicators.html: what this workspace is for (agents read it). */
+  description: DescriptionSchema.optional(),
   /** In the order the person put them. */
   boardIds: z.array(BoardIdSchema).max(WORKSPACE_ITEMS_MAX),
   artifactIds: z.array(ArtifactRefIdSchema).max(WORKSPACE_ITEMS_MAX),

@@ -51,7 +51,6 @@
   import {
     artifactBuild,
     artifactDoc,
-    artifactGlyph,
     firstSettingsSection,
     roleIn,
     shortBuild,
@@ -312,7 +311,7 @@
           kind="artifact"
           items={switchItems}
           name={art.name}
-          glyph={artifactGlyph(art)}
+          mark={{ of: art, seed: artifactId }}
         />
         {#if art.archivedAt != null}
           <span class="shrink-0 rounded bg-warning-soft px-1.5 py-0.5 text-xs text-warning"

@@ -11,6 +11,7 @@ import type { Artifact } from '@tm/shared';
 import { artifactRef, loadArtifact, syncArtifactMirror } from '../artifacts/shared.js';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
+import { markPatch } from './indicatorShared.js';
 
 export default defineCommand('artifactUpdate', async (ctx, input) => {
   const { artifactId } = input;
@@ -19,7 +20,7 @@ export default defineCommand('artifactUpdate', async (ctx, input) => {
     const patch: Partial<Artifact> = {};
     if (input.name !== undefined && input.name !== artifact.name) patch.name = input.name;
     if (input.description !== undefined) patch.description = input.description || null;
-    if (input.icon !== undefined) patch.icon = input.icon || null;
+    Object.assign(patch, markPatch(input));
     if (input.readOnly !== undefined && input.readOnly !== artifact.readOnly)
       patch.readOnly = input.readOnly;
     if (input.archived !== undefined && input.archived !== (artifact.archivedAt !== null))

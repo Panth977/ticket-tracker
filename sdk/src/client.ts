@@ -40,6 +40,7 @@ import {
 import { workLoop, type WorkHandler, type WorkOptions, type WorkSummary } from './work.js';
 import type {
   Agent,
+  Indicator,
   AgentState,
   AgentStatus,
   Artifact,
@@ -48,6 +49,7 @@ import type {
   ArtifactDetail,
   ArtifactShareResult,
   ArtifactSource,
+  AggBuckets,
   Board,
   BoardRole,
   EventPage,
@@ -166,6 +168,31 @@ export interface PostMessageInput {
   replyTo?: string;
   /** Orchestrators: the receipt of one finished run. The body should say the same in words. */
   run?: RunReceiptInput | null;
+  /**
+   * aggregates.html: add to the board's aggregate fields (`board().agg_fields`)
+   * — each entry names its field by `fieldId` or `field` (the label,
+   * case-insensitive); a negative value takes away. Without `run`, `markdown`
+   * may be empty (the server writes '+2.5 h Time').
+   */
+  agg?: { entries: AggEntryInput[] };
+}
+
+/** One aggregate entry: the field by id or by label, and the amount. */
+export interface AggEntryInput {
+  fieldId?: string;
+  field?: string;
+  value: number;
+}
+
+/** The SDK's agg entries → the wire's `{ entries: [{ field_id | field, value }] }`. */
+export function aggBody(agg: { entries: AggEntryInput[] }): Record<string, unknown> {
+  return {
+    entries: agg.entries.map((e) =>
+      e.fieldId !== undefined
+        ? { field_id: e.fieldId, value: e.value }
+        : { field: e.field, value: e.value },
+    ),
+  };
 }
 
 /** `agents.create()` — an agent profile (account tokens). */
@@ -189,8 +216,14 @@ export interface CreateBoardInput {
   key: string;
   /** 'kanban' has the To do / In progress / Review / Done stages an orchestrator expects. */
   template?: 'blank' | 'kanban' | 'bugs' | 'support' | 'sprint';
+  /** LEGACY: prefer `indicator`. */
   color?: string;
+  /** LEGACY: prefer `indicator`. */
   icon?: string;
+  /** The board's mark (default: a palette colour). */
+  indicator?: Indicator;
+  /** Plain text, ≤ 2000: what the board is for (agents read it). */
+  description?: string;
 }
 
 /** `boards.setAgent()` (account tokens): put an agent on a board, change its role, or remove it. */
@@ -329,17 +362,21 @@ export interface StreamOptions extends EventQuery {
 export interface CreateArtifactInput {
   /** ≤ 80 characters. */
   name: string;
-  /** ≤ 500 characters. */
+  /** ≤ 2000 characters: what it is for (agents read it). */
   description?: string | null;
-  /** One emoji. */
+  /** LEGACY: one emoji. Prefer `indicator`. */
   icon?: string | null;
+  /** The artifact's mark (default: a palette colour). */
+  indicator?: Indicator;
 }
 
 /** `artifacts.update()` — owner only. Send only what changes. */
 export interface UpdateArtifactInput {
   name?: string;
   description?: string | null;
+  /** LEGACY: one emoji. Prefer `indicator`. */
   icon?: string | null;
+  indicator?: Indicator;
   /** Viewers may read the artifact's data but not write it. */
   readOnly?: boolean;
   /** Archive (no data writes, off the sidebar) or restore. */
@@ -977,6 +1014,8 @@ function createClientBase(options: ClientOptions) {
           template: input.template,
           color: input.color,
           icon: input.icon,
+          indicator: input.indicator,
+          description: input.description,
         }),
         o,
       ),
@@ -1073,6 +1112,18 @@ function createClientBase(options: ClientOptions) {
     board: (o?: RequestOptions): Promise<Board> => get<Board>('/board', undefined, o),
 
     /**
+     * aggregates.html: one aggregate field's totals per period bucket (daily /
+     * weekly / monthly as the field says), oldest first. `field` is an id or a
+     * label (default: the board's first active field); `from` / `to` are
+     * bucket keys ('2026-10-01', '2026-W38', '2026-09'), inclusive.
+     */
+    aggregates: (
+      q: { field?: string; from?: string; to?: string } = {},
+      o?: RequestOptions,
+    ): Promise<AggBuckets> =>
+      get<AggBuckets>('/board/aggregates', { field: q.field, from: q.from, to: q.to }, o),
+
+    /**
      * Every board this credential may act on — exactly one for a board token,
      * and for an ACCOUNT token every board you are on RIGHT NOW (§R2), read
      * at this call rather than remembered.
@@ -1158,6 +1209,7 @@ function createClientBase(options: ClientOptions) {
             })),
             reply_to: input.replyTo,
             run: input.run ? runBody(input.run) : undefined,
+            agg: input.agg ? aggBody(input.agg) : undefined,
           }),
           o,
         ),
@@ -1434,7 +1486,12 @@ function createClientBase(options: ClientOptions) {
         write<Artifact>(
           'POST',
           '/artifacts',
-          defined({ name: input.name, description: input.description, icon: input.icon }),
+          defined({
+            name: input.name,
+            description: input.description,
+            icon: input.icon,
+            indicator: input.indicator,
+          }),
           o,
         ),
       /** Rename, describe, set read-only for viewers, archive or restore (owner). */
@@ -1446,6 +1503,7 @@ function createClientBase(options: ClientOptions) {
             name: patch.name,
             description: patch.description,
             icon: patch.icon,
+            indicator: patch.indicator,
             read_only: patch.readOnly,
             archived: patch.archived,
           }),

@@ -41,6 +41,7 @@ import {
   type PublicArtifactDetail,
   type PublicArtifactMember,
 } from '@tm/shared';
+import { indicatorOf } from '@tm/shared';
 import { agentRef } from '../agents/shared.js';
 import {
   agentAccessFor,
@@ -71,6 +72,7 @@ export function toPublicArtifact(
     name: a.name,
     description: a.description,
     icon: a.icon,
+    indicator: indicatorOf(a, id),
     url: `${appUrl()}${artifactAppPath(id)}`,
     role,
     ...(agentAccess ? { agent_access: agentAccess } : {}),
@@ -155,7 +157,12 @@ export async function listArtifacts(ctx: ServerCtx): Promise<PublicArtifact[]> {
     .flatMap((d) => {
       const role = roleFor(ctx, d.data());
       return role
-        ? [{ a: d.data(), pub: toPublicArtifact(d.id, d.data(), role, agentAccessFor(ctx, d.data())) }]
+        ? [
+            {
+              a: d.data(),
+              pub: toPublicArtifact(d.id, d.data(), role, agentAccessFor(ctx, d.data())),
+            },
+          ]
         : [];
     })
     .sort((x, y) => y.a.updatedAt - x.a.updatedAt)

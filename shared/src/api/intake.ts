@@ -3,7 +3,7 @@
  * authorised by a board's slug + secret headers instead of a session.
  */
 import { z } from 'zod';
-import { PublicFieldSchema, PublicOptionSchema, PublicStageSchema } from './public.js';
+import { PublicFieldSchema, PublicOptionSchema, PublicStageRefSchema } from './public.js';
 
 export const INTAKE_HEADERS = { slug: 'x-tm-intake', secret: 'x-tm-secret' } as const;
 /** ≤ 5 MB of attachments in total, measured on the decoded bytes. */
@@ -33,7 +33,7 @@ export type IntakeSubmitRes = z.infer<typeof IntakeSubmitResSchema>;
 /** GET /v1/intake/schema → the board's public options for the widget's selects. */
 export const IntakeSchemaResSchema = z.object({
   board: z.object({ key: z.string(), name: z.string() }),
-  stages: z.array(PublicStageSchema),
+  stages: z.array(PublicStageRefSchema),
   priorities: z.array(PublicOptionSchema),
   tags: z.array(PublicOptionSchema),
   fields: z.array(PublicFieldSchema),

@@ -8,10 +8,11 @@
   // hrefs are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { Archive, Brain, Plus } from 'lucide-svelte';
-  import { formatBytes, memoryGlyph, type MemoryRole } from '@tm/shared';
+  import { MEMORY_DEFAULT_INDICATOR, formatBytes, type MemoryRole } from '@tm/shared';
   import { relativeTime } from '$lib/account/format';
   import { auth } from '$lib/firebase/auth.svelte';
   import ItemTile from '$lib/layout/ItemTile.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { routes } from '$lib/layout/routes';
   import NewMemoryDialog from '$lib/memory/NewMemoryDialog.svelte';
   import { memoryRoleIn, myMemories, splitMemories } from '$lib/memory/store';
@@ -74,7 +75,8 @@
             id={m.id}
             href={routes.memory(m.id)}
             name={m.name}
-            glyph={memoryGlyph(m)}
+            of={m}
+            fallback={MEMORY_DEFAULT_INDICATOR}
             description={m.description}
             badge={role ? ROLE_LABEL[role] : null}
             hidden={$hiddenQ.memories.has(m.id)}
@@ -113,7 +115,7 @@
       <ul class="divide-y divide-line border-t border-line">
         {#each groups.archived as m (m.id)}
           <li class="flex flex-wrap items-center gap-3 px-4 py-2.5">
-            <span aria-hidden="true">{memoryGlyph(m)}</span>
+            <Indicator of={m} seed={m.id} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
             <a
               class="flex-1 truncate text-sm hover:underline"
               href={routes.memory(m.id)}

@@ -29,7 +29,9 @@ for await (const t of tm.tickets.iterate({ stage: inbox.id, state: 'active' })) 
 ```
 
 Stages, priorities, tags and custom fields can all be named rather than referenced by id. Read the
-board once at startup; it changes rarely.
+board once at startup; it changes rarely. When the categories are not enough to choose a stage, read
+`board.stages[i].description` — the board admin's own words for what being in that stage means —
+and `board.description_md` for what the board is for.
 
 ### 7.2 Answer-driven work
 

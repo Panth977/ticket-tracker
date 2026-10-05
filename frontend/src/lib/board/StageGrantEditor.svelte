@@ -6,6 +6,7 @@
 <script lang="ts">
   import type { Stage, StageGrant } from '@tm/shared';
   import ChoicePicker from '$lib/views/pickers/ChoicePicker.svelte';
+  import { stageChoices } from './stageMark';
 
   interface Props {
     stages: Stage[];
@@ -23,11 +24,7 @@
     label = 'Stages they may move tickets between',
   }: Props = $props();
 
-  const items = $derived(
-    [...stages]
-      .sort((a, b) => a.position - b.position)
-      .map((s) => ({ id: s.id, label: s.name, color: s.color })),
-  );
+  const items = $derived(stageChoices(stages));
   const selected = $derived(grant?.stages ?? []);
 
   function set(ids: string[], assignedOnly = grant?.assignedOnly ?? false) {

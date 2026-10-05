@@ -1,6 +1,8 @@
 <!--
-  New workspace / Edit workspace (agents.html §AB): a name, a colour, and
-  which of my boards, artifacts and memories (memory.html §F) are in it. Boards and artifacts are still
+  New workspace / Edit workspace (agents.html §AB): a name, a description, an
+  indicator (indicators.html), and
+  which of my boards, artifacts and memories (memory.html §F) are in it —
+  picked with the same list and Add dialog as every Subscriptions (lib/access). Boards and artifacts are still
   created where they always were; this only gathers them. Archived ones are
   not offered (they live on the All pages).
 -->
@@ -8,17 +10,37 @@
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
-  import { WORKSPACE_COLORS, WORKSPACE_NAME_MAX, memoryGlyph, type Workspace } from '@tm/shared';
+  import {
+    DESCRIPTION_MAX,
+    WORKSPACE_COLORS,
+    WORKSPACE_NAME_MAX,
+    indicatorColor,
+    indicatorOf,
+    type Indicator as IndicatorT,
+    type Workspace,
+  } from '@tm/shared';
   import { command } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
-  import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
-  import { myMemories, splitMemories } from '$lib/memory/store';
+  import { myArtifacts } from '$lib/artifacts/store';
+  import { myMemories } from '$lib/memory/store';
   import { myBoards, type WithId } from '$lib/stores';
+  import {
+    artifactView,
+    boardView,
+    hiddenView,
+    memoryView,
+    type Candidate,
+    type EntityView,
+    type SubscriptionRow,
+  } from '$lib/access/entities';
+  import { WORKSPACE } from '$lib/access/relations';
+  import SubscriptionList from '$lib/access/SubscriptionList.svelte';
   import Button from '$lib/ui/Button.svelte';
-  import Checkbox from '$lib/ui/Checkbox.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import Input from '$lib/ui/Input.svelte';
+  import Textarea from '$lib/ui/Textarea.svelte';
 
   let {
     open = $bindable(false),
@@ -26,16 +48,12 @@
   }: { open: boolean; workspace?: WithId<Workspace> | null } = $props();
 
   const boardsQ = $derived(myBoards(auth.uid));
-  const boards = $derived(
-    $boardsQ.data.filter((b) => b.archivedAt == null).sort((a, b) => a.name.localeCompare(b.name)),
-  );
   const artifactsQ = $derived(myArtifacts(auth.uid));
-  const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
   const memoriesQ = $derived(myMemories(auth.uid));
-  const memories = $derived(splitMemories($memoriesQ.data).active);
 
   let name = $state('');
-  let color = $state<string>(WORKSPACE_COLORS[0]);
+  let description = $state('');
+  let indicator = $state<IndicatorT>({ kind: 'color', color: WORKSPACE_COLORS[0] });
   let boardIds = $state<string[]>([]);
   let artifactIds = $state<string[]>([]);
   let memoryIds = $state<string[]>([]);
@@ -45,31 +63,84 @@
   $effect(() => {
     if (!open) return;
     name = workspace?.name ?? '';
-    color = workspace?.color ?? WORKSPACE_COLORS[0];
+    description = workspace?.description ?? '';
+    indicator = workspace
+      ? indicatorOf(workspace, workspace.id)
+      : { kind: 'color', color: WORKSPACE_COLORS[0] };
     boardIds = [...(workspace?.boardIds ?? [])];
     artifactIds = [...(workspace?.artifactIds ?? [])];
     memoryIds = [...(workspace?.memoryIds ?? [])];
   });
 
-  const toggle = (list: string[], id: string, on: boolean) =>
-    on ? [...new Set([...list, id])] : list.filter((x) => x !== id);
+  // ── what it includes: the same list + Add dialog as every Subscriptions (lib/access) ──
+  type Kind = 'board' | 'artifact' | 'memory';
+  const views = $derived({
+    board: new Map($boardsQ.data.map((b) => [b.id, boardView(b)])),
+    artifact: new Map($artifactsQ.data.map((a) => [a.id, artifactView(a)])),
+    memory: new Map($memoriesQ.data.map((m) => [m.id, memoryView(m)])),
+  });
+  const ids = (k: Kind) => (k === 'board' ? boardIds : k === 'artifact' ? artifactIds : memoryIds);
+  function add(kind: string, id: string) {
+    if (kind === 'board') boardIds = [...new Set([...boardIds, id])];
+    else if (kind === 'artifact') artifactIds = [...new Set([...artifactIds, id])];
+    else if (kind === 'memory') memoryIds = [...new Set([...memoryIds, id])];
+  }
+  function drop(kind: string, id: string) {
+    if (kind === 'board') boardIds = boardIds.filter((x) => x !== id);
+    else if (kind === 'artifact') artifactIds = artifactIds.filter((x) => x !== id);
+    else if (kind === 'memory') memoryIds = memoryIds.filter((x) => x !== id);
+  }
+  const KINDS: Kind[] = ['board', 'artifact', 'memory'];
+  const rows = $derived(
+    KINDS.flatMap((k) =>
+      ids(k).map((id): SubscriptionRow => ({
+        // One archived or no longer shared stays listed (by its kind) until removed.
+        entity: views[k].get(id) ?? hiddenView(k, id),
+        relation: WORKSPACE,
+        perms: { checks: [] },
+        edit: true,
+        remove: true,
+      })),
+    ),
+  );
+  const candidates = $derived<Candidate[]>(
+    KINDS.flatMap((k) =>
+      [...views[k].values()]
+        // Archived ones are not offered (they live on the All pages).
+        .filter((e: EntityView) => e.note !== 'archived' && !ids(k).includes(e.id))
+        .sort((x, y) => (x.name ?? '').localeCompare(y.name ?? ''))
+        .map((e) => ({ entity: e, relation: WORKSPACE })),
+    ),
+  );
 
   async function save() {
     const n = name.trim();
     if (!n || busy) return;
     busy = true;
+    // The legacy `color` stays coherent: older readers draw the dot from it.
+    const color = indicatorColor(indicator);
+    const desc = description.trim() || null;
     try {
       if (workspace) {
         await command(
           'workspaceUpdate',
-          { workspaceId: workspace.id, name: n, color, boardIds, artifactIds, memoryIds },
+          {
+            workspaceId: workspace.id,
+            name: n,
+            description: desc,
+            color,
+            indicator,
+            boardIds,
+            artifactIds,
+            memoryIds,
+          },
           { toast: 'Could not save the workspace' },
         );
         open = false;
       } else {
         const { workspaceId } = await command(
           'workspaceCreate',
-          { name: n, color, boardIds, artifactIds, memoryIds },
+          { name: n, description: desc, color, indicator, boardIds, artifactIds, memoryIds },
           { toast: 'Could not create the workspace' },
         );
         open = false;
@@ -102,79 +173,40 @@
       placeholder="Freelance"
       autocomplete="off"
     />
-    <fieldset class="flex flex-col gap-1.5">
-      <legend class="mb-1 text-sm font-medium">Colour</legend>
-      <div class="flex flex-wrap gap-2">
-        {#each WORKSPACE_COLORS as c (c)}
-          <button
-            type="button"
-            class="size-7 rounded-full border-2 {color === c
-              ? 'border-text'
-              : 'border-transparent'}"
-            style="background: {c}"
-            aria-label={c}
-            aria-pressed={color === c}
-            onclick={() => (color = c)}
-          ></button>
-        {/each}
-      </div>
-    </fieldset>
-    <div class="grid gap-4 sm:grid-cols-3">
-      <fieldset class="flex min-w-0 flex-col gap-1">
-        <legend class="mb-1 text-sm font-medium">Boards</legend>
-        <div class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
-          {#each boards as b (b.id)}
-            <Checkbox
-              checked={boardIds.includes(b.id)}
-              label="{b.key} · {b.name}"
-              onchange={(e) =>
-                (boardIds = toggle(boardIds, b.id, (e.currentTarget as HTMLInputElement).checked))}
-            />
-          {:else}
-            <p class="text-xs text-muted">No boards yet.</p>
-          {/each}
-        </div>
-      </fieldset>
-      <fieldset class="flex min-w-0 flex-col gap-1">
-        <legend class="mb-1 text-sm font-medium">Artifacts</legend>
-        <div class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
-          {#each artifacts as a (a.id)}
-            <Checkbox
-              checked={artifactIds.includes(a.id)}
-              label="{artifactGlyph(a)} {a.name}"
-              onchange={(e) =>
-                (artifactIds = toggle(
-                  artifactIds,
-                  a.id,
-                  (e.currentTarget as HTMLInputElement).checked,
-                ))}
-            />
-          {:else}
-            <p class="text-xs text-muted">No artifacts yet.</p>
-          {/each}
-        </div>
-      </fieldset>
-      <fieldset class="flex min-w-0 flex-col gap-1">
-        <legend class="mb-1 text-sm font-medium">Memory</legend>
-        <div class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
-          {#each memories as m (m.id)}
-            <Checkbox
-              checked={memoryIds.includes(m.id)}
-              label="{memoryGlyph(m)} {m.name}"
-              onchange={(e) =>
-                (memoryIds = toggle(
-                  memoryIds,
-                  m.id,
-                  (e.currentTarget as HTMLInputElement).checked,
-                ))}
-            />
-          {:else}
-            <p class="text-xs text-muted">No memories yet.</p>
-          {/each}
-        </div>
-      </fieldset>
+    <Textarea
+      label="Description"
+      bind:value={description}
+      maxlength={DESCRIPTION_MAX}
+      rows={2}
+      placeholder="What this workspace is for (optional)"
+    />
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm font-medium">Indicator</span>
+      <IndicatorField
+        value={indicator}
+        seed={workspace?.id ?? name}
+        label="Workspace indicator"
+        onchange={(i) => (indicator = i)}
+      />
     </div>
   </form>
+  <!-- Outside the form: the Add dialog is a dialog of its own. -->
+  <section class="mt-4 flex flex-col gap-2" aria-label="Includes">
+    <h3 class="text-sm font-medium">Includes</h3>
+    <SubscriptionList
+      name="workspace"
+      {rows}
+      {candidates}
+      canAdd={true}
+      showKind
+      addTitle="Add to the workspace"
+      empty="Nothing yet: add boards, artifacts and memories you already have."
+      nothingToAdd="Everything you have is already in it."
+      removeMessage={null}
+      onsave={async (c) => (add(c.entity.kind, c.entity.id), true)}
+      onremove={async (r) => (drop(r.entity.kind, r.entity.id), true)}
+    />
+  </section>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
     <Button

@@ -1,5 +1,5 @@
 <!--
-  One board in the sidebar (agents.html §Q1): a single row — colour dot, key,
+  One board in the sidebar (agents.html §Q1): a single row — its indicator, key,
   name, unread count. No accordion: clicking it opens the view I was last on
   (prefs.lastViewId), falling back to the board's default view. Views, People
   and Settings live on the board page now.
@@ -10,7 +10,7 @@
   import { Star } from 'lucide-svelte';
   import type { Board } from '@tm/shared';
   import type { WithId } from '$lib/stores';
-  import ColorSwatch from '$lib/ui/ColorSwatch.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { routes } from './routes';
 
   interface Props {
@@ -52,7 +52,7 @@
     ? 'bg-surface-3 font-medium text-text'
     : 'text-muted hover:bg-surface-2 hover:text-text'}"
 >
-  <ColorSwatch color={board.color} size={8} />
+  <Indicator of={board} seed={board.id} size="sm" />
   <span class="text-[11px] font-semibold tracking-wide text-subtle">{board.key}</span>
   <span class="flex-1 truncate">{board.name}</span>
   {#if starred}<Star

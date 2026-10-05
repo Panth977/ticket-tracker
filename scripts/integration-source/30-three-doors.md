@@ -96,7 +96,8 @@ refused if called anyway, so a model's tool list is always exactly what it may d
 Every tool that works on a board takes an optional **`board`** argument (a key, `'ENG'`). It is required
 only when the credential spans several boards — an agent on several, an account token or an OAuth grant
 — *and* the call does not name a ticket key. `list_boards` is then the natural first call: it returns the
-keys the credential reaches right now. On exactly one board the argument may be left out.
+keys the credential reaches right now, with each board's description and its stages' descriptions —
+what each board is for and what each stage means. On exactly one board the argument may be left out.
 
 An MCP client that a person drives — Claude Desktop, Claude Code — is set up on its own page:
 {{url:claudeUrl}} (a custom connector over OAuth, one `claude mcp add` command, or the plugin at

@@ -10,6 +10,7 @@
   import ChoicePicker, { type ChoiceItem } from '$lib/views/pickers/ChoicePicker.svelte';
   import { useBoard, type BoardDoc } from './context.svelte';
   import { bulk } from './ops';
+  import { stageChoices } from './stageMark';
 
   interface Props {
     /** The loaded board (§Q4) — never null. */
@@ -36,7 +37,7 @@
   <span class="font-medium">{ids.length} selected</span>
   <span class="h-4 w-px bg-line"></span>
   <ChoicePicker
-    items={opts(board.stages)}
+    items={stageChoices(board.stages)}
     selected={[]}
     placeholder="Stage"
     label="Move to stage"

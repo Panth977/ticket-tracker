@@ -15,7 +15,7 @@
   import { ArrowLeft } from 'lucide-svelte';
   import { artifactCan } from '@tm/shared';
   import { provideArtifactSettings } from '$lib/artifacts/settings/context.svelte';
-  import { artifactDoc, artifactGlyph, roleIn, settingsSectionsFor } from '$lib/artifacts/store';
+  import { artifactDoc, roleIn, settingsSectionsFor } from '$lib/artifacts/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -24,6 +24,7 @@
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import { switcherFor } from '$lib/workspaces/switcherStore';
   import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -85,7 +86,7 @@
       kind="artifact"
       items={$switchQ.items}
       name={art.name}
-      glyph={artifactGlyph(art)}
+      mark={{ of: art, seed: artifactId }}
     />
     <span class="shrink-0 text-sm text-subtle">› Settings</span>
   </header>
@@ -96,7 +97,8 @@
         class="mb-2 flex min-w-0 items-center gap-1.5 text-sm text-muted hover:text-text"
       >
         <ArrowLeft size={14} class="shrink-0" />
-        <span class="truncate">{artifactGlyph(art)} {art.name}</span>
+        <Indicator of={art} seed={artifactId} size="sm" />
+        <span class="truncate">{art.name}</span>
       </a>
       <h1 class="mb-1 px-2 text-xs font-semibold tracking-wide text-subtle uppercase">Settings</h1>
       <ul class="flex gap-1 overflow-x-auto md:flex-col">

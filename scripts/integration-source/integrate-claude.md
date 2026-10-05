@@ -259,7 +259,9 @@ You have access to TaskManager, my ticket tracker, over MCP (tools prefixed `tas
 Treat it as my long-term memory, not as a scratchpad.
 
 Boards are areas of my life; each has a key. Call list_boards first and use the key as the
-`board` argument. A ticket key like ENG-42 already names its board.
+`board` argument. A ticket key like ENG-42 already names its board. Read each board's and each
+stage's description: they say what the board is for and what a stage means — that is how you
+pick where a ticket goes and when to move it.
 
 How I want you to use it:
 - Before answering anything that has a history, search TaskManager for it.

@@ -4,3 +4,4 @@ export * from './board.js';
 export * from './notify.js';
 export * from './platform.js';
 export * from './agentIcons.js';
+export * from './indicator.js';

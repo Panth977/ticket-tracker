@@ -10,8 +10,9 @@
   // hrefs are built by lib/layout/routes; the SPA has no base path, so resolve() would be the identity.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { ChevronRight, Plus } from 'lucide-svelte';
-  import { memoryGlyph, type Artifact, type Board, type BoardPref, type Memory } from '@tm/shared';
-  import { artifactGlyph } from '$lib/artifacts/store';
+  import type { Artifact, Board, BoardPref, Memory } from '@tm/shared';
+  import Indicator from '$lib/ui/Indicator.svelte';
+  import { MEMORY_DEFAULT_INDICATOR } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import type { WithId } from '$lib/stores';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
@@ -109,7 +110,7 @@
         class="flex h-7 min-w-0 flex-1 items-center gap-2 pr-2 text-sm
           {here ? 'font-medium text-text' : 'text-muted hover:text-text'}"
       >
-        <span class="size-2 shrink-0 rounded-full" style="background: {w.color}"></span>
+        <Indicator of={w} seed={w.id} size="sm" />
         <span class="flex-1 truncate">{w.name}</span>
       </a>
     </div>
@@ -141,9 +142,7 @@
               ? 'bg-surface-3 font-medium text-text'
               : 'text-muted hover:bg-surface-2 hover:text-text'}"
           >
-            <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
-              >{artifactGlyph(a)}</span
-            >
+            <Indicator of={a} seed={a.id} size="sm" />
             <span class="flex-1 truncate">{a.name}</span>
           </a>
         {/if}
@@ -162,9 +161,7 @@
               ? 'bg-surface-3 font-medium text-text'
               : 'text-muted hover:bg-surface-2 hover:text-text'}"
           >
-            <span class="w-4 shrink-0 text-center text-xs leading-none" aria-hidden="true"
-              >{memoryGlyph(m)}</span
-            >
+            <Indicator of={m} seed={m.id} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
             <span class="flex-1 truncate">{m.name}</span>
           </a>
         {/if}

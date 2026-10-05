@@ -406,11 +406,7 @@ export function createWatcher(deps: WatchDeps, opts: WatchOptions = {}): Watcher
   };
 
   const interval = (): number =>
-    state.source === 'stream'
-      ? backstop > 0
-        ? backstop
-        : Number.POSITIVE_INFINITY
-      : state.wait;
+    state.source === 'stream' ? (backstop > 0 ? backstop : Number.POSITIVE_INFINITY) : state.wait;
 
   async function ticker(): Promise<void> {
     while (!stopper.signal.aborted) {

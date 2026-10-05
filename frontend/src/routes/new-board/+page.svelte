@@ -1,6 +1,7 @@
 <!--
   Create board (app.json › Create board). Template chips, a name, a key
-  (suggested from the name, checked live against boardKeys/{key}), a colour,
+  (suggested from the name, checked live against boardKeys/{key}), a
+  description and an indicator (indicators.html),
   and people to invite inline. boardCreate makes you its admin; the invites
   go out right after (inviteCreate) — a failed invite never loses the board.
 -->
@@ -10,7 +11,13 @@
   import { goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
   import { ArrowLeft, Check, CircleAlert, LoaderCircle, Plus, X } from 'lucide-svelte';
-  import type { BoardRole, BoardTemplate } from '@tm/shared';
+  import {
+    DESCRIPTION_MAX,
+    defaultIndicator,
+    type BoardRole,
+    type BoardTemplate,
+    type Indicator,
+  } from '@tm/shared';
   import { command, isAppError } from '$lib/api';
   import {
     createKeyChecker,
@@ -23,7 +30,8 @@
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { myBoards } from '$lib/stores';
-  import { Button, ColorSwatch, Input, PALETTE, Select, toast } from '$lib/ui';
+  import { Button, Input, Select, Textarea, toast } from '$lib/ui';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
 
   type Chip = 'blank' | 'kanban' | 'bugs' | 'support' | 'sprint' | 'copy';
   const CHIPS: { id: Chip; label: string; hint: string }[] = [
@@ -42,7 +50,10 @@
   /** Once the key is typed by hand, the name stops rewriting it. */
   let keyTouched = $state(false);
   let keyStatus = $state<KeyStatus>('idle');
-  let color = $state<string | null>(PALETTE[6] ?? '#3b82f6');
+  let description = $state('');
+  /** null = not picked yet: a palette colour that follows the name. */
+  let picked = $state<Indicator | null>(null);
+  const indicator = $derived(picked ?? defaultIndicator(name.trim() || 'board'));
   let nameError = $state<string | null>(null);
 
   let inviteText = $state('');
@@ -112,7 +123,13 @@
     try {
       const { boardId } = await command(
         'boardCreate',
-        { name: name.trim(), key, template, ...(color ? { color } : {}) },
+        {
+          name: name.trim(),
+          key,
+          template,
+          indicator,
+          ...(description.trim() ? { description: description.trim() } : {}),
+        },
         { toast: false },
       );
       if (invites.length) {
@@ -190,6 +207,14 @@
           oninput={(e) => onName((e.currentTarget as HTMLInputElement).value)}
           error={nameError}
         />
+        <Textarea
+          label="Description"
+          placeholder="What this board is for (optional) — agents read it"
+          maxlength={DESCRIPTION_MAX}
+          rows={2}
+          bind:value={description}
+          data-testid="new-board-description"
+        />
         <div class="flex flex-col gap-1">
           <div class="flex items-end gap-3">
             <Input
@@ -231,8 +256,13 @@
           </p>
         </div>
         <div class="flex flex-col gap-1.5">
-          <span class="text-sm font-medium">Colour</span>
-          <ColorSwatch options={PALETTE} bind:value={color} label="Board colour" size={20} />
+          <span class="text-sm font-medium">Indicator</span>
+          <IndicatorField
+            value={indicator}
+            seed={name}
+            label="Board indicator"
+            onchange={(i) => (picked = i)}
+          />
         </div>
       </div>
 

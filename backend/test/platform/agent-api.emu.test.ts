@@ -679,6 +679,7 @@ describe('MCP with an agent token', () => {
         'whoami',
         'list_boards',
         'get_board',
+        'get_aggregates',
         'list_my_tickets',
         'search_tickets',
         'get_ticket',

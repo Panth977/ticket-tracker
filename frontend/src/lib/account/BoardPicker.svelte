@@ -7,6 +7,7 @@
   import { myBoards } from '$lib/stores';
   import { Checkbox, Skeleton } from '$lib/ui';
   import { uid } from '$lib/ui';
+  import Indicator from '$lib/ui/Indicator.svelte';
 
   interface Props {
     value?: string[] | null;
@@ -62,8 +63,12 @@
             checked={value.includes(b.id)}
             onchange={(e) => toggle(b.id, (e.currentTarget as HTMLInputElement).checked)}
           >
-            <span class="font-mono text-xs text-muted">{b.key}</span>
-            {b.name}
+            <span class="inline-flex items-center gap-1.5"
+              ><Indicator of={b} seed={b.id} size="sm" /><span class="font-mono text-xs text-muted"
+                >{b.key}</span
+              >
+              {b.name}</span
+            >
           </Checkbox>
         {/each}
       {/if}

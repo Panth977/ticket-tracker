@@ -4,8 +4,8 @@
   two cards where its access is read and set:
     TOKEN   the agent's ONE token (generate / regenerate, shown once; older
             converted tokens listed until they are revoked)
-    ACCESS  every board it is on with its role, every artifact with Build and
-            Data — "what may this agent do?" has one answer, and it is here
+    SUBSCRIPTIONS  every board it is on with its role, every artifact with
+            Build and data (lib/access) — "what may this agent do?" has one answer, and it is here
   then archive / restore. Owner only: anyone else gets "not found" (agents are
   private).
 -->
@@ -13,23 +13,13 @@
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { page } from '$app/state';
   import { beforeNavigate } from '$app/navigation';
-  import {
-    AppWindow,
-    Archive,
-    ArchiveRestore,
-    ArrowLeft,
-    Bot,
-    Copy,
-    LayoutGrid,
-    Save,
-  } from 'lucide-svelte';
+  import { Archive, ArchiveRestore, ArrowLeft, Bot, Copy, Save } from 'lucide-svelte';
   import { paths, type Agent } from '@tm/shared';
   import { command } from '$lib/api';
   import Panel from '$lib/account/Panel.svelte';
   import AgentAvatarEditor from '$lib/agents/AgentAvatarEditor.svelte';
   import AgentActivity from '$lib/agents/AgentActivity.svelte';
-  import AgentArtifacts from '$lib/agents/AgentArtifacts.svelte';
-  import AgentBoards from '$lib/agents/AgentBoards.svelte';
+  import AgentSubscriptions from '$lib/agents/AgentSubscriptions.svelte';
   import AgentTokenCard from '$lib/agents/AgentTokenCard.svelte';
   import PromptEditor from '$lib/agents/PromptEditor.svelte';
   import {
@@ -253,39 +243,16 @@
     <!-- §AA5 — the two cards. The token says WHO; Access says WHAT. -->
     <Panel
       title="Token"
-      description="One token for this agent. It says who the agent is and nothing else — what it may do is set in Access, below."
+      description="One token for this agent. It says who the agent is and nothing else — what it may do is set in Subscriptions, below."
     >
       <AgentTokenCard {agentId} name={agent.name} {archived} />
     </Panel>
 
     <Panel
-      title="Access"
-      description="What this agent may do, set where it works: a role on each board, a permission on each artifact. A change here applies to its token at once."
+      title="Subscriptions"
+      description="Everything this agent may use: a role on each board (the role is the permission) and Build / data on each artifact. A change here applies to its token at once."
     >
-      <section class="flex flex-col gap-3" aria-label="Boards">
-        <div>
-          <h4 class="flex items-center gap-1.5 text-sm font-medium">
-            <LayoutGrid size={15} aria-hidden="true" /> Boards
-          </h4>
-          <p class="text-xs text-muted">
-            On a board the role is the permission. Any admin of the board can change it or remove
-            the agent.
-          </p>
-        </div>
-        <AgentBoards {agentId} name={agent.name} {archived} />
-      </section>
-      <section class="flex flex-col gap-3 border-t border-line pt-4" aria-label="Artifacts">
-        <div>
-          <h4 class="flex items-center gap-1.5 text-sm font-medium">
-            <AppWindow size={15} aria-hidden="true" /> Artifacts
-          </h4>
-          <p class="text-xs text-muted">
-            Build and data are separate: it may publish one artifact and only read or write the data
-            of another.
-          </p>
-        </div>
-        <AgentArtifacts {agentId} name={agent.name} {archived} />
-      </section>
+      <AgentSubscriptions {agentId} name={agent.name} {archived} />
     </Panel>
 
     <Panel title={archived ? 'Restore' : 'Archive'} tone={archived ? 'default' : 'danger'}>

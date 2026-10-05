@@ -35,7 +35,10 @@ export interface SseFrame {
  * Split a byte stream into SSE frames. Handles frames split across chunks,
  * CRLF, comment lines (`:`) and multi-line `data:`.
  */
-export async function* readSse(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<SseFrame> {
+export async function* readSse(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<SseFrame> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

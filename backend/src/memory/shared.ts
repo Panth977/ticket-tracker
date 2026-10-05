@@ -35,6 +35,8 @@ import {
   type MemoryReach,
   type MemoryRole,
   type Uid,
+  indicatorOf,
+  MEMORY_DEFAULT_INDICATOR,
 } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedCol, typedDoc } from '../runtime/converters.js';
@@ -179,6 +181,7 @@ export const toMemoryOut = (
   name: m.name,
   description: m.description,
   icon: m.icon,
+  indicator: indicatorOf(m, id, MEMORY_DEFAULT_INDICATOR),
   reach,
   archived: m.archivedAt !== null,
   stats: m.stats,

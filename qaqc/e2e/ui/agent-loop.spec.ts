@@ -26,7 +26,7 @@ import {
   stage,
   giveAttachMemory,
 } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, subscribe } from '../support/ui.js';
 
 const REPORT_MD = [
   '# Release notes 2.0',
@@ -78,16 +78,15 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
   const agentId = new URL(page.url()).pathname.split('/').pop()!;
   await expect(page.getByRole('heading', { name: 'Builder', level: 1 })).toBeVisible();
 
-  // ── 2. add it to the board (People & roles is the other door; same command) ─
-  const addForm = page.getByRole('form', { name: 'Add Builder to a board' });
-  await addForm.getByLabel('Board').selectOption(b.id);
-  await addForm.getByLabel('Role').selectOption('editor');
-  await addForm.getByRole('button', { name: 'Add to board' }).click();
+  // ── 2. add it to the board: its Subscriptions › Add → the board → View+Comment+Edit ─
+  await subscribe(page, 'agent', `board:${b.id}`, ['view', 'comment', 'edit']);
   await eventually(
     'agent member row',
     async () => (await read(`boards/${b.id}/members/${agentId}`))?.kind === 'agent',
   );
-  await expect(page.getByLabel('Role of Builder on Agent loop')).toHaveValue('editor');
+  await expect(page.locator(`[data-subscription="board:${b.id}"] [data-chips]`)).toHaveText(
+    'Editor',
+  );
 
   // ── 3. THE agent's token, from its own page (§AA: one token, no board, no checkboxes) ──
   await page.getByRole('button', { name: 'Generate token' }).click();

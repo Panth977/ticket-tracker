@@ -4,6 +4,7 @@
   boards/{b}/prefs/{me}, written through boardPrefSet.
 -->
 <script lang="ts">
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { ChevronRight } from 'lucide-svelte';
   import { NOTIFY_EVENTS, paths, type Board, type BoardPref, type NotifyEvent } from '@tm/shared';
   import { command } from '$lib/api';
@@ -70,8 +71,7 @@
         class="shrink-0 text-muted transition-transform {open ? 'rotate-90' : ''}"
         aria-hidden="true"
       />
-      <span class="size-2.5 shrink-0 rounded-full" style:background={board.color} aria-hidden="true"
-      ></span>
+      <Indicator of={board} seed={board.id} size="sm" />
       <span class="font-mono text-xs text-muted">{board.key}</span>
       <span class="truncate text-sm font-medium">{board.name}</span>
       {#if customised}<span class="text-xs text-subtle">· customised</span>{/if}
@@ -115,10 +115,12 @@
         {#each board.stages as s (s.id)}
           <Checkbox
             checked={stageIds === null || stageIds.includes(s.id)}
-            label={s.name}
             disabled={events !== null && !events.includes('stage')}
             onchange={(ev) => toggleStage(s.id, (ev.currentTarget as HTMLInputElement).checked)}
-          />
+            ><span class="inline-flex items-center gap-1.5"
+              ><Indicator of={s} seed={s.id} size="xs" />{s.name}</span
+            ></Checkbox
+          >
         {/each}
       </fieldset>
     </div>

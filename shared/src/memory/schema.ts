@@ -10,6 +10,7 @@
  * answer to "what may this principal do".
  */
 import { z } from 'zod';
+import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
 import {
   BoardIdSchema,
@@ -39,7 +40,8 @@ export const MemoryFileIdSchema = z.string().regex(/^[A-Za-z0-9_-]{6,64}$/, 'Fil
 
 // ─── limits (§C) ──────────────────────────────────────────────────────────────
 export const MEMORY_NAME_MAX = 80;
-export const MEMORY_DESCRIPTION_MAX = 500;
+/** indicators.html: the one description limit. */
+export const MEMORY_DESCRIPTION_MAX = DESCRIPTION_MAX;
 export const MEMORY_NODE_NAME_MAX = 255;
 export const MEMORY_PATH_MAX = 1024;
 export const MEMORY_DEPTH_MAX = 32;
@@ -82,8 +84,10 @@ export const MemoryPathSchema = z
 export const MemorySchema = z.object({
   name: z.string().min(1).max(MEMORY_NAME_MAX),
   description: z.string().max(MEMORY_DESCRIPTION_MAX).nullable(),
-  /** One emoji, or null for the default 🧠. */
+  /** LEGACY (indicators.html): one typed emoji, or null for 🧠. Read through indicatorOf(). */
   icon: z.string().max(16).nullable(),
+  /** indicators.html: what the sidebar, dropdowns and cards draw. */
+  indicator: IndicatorSchema.optional(),
   ownerUid: UidSchema,
   /** Every PERSON with a role, the owner included. Rules read this. */
   access: z.record(UidSchema, MemoryRoleSchema),

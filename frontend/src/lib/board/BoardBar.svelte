@@ -43,11 +43,10 @@
   import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import { auth } from '$lib/firebase/auth.svelte';
-  import { fmtTurns, fmtUsd, fmtUsdExact } from '$lib/cost/format';
+  import { aggCountersOf, cardChips } from '$lib/aggregates/fields';
   import Popover from '$lib/ui/Popover.svelte';
   import Menu from '$lib/ui/Menu.svelte';
   import Button from '$lib/ui/Button.svelte';
-  import ColorSwatch from '$lib/ui/ColorSwatch.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
   import type { MenuItem } from '$lib/ui/types';
   import { routes } from '$lib/layout/routes';
@@ -185,8 +184,13 @@
       <!-- §AB3: where I came from; one click back to the workspace page. -->
       <WorkspaceCrumb {workspace} />
     {/if}
-    <ColorSwatch color={board.color} size={10} />
-    <TitleSwitcher kind="board" items={boardItems} name={board.name} prefix={board.key} />
+    <TitleSwitcher
+      kind="board"
+      items={boardItems}
+      name={board.name}
+      prefix={board.key}
+      mark={{ of: board, seed: board.id }}
+    />
     <button
       type="button"
       class="tm-tap grid size-7 shrink-0 place-items-center rounded text-subtle hover:bg-surface-2 hover:text-warning"
@@ -196,20 +200,19 @@
     >
       <Star size={15} class={starred ? 'fill-current text-warning' : ''} />
     </button>
-    {#if board.cost && board.cost.usd > 0}
-      <!-- §Y2: the board's lifetime agent cost; §Y3: the chip is the door to Analytics. -->
+    {#each cardChips(board, aggCountersOf(board)) as a (a.id)}
+      <!-- aggregates.html: the board's lifetime totals of the fields shown on cards; the chip is the door to Analytics. -->
       <a
         href={routes.boardAnalytics(board.key)}
-        data-board-cost
+        data-board-agg={a.id}
+        data-board-cost={a.id === 'cost' ? '' : undefined}
         class="tm-tap inline-flex h-6 shrink-0 items-center rounded-full bg-surface-2 px-2 text-xs font-medium text-muted tabular-nums hover:bg-surface-3 hover:text-text"
-        title="{fmtUsdExact(board.cost.usd)} in agent turns over {fmtTurns(
-          board.cost.runs,
-        )} — open Analytics"
-        aria-label="Analytics — {fmtUsdExact(board.cost.usd)} in agent turns"
+        title="{a.title} — open Analytics"
+        aria-label="Analytics — {a.title}"
       >
-        {fmtUsd(board.cost.usd)}
+        {a.text}
       </a>
-    {/if}
+    {/each}
     {#if online.length}
       <span class="hidden lg:inline" title="Also here now"
         ><Avatars uids={online} size={20} max={4} /></span

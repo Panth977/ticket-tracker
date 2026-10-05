@@ -135,7 +135,11 @@ import { createClient } from '{{url:sdk.ts}}';
 
 const tm = createClient({ token: process.env.TM_TOKEN! });        // an account token, or an agent's
 
-const art = await tm.artifacts.create({ name: 'Sales dashboard' });  // an agent creates it for its owner
+const art = await tm.artifacts.create({
+  name: 'Sales dashboard',                                         // an agent creates it for its owner
+  description: 'Weekly revenue by region, refreshed nightly',      // plain text, people and agents read it
+  indicator: { kind: 'icon', icon: 'chart-line', color: '#22c55e' }, // optional: colour, icon or emoji
+});
 const build = await tm.artifacts.publish(art.id, './dist', { source: './', message: 'first cut' });
 if (build.warnings.length) console.warn(build.warnings);
 

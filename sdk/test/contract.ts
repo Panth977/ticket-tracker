@@ -20,6 +20,10 @@ import type {
   PublicArtifactDetail,
   PublicArtifactMember,
   PublicCost,
+  PublicAggField,
+  PublicAggCounters,
+  PublicMessageAgg,
+  PublicAggBuckets,
   PublicRunReceipt,
   PublicAttachment,
   PublicBoard,
@@ -83,6 +87,10 @@ import type {
   TicketDetail,
   TmEvent,
   TmFile,
+  AggField,
+  AggCounters,
+  AggBuckets,
+  MessageAgg,
 } from '../src/types.js';
 
 /** `Exact<A, B>` only compiles when A and B are the same type both ways round. */
@@ -113,6 +121,16 @@ exact<Exact<Me, RestMeRes>>(true);
 exact<Exact<Cost, PublicCost>>(true);
 exact<Exact<RunReceipt, PublicRunReceipt>>(true);
 exact<Exact<Agent, PublicAgent>>(true);
+// aggregates.html
+exact<Exact<AggField, PublicAggField>>(true);
+exact<Exact<AggCounters, PublicAggCounters>>(true);
+exact<Exact<MessageAgg, PublicMessageAgg>>(true);
+exact<Exact<AggBuckets, PublicAggBuckets>>(true);
+exact<Exact<Board['agg_fields'], PublicBoard['agg_fields']>>(true);
+exact<Exact<Board['aggs'], PublicBoard['aggs']>>(true);
+exact<Exact<Ticket['aggs'], PublicTicket['aggs']>>(true);
+exact<Exact<Message['agg'], PublicMessage['agg']>>(true);
+exact<Exact<Message['kind'], PublicMessage['kind']>>(true);
 // artifacts (docs/plan/artifacts.html §C1)
 exact<Exact<Artifact, PublicArtifact>>(true);
 exact<Exact<ArtifactBuild, PublicArtifactBuild>>(true);

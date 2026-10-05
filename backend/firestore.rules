@@ -414,6 +414,16 @@ service cloud.firestore {
         allow write: if false; // messagePost
       }
 
+      // ------------------------------------------------ aggregate fields
+      // (docs/plan/aggregates.html) boards/{b}/aggStats/{period}:{key} — one
+      // bucket per period (daily / weekly / monthly) holding every field of
+      // that period. Written by messagePost in the entry's transaction; read
+      // by Analytics.
+      match /aggStats/{id} {
+        allow read: if canRead(boardId);
+        allow write: if false; // messagePost
+      }
+
       // ------------------------------------------ phase 15: ONE DOCUMENT
       // (docs/plan/agents.html §W) The board screen is ONE query returning ten
       // documents, and opening a ticket costs nothing more: the thread, the

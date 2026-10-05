@@ -347,6 +347,71 @@ describe('memory: grants (§D)', () => {
   });
 });
 
+describe('memory: either side ends a grant (§D, Subscriptions / Subscribers)', () => {
+  it('a board admin drops a memory from their board; an editor there cannot; a stranger learns nothing', async () => {
+    const { owner, admin, ed, stranger } = await people('owner', 'admin', 'ed', 'stranger');
+    const board = await seedBoard({ admin, editors: [ed, owner] });
+    const ownBoard = await seedBoard({ admin: owner });
+    const memoryId = await newMemory(owner);
+    await call(owner, 'memoryGrantSet', { memoryId, boardId: ownBoard.id, access: 'read' });
+    // The owner was this board's admin when they granted it (seeded straight in).
+    await db()
+      .doc(paths.memory(memoryId))
+      .update({ [`boards.${board.id}`]: 'write', boardIds: [board.id, ownBoard.id].sort() });
+
+    await expect(
+      call(ed, 'memoryGrantSet', { memoryId, boardId: board.id, access: null }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(
+      call(stranger, 'memoryGrantSet', { memoryId, boardId: board.id, access: null }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    // The board admin may END it but never GRANT or raise it (that is the owner's).
+    await expect(
+      call(admin, 'memoryGrantSet', { memoryId, boardId: board.id, access: 'read' }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    // …nor touch another board's grant.
+    await expect(
+      call(admin, 'memoryGrantSet', { memoryId, boardId: ownBoard.id, access: null }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    await call(admin, 'memoryGrantSet', { memoryId, boardId: board.id, access: null });
+    const m = (await memDoc(memoryId))!;
+    expect(m.boards).toEqual({ [ownBoard.id]: 'read' });
+    expect(m.boardIds).toEqual([ownBoard.id]);
+    await expect(call(ed, 'memoryTree', { memoryId })).rejects.toMatchObject({
+      code: 'not_found',
+    });
+  });
+
+  it("an artifact's owner drops a memory from their artifact; nobody else can", async () => {
+    const { owner, other } = await people('owner', 'other');
+    const memoryId = await newMemory(owner);
+    const { artifactId } = await call(owner, 'artifactCreate', { name: 'Dash' });
+    await call(owner, 'memoryGrantSet', { memoryId, artifactId, access: 'read' });
+    // The memory's owner is also the artifact's owner here; hand the artifact
+    // side to someone else by checking the refusal for a non-owner first.
+    await expect(
+      call(other, 'memoryGrantSet', { memoryId, artifactId, access: null }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await call(owner, 'artifactShare', { artifactId, email: other.email, role: 'editor' });
+    await expect(
+      call(other, 'memoryGrantSet', { memoryId, artifactId, access: null }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+
+    // Someone who owns an artifact but not the memory: the artifact side ends it.
+    const theirs = (await call(other, 'artifactCreate', { name: 'Theirs' })).artifactId;
+    await db()
+      .doc(paths.memory(memoryId))
+      .update({ [`artifacts.${theirs}`]: 'write' });
+    await call(other, 'memoryGrantSet', { memoryId, artifactId: theirs, access: null });
+    expect((await memDoc(memoryId))!.artifacts).toEqual({ [artifactId]: 'read' });
+    // …and only their own artifact's grant.
+    await expect(
+      call(other, 'memoryGrantSet', { memoryId, artifactId, access: null }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+  });
+});
+
 describe('memory: files on tickets (§E)', () => {
   it('a ticket points at the node: the door serves the CURRENT version, until the grant goes', async () => {
     const { owner, com } = await people('owner', 'com');

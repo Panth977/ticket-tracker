@@ -18,7 +18,7 @@ import {
   read,
   WEB_URL,
 } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, subscribe } from '../support/ui.js';
 
 test('§E: attach a memory file to a comment; it follows edits, and goes when the grant does', async ({
   page,
@@ -153,18 +153,15 @@ test('§H: an artifact reads a granted memory through BackendDriver.memory, neve
   });
 });
 
-test('Settings › Memory: an admin grants a board a memory they own', async ({ page }) => {
+test('Settings › Subscriptions: an admin adds a memory they own to the board', async ({ page }) => {
   const ada = await newPerson('Ada');
   const eng = await newBoard(ada, { name: 'Engineering' });
   const { memoryId } = await call(ada, 'memoryCreate', { name: 'Brand kit' });
-  await signIn(page, ada.email, `/b/${eng.key}/settings/memory`);
-  const row = page.locator(`[data-memory-grant="${memoryId}"]`);
+  await signIn(page, ada.email, `/b/${eng.key}/settings/subscriptions`);
+  await subscribe(page, 'board', `memory:${memoryId}`, ['read', 'write']);
+  const row = page.locator(`[data-subscription="memory:${memoryId}"]`);
   await expect(row).toContainText('Brand kit');
-  await row.getByRole('button', { name: 'Read & write' }).click();
-  await expect(row.getByRole('button', { name: 'Read & write' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(row.locator('[data-chips]')).toHaveText(/Read\s*Write/);
   await eventually('the grant is stored', async () => {
     const m = await read<{ boards: Record<string, string> }>(`memories/${memoryId}`);
     return m?.boards[eng.id] === 'write' ? true : null;

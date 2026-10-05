@@ -31,6 +31,7 @@ import {
   ArtifactRoleSchema,
   ArtifactShareRoleSchema,
 } from './schema.js';
+import { IndicatorSchema } from '../types/indicator.js';
 
 const Name = z.string().trim().min(1).max(ARTIFACT_NAME_MAX);
 const Description = z.string().trim().max(ARTIFACT_DESCRIPTION_MAX);
@@ -54,7 +55,10 @@ export const artifactCreate = defineCommand({
   req: req({
     name: Name,
     description: Description.nullable().optional(),
+    /** LEGACY (old clients): one emoji. Prefer `indicator`. */
     icon: z.string().max(16).nullable().optional(),
+    /** indicators.html: the artifact's mark. Default: a palette colour from the name. */
+    indicator: IndicatorSchema.optional(),
   }),
   res: z.object({ artifactId: ArtifactIdSchema }),
 });
@@ -69,7 +73,10 @@ export const artifactUpdate = defineCommand({
     artifactId: ArtifactIdSchema,
     name: Name.optional(),
     description: Description.nullable().optional(),
+    /** LEGACY (old clients): one emoji. Prefer `indicator`. */
     icon: z.string().max(16).nullable().optional(),
+    /** indicators.html */
+    indicator: IndicatorSchema.optional(),
     /** §B: viewers read-only. */
     readOnly: z.boolean().optional(),
     /** Archive (no data writes, hidden from the sidebar) or restore. */
@@ -88,7 +95,7 @@ export const artifactBoardAccessSet = defineCommand({
   source: 'app',
   scopes: ['artifacts:write'],
   permission:
-    'Owner only, and only for a board the owner can read; write needs the owner to be editor or admin there. null removes the board.',
+    'Owner only, and only for a board the owner can read; write needs the owner to be editor or admin there. null removes the board — which the owner OR an admin of that board may do (a person, never an agent).',
   errors: ['not_found', 'forbidden', 'invalid', 'conflict'],
   req: req({
     artifactId: ArtifactIdSchema,
@@ -96,6 +103,34 @@ export const artifactBoardAccessSet = defineCommand({
     access: ArtifactBoardAccessSchema.nullable(),
   }),
   res: OkResSchema,
+});
+
+/**
+ * The artifacts that use ONE board (artifacts.html §K, seen from the board):
+ * board settings › Subscribers lists them, and a board admin may take a
+ * board away from any of them (artifactBoardAccessSet with access null). A
+ * person on the board may ask; the answer names an artifact only to someone
+ * with a role on it — everyone else gets its id, its owner and the grant.
+ * App only (no token scope).
+ */
+export const boardArtifactList = defineCommand({
+  name: 'boardArtifactList',
+  source: 'extra',
+  permission:
+    'Anyone on the board (a person). The artifacts granted this board, with the grant and owner; name and indicator only where the caller has a role on the artifact.',
+  errors: ['not_found', 'forbidden', 'invalid'],
+  req: req({ boardId: BoardIdSchema }),
+  res: z.object({
+    artifacts: z.array(
+      z.object({
+        artifactId: ArtifactIdSchema,
+        access: ArtifactBoardAccessSchema,
+        ownerUid: z.string(),
+        name: z.string().nullable(),
+        indicator: IndicatorSchema.nullable(),
+      }),
+    ),
+  }),
 });
 
 export const artifactShare = defineCommand({

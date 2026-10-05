@@ -22,11 +22,13 @@ import {
   ViaSchema,
 } from '../types/index.js';
 import { QuestionSchema, type Question } from './question.js';
+import { MessageAggSchema } from './aggregates.js';
 
 /** An id that used to be a document id — generated, one path segment. */
 export const StoredIdSchema = z.string().min(1).max(200);
 
-export const MESSAGE_KINDS = ['comment', 'system', 'question'] as const;
+/** 'agg' (aggregates.html): a message whose point is its `agg` entries. */
+export const MESSAGE_KINDS = ['comment', 'system', 'question', 'agg'] as const;
 export const MessageKindSchema = z.enum(MESSAGE_KINDS);
 export type MessageKind = z.infer<typeof MessageKindSchema>;
 
@@ -128,6 +130,11 @@ export const MessageSchema = z.object({
    * board's and the day's cost counters in the same write.
    */
   run: RunReceiptSchema.nullable().optional(),
+  /**
+   * aggregates.html: the entries this message adds to the board's aggregate
+   * fields — present on a kind 'agg' message, and on a turn receipt (its cost).
+   */
+  agg: MessageAggSchema.nullable().optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;
 

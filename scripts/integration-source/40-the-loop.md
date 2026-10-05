@@ -340,9 +340,40 @@ per session**: Claude Code reports `total_cost_usd` cumulatively across a resume
 the last reported total in your state and post the *difference* as `costUsd` (the reported total goes
 in `sessionUsd`). A run that dies without a result line has no receipt; its money shows up in the next
 turn's difference, which is honest — it was spent on this ticket. The server stores the receipt on
-the message and, in the same write, adds it to the ticket's `cost`, the board's `cost` and the day's
-row the board's Analytics view draws. The body is the same thing in words, so digests and search see
-it too. Only the orchestrator posts receipts; the app's composer never does.
+the message and, in the same write, adds `costUsd` to the board's **Cost aggregate field** (id
+`cost`, unit `$`, daily): the ticket's `aggs.cost`, the board's `aggs.cost` and the day's bucket the
+board's Analytics view draws. The receipt comes back with `agg: { entries: [{ field_id: 'cost',
+value: costUsd }] }`; the old `cost: { usd, runs }` on the ticket and the board is still there,
+computed from it. The body is the same thing in words, so digests and search see it too. Only the
+orchestrator posts receipts; the app's composer never does.
+
+**Other totals.** Cost is one aggregate field among any the board defines (board settings ›
+Aggregates: a label, a unit, a period of `daily`, `weekly` or `monthly`). Read them from the board's
+`agg_fields`; add to them with a message carrying `agg` — kind `agg`, one entry per field, a
+negative value takes away. Name a field by `field_id` or by its label (`field`, case-insensitive);
+`body` may be left out (the server writes *"+2.5 h Time"*):
+
+```ts
+await tm.messages.post(ticket.key, {
+  markdown: 'Pairing session with the reviewer',
+  agg: { entries: [{ field: 'Time', value: 2.5 }] },
+});
+```
+
+```bash
+curl -X POST "$TM/v1/tickets/ENG-42/messages" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: time-ENG-42-7' \
+  -d '{ "agg": { "entries": [{ "field": "Time", "value": 2.5 }] } }'
+```
+
+MCP: `post_message` with the same `agg`. An unknown or archived field is a `400`. An entry is never
+edited or deleted — correct a mistake with another entry (`-0.5`). A receipt may carry other entries
+too, but not one on `cost` (its `costUsd` already is). The ticket's totals are `aggs` on the ticket,
+the board's lifetime totals `aggs` on the board, and the buckets of one field are
+`GET /v1/boards/{KEY}/aggregates?field=Time&from=2026-W30&to=2026-W41` → `{ field, total, buckets:
+[{ key, total, count, tickets: { KEY: { total, count } } }] }` (`from` / `to` are period keys —
+`2026-10-05`, `2026-W41`, `2026-10` — inclusive; default the last 30 days / 12 weeks / 12 months).
+The SDK: `tm.aggregates({ field: 'Time', from: '2026-W30' })`; MCP: `get_aggregates`.
 
 ### 4.7 The rules this example is obeying
 

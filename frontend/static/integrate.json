@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "apiVersion": "v1",
   "updated": "2026-10-05",
-  "contentSha256": "51c7c9989fb0a8f6b2b6e0793e1d9b586dd042f0bb36545a920d35cba5719e24",
+  "contentSha256": "05ad8677cb104b6a9392f755b5d567b8c8271137308b11e43fa9e34a06f4496e",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -578,6 +578,14 @@
     },
     {
       "method": "GET",
+      "path": "/v1/board/aggregates",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "One aggregate field's totals per period bucket (aggregates.html)"
+    },
+    {
+      "method": "GET",
       "path": "/v1/boards",
       "scopes": [
         "board:read"
@@ -591,6 +599,14 @@
         "board:read"
       ],
       "summary": "One board: stages, priorities, tags, fields, members"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/boards/{KEY}/aggregates",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "One aggregate field's totals per period bucket (aggregates.html)"
     },
     {
       "method": "POST",
@@ -1127,7 +1143,7 @@
     },
     {
       "name": "list_boards",
-      "description": "Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.",
+      "description": "Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes. Each board carries its description (what it is for) and its stages with THEIR descriptions — what each stage means; read them to decide which stage a ticket belongs in before moving it.",
       "readOnly": true,
       "scopes": [
         "board:read"
@@ -1135,7 +1151,7 @@
     },
     {
       "name": "get_board",
-      "description": "The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).",
+      "description": "The board: its description, stages (with categories and descriptions — what each stage means, so you know where a ticket goes), priorities, tags, custom fields, and members (people and agents).",
       "readOnly": true,
       "scopes": [
         "board:read"
@@ -1209,10 +1225,18 @@
     },
     {
       "name": "post_message",
-      "description": "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).",
+      "description": "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
       "readOnly": false,
       "scopes": [
         "comments:write"
+      ]
+    },
+    {
+      "name": "get_aggregates",
+      "description": "One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.",
+      "readOnly": true,
+      "scopes": [
+        "board:read"
       ]
     },
     {
@@ -1415,6 +1439,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "1.6.0",
+      "date": "2026-10-05"
+    },
     {
       "version": "1.5.0",
       "date": "2026-10-05"

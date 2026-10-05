@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { MEMORY_REFS_MAX, MemoryRefSchema } from '../memory/schema.js';
 import { MemoryUploadSchema } from '../memory/attach.js';
+import { MessageAggSchema } from '../schema/aggregates.js';
 import {
   BoardIdSchema,
   FieldValueSchema,
@@ -255,6 +256,12 @@ export const messagePost = defineCommand({
        * composer never does. The message stays a 'comment'.
        */
       run: RunReceiptSchema.nullable().optional(),
+      /**
+       * aggregates.html: entries for the board's aggregate fields — the message
+       * becomes kind 'agg' (unless it also carries a `run`, which stays a
+       * receipt). Each field must exist on the board and not be archived.
+       */
+      agg: MessageAggSchema.optional(),
       /** REQUIRED here: the optimistic bubble's id; a retried post is one message. */
       clientId: ClientIdSchema,
     })

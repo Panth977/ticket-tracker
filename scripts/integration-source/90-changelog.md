@@ -17,6 +17,41 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 1.6.0 — 2026-10-05
+
+- **Aggregate fields** (docs/plan/aggregates.html). Cost is no longer a concept of its own: a board
+  defines aggregate fields (board settings › Aggregates: label, unit, period `daily` | `weekly` |
+  `monthly`), and every board has the field `cost` (`$`, daily) that turn receipts land on.
+- **Reading**: `PublicBoard.agg_fields` (`[{ id, label, unit, period, show_on_card, archived }]`)
+  and `PublicBoard.aggs` (`{ [field_id]: { total, count } }`); `PublicTicket.aggs`;
+  `PublicMessage.agg` (`{ entries: [{ field_id, value }] } | null`) and the message kind `agg`.
+  The `cost` fields stay, computed from `aggs.cost`.
+- **Posting**: `POST /v1/tickets/{KEY}/messages`, MCP `post_message` and SDK `tm.messages.post`
+  take `agg: { entries: [{ field_id | field, value }] }` (`field` = the label, case-insensitive;
+  1–10 entries, one per field; negative values take away). `body` may be omitted for an `agg`
+  message. Unknown or archived field: `400`. An `agg` message cannot be edited or deleted.
+- **A turn receipt** is an entry on `cost`: it comes back with `agg` set, and may carry entries on
+  other fields too (not on `cost`).
+- **Buckets**: `GET /v1/boards/{KEY}/aggregates?field=&from=&to=` →
+  `{ field, total, buckets: [{ key, total, count, tickets }] }` — one field (id or label), period
+  keys inclusive (also `GET /v1/board/aggregates?board=`, SDK `tm.aggregates()`, MCP
+  `get_aggregates`).
+- **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, memories
+  and workspaces each have an `indicator` — `{ kind: 'color', color }` | `{ kind: 'icon', icon,
+  color }` (an icon from the app's list, tinted) | `{ kind: 'emoji', emoji }` | `{ kind: 'image',
+  path }` (uploaded in the app) — and a plain-text `description` (≤ 2000, Markdown allowed). An
+  unknown icon, a non-emoji or a foreign path is `400`.
+- **Reading**: `PublicBoard.indicator`; each of `PublicBoard.stages` has `description` (what the
+  stage means — read it to decide where a ticket goes) and `indicator`; `PublicArtifact.indicator`;
+  memories (`memory_list`, `GET /v1/memories`) carry `indicator`; `list_workspaces` returns each
+  workspace's `description` and `indicator`. A ticket's `stage` stays `{ id, name, category }`.
+  `description_md` on a board is now plain text (old rich-text descriptions are flattened).
+- **Writing**: `POST /v1/boards` and SDK `tm.boards.create` take `indicator` and `description`;
+  `POST|PATCH /v1/artifacts`, MCP `artifact_create`, SDK `tm.artifacts.create|update` take
+  `indicator`; `boardUpdate` (patch `indicator`, `description`, and per stage `indicator` /
+  `description`), `memory_create` / `memory_update`, `workspace_create` / `workspace_update` take
+  both. The old `color` / `icon` fields still work and are kept in step; prefer `indicator`.
+
 ### 1.5.0 — 2026-10-05
 
 - **Ticket files live in a memory** (memory.html §J). A board takes no files of its own any more.

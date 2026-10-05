@@ -37,6 +37,15 @@ import {
   type PublicMessage,
   type PublicMemoryFileRef,
   type PublicRunReceipt,
+  type PublicAggBuckets,
+  type PublicAggInput,
+  type AggFieldDef,
+  type AggStats,
+  type MessageAgg,
+  activeAggFields,
+  aggKeyFits,
+  aggPeriodKeys,
+  boardAggFields,
   type PublicTicket,
   type PublicTicketDetail,
   type RestFileRes,
@@ -66,6 +75,8 @@ import {
   toPublicMessages,
   toPublicPerson,
   toPublicTicket,
+  toPublicAggField,
+  toPublicAggs,
 } from './public.js';
 import { decodeCursor, encodeCursor, markdownIn, peopleUids, readableBoards } from './resolve.js';
 import { requireFileRead } from './fileAccess.js';
@@ -348,6 +359,8 @@ export async function postMessage(
     fileIds?: string[] | undefined;
     replyTo?: string | undefined;
     run?: PublicRunReceipt | null | undefined;
+    /** aggregates.html: entries naming their field by id or label. */
+    agg?: PublicAggInput | undefined;
     /** memory.html §E: memory files by reference. */
     memoryFiles?: PublicMemoryFileRef[] | undefined;
   },
@@ -366,6 +379,7 @@ export async function postMessage(
       ...(m.memoryFiles?.length ? { memoryRefs: await memoryRefsIn(m.memoryFiles) } : {}),
       ...(m.replyTo ? { replyTo: m.replyTo } : {}),
       ...(m.run ? { run: runIn(m.run) } : {}),
+      ...(m.agg ? { agg: aggIn(board, m.agg) } : {}),
       clientId: clientIdFor(key, ctx),
     },
     ctx,
@@ -380,6 +394,79 @@ export async function postMessage(
     ctx.now,
   );
   return pub!;
+}
+
+// ─── aggregates (aggregates.html) ────────────────────────────────────────────
+
+/**
+ * A field named by the API — its id, else its label (case-insensitive; an
+ * active field wins over an archived one of the same label). 400 when none.
+ */
+export function aggFieldFor(board: BoardWithId, ref: string, what = 'agg'): AggFieldDef {
+  const fields = boardAggFields(board);
+  const want = ref.trim().toLowerCase();
+  const f =
+    fields.find((x) => x.id === ref) ??
+    fields.find((x) => !x.archived && x.label.toLowerCase() === want) ??
+    fields.find((x) => x.label.toLowerCase() === want);
+  if (!f)
+    throw errors.invalid(
+      `No aggregate field "${ref}" on ${board.key} (have: ${fields.map((x) => x.label).join(', ') || 'none'})`,
+      { field: what },
+    );
+  return f;
+}
+
+/** The wire entries (field_id | field) → what messagePost takes (it checks archived / duplicates). */
+export function aggIn(board: BoardWithId, agg: PublicAggInput): MessageAgg {
+  return {
+    entries: agg.entries.map((e) => ({
+      fieldId: aggFieldFor(board, (e.field_id ?? e.field)!).id,
+      value: e.value,
+    })),
+  };
+}
+
+const AGG_DEFAULT_BUCKETS = { daily: 30, weekly: 12, monthly: 12 } as const;
+
+/** GET /v1/boards/{KEY}/aggregates, MCP get_aggregates: one field's buckets, oldest first. */
+export async function aggregateBuckets(
+  ctx: ServerCtx,
+  board: BoardWithId,
+  q: { field?: string | undefined; from?: string | undefined; to?: string | undefined },
+): Promise<PublicAggBuckets> {
+  const first = activeAggFields(board)[0] ?? boardAggFields(board)[0];
+  if (!q.field && !first)
+    throw errors.invalid('This board has no aggregate fields', { field: 'field' });
+  const field = q.field ? aggFieldFor(board, q.field, 'field') : first!;
+  for (const [k, v] of [
+    ['from', q.from],
+    ['to', q.to],
+  ] as const)
+    if (v !== undefined && !aggKeyFits(field.period, v))
+      throw errors.invalid(`${k}: "${v}" is not a ${field.period} key`, { field: k });
+  const from =
+    q.from ?? aggPeriodKeys(field.period, ctx.now, AGG_DEFAULT_BUCKETS[field.period])[0]!;
+  let qy = db()
+    .collection(paths.aggStats(board.id))
+    .where('period', '==', field.period)
+    .where('key', '>=', from);
+  if (q.to) qy = qy.where('key', '<=', q.to);
+  const snap = await qy.orderBy('key', 'asc').limit(400).get();
+  const buckets = snap.docs
+    .map((d) => d.data() as AggStats)
+    .map((d) => ({ key: d.key, c: d.fields[field.id] }))
+    .filter((x) => x.c && x.c.count > 0)
+    .map(({ key, c }) => ({
+      key,
+      total: c!.total,
+      count: c!.count,
+      tickets: Object.fromEntries(
+        Object.entries(c!.tickets).map(([k, v]) => [k, { total: v.total, count: v.count }]),
+      ),
+    }));
+  const total = toPublicAggs(board)[field.id] ?? { total: 0, count: 0 };
+  return { field: toPublicAggField(field), total, buckets };
 }
 
 // ─── files ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Aggregates · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/memory">Memory</a>
+          <a href="/plan/aggregates" class="on">Aggregates</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+      <article class="mg">
+        <h1>Aggregates</h1>
+        <p class="lede">
+          An aggregate field is a number a board adds up: per ticket, for the board's lifetime, and
+          per day, week or month. Cost was the first one (<a href="/plan/agents#y">agents.html §Y</a>):
+          every turn receipt added its price to the ticket, the board and the day. Nothing about that
+          is specific to money, so the concept is now general — hours spent, kilometres driven, story
+          points, bugs found — and <b>Cost is one aggregate field</b> among any the board defines. A
+          number enters the totals the way everything else enters a ticket: as a message in its
+          thread.
+        </p>
+
+        <h2 id="a">A · The field</h2>
+        <ul>
+          <li>
+            <b>Defined in board settings › Aggregates</b>, stored on the board as
+            <code>aggFields: [{ id, label, unit, period, position, showOnCard?, archived? }]</code>
+            (≤ 20; <code>@tm/shared</code> <code>AggFieldDefSchema</code>).
+          </li>
+          <li>
+            <b>label</b> (1–40) is what people read — <i>Cost</i>, <i>Time</i>. <b>unit</b> (≤ 12)
+            is drawn with every value: a currency symbol before the number (<code>$1.24</code>),
+            anything else after it (<code>2.5 h</code>), nothing for a plain count
+            (<code>formatAgg</code>).
+          </li>
+          <li>
+            <b>period</b> is <code>daily | weekly | monthly</code>: the bucket the field's totals are
+            kept in (§C). It is what Analytics draws one bar per.
+          </li>
+          <li>
+            <b>showOnCard</b> draws the ticket's total as a chip on its card, and the lifetime total
+            on the board bar.
+          </li>
+          <li>
+            <b>Ids are immutable.</b> A new field gets <code>a_</code> + 6 characters; the field turn
+            receipts land on keeps the id <code>cost</code>, and only that field may carry it.
+          </li>
+          <li>
+            <b>Removing archives.</b> Like custom fields, a field missing from the list the editor
+            saves is kept with <code>archived: true</code>: its history stays in every counter, it
+            takes no new entries, and the editor hides it. A board starts with one field: Cost
+            (<code>COST_AGG_FIELD</code>: <code>$</code>, daily, on cards).
+          </li>
+          <li>
+            <b>The period locks</b> once the field has an entry (<code>board.aggs[id].count &gt; 0</code>):
+            the buckets already written are cut by the old period and would not add up with the new
+            ones. Label, unit, order and showOnCard stay editable. To count something by another
+            period, add a new field.
+          </li>
+          <li>Only a board admin edits the list; everyone on the board sees it.</li>
+        </ul>
+
+        <h2 id="b">B · An entry is a message</h2>
+        <ul>
+          <li>
+            <b>A message of kind <code>agg</code></b> — the way a question is kind
+            <code>question</code> — carrying
+            <code>agg: { entries: [{ fieldId, value }] }</code>: 1–10 entries, one per field.
+            <code>value</code> is any finite number with |value| ≤ 10<sup>12</sup>; <b>a negative
+            value takes away</b>.
+          </li>
+          <li>
+            <b>Every field must exist on the board and not be archived</b>, or the post is a 400 on
+            <code>agg</code>. Who may comment may add entries.
+          </li>
+          <li>
+            <b>The body is optional.</b> Without one the server writes a short line from the
+            entries — <i>+$1.24 Cost · −2 h Time</i> — so notifications, e-mail and search have
+            text. With one (the composer's note), the note is the body.
+          </li>
+          <li>
+            <b>Never edited, never deleted.</b> A total is the sum of its entries; changing one in
+            place would silently rewrite every period it fell in. A mistake is corrected by another
+            entry (−0.5 h). <code>messageEdit</code> refuses an <code>agg</code> message like a
+            system message.
+          </li>
+          <li>
+            <b>A turn receipt counts too.</b> A message with <code>run</code> stays a receipt (kind
+            <code>comment</code>, drawn as a receipt row); when the board has an active field
+            <code>cost</code>, the server adds the entry <code>{ fieldId: 'cost', value:
+            run.costUsd }</code> and stores it as the receipt's <code>agg</code>. A receipt may
+            carry other entries as well, but not one naming <code>cost</code> (400).
+          </li>
+          <li>
+            In the app: the composer's <b>Add to a total</b> button (or <code>/agg</code>) opens a
+            small dialog, one number per active field and an optional note. The thread draws an
+            <code>agg</code> message as a compact row — <i>+2.5 h Time · Asha · 14:02</i> — that
+            stands alone like a receipt.
+          </li>
+        </ul>
+
+        <h2 id="c">C · Where the totals live</h2>
+        <table>
+          <tr>
+            <th>Where</th>
+            <th>What</th>
+          </tr>
+          <tr>
+            <td><code>ticket.aggs</code></td>
+            <td>per field <code>{ total, count }</code> for that ticket (the card chips, the drawer header)</td>
+          </tr>
+          <tr>
+            <td><code>board.aggs</code></td>
+            <td>per field <code>{ total, count }</code> for the board's lifetime (the board bar)</td>
+          </tr>
+          <tr>
+            <td><code>boards/{b}/aggStats/{period}:{key}</code></td>
+            <td>
+              one document per bucket — <code>daily:2026-10-05</code>,
+              <code>weekly:2026-W41</code>, <code>monthly:2026-10</code> —
+              <code>{ period, key, fields: { [fieldId]: { total, count, tickets: { [KEY]: { total,
+              count } } } }, updatedAt }</code>. Fields that share a period share the document.
+            </td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <b>One transaction.</b> <code>messagePost</code> writes the message, adds every entry to
+            the ticket's and the board's counter, and to the bucket of each field's period — one
+            read per distinct period, so a post touching three daily fields reads one stats
+            document. Nothing is scanned and nothing is triggered.
+          </li>
+          <li>
+            <b>The clock is the owner's</b>: periods are cut in <code>Asia/Kolkata</code>
+            (<code>AGG_TZ</code>), weeks are ISO weeks starting Monday (<code>aggPeriodKey</code>).
+            Keys sort as strings within a period, so a range is <code>key &gt;= from</code>.
+          </li>
+          <li>
+            <b>Totals are rounded</b> to 6 decimals on every add (<code>roundAgg</code>), so float
+            drift never shows.
+          </li>
+          <li>
+            <b>A replay counts once.</b> A retried post (same <code>clientId</code>) returns the
+            first message before anything is added.
+          </li>
+          <li>
+            <b>Legacy mirrors.</b> <code>ticket.cost</code> / <code>board.cost</code>
+            (<code>{ usd, runs }</code>) and <code>boards/{b}/stats/{day}</code> are still written
+            for every entry on <code>cost</code>, so an old client and the public
+            <code>cost</code> fields keep working. New readers use <code>aggs</code> and
+            <code>aggStats</code>.
+          </li>
+          <li>
+            <b>Rules</b>: <code>aggStats</code> is readable by anyone who can read the board and
+            written only by the command layer.
+          </li>
+        </ul>
+
+        <h2 id="d">D · Seeing it</h2>
+        <ul>
+          <li>
+            <b>Card</b>: one chip per <code>showOnCard</code> field with a non-zero ticket total
+            (<i>Cost: $1.24 · 3 entries</i> on hover). <b>Drawer header</b>: every active field's
+            ticket total. <b>Board bar</b>: the lifetime chips of the <code>showOnCard</code>
+            fields, each a link to Analytics. <b>Boards home</b>: the tile shows Cost (or the first
+            card field).
+          </li>
+          <li>
+            <b>Analytics</b> (board settings › Analytics) picks a field — the first active one by
+            default — and draws its buckets: 30 / 90 days, 12 / 26 weeks or 6 / 12 months by the
+            field's period, an empty bucket an empty slot. Under the chart, the table of buckets
+            and the tickets of the range ranked by their total. The lifetime figure is
+            <code>board.aggs</code>. It reads <code>aggStats</code> live
+            (<code>period == field.period</code>, <code>key &gt;= from</code>).
+          </li>
+        </ul>
+
+        <h2 id="e">E · From outside</h2>
+        <ul>
+          <li>
+            <b>Reading</b>: <code>PublicBoard</code> has <code>agg_fields</code>
+            (<code>[{ id, label, unit, period, show_on_card, archived }]</code>) and
+            <code>aggs</code> (<code>{ [field_id]: { total, count } }</code>);
+            <code>PublicTicket</code> has <code>aggs</code>; <code>PublicMessage</code> has
+            <code>agg: { entries: [{ field_id, value }] } | null</code> and kind
+            <code>agg</code>. The old <code>cost</code> fields stay, computed from
+            <code>aggs.cost</code>.
+          </li>
+          <li>
+            <b>Posting</b>: <code>POST /v1/tickets/{KEY}/messages</code>, MCP
+            <code>post_message</code> and the SDK's <code>tm.messages.post</code> take
+            <code>agg: { entries: [{ field_id | field, value }] }</code> — <code>field</code> is the
+            label, case-insensitive, resolved on the server. <code>body</code> may be omitted.
+          </li>
+          <li>
+            <b>The buckets</b>:
+            <code>GET /v1/boards/{KEY}/aggregates?field=&amp;from=&amp;to=</code> returns
+            <code>{ field, total, buckets: [{ key, total, count, tickets }] }</code> for one field
+            (id or label; <code>total</code> is the lifetime one); <code>from</code> / <code>to</code>
+            are period keys, inclusive (default the last 30 days / 12 weeks / 12 months). The same
+            as <code>GET /v1/board/aggregates?board=</code>, SDK <code>tm.aggregates()</code> and MCP
+            <code>get_aggregates</code>.
+          </li>
+        </ul>
+
+        <h2 id="m">M · The migration</h2>
+        <p>
+          <code>scripts/migrate-aggregates.mjs</code> (logic in
+          <code>scripts/lib/aggregates.mjs</code>, unit- and emulator-tested) turns the cost
+          counters into the aggregate shape. For every board, archived ones too:
+        </p>
+        <ul>
+          <li>
+            <code>aggFields ||= [COST_AGG_FIELD]</code>; a list without <code>cost</code> gets it
+            first; a list with <code>cost</code> — archived or not — is left alone.
+          </li>
+          <li>
+            <code>board.aggs.cost</code> and every <code>ticket.aggs.cost</code> =
+            <code>{ total: cost.usd, count: cost.runs }</code>.
+          </li>
+          <li>
+            Every <code>stats/{day}</code> → <code>aggStats/daily:{day}</code>
+            <code>fields.cost</code> (other fields in that document are kept).
+          </li>
+          <li>
+            Every message with <code>run</code> and no <code>agg</code>, inline and in data pages,
+            gets <code>agg: { entries: [{ fieldId: 'cost', value: run.costUsd }] }</code>.
+          </li>
+        </ul>
+        <p>
+          The legacy counters are the full truth for <code>cost</code> (the backend still writes
+          them, and seeds <code>aggs.cost</code> from them on a board not yet migrated), so a
+          counter that differs is corrected from them and listed. Values are compared before every
+          write: a re-run writes nothing. Dry run by default; nothing is deleted.
+        </p>
+        <pre>pnpm --filter @tm/shared build
+node scripts/migrate-aggregates.mjs --project &lt;id&gt;           # dry run
+node scripts/migrate-aggregates.mjs --project &lt;id&gt; --apply   # write</pre>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

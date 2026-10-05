@@ -6,10 +6,15 @@
   <ChoicePicker items={…} selected={['a']} multi onchange={(ids) => …} />
 -->
 <script lang="ts" module>
+  import type { Indicator as IndicatorT } from '@tm/shared';
   export interface ChoiceItem {
     id: string;
     label: string;
     color?: string;
+    /** indicators.html: drawn instead of the colour dot (stages). */
+    indicator?: IndicatorT;
+    /** A tooltip on the row (a stage's description). */
+    hint?: string | null;
     /** A person: drawn with PersonChip. */
     uid?: string;
     /** Extra text matched by the search box (e.g. email). */
@@ -22,6 +27,7 @@
   import type { Snippet } from 'svelte';
   import Popover from '$lib/ui/Popover.svelte';
   import PersonChip from '$lib/ui/PersonChip.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
 
   interface Props {
     items: ChoiceItem[];
@@ -120,7 +126,9 @@
           <PersonChip uid={c.uid} layout="compact" size={16} />
         {:else}
           <span class="inline-flex items-center gap-1 truncate">
-            {#if c.color}<span class="size-2 shrink-0 rounded-full" style="background:{c.color}"
+            {#if c.indicator}<Indicator indicator={c.indicator} size="xs" />{:else if c.color}<span
+                class="size-2 shrink-0 rounded-full"
+                style="background:{c.color}"
               ></span>{/if}{c.label}
           </span>
         {/if}
@@ -178,11 +186,14 @@
               suffix={item.label === 'Me' ? '(me)' : undefined}
             />
           {:else}
-            {#if item.color}<span
+            {#if item.indicator}<Indicator
+                indicator={item.indicator}
+                size="sm"
+              />{:else if item.color}<span
                 class="size-2.5 shrink-0 rounded-full"
                 style="background:{item.color}"
               ></span>{/if}
-            <span class="truncate">{item.label}</span>
+            <span class="truncate" title={item.hint || undefined}>{item.label}</span>
           {/if}
         </button>
       </li>

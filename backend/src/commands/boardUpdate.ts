@@ -16,10 +16,12 @@
  * can be more than a transaction holds) run in batches right after.
  */
 import {
+  boardAggFields,
   errors,
   paths,
   type Activity,
   type Board,
+  type AggFieldDef,
   type BoardWithId,
   type CommandReqParsed,
   type FieldDef,
@@ -28,7 +30,8 @@ import {
   type StageGrant,
   type Ticket,
 } from '@tm/shared';
-import { parseRichText } from '@tm/shared/logic/index';
+import { descriptionText } from '@tm/shared/logic/index';
+import { indicatorColor } from '@tm/shared';
 import type { DocumentReference } from 'firebase-admin/firestore';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
@@ -69,6 +72,51 @@ function uniqueIds(list: { id: string }[], what: string): void {
   }
 }
 
+/** aggregates.html: the board's next aggFields (pure; throws 400 on a refused change). */
+export function planAggFields(board: Board, next: AggFieldDef[]): AggFieldDef[] {
+  uniqueIds(next, 'aggregate field');
+  // A board from before aggregates has Cost (boardAggFields): leaving it out archives it.
+  const before = boardAggFields(board);
+  const old = new Map(before.map((f) => [f.id, f]));
+  for (const f of next) {
+    const prev = old.get(f.id);
+    if (!prev) continue;
+    if (prev.period !== f.period && (board.aggs?.[f.id]?.count ?? 0) > 0)
+      throw errors.invalid(
+        `"${prev.label}" already has entries: its period stays ${prev.period}. Add a new field instead.`,
+        { field: 'aggFields', fieldId: f.id },
+      );
+  }
+  const kept = new Set(next.map((f) => f.id));
+  const archived = before.filter((f) => !kept.has(f.id)).map((f) => ({ ...f, archived: true }));
+  return [...next, ...archived];
+}
+
+/**
+ * indicators.html: a stage's indicator and description. A client that does
+ * not send them (an old one) keeps what the stage had; a description of
+ * null / blank clears it. A colour or icon indicator keeps the legacy
+ * `color` (the column tint) in step.
+ */
+export function withStageMarks(old: Stage[], next: Stage[]): Stage[] {
+  const prev = new Map(old.map((s) => [s.id, s]));
+  return next.map((s) => {
+    const was = prev.get(s.id);
+    const out: Stage = { ...s };
+    const indicator = s.indicator ?? was?.indicator;
+    if (indicator) {
+      out.indicator = indicator;
+      if (indicator.kind === 'color' || indicator.kind === 'icon')
+        out.color = indicatorColor(indicator);
+    } else delete out.indicator;
+    const description =
+      s.description === undefined ? was?.description : descriptionText(s.description);
+    if (description) out.description = description;
+    else delete out.description;
+    return out;
+  });
+}
+
 /** Pure: validate the patch against the board and work out every consequence. */
 export function planUpdate(board: Board, { patch, remap }: Pick<Input, 'patch' | 'remap'>): Plan {
   const plan: Plan = {
@@ -85,8 +133,13 @@ export function planUpdate(board: Board, { patch, remap }: Pick<Input, 'patch' |
   if (patch.name !== undefined) u.name = patch.name;
   if (patch.color !== undefined) u.color = patch.color;
   if (patch.icon !== undefined) u.icon = patch.icon;
-  if (patch.description !== undefined)
-    u.description = patch.description === null ? null : parseRichText(patch.description);
+  // indicators.html: plain text; an old client's rich text is flattened.
+  if (patch.description !== undefined) u.description = descriptionText(patch.description);
+  if (patch.indicator !== undefined) {
+    u.indicator = patch.indicator;
+    // Key chips and old readers tint with board.color: keep it coherent.
+    if (patch.color === undefined && 'color' in patch.indicator) u.color = patch.indicator.color;
+  }
 
   // fields first: stage `requires` are checked against the resulting list.
   let fields: FieldDef[] = board.fields;
@@ -107,6 +160,10 @@ export function planUpdate(board: Board, { patch, remap }: Pick<Input, 'patch' |
     fields = [...patch.fields, ...archived];
     u.fields = fields;
   }
+
+  // aggregates.html: like fields — a missing one is ARCHIVED (its totals and
+  // history stay); ids never change; a field's period is fixed once it counts.
+  if (patch.aggFields) u.aggFields = planAggFields(board, patch.aggFields);
 
   if (patch.stages) {
     const next = patch.stages;
@@ -134,8 +191,9 @@ export function planUpdate(board: Board, { patch, remap }: Pick<Input, 'patch' |
     for (const k of Object.keys(moves))
       if (!board.stages.some((s) => s.id === k) || nextById.has(k))
         throw errors.invalid(`remap.stages: "${k}" is not a removed stage`);
-    u.stages = next;
-    plan.newStages = next;
+    const stages = withStageMarks(board.stages, next);
+    u.stages = stages;
+    plan.newStages = stages;
     // Stage grants may only name stages that exist.
     const grants: Record<string, StageGrant> = {};
     let changed = false;

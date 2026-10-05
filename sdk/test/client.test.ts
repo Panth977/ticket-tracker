@@ -211,6 +211,30 @@ describe('messages', () => {
     expect(f.last().body).toEqual({ body_markdown: '', attachments: ['f1'] });
   });
 
+  it('post carries aggregate entries by id or by label (aggregates.html)', async () => {
+    const f = mockFetch({ status: 201, body: { id: 'm1', kind: 'agg' } });
+    await testClient(f).messages.post('ENG-42', {
+      agg: { entries: [{ field: 'Time', value: 2.5 }, { fieldId: 'a_abc123', value: -1 }] },
+    });
+    expect(f.last().body).toEqual({
+      body_markdown: '',
+      agg: {
+        entries: [
+          { field: 'Time', value: 2.5 },
+          { field_id: 'a_abc123', value: -1 },
+        ],
+      },
+    });
+  });
+
+  it('aggregates() reads one field\'s buckets (aggregates.html)', async () => {
+    const f = mockFetch({ status: 200, body: { field: { id: 'cost' }, total: {}, buckets: [] } });
+    await testClient(f).aggregates({ field: 'Time', from: '2026-W30' });
+    expect(f.last()).toMatchObject({ method: 'GET', path: '/board/aggregates' });
+    expect(f.last().url).toContain('field=Time');
+    expect(f.last().url).toContain('from=2026-W30');
+  });
+
   it('post carries the turn receipt as snake_case, with absent optionals as null (§Y1)', async () => {
     const f = mockFetch({ status: 201, body: { id: 'm1', run: { n: 3 } } });
     await testClient(f).messages.post('ENG-42', {

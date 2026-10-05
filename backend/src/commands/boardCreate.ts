@@ -11,7 +11,10 @@
  * anyone's personal views.
  */
 import { errors, isAgentId, paths, type Board, type BoardPref, type View } from '@tm/shared';
+import { COST_AGG_FIELD, type AggFieldDef } from '@tm/shared';
 import { rateBuckets } from '@tm/shared';
+import { indicatorColor, indicatorOf } from '@tm/shared';
+import { descriptionText } from '@tm/shared/logic/index';
 import { can } from '@tm/shared/logic/index';
 import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
@@ -39,6 +42,8 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   // Copy-a-board: read the source first (outside the tx — it is not modified).
   let seed: BoardSeed;
   let copiedViews: { key: string; view: View; wasDefault: boolean }[] | null = null;
+  // aggregates.html: every new board starts with Cost; a copy takes the source's active fields.
+  let aggFields: AggFieldDef[] = [COST_AGG_FIELD];
   if (typeof template === 'object') {
     const src = await boardRef(template.fromBoardId).get();
     const data = src.exists ? src.data()! : undefined;
@@ -51,6 +56,8 @@ export default defineCommand('boardCreate', async (ctx, input) => {
       fields: data.fields,
       settings: data.settings,
     };
+    const activeAggs = (data.aggFields ?? []).filter((f) => !f.archived);
+    if (activeAggs.length) aggFields = activeAggs;
     const views = await typedCol('views', paths.views(src.id)).where('scope', '==', 'shared').get();
     copiedViews = views.docs.map((d) => ({
       key: d.id,
@@ -81,20 +88,27 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   );
 
   const access = { [ctx.actor]: 'admin' as const };
+  // indicators.html: every new board (and each of its stages) gets an indicator.
+  const indicator =
+    input.indicator ??
+    indicatorOf({ color: input.color ?? null, icon: input.icon ?? null }, input.name);
+  const stages = seed.stages.map((s) => ({ ...s, indicator: s.indicator ?? indicatorOf(s, s.id) }));
   const board: Board = {
     name: input.name,
     key: input.key,
     nextNumber: 1,
-    color: input.color ?? 'blue',
+    color: input.color ?? indicatorColor(indicator),
     icon: input.icon ?? '',
-    description: null,
+    indicator,
+    description: descriptionText(input.description),
     access,
     stageGrants: {},
     ...deriveAccess(access),
-    stages: seed.stages,
+    stages,
     priorities: seed.priorities,
     tags: seed.tags,
     fields: seed.fields,
+    aggFields,
     defaultViewId,
     settings: seed.settings,
     counts: { active: 0, done: 0, overdue: 0 },

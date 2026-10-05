@@ -29,7 +29,9 @@ import { TaskItemStatusSchema } from '../schema/tasklist.js';
 import { AgentHealthSchema, AgentStateSchema } from '../schema/agentStatus.js';
 import { MessageKindSchema } from '../schema/ticket.js';
 import { RunOutcomeSchema } from '../schema/message.js';
+import { AGG_ENTRIES_MAX, AggPeriodSchema } from '../schema/aggregates.js';
 import { ArtifactAgentAccessSchema, ArtifactRoleSchema } from '../artifacts/schema.js';
+import { IndicatorSchema } from '../types/indicator.js';
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -98,6 +100,72 @@ export const PublicRunReceiptSchema = z.object({
 export type PublicRunReceipt = z.infer<typeof PublicRunReceiptSchema>;
 
 /**
+ * aggregates.html: a board's AGGREGATE FIELD — a number its tickets add up
+ * (Cost, Time…) with a unit and the period its totals are bucketed by.
+ */
+export const PublicAggFieldSchema = z.object({
+  /** 'cost' (turn receipts land here) or 'a_xxxxxx'. Post entries by id or by label. */
+  id: z.string(),
+  label: z.string(),
+  unit: z.string(),
+  period: AggPeriodSchema,
+  show_on_card: z.boolean(),
+  /** Removed from the board: totals kept, no new entries. */
+  archived: z.boolean(),
+});
+export type PublicAggField = z.infer<typeof PublicAggFieldSchema>;
+/** Per field id: { total, count } (count = how many entries). */
+export const PublicAggCountersSchema = z.record(
+  z.string(),
+  z.object({ total: z.number(), count: z.number().int().nonnegative() }),
+);
+export type PublicAggCounters = z.infer<typeof PublicAggCountersSchema>;
+/** PublicMessage.agg — the entries a message added (kind 'agg', or a receipt's cost). */
+export const PublicMessageAggSchema = z.object({
+  entries: z.array(z.object({ field_id: z.string(), value: z.number() })),
+});
+export type PublicMessageAgg = z.infer<typeof PublicMessageAggSchema>;
+/**
+ * The way IN (REST POST /v1/tickets/{KEY}/messages `agg`, MCP post_message
+ * `agg`): each entry names its field by `field_id` or by `field` (the label,
+ * case-insensitive). A negative value takes away.
+ */
+export const PublicAggInputSchema = z.object({
+  entries: z
+    .array(
+      z
+        .object({
+          field_id: z.string().min(1).max(40).optional(),
+          field: z.string().min(1).max(40).optional(),
+          value: z.number().finite(),
+        })
+        .refine((e) => (e.field_id === undefined) !== (e.field === undefined), {
+          message: 'Name the field by exactly one of field_id or field',
+        }),
+    )
+    .min(1)
+    .max(AGG_ENTRIES_MAX),
+});
+export type PublicAggInput = z.infer<typeof PublicAggInputSchema>;
+/** GET /v1/boards/{KEY}/aggregates, MCP get_aggregates: one field's period buckets. */
+export const PublicAggBucketsSchema = z.object({
+  field: PublicAggFieldSchema,
+  /** Lifetime total of the field on the board. */
+  total: z.object({ total: z.number(), count: z.number().int().nonnegative() }),
+  /** Oldest first; only buckets with entries. `key` is '2026-10-05' | '2026-W40' | '2026-10'. */
+  buckets: z.array(
+    z.object({
+      key: z.string(),
+      total: z.number(),
+      count: z.number().int().nonnegative(),
+      /** Per ticket KEY. */
+      tickets: PublicAggCountersSchema,
+    }),
+  ),
+});
+export type PublicAggBuckets = z.infer<typeof PublicAggBucketsSchema>;
+
+/**
  * Phase 17 (§Z2): an agent profile as POST /v1/agents answers it — what an
  * account token needs to put the agent on a board and mint nothing else.
  */
@@ -129,10 +197,21 @@ export const PublicMemberSchema = PublicPersonSchema.extend({
 });
 export type PublicMember = z.infer<typeof PublicMemberSchema>;
 
-export const PublicStageSchema = z.object({
+/** A stage named on a ticket (or an intake form). */
+export const PublicStageRefSchema = z.object({
   id: z.string(),
   name: z.string(),
   category: StageCategorySchema,
+});
+/** A stage as a board lists it. */
+export const PublicStageSchema = PublicStageRefSchema.extend({
+  /**
+   * indicators.html: what this stage MEANS, in the board admin's words — read
+   * it to decide which stage a ticket belongs in. null = not written.
+   */
+  description: z.string().nullable(),
+  /** indicators.html: the stage's mark (colour / icon / emoji / image). */
+  indicator: IndicatorSchema,
 });
 export const PublicOptionSchema = z.object({ id: z.string(), name: z.string() });
 export const PublicFieldSchema = z.object({
@@ -148,7 +227,10 @@ export const PublicBoardRefSchema = z.object({ id: z.string(), key: z.string(), 
 
 export const PublicBoardSchema = PublicBoardRefSchema.extend({
   url: z.string(),
+  /** indicators.html: what the board is for (plain text, Markdown allowed). */
   description_md: z.string().nullable(),
+  /** indicators.html: the board's mark. */
+  indicator: IndicatorSchema,
   stages: z.array(PublicStageSchema),
   priorities: z.array(PublicOptionSchema),
   tags: z.array(PublicOptionSchema),
@@ -158,6 +240,10 @@ export const PublicBoardSchema = PublicBoardRefSchema.extend({
   archived: z.boolean(),
   /** Phase 17 (§Y2): every turn receipt on every ticket, for the board's lifetime; null = none yet. */
   cost: PublicCostSchema.nullable(),
+  /** aggregates.html: the board's aggregate fields (archived ones included, flagged). */
+  agg_fields: z.array(PublicAggFieldSchema),
+  /** aggregates.html: lifetime { total, count } per field id. */
+  aggs: PublicAggCountersSchema,
 });
 export type PublicBoard = z.infer<typeof PublicBoardSchema>;
 
@@ -168,7 +254,7 @@ export const PublicTicketSchema = z.object({
   title: z.string(),
   description_md: z.string().nullable(),
   board: PublicBoardRefSchema,
-  stage: PublicStageSchema,
+  stage: PublicStageRefSchema,
   priority: PublicOptionSchema.nullable(),
   /** Tag names. */
   tags: z.array(z.string()),
@@ -185,6 +271,8 @@ export const PublicTicketSchema = z.object({
   state: TicketStateSchema,
   /** Phase 17 (§Y2): what the agents' turns on this ticket have cost; null = no receipt yet. */
   cost: PublicCostSchema.nullable(),
+  /** aggregates.html: this ticket's { total, count } per aggregate field id. */
+  aggs: PublicAggCountersSchema,
   created_at: Iso,
   updated_at: Iso,
 });
@@ -293,6 +381,8 @@ export const PublicMessageSchema = z.object({
   pinned: z.boolean(),
   /** Phase 17 (§Y1): the turn receipt, when this message is one; null otherwise. */
   run: PublicRunReceiptSchema.nullable(),
+  /** aggregates.html: the entries this message added (kind 'agg', or a receipt's cost); null otherwise. */
+  agg: PublicMessageAggSchema.nullable(),
   created_at: Iso,
   edited_at: Iso.nullable(),
   deleted: z.boolean(),
@@ -457,7 +547,10 @@ export const PublicArtifactSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  /** LEGACY: the typed emoji, if any. Read `indicator`. */
   icon: z.string().nullable(),
+  /** indicators.html: the artifact's mark. */
+  indicator: IndicatorSchema,
   /** Where a person opens it: {app}/x/{id}. An artifact never runs outside that page. */
   url: z.string(),
   /**

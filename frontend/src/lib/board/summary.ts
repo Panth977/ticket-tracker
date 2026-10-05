@@ -11,7 +11,8 @@
  * pure function is also the only way to test 'this fact is not drawn when it is
  * empty' without a browser.
  */
-import type { Board, FieldValue, Millis, Ticket } from '@tm/shared';
+import type { Board, FieldValue, Indicator, Millis, Ticket } from '@tm/shared';
+import { stageMark } from './stageMark';
 import type { Tone } from '$lib/ui/types';
 import { dueTone, fieldText, formatDate, formatNumber } from '$lib/views/format';
 
@@ -57,6 +58,8 @@ export interface Fact {
   tone?: Tone;
   /** A board option's colour (tints the chip). */
   color?: string | null;
+  /** indicators.html: the stage chip draws its stage's mark. */
+  indicator?: Indicator;
   icon?: FactIcon;
   /** Tooltip / aria wording when the text alone is not enough. */
   title?: string;
@@ -125,7 +128,17 @@ export function cardFacts(t: SummaryTicket, ctx: FactCtx): Fact[] {
 
   if (show('stage')) {
     const st = board.stages.find((s) => s.id === t.stageId);
-    if (st) out.push({ id: 'stage', kind: 'stage', text: st.name, color: st.color });
+    if (st) {
+      const m = stageMark(st);
+      out.push({
+        id: 'stage',
+        kind: 'stage',
+        text: st.name,
+        color: m.color,
+        indicator: m.indicator,
+        ...(m.hint ? { title: m.hint } : {}),
+      });
+    }
   }
 
   if (show('due') && t.dueAt != null) {

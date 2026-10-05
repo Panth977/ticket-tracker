@@ -2,7 +2,8 @@
   The composer (app.json › Composer): TipTap on THE shared schema.
     @  people on this board (name / email, with picture)
     #  ticket search (Typesense, or the dev fallback)
-    /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask
+    /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask /agg
+  Σ / /agg opens 'Add to a total' (aggregates.html) when the board has active aggregate fields.
   Paste, drop or 📎 files → the attach dialog asks which memory and at what
   path (memory.html §J: a ticket's files live in a memory granted `write` to
   the board); they upload with progress and go out as memoryUploads on send.
@@ -49,6 +50,8 @@
   import { relayUpload, sendMessage } from './pending.svelte';
   import { typingSignal } from './presence';
   import AskDialog from './AskDialog.svelte';
+  import AggDialog from './AggDialog.svelte';
+  import { activeAggFields } from '$lib/aggregates/fields';
   import MemoryPicker from '$lib/memoryRefs/MemoryPicker.svelte';
   import { newFileId, objectPathFor } from '$lib/memory/upload.svelte';
   import AttachDialog from './AttachDialog.svelte';
@@ -82,6 +85,9 @@
   let loaded = $state(false);
   /** Phase 5 (§N1): the question builder — the ❓ toolbar button and /ask. */
   let askOpen = $state(false);
+  /** aggregates.html: 'Add to a total' — the Σ toolbar button and /agg. */
+  let aggOpen = $state(false);
+  const canAgg = $derived(t.perms.comment && activeAggFields(t.board).length > 0);
   /** memory.html §E: files picked from a memory, sent as memoryRefs. */
   let memoryPicks = $state<MemoryPick[]>([]);
   let memoryOpen = $state(false);
@@ -230,6 +236,20 @@
           'Commenters, editors and admins can.',
         );
       askOpen = true;
+      return true;
+    }
+    if (a.cmd === 'agg') {
+      if (!t.perms.comment)
+        return fail(
+          "You can't add to a total on this board",
+          'Commenters, editors and admins can.',
+        );
+      if (!canAgg)
+        return fail(
+          'This board has no aggregate fields',
+          'An admin adds them in Settings › Aggregates.',
+        );
+      aggOpen = true;
       return true;
     }
     const needsEdit = !['watch', 'unwatch'].includes(a.cmd);
@@ -432,6 +452,7 @@
         onattach={() => fileInput?.click()}
         onask={() => (askOpen = true)}
         onmemory={() => (memoryOpen = true)}
+        onagg={canAgg ? () => (aggOpen = true) : undefined}
         class="border-b border-line px-1.5 py-1"
       />
       <RichEditor
@@ -540,6 +561,7 @@
       </div>
     </div>
     <AskDialog bind:open={askOpen} onasked={() => onsent?.()} />
+    {#if canAgg}<AggDialog bind:open={aggOpen} onsent={() => onsent?.()} />{/if}
     <AttachDialog
       bind:open={attachOpen}
       {boardId}

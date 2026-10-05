@@ -138,12 +138,12 @@ const REFUSAL: Record<ArtifactNeed, string> = {
 const AGENT_REFUSAL: Record<ArtifactNeed, string> = {
   open: 'This agent cannot open this artifact',
   publish:
-    'This agent has no build permission on this artifact — its owner can give it (People › the agent › Build)',
+    "This agent has no build permission on this artifact — its owner can give it (the agent's page › Subscriptions › Build)",
   manage: 'An agent cannot share, rename or delete an artifact — only its owner can',
   readData:
-    "This agent has no data permission on this artifact — its owner can give it (People › the agent › Data)",
+    "This agent has no data permission on this artifact — its owner can give it (the agent's page › Subscriptions › Read data)",
   writeData:
-    "This agent may not write this artifact's data — its owner can set Data to 'write' (People › the agent › Data)",
+    "This agent may not write this artifact's data — its owner can tick Write data (the agent's page › Subscriptions)",
 };
 
 export interface LoadedArtifact {

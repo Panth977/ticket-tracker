@@ -1,16 +1,26 @@
 <!--
-  Board settings › General: name, key (fixed once created), colour, the
+  Board settings › General: name, description, indicator (indicators.html),
+  key (fixed once created), the
   default view, and the board-wide switches (settings.*). One boardUpdate with
   just the keys that changed.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { BoardPatch, BoardSettings } from '@tm/shared';
+  import {
+    DESCRIPTION_MAX,
+    descriptionText,
+    indicatorColor,
+    indicatorOf,
+    type BoardPatch,
+    type BoardSettings,
+    type Indicator,
+  } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { boardViews } from '$lib/stores';
   import Checkbox from '$lib/ui/Checkbox.svelte';
-  import ColorSwatch, { PALETTE } from '$lib/ui/ColorSwatch.svelte';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import Input from '$lib/ui/Input.svelte';
+  import Textarea from '$lib/ui/Textarea.svelte';
   import Section from './Section.svelte';
   import { useDraft, useRestore, useSettings } from './draft.svelte';
   import { saveBoard } from './save';
@@ -19,15 +29,15 @@
   const s = useSettings();
   type G = {
     name: string;
-    color: string;
-    icon: string;
+    description: string;
+    indicator: Indicator;
     defaultViewId: string;
     settings: BoardSettings;
   };
   const draft = useDraft<G>(() => ({
     name: s.board.name,
-    color: s.board.color,
-    icon: s.board.icon,
+    description: descriptionText(s.board.description) ?? '',
+    indicator: indicatorOf(s.board, s.board.id),
     defaultViewId: s.board.defaultViewId,
     settings: {
       allowDelete: s.board.settings.allowDelete,
@@ -49,8 +59,13 @@
     if (!v.name.trim()) return;
     const patch: BoardPatch = {};
     if (v.name.trim() !== base.name) patch.name = v.name.trim();
-    if (v.color !== base.color) patch.color = v.color;
-    if (v.icon !== base.icon) patch.icon = v.icon;
+    if (v.description.trim() !== base.description.trim())
+      patch.description = v.description.trim() || null;
+    if (JSON.stringify(v.indicator) !== JSON.stringify(base.indicator)) {
+      patch.indicator = v.indicator;
+      // Legacy readers (key chips, tints) still read board.color.
+      patch.color = indicatorColor(v.indicator);
+    }
     if (v.defaultViewId !== base.defaultViewId) patch.defaultViewId = v.defaultViewId;
     const changed = (Object.keys(v.settings) as (keyof BoardSettings)[]).filter(
       (k) => v.settings[k] !== base.settings[k],
@@ -84,29 +99,32 @@
       disabled={ro}
       oninput={(e) => (draft.value = { ...d, name: e.currentTarget.value })}
     />
+    <Textarea
+      label="Description"
+      value={d.description}
+      maxlength={DESCRIPTION_MAX}
+      rows={3}
+      autosize
+      disabled={ro}
+      placeholder="What this board is for — agents read it to know where work belongs."
+      data-testid="board-description"
+      oninput={(e) => (draft.value = { ...d, description: e.currentTarget.value })}
+    />
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm font-medium">Indicator</span>
+      <IndicatorField
+        value={d.indicator}
+        seed={s.board.id}
+        label="Board indicator"
+        disabled={ro}
+        onchange={(i) => (draft.value = { ...d, indicator: i })}
+      />
+    </div>
     <Input
       label="Key"
       value={s.board.key}
       disabled
       hint="Fixed once created — every ticket's number (#{s.board.key}-42) and link uses it."
-    />
-    <div class="flex flex-col gap-1.5">
-      <span class="text-sm font-medium">Colour</span>
-      {#if ro}<ColorSwatch color={d.color} size={18} />
-      {:else}<ColorSwatch
-          value={d.color}
-          options={PALETTE}
-          label="Board colour"
-          onchange={(c) => (draft.value = { ...d, color: c })}
-        />{/if}
-    </div>
-    <Input
-      label="Icon"
-      value={d.icon}
-      maxlength={64}
-      disabled={ro}
-      hint="An emoji shown next to the board in the sidebar."
-      oninput={(e) => (draft.value = { ...d, icon: e.currentTarget.value })}
     />
     <label class="flex flex-col gap-1 text-sm">
       <span class="font-medium">Default view</span>

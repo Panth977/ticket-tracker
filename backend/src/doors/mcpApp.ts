@@ -68,9 +68,9 @@ const PLUMBING = new Set<string>(['ping', 'searchKey', 'memoryFilePut']);
 /** What each command does, in a line; the spec's `permission` says who may. */
 const SUMMARY: Partial<Record<CommandName, string>> = {
   boardCreate:
-    'Create a board (you become its admin). template: blank / kanban / bug tracker, or copy a board.',
+    'Create a board (you become its admin). template: blank / kanban / bug tracker, or copy a board. Give it a `description` (plain text: what the board is for — agents read it) and optionally an `indicator` (its mark: { kind: color | icon | emoji, … }).',
   boardUpdate:
-    'Change board settings: name, key, description, stages, priorities, fields, tags, colours, WIP limits and the settings object (patch). Read get_board_settings first.',
+    'Change board settings: name, key, description (plain text), indicator, stages (each with its own description — what the stage MEANS, which agents read to decide where a ticket goes — and indicator), priorities, fields, tags, WIP limits and the settings object (patch). Read get_board_settings first.',
   boardArchive:
     "Archive, restore or DELETE a board. Deleting needs confirmKey = the board's key and removes every ticket — confirm with the person first.",
   boardAccessSet:
@@ -110,7 +110,7 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
   userAllow: 'App admin only: allow an email address to use this app.',
   userDisallow: 'App admin only: take an email address off the allow list.',
   artifactUpdate:
-    'Rename an artifact, change its description or icon, make it read-only, archive it.',
+    'Rename an artifact, change its description or indicator (its mark), make it read-only, archive it.',
   artifactDelete: 'Delete an artifact with all its builds, source, files and data — confirm first.',
   artifactOpen: 'A link that opens the artifact (current build, or a kept one by buildId).',
   artifactFileList:
@@ -122,16 +122,17 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
   artifactBoardAccessSet:
     'Let an artifact’s page read (or read and write) a board’s tickets through BackendDriver.tickets, or take that away (access null). Viewers still only see what their own board role allows.',
   workspaceCreate:
-    'Create one of your workspaces: a named bundle of boards and artifacts in your sidebar (grants nothing).',
+    'Create one of your workspaces: a named bundle of boards and artifacts in your sidebar (grants nothing), with an optional description and indicator.',
   workspaceUpdate:
-    'Rename / recolour a workspace, or attach and detach boards and artifacts (add / remove, or whole lists).',
+    'Rename a workspace, change its description or indicator, or attach and detach boards and artifacts (add / remove, or whole lists).',
   workspaceDelete: 'Delete a workspace. Its boards and artifacts are untouched.',
   sidebarHide:
     'Hide a board, artifact or memory from your sidebar’s root lists, or show it again. Nothing about it changes otherwise.',
   // Memory (docs/plan/memory.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
   memoryCreate:
     'Create a memory: an online bucket of files and folders (notes, images, video, APKs …) you own.',
-  memoryUpdate: 'Rename a memory, change its description or emoji, archive or restore it.',
+  memoryUpdate:
+    'Rename a memory, change its description or indicator (its mark), archive or restore it.',
   memoryDelete:
     'Delete a memory with every file in it — confirm first. Tickets that pointed at its files show them as gone.',
   memoryShare:
@@ -412,7 +413,7 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
   read(
     'list_workspaces',
     ['board:read'],
-    'Your workspaces (bundles of boards and artifacts, ids and names) and what you hid from the sidebar.',
+    'Your workspaces (bundles of boards and artifacts: ids, names, descriptions, indicators) and what you hid from the sidebar.',
     {},
     async () => {
       const [ws, side, boards] = await Promise.all([

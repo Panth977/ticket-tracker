@@ -58,6 +58,8 @@
   import { attachmentFiles, fileHref } from './files';
   import QuestionCard from './QuestionCard.svelte';
   import TurnReceipt from '$lib/cost/TurnReceipt.svelte';
+  import AggCard from '$lib/aggregates/AggCard.svelte';
+  import { allAggFields } from '$lib/aggregates/fields';
   import PersonAvatar from './PersonAvatar.svelte';
   import MessageStatus from './MessageStatus.svelte';
   import { formatFull, formatWhen } from './time';
@@ -146,6 +148,9 @@
       minute: '2-digit',
     }),
   );
+
+  /** aggregates.html: an 'agg' message (or its bubble) is an entries row, not a bubble. */
+  const agg = $derived(m.kind === 'agg' && m.agg && !deleted ? m.agg : null);
 
   // ——— a failed bubble: Resend / Cancel
   let failOpen = $state(false);
@@ -315,6 +320,31 @@
       {time}
       timeTitle={formatFull(m.createdAt, t.tz)}
     />
+  </div>
+{:else if agg}
+  <!-- aggregates.html: the entries row. Never edited or deleted — a correction is another entry. -->
+  <div
+    id="msg-{m.id}"
+    class="tm-rise-in px-4 pt-2 transition-colors duration-500 {highlight
+      ? 'bg-accent-soft/60'
+      : ''}"
+  >
+    <AggCard
+      {agg}
+      fields={allAggFields(t.board)}
+      note={plainText(doc, pick.nameOf)}
+      authorName={m.authorName}
+      {time}
+      timeTitle={formatFull(m.createdAt, t.tz)}
+      pending={isPending && !failed}
+    />
+    {#if failed}
+      <p class="mt-1 flex items-center gap-2 text-xs text-danger" data-agg-failed>
+        Not added{m.pending && m.error ? ` — ${m.error}` : ''}
+        <Button size="sm" variant="ghost" icon={RotateCw} onclick={resend}>Resend</Button>
+        <Button size="sm" variant="ghost" icon={X} onclick={discard}>Cancel</Button>
+      </p>
+    {/if}
   </div>
 {:else if msg?.kind === 'system'}
   <div

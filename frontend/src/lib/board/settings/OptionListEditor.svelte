@@ -28,6 +28,8 @@
     min?: number;
     /** Extra editors under each row (stage category, WIP, requires). */
     row?: Snippet<[T, (patch: Partial<T>) => void]>;
+    /** Drawn instead of the colour pick (stages: the indicator, indicators.html). */
+    lead?: Snippet<[T, (patch: Partial<T>) => void]>;
     /** Why an item can't be removed (null = it can). */
     removeBlocked?: (item: T) => string | null;
     label?: string;
@@ -41,6 +43,7 @@
     addLabel = 'Add',
     min = 0,
     row,
+    lead,
     removeBlocked,
     label = 'Options',
   }: Props = $props();
@@ -114,7 +117,9 @@
               aria-label="Drag {item.name}"
               class="shrink-0 cursor-grab text-subtle"><GripVertical size={14} /></span
             >{/if}
-          {#if colors}
+          {#if lead}
+            {@render lead(item, (p) => patch(i, p))}
+          {:else if colors}
             <ColorPick
               value={item.color}
               label="Colour of {item.name}"

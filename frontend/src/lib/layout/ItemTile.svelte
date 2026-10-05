@@ -1,7 +1,7 @@
 <!--
   A card for an artifact or a memory, drawn exactly like a board's
   (account/BoardTile) so every "All …" page and a workspace page read the
-  same: a glyph, a badge, the name, a line about it, small facts at the
+  same: its indicator, a badge, the name, a line about it, small facts at the
   bottom. On a root list page `hidden` + `ontogglehidden` show the eye that
   hides it from the sidebar; on a workspace page only `onremove` (the
   workspace page never offers hiding — it is about the sidebar's root lists).
@@ -11,17 +11,22 @@
   /* eslint-disable svelte/no-navigation-without-resolve */
   import type { Snippet } from 'svelte';
   import { Eye, EyeOff, X } from 'lucide-svelte';
+  import { indicatorColor, indicatorOf, type Indicator as IndicatorT } from '@tm/shared';
+  import Indicator from '$lib/ui/Indicator.svelte';
 
   interface Props {
     href: string;
     name: string;
-    glyph: string;
+    /** The entity (indicators.html): its indicator, or the legacy fields indicatorOf reads. */
+    of: { indicator?: IndicatorT | null; color?: string | null; icon?: string | null };
+    /** Drawn when it has no mark (memories: MEMORY_DEFAULT_INDICATOR). */
+    fallback?: IndicatorT;
     description?: string | null;
     /** Top-left, like a board's key: e.g. the role ('Owner'). */
     badge?: string | null;
     /** Facts along the bottom. */
     meta?: Snippet;
-    /** The left stripe (a board's colour; artifacts and memory use the accent). */
+    /** The left stripe; default: the indicator's colour. */
     color?: string;
     /** Root list pages only: is it hidden from the sidebar? (undefined = no eye) */
     hidden?: boolean;
@@ -36,11 +41,12 @@
   let {
     href,
     name,
-    glyph,
+    of,
+    fallback,
     description = null,
     badge = null,
     meta,
-    color = 'var(--color-accent)',
+    color,
     hidden,
     ontogglehidden = null,
     onremove = null,
@@ -62,9 +68,13 @@
   class="group relative flex min-h-28 flex-col gap-2 overflow-hidden rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
   {...{ [`data-${dataKind}`]: id }}
 >
-  <span class="absolute inset-y-0 left-0 w-1" style:background={color} aria-hidden="true"></span>
+  <span
+    class="absolute inset-y-0 left-0 w-1"
+    style:background={color ?? indicatorColor(indicatorOf(of, id, fallback))}
+    aria-hidden="true"
+  ></span>
   <div class="flex items-start gap-2">
-    <span class="text-lg leading-none" aria-hidden="true">{glyph}</span>
+    <Indicator {of} seed={id} {fallback} size="md" />
     {#if badge}
       <span
         class="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-muted group-hover:bg-surface-3"

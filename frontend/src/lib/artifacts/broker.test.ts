@@ -163,6 +163,7 @@ function fakeBackend() {
             id: 'mem01',
             name: 'Brand',
             description: null,
+            indicator: { kind: 'emoji', emoji: '🧠' } as const,
             icon: null,
             reach: 'manage',
             archived: false,

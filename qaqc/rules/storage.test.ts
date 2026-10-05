@@ -1,5 +1,5 @@
 /**
- * storage.rules — ticket attachments, avatars, exports.
+ * storage.rules — ticket attachments, avatars, indicators, exports.
  * Board roles come from Firestore via firestore.get(), so the board is seeded
  * into the Firestore emulator first.
  */
@@ -11,7 +11,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { doc, setDoc } from 'firebase/firestore';
 import { deleteObject, getMetadata, ref, uploadBytes } from 'firebase/storage';
-import { storage as paths, MAX_AVATAR_BYTES } from '@tm/shared';
+import { storage as paths, INDICATOR_IMAGE_MAX_BYTES, MAX_AVATAR_BYTES } from '@tm/shared';
 import {
   ADMIN,
   BOARD,
@@ -51,6 +51,7 @@ beforeAll(async () => {
     await setDoc(doc(fs(ctx), `boards/${BOARD}`), boardDoc(ROLES));
     await uploadBytes(ref(st(ctx), EXISTING), png, pngMeta);
     await uploadBytes(ref(st(ctx), paths.avatar(ADMIN, 1)), png, pngMeta);
+    await uploadBytes(ref(st(ctx), paths.indicator(ADMIN, 'ind_seed1', 'mark.png')), png, pngMeta);
     await uploadBytes(ref(st(ctx), paths.export(ADMIN, 'job1')), png, {
       contentType: 'application/zip',
     });
@@ -100,6 +101,43 @@ describe('avatars', () => {
     await assertFails(
       upload(ADMIN, paths.avatar(ADMIN, 5), new Uint8Array(MAX_AVATAR_BYTES), 'image/png'),
     );
+  });
+});
+
+describe('indicator images (indicators.html)', () => {
+  const ind = (uid: string, fileId: string, name = 'mark.png') =>
+    paths.indicator(uid, fileId, name);
+  it('any signed-in person reads one; signed-out does not', async () => {
+    await assertSucceeds(getMetadata(ref(storageOf(STRANGER), ind(ADMIN, 'ind_seed1'))));
+    await assertFails(getMetadata(ref(storageOf(null), ind(ADMIN, 'ind_seed1'))));
+  });
+  it('the owner uploads an image ≤ 1 MB of an allowed type, once; may delete it', async () => {
+    await assertSucceeds(upload(ADMIN, ind(ADMIN, 'ind_png01')));
+    await assertSucceeds(upload(ADMIN, ind(ADMIN, 'ind_svg01', 'm.svg'), png, 'image/svg+xml'));
+    await assertSucceeds(
+      upload(
+        ADMIN,
+        ind(ADMIN, 'ind_max01'),
+        new Uint8Array(INDICATOR_IMAGE_MAX_BYTES),
+        'image/webp',
+      ),
+    );
+    await assertFails(upload(ADMIN, ind(ADMIN, 'ind_png01'))); // no overwrite
+    await assertSucceeds(deleteObject(ref(storageOf(ADMIN), ind(ADMIN, 'ind_png01'))));
+  });
+  it('not under someone else’s uid, not signed out', async () => {
+    await assertFails(upload(EDITOR, ind(ADMIN, 'ind_other1')));
+    await assertFails(upload(null, ind(ADMIN, 'ind_anon01')));
+    await assertFails(deleteObject(ref(storageOf(EDITOR), ind(ADMIN, 'ind_seed1'))));
+  });
+  it('not over 1 MB, not a non-image type, not a bad fileId', async () => {
+    await assertFails(
+      upload(ADMIN, ind(ADMIN, 'ind_big01'), new Uint8Array(INDICATOR_IMAGE_MAX_BYTES + 1)),
+    );
+    await assertFails(upload(ADMIN, ind(ADMIN, 'ind_txt01', 'a.txt'), png, 'text/plain'));
+    await assertFails(upload(ADMIN, ind(ADMIN, 'ind_bmp01', 'a.bmp'), png, 'image/bmp'));
+    await assertFails(upload(ADMIN, ind(ADMIN, 'abc'))); // too short
+    await assertFails(upload(ADMIN, ind(ADMIN, 'bad.id!')));
   });
 });
 

@@ -9,6 +9,7 @@
   import type { Snippet } from 'svelte';
   import { ChevronDown } from 'lucide-svelte';
   import Menu from '$lib/ui/Menu.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import type { MenuItem } from '$lib/ui/types';
 
   interface Props {
@@ -17,11 +18,11 @@
     name: string;
     /** Before the name, small and muted: a board's key. */
     prefix?: string | null;
-    /** Before everything: an emoji / glyph. */
-    glyph?: string | null;
+    /** Before everything: the entity's indicator (indicators.html). */
+    mark?: MenuItem['indicator'] | null;
     leading?: Snippet;
   }
-  let { kind, items, name, prefix = null, glyph = null, leading }: Props = $props();
+  let { kind, items, name, prefix = null, mark = null, leading }: Props = $props();
   const title = $derived(`Switch ${kind}`);
 </script>
 
@@ -35,9 +36,13 @@
       class="tm-tap flex h-8 min-w-0 items-center gap-1.5 rounded-md px-1 hover:bg-surface-2"
     >
       {@render leading?.()}
-      {#if glyph}<span class="w-5 shrink-0 text-center text-base leading-none" aria-hidden="true"
-          >{glyph}</span
-        >{/if}
+      {#if mark}<Indicator
+          indicator={mark.indicator}
+          of={mark.of}
+          seed={mark.seed}
+          fallback={mark.fallback}
+          size="md"
+        />{/if}
       <h1 class="flex min-w-0 items-baseline gap-1.5 text-base font-semibold">
         {#if prefix}<span class="text-xs tracking-wide text-subtle">{prefix}</span>{/if}
         <span class="truncate">{name}</span>

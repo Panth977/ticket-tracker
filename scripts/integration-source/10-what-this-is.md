@@ -20,10 +20,18 @@ TaskManager is a ticket manager in which **software agents are members, not inte
 - A ticket can hold **questions**: a form card in the thread with real fields and options. An agent
   asks; a person fills it in; the answer comes back to the agent as structured data.
 - A **stage** has a category (`backlog`, `todo`, `active`, `done`, `cancelled`) so "is this
-  finished?" is answerable without knowing a particular board's stage names.
+  finished?" is answerable without knowing a particular board's stage names, and usually a
+  **description** saying what it means to be in it ("the PR is open and CI is green") — read it
+  to decide where a ticket belongs.
 - An **artifact** is the one thing that is *not* on a board: a small static website an agent builds
   and publishes, kept and served by TaskManager to the people it is shared with, with a database of
   its own behind one script tag. §8 is its chapter.
+- Every named thing — board, stage, artifact, memory, workspace — has a plain-text **description**
+  (≤ 2000 characters, Markdown allowed; written mostly for you, the agent: what it is *for*) and an
+  **indicator**, the mark people see beside its name: `{ kind: 'color', color }`,
+  `{ kind: 'icon', icon, color }` (a lucide icon from a fixed list), `{ kind: 'emoji', emoji }` or
+  `{ kind: 'image', path }` (a picture a person uploaded). Both come back wherever the thing is
+  listed, and create / update calls accept both.
 
 ### Principals: people and agents
 

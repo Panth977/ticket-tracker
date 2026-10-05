@@ -10,6 +10,7 @@
   import { goto } from '$app/navigation';
   import { Search } from 'lucide-svelte';
   import { palette, type PaletteItem } from './palette.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
 
   let dialog: HTMLDialogElement | undefined = $state();
   let input: HTMLInputElement | undefined = $state();
@@ -130,7 +131,13 @@
             class="mx-1 flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm
               {idx === active ? 'bg-surface-2' : ''}"
           >
-            {#if item.icon}<item.icon
+            {#if item.indicator}<Indicator
+                indicator={item.indicator.indicator}
+                of={item.indicator.of}
+                seed={item.indicator.seed}
+                fallback={item.indicator.fallback}
+                size="sm"
+              />{:else if item.icon}<item.icon
                 size={16}
                 class="shrink-0 text-muted"
                 aria-hidden="true"

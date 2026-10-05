@@ -31,6 +31,8 @@ import {
 } from '../types/index.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
 import { BoardAttachMemorySchema } from '../memory/attach.js';
+import { AggCountersSchema, AggFieldDefSchema } from './aggregates.js';
+import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 
 export const INVITE_STATUSES = ['pending', 'accepted', 'declined', 'revoked', 'expired'] as const;
 /** Invites expire after 14 days. */
@@ -101,9 +103,17 @@ export const BoardSchema = z.object({
   key: BoardKeySchema,
   /** allocateKey increments in a transaction. */
   nextNumber: z.number().int().positive(),
+  /** LEGACY (indicators.html): read through indicatorOf(); new writes set `indicator`. */
   color: ColorSchema,
+  /** LEGACY: a typed icon. */
   icon: z.string(),
-  description: RichTextSchema.nullable(),
+  /** indicators.html: what the sidebar, dropdowns and cards draw. Absent on old boards until migrated. */
+  indicator: IndicatorSchema.optional(),
+  /**
+   * indicators.html: plain text (Markdown allowed), mostly for agents. Old
+   * boards hold rich text here until scripts/migrate-indicators.mjs flattens it.
+   */
+  description: z.union([DescriptionSchema, RichTextSchema]).nullable(),
 
   /** Keys are PRINCIPAL ids: people and agents (§AA2: an agent may hold any role, admin included). */
   access: z.record(PrincipalIdSchema, BoardRoleSchema),
@@ -137,6 +147,10 @@ export const BoardSchema = z.object({
   }),
   /** Phase 17 (§Y2): every turn receipt on every ticket, for the board's lifetime. Absent = nothing yet. */
   cost: CostCounterSchema.optional(),
+  /** aggregates.html: the aggregate fields (Settings › Aggregates). Absent = none yet (the migration adds Cost). */
+  aggFields: z.array(AggFieldDefSchema).optional(),
+  /** aggregates.html: lifetime { total, count } per field. `cost` is the legacy mirror of aggs.cost. */
+  aggs: AggCountersSchema.optional(),
   /**
    * memory.html §J: where a file put on one of this board's tickets goes by
    * default — one of the memories granted `write` to the board, and a path

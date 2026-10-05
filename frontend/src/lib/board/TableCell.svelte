@@ -8,6 +8,8 @@
   import Badge from '$lib/ui/Badge.svelte';
   import DatePicker from '$lib/ui/DatePicker.svelte';
   import PersonChip from '$lib/ui/PersonChip.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
+  import { stageChoices, stageMark } from './stageMark';
   import ChoicePicker, { type ChoiceItem } from '$lib/views/pickers/ChoicePicker.svelte';
   import { dueTone, fieldText, formatDate, formatNumber } from '$lib/views/format';
   import Avatars from './Avatars.svelte';
@@ -57,7 +59,7 @@
   }
   /** Commenters may change the stage within their grant; everything else needs edit. */
   const stageItems = $derived(
-    opts(board.stages).filter((s) => s.id === t.stageId || bs.canMoveTo(t, s.id)),
+    stageChoices(board.stages).filter((s) => s.id === t.stageId || bs.canMoveTo(t, s.id)),
   );
 </script>
 
@@ -181,7 +183,11 @@
       part="activity"
     />
   {:else if field === 'stage'}
-    {#if stage}<Badge color={stage.color}>{stage.name}</Badge>{/if}
+    {#if stage}<Badge color={stageMark(stage).color}
+        ><span class="inline-flex items-center gap-1"
+          ><Indicator of={stage} seed={stage.id} size="xs" />{stage.name}</span
+        ></Badge
+      >{/if}
   {:else if field === 'priority'}
     {#if priority}<Badge color={priority.color}>{priority.name}</Badge>{/if}
   {:else if field === 'assignee'}

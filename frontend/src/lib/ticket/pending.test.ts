@@ -85,7 +85,7 @@ describe('message bubbles from outbox entries', () => {
     };
     const merged = mergeThread<{
       id: string;
-      kind: 'comment' | 'question';
+      kind: 'comment' | 'question' | 'agg';
       authorUid: string;
       authorName: string;
       createdAt: number;

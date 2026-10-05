@@ -10,6 +10,7 @@
 <script lang="ts">
   import { Ban, ListChecks, Loader2, Paperclip } from 'lucide-svelte';
   import Badge from '$lib/ui/Badge.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import Avatars from './Avatars.svelte';
   import type { Fact } from './summary';
 
@@ -61,6 +62,11 @@
                 size={10}
                 class="mr-0.5 inline"
                 aria-hidden="true"
+              />{/if}
+            {#if f.indicator}<Indicator
+                indicator={f.indicator}
+                size="xs"
+                class="mr-0.5 inline-flex align-[-1px]"
               />{/if}
             {#if f.label}<span class="mr-0.5 text-subtle">{f.label}</span>{/if}{f.text}
           </Badge>

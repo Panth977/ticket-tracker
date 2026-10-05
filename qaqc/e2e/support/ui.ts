@@ -39,3 +39,50 @@ export async function signIn(page: Page, email: string, next?: string): Promise<
     { timeout: 30_000 },
   );
 }
+
+// ─── access (frontend/src/lib/access): Subscriptions / Subscribers ──────────
+
+/** The open two-step Add / Edit dialog. */
+export const subscribeDialog = (page: Page) =>
+  // The nearest <dialog> around the step (it may sit inside another dialog, e.g. the workspace form).
+  page.locator('[data-subscribe-step]').locator('xpath=ancestor::dialog[1]');
+
+/** Tick exactly these permission boxes (by key: read, write, view, comment, edit, admin, build). */
+export async function setPerms(page: Page, keys: string[]): Promise<void> {
+  const dlg = subscribeDialog(page);
+  const boxes = dlg.locator('input[data-perm]');
+  const all = await boxes.evaluateAll((els) => els.map((e) => e.getAttribute('data-perm')!));
+  for (const k of all) if (keys.includes(k)) await dlg.locator(`input[data-perm="${k}"]`).check();
+  for (const k of [...all].reverse())
+    if (!keys.includes(k)) await dlg.locator(`input[data-perm="${k}"]`).uncheck();
+  for (const k of all)
+    await expect(dlg.locator(`input[data-perm="${k}"]`)).toBeChecked({ checked: keys.includes(k) });
+}
+
+/**
+ * Subscriptions › Add: pick `candidate` ('memory:<id>', 'board:<id>'…) and, when
+ * the relation has permissions, tick `perms` and press Add. `list` is the
+ * data-subscriptions name ('board', 'artifact', 'agent', 'workspace').
+ */
+export async function subscribe(
+  page: Page,
+  list: string,
+  candidate: string,
+  perms?: string[],
+  before?: () => Promise<void>,
+): Promise<void> {
+  await page
+    .locator(`[data-subscriptions="${list}"]`)
+    .getByRole('button', { name: 'Add', exact: true })
+    .click();
+  const dlg = subscribeDialog(page);
+  await dlg.locator(`[data-candidate="${candidate}"]`).click();
+  if (!perms) {
+    await expect(dlg).toHaveCount(0);
+    return;
+  }
+  await setPerms(page, perms);
+  if (before) await before();
+  await dlg.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dlg).toHaveCount(0);
+}

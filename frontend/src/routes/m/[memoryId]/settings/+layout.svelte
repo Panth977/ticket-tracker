@@ -1,8 +1,8 @@
 <!--
   /m/[memoryId]/settings/[section] — Memory settings (docs/plan/memory.html §F),
   the same frame as artifact settings: the title dropdown on top, then
-  [menu: General · People · Board & artifact access] | [the section].
-  The owner sees all three; an editor or viewer only the access list.
+  [menu: General · People · Subscribers] | [the section].
+  The owner sees all three; an editor or viewer only Subscribers.
 -->
 <script lang="ts">
   // hrefs are built by lib/layout/routes (the SPA has no base path).
@@ -10,7 +10,6 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { ArrowLeft } from 'lucide-svelte';
-  import { memoryGlyph } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { provideMemorySettings } from '$lib/memory/settings/context.svelte';
@@ -19,6 +18,8 @@
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import { switcherFor } from '$lib/workspaces/switcherStore';
   import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
+  import { MEMORY_DEFAULT_INDICATOR } from '@tm/shared';
   import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -66,7 +67,12 @@
 {:else}
   <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
     {#if $switchQ.workspace}<WorkspaceCrumb workspace={$switchQ.workspace} />{/if}
-    <TitleSwitcher kind="memory" items={$switchQ.items} name={m.name} glyph={memoryGlyph(m)} />
+    <TitleSwitcher
+      kind="memory"
+      items={$switchQ.items}
+      name={m.name}
+      mark={{ of: m, seed: memoryId, fallback: MEMORY_DEFAULT_INDICATOR }}
+    />
     <span class="shrink-0 text-sm text-subtle">› Settings</span>
   </header>
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:flex-row md:px-8">
@@ -76,7 +82,8 @@
         class="mb-2 flex min-w-0 items-center gap-1.5 text-sm text-muted hover:text-text"
       >
         <ArrowLeft size={14} class="shrink-0" />
-        <span class="truncate">{memoryGlyph(m)} {m.name}</span>
+        <Indicator of={m} seed={memoryId} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
+        <span class="truncate">{m.name}</span>
       </a>
       <h1 class="mb-1 px-2 text-xs font-semibold tracking-wide text-subtle uppercase">Settings</h1>
       <ul class="flex gap-1 overflow-x-auto md:flex-col">

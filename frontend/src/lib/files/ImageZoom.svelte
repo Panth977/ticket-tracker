@@ -81,7 +81,8 @@
   <!-- minmax(0,1fr) tracks give the cell a definite size, so max-h-full fits a tall image to the stage -->
   <div
     bind:this={stage}
-    class="grid size-full touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center select-none {scale > 1
+    class="grid size-full touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center select-none {scale >
+    1
       ? drag
         ? 'cursor-grabbing'
         : 'cursor-grab'

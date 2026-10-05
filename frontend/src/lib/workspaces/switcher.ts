@@ -10,10 +10,16 @@
  *                                              artifact (on an artifact) or
  *                                              every memory (on a memory)
  *
- * Archived ones are left out; the open one is marked (disabled).
+ * Archived ones are left out; the open one is marked (disabled). Every row
+ * carries its entity's indicator (indicators.html), drawn by Menu.
  */
-import { memoryGlyph, type Artifact, type Board, type Memory, type Workspace } from '@tm/shared';
-import { artifactGlyph } from '$lib/artifacts/store';
+import {
+  MEMORY_DEFAULT_INDICATOR,
+  type Artifact,
+  type Board,
+  type Memory,
+  type Workspace,
+} from '@tm/shared';
 import { routes } from '$lib/layout/routes';
 import type { WithId } from '$lib/stores';
 import type { MenuItem } from '$lib/ui/types';
@@ -49,18 +55,21 @@ export function switcherItems(o: {
   const memories = (o.memories ?? []).filter((m) => m.archivedAt == null);
   const boardItem = (b: WithId<Board>, separator = false): MenuItem => ({
     label: `${b.key} · ${b.name}`,
+    indicator: { of: b, seed: b.id },
     href: routes.board(b.key),
     disabled: 'boardId' in o.current && b.id === o.current.boardId,
     separator,
   });
   const artifactItem = (a: WithId<Artifact>, separator = false): MenuItem => ({
-    label: `${artifactGlyph(a)}  ${a.name}`,
+    label: a.name,
+    indicator: { of: a, seed: a.id },
     href: routes.artifact(a.id),
     disabled: 'artifactId' in o.current && a.id === o.current.artifactId,
     separator,
   });
   const memoryItem = (m: WithId<Memory>, separator = false): MenuItem => ({
-    label: `${memoryGlyph(m)}  ${m.name}`,
+    label: m.name,
+    indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
     href: routes.memory(m.id),
     disabled: 'memoryId' in o.current && m.id === o.current.memoryId,
     separator,

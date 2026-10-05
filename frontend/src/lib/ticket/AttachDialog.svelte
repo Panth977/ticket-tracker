@@ -9,14 +9,19 @@
       SELECTED, so typing renames it. Enter attaches.
   A path that is already taken is not an error: the server numbers the new
   file ('name (2).png'). No memory to write to → it says so, and points an
-  admin at Settings › Memory.
+  admin at Settings › Subscriptions.
 -->
 <script lang="ts">
   // Links come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { tick, untrack } from 'svelte';
   import { Brain, Loader2, Settings, X } from 'lucide-svelte';
-  import { formatBytes, memoryGlyph, random6, type BoardAttachMemory } from '@tm/shared';
+  import {
+    MEMORY_DEFAULT_INDICATOR,
+    formatBytes,
+    random6,
+    type BoardAttachMemory,
+  } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { KIND_ICON, kindOf } from '$lib/files/kinds';
   import { routes } from '$lib/layout/routes';
@@ -44,7 +49,7 @@
     /** The ticket's key (ENG-42): fills <ticketId>. */
     ticketKey: string;
     attachMemory: BoardAttachMemory | null | undefined;
-    /** Board admins get a way to Settings › Memory when there is nowhere to write. */
+    /** Board admins get a way to Settings › Subscriptions when there is nowhere to write. */
     isAdmin: boolean;
     files: File[];
     onattach: (a: {
@@ -157,19 +162,21 @@
         </p>
         {#if isAdmin}
           <p class="text-muted">
-            Grant one of your memories <b>Read &amp; write</b> to this board, and pick it for ticket attachments.
+            Add one of your memories to this board with <b>Write</b>, and pick it for ticket
+            attachments.
           </p>
           <a
-            href={routes.boardSettings(boardKey, 'memory')}
+            href={routes.boardSettings(boardKey, 'subscriptions')}
             class="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-medium hover:bg-surface-2"
             onclick={() => (open = false)}
             data-attach-settings
           >
-            <Settings size={14} aria-hidden="true" /> Open Settings › Memory
+            <Settings size={14} aria-hidden="true" /> Open Settings › Subscriptions
           </a>
         {:else}
           <p class="text-muted">
-            Ask a board admin to share a memory with this board for writing (Settings › Memory).
+            Ask a board admin to share a memory with this board for writing (Settings ›
+            Subscriptions).
           </p>
         {/if}
         <p class="text-xs text-subtle">
@@ -187,7 +194,8 @@
           bind:value={memoryId}
           options={memories.map((m) => ({
             value: m.id,
-            label: `${memoryGlyph(m)} ${m.name}${m.id === attachMemory?.memoryId ? ' (default)' : ''}`,
+            label: `${m.name}${m.id === attachMemory?.memoryId ? ' (default)' : ''}`,
+            indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
           }))}
           data-attach-memory
         />

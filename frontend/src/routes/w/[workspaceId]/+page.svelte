@@ -12,12 +12,13 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Pencil, Trash2 } from 'lucide-svelte';
-  import { memoryGlyph, paths, type Workspace } from '@tm/shared';
+  import { MEMORY_DEFAULT_INDICATOR, paths, type Workspace } from '@tm/shared';
   import { command } from '$lib/api';
   import BoardTile from '$lib/account/BoardTile.svelte';
-  import { artifactGlyph, myArtifacts, splitArtifacts } from '$lib/artifacts/store';
+  import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import ItemTile from '$lib/layout/ItemTile.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { routes } from '$lib/layout/routes';
   import { myMemories, splitMemories } from '$lib/memory/store';
   import { docStore, myBoards } from '$lib/stores';
@@ -99,8 +100,16 @@
   {:else}
     <header class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex min-w-0 items-center gap-3">
-        <span class="size-3 shrink-0 rounded-full" style="background: {ws.color}"></span>
-        <h1 class="truncate text-2xl font-semibold">{ws.name}</h1>
+        <Indicator of={ws} seed={ws.id} size="lg" />
+        <div class="min-w-0">
+          <h1 class="truncate text-2xl font-semibold">{ws.name}</h1>
+          {#if ws.description}<p
+              class="line-clamp-2 text-sm whitespace-pre-line text-muted"
+              data-workspace-description
+            >
+              {ws.description}
+            </p>{/if}
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <Button icon={Pencil} onclick={() => (editing = true)}>Edit</Button>
@@ -157,7 +166,7 @@
               id={a.id}
               href={routes.artifact(a.id)}
               name={a.name}
-              glyph={artifactGlyph(a)}
+              of={a}
               description={a.description}
               onremove={() => remove({ artifactIds: [a.id] })}
               onopen={() => workspaceContext.enter(ws.id)}
@@ -177,7 +186,8 @@
               id={m.id}
               href={routes.memory(m.id)}
               name={m.name}
-              glyph={memoryGlyph(m)}
+              of={m}
+              fallback={MEMORY_DEFAULT_INDICATOR}
               description={m.description}
               onremove={() => remove({ memoryIds: [m.id] })}
               onopen={() => workspaceContext.enter(ws.id)}

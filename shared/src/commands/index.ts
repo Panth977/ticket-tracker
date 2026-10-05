@@ -103,6 +103,7 @@ export const COMMANDS = {
   artifactSourceUrl: artifacts.artifactSourceUrl,
   artifactDataClear: artifacts.artifactDataClear,
   artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
+  boardArtifactList: artifacts.boardArtifactList,
   // workspaces (agents.html §AB): a person's own sidebar
   workspaceCreate: workspaces.workspaceCreate,
   workspaceUpdate: workspaces.workspaceUpdate,

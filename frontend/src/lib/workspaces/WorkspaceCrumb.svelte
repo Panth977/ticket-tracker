@@ -8,6 +8,7 @@
   import { ChevronRight } from 'lucide-svelte';
   import type { Workspace } from '@tm/shared';
   import { routes } from '$lib/layout/routes';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import type { WithId } from '$lib/stores';
 
   let { workspace }: { workspace: WithId<Workspace> } = $props();
@@ -18,7 +19,7 @@
   class="flex min-w-0 shrink items-center gap-1.5 truncate text-sm text-muted hover:text-text"
   data-workspace-crumb
 >
-  <span class="size-2 shrink-0 rounded-full" style="background: {workspace.color}"></span>
+  <Indicator of={workspace} seed={workspace.id} size="sm" />
   <span class="truncate">{workspace.name}</span>
 </a>
 <ChevronRight size={14} class="shrink-0 text-subtle" aria-hidden="true" />

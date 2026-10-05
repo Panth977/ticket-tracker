@@ -3,7 +3,8 @@
  * 'New' divider goes. "Grouped by author and day" (app.json Thread): a run of
  * comments by one person on one day, each within GROUP_GAP_MS of the last,
  * shares a single header. System lines always stand alone — and so does a
- * turn receipt (phase 17, §Y1: a message with `run` is a row, not a bubble).
+ * turn receipt (phase 17, §Y1: a message with `run` is a row, not a bubble)
+ * and an 'agg' message (aggregates.html: entries are a row too).
  */
 import type { Message } from '@tm/shared';
 
@@ -19,8 +20,8 @@ export interface ThreadMsg extends Pick<
   run?: Message['run'];
 }
 
-/** System lines and turn receipts never share a header with anything. */
-const alone = (m: ThreadMsg): boolean => m.kind === 'system' || !!m.run;
+/** System lines, turn receipts and 'agg' rows never share a header with anything. */
+const alone = (m: ThreadMsg): boolean => m.kind === 'system' || m.kind === 'agg' || !!m.run;
 
 export interface MsgGroup<M extends ThreadMsg> {
   key: string;

@@ -20,6 +20,7 @@
   import { ALL_KEY, type ViewGroup } from '@tm/shared/logic/view';
   import Menu from '$lib/ui/Menu.svelte';
   import PersonChip from '$lib/ui/PersonChip.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import type { MenuItem } from '$lib/ui/types';
   import { boardFields, fieldInfo } from '$lib/views/fields';
   import { DEFAULT_COLUMNS } from '$lib/views/draft';
@@ -370,9 +371,13 @@
                     size={18}
                   />
                 {:else}
-                  {#if r.g.color}<span class="size-2.5 rounded-full" style="background:{r.g.color}"
+                  {@const st =
+                    r.g.by === 'stage' && r.g.value != null ? bs.stage(r.g.key) : undefined}
+                  {#if st}<Indicator of={st} seed={st.id} size="sm" />{:else if r.g.color}<span
+                      class="size-2.5 rounded-full"
+                      style="background:{r.g.color}"
                     ></span>{/if}
-                  {groupLabel(board, r.g)}
+                  <span title={st?.description || undefined}>{groupLabel(board, r.g)}</span>
                 {/if}
                 <span class="text-xs font-normal text-subtle">{r.g.tickets.length}</span>
               </button>

@@ -16,7 +16,14 @@ import {
   SquareKanban,
   User,
 } from 'lucide-svelte';
-import type { Artifact, Board, Memory, Workspace } from '@tm/shared';
+import {
+  MEMORY_DEFAULT_INDICATOR,
+  descriptionText,
+  type Artifact,
+  type Board,
+  type Memory,
+  type Workspace,
+} from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
 import type { QueryState } from '$lib/stores';
 import type { Readable } from 'svelte/store';
@@ -107,8 +114,9 @@ export function registerNavProviders(
             label: b.name,
             hint: b.key,
             icon: SquareKanban,
+            indicator: { of: b, seed: b.id },
             href: routes.board(b.key),
-            keywords: b.key,
+            keywords: `${b.key} ${descriptionText(b.description) ?? ''}`,
           },
           ...(q
             ? [
@@ -148,6 +156,7 @@ export function registerNavProviders(
             label: a.name,
             hint: a.description ?? undefined,
             icon: AppWindow,
+            indicator: { of: a, seed: a.id },
             href: routes.artifact(a.id),
             keywords: 'artifact app',
           })),
@@ -168,6 +177,7 @@ export function registerNavProviders(
             label: m.name,
             hint: m.description ?? undefined,
             icon: Brain,
+            indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
             href: routes.memory(m.id),
             keywords: 'memory files bucket',
           })),
@@ -187,8 +197,9 @@ export function registerNavProviders(
             label: w.name,
             hint: `${w.boardIds.length} boards · ${w.artifactIds.length} artifacts`,
             icon: Layers,
+            indicator: { of: w, seed: w.id },
             href: routes.workspace(w.id),
-            keywords: 'workspace group',
+            keywords: `workspace group ${w.description ?? ''}`,
           })),
         );
       },

@@ -8,7 +8,13 @@
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
-  import { ARTIFACT_DESCRIPTION_MAX, ARTIFACT_NAME_MAX } from '@tm/shared';
+  import {
+    ARTIFACT_DESCRIPTION_MAX,
+    ARTIFACT_NAME_MAX,
+    defaultIndicator,
+    type Indicator,
+  } from '@tm/shared';
+  import IndicatorField from '$lib/ui/IndicatorField.svelte';
   import { command } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -20,6 +26,9 @@
 
   let name = $state('');
   let description = $state('');
+  /** null = not picked yet: a palette colour that follows the name. */
+  let picked = $state<Indicator | null>(null);
+  const indicator = $derived(picked ?? defaultIndicator(name.trim() || 'artifact'));
   let busy = $state(false);
 
   // A fresh form each time it opens.
@@ -27,6 +36,7 @@
     if (open) {
       name = '';
       description = '';
+      picked = null;
     }
   });
 
@@ -37,7 +47,7 @@
     try {
       const { artifactId } = await command(
         'artifactCreate',
-        { name: n, description: description.trim() || null },
+        { name: n, description: description.trim() || null, indicator },
         { toast: 'Could not create the artifact' },
       );
       open = false;
@@ -76,6 +86,15 @@
       rows={2}
       placeholder="What it is for (optional)"
     />
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm font-medium">Indicator</span>
+      <IndicatorField
+        value={indicator}
+        seed={name}
+        label="Artifact indicator"
+        onchange={(i) => (picked = i)}
+      />
+    </div>
   </form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>

@@ -17,6 +17,7 @@
  * only name their own board.
  */
 import { z } from 'zod';
+import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import {
   AgentIconIdSchema,
   AgentIdSchema,
@@ -49,10 +50,13 @@ import {
   TaskItemStatusSchema,
 } from '../schema/tasklist.js';
 import { AGENT_STATUS_MESSAGE_MAX, AgentStateSchema } from '../schema/agentStatus.js';
+import { AGG_KEY_RE } from '../schema/aggregates.js';
 import {
   PublicAgentSchema,
   PublicAgentStatusSchema,
   PublicRunReceiptSchema,
+  PublicAggBucketsSchema,
+  PublicAggInputSchema,
   PublicMemoryFileRefSchema,
   PublicQuestionSchema,
   PublicQuestionFieldSchema,
@@ -301,6 +305,14 @@ export const RestPostMessageBodySchema = z
      */
     run: PublicRunReceiptSchema.nullable().optional(),
     /**
+     * aggregates.html: entries for the board's aggregate fields — each names
+     * its field by `field_id` or `field` (label, case-insensitive); a negative
+     * value takes away. Without a run the message is kind 'agg' and the body
+     * may be empty (the server writes '+$1.24 Cost'). Beside a `run`, no
+     * entry may name the cost field (the receipt already counts it).
+     */
+    agg: PublicAggInputSchema.optional(),
+    /**
      * memory.html §E: memory files to attach BY REFERENCE (no upload). The
      * memory must be granted to this board. Name each by node_id or path.
      */
@@ -310,12 +322,32 @@ export const RestPostMessageBodySchema = z
   .refine(
     (b) =>
       b.body_markdown.trim().length > 0 ||
+      (b.agg?.entries.length ?? 0) > 0 ||
       (b.attachments?.length ?? 0) > 0 ||
       (b.memory_files?.length ?? 0) > 0,
-    { message: 'A message needs body_markdown, attachments or memory_files' },
+    { message: 'A message needs body_markdown, agg, attachments or memory_files' },
   );
 export type RestPostMessageBody = z.infer<typeof RestPostMessageBodySchema>;
 export const RestPostMessageResSchema = PublicMessageSchema;
+
+// ───────────────────────── aggregates (aggregates.html) ─────────────────────────
+
+/**
+ * GET /v1/boards/{KEY}/aggregates?field=&from=&to= (or GET
+ * /v1/board/aggregates?board=…, the SDK's form) — one aggregate field's
+ * period buckets. `field` is an id or a label (default: the first active
+ * field); from / to are period keys of that field's period, inclusive
+ * ('2026-10-01', '2026-W38', '2026-09'); default: the last 30 days / 12 weeks
+ * / 12 months.
+ */
+export const RestAggregatesQuerySchema = z.object({
+  /** GET /v1/board/aggregates only (the board-in-the-query form). */
+  board: BoardParam,
+  field: z.string().min(1).max(40).optional(),
+  from: z.string().regex(AGG_KEY_RE).optional(),
+  to: z.string().regex(AGG_KEY_RE).optional(),
+});
+export const RestAggregatesResSchema = PublicAggBucketsSchema;
 
 // ───────────────────────── files ─────────────────────────
 
@@ -553,8 +585,14 @@ export const RestCreateBoardBodySchema = z
     /** 2–6 chars, A–Z then A–Z/0–9; 409 when taken. */
     key: BoardKeySchema,
     template: z.enum(BOARD_TEMPLATES).optional(),
+    /** LEGACY: prefer `indicator`. */
     color: ColorSchema.optional(),
+    /** LEGACY: prefer `indicator`. */
     icon: z.string().max(64).optional(),
+    /** indicators.html: the board's mark (colour / icon / emoji / uploaded image). */
+    indicator: IndicatorSchema.optional(),
+    /** indicators.html: plain text — what the board is for (agents read it). */
+    description: DescriptionSchema.optional(),
   })
   .strict();
 export type RestCreateBoardBody = z.infer<typeof RestCreateBoardBodySchema>;
@@ -626,8 +664,10 @@ export const RestCreateArtifactBodySchema = z
   .object({
     name: z.string().trim().min(1).max(ARTIFACT_NAME_MAX),
     description: z.string().trim().max(ARTIFACT_DESCRIPTION_MAX).nullable().optional(),
-    /** One emoji. */
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon: z.string().max(16).nullable().optional(),
+    /** indicators.html: the artifact's mark. */
+    indicator: IndicatorSchema.optional(),
   })
   .strict();
 export type RestCreateArtifactBody = z.infer<typeof RestCreateArtifactBodySchema>;
@@ -637,7 +677,10 @@ export const RestPatchArtifactBodySchema = z
   .object({
     name: z.string().trim().min(1).max(ARTIFACT_NAME_MAX).optional(),
     description: z.string().trim().max(ARTIFACT_DESCRIPTION_MAX).nullable().optional(),
+    /** LEGACY: one emoji. Prefer `indicator`. */
     icon: z.string().max(16).nullable().optional(),
+    /** indicators.html: the artifact's mark. */
+    indicator: IndicatorSchema.optional(),
     /** Viewers may read the data but not write it. */
     read_only: z.boolean().optional(),
     /** Archive (no data writes, off the sidebar) or restore. */
@@ -899,6 +942,13 @@ export const REST_ROUTES = [
   },
   {
     method: 'GET',
+    path: '/v1/board/aggregates',
+    scopes: ['board:read'],
+    board: true,
+    summary: "One aggregate field's totals per period bucket (aggregates.html)",
+  },
+  {
+    method: 'GET',
     path: '/v1/boards',
     scopes: ['board:read'],
     summary:
@@ -911,6 +961,12 @@ export const REST_ROUTES = [
     path: '/v1/boards/{KEY}',
     scopes: ['board:read'],
     summary: 'One board: stages, priorities, tags, fields, members',
+  },
+  {
+    method: 'GET',
+    path: '/v1/boards/{KEY}/aggregates',
+    scopes: ['board:read'],
+    summary: "One aggregate field's totals per period bucket (aggregates.html)",
   },
   // phase 17 (§Z2): ACCOUNT-TOKEN routes — the REST face of boardCreate,
   // agentCreate and boardAgentSet, which the app door already exposes to a

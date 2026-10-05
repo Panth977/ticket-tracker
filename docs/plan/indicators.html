@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Indicators · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/memory">Memory</a>
+          <a href="/plan/indicators" class="on">Indicators</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+      <article class="mg">
+        <h1>Indicators and descriptions</h1>
+        <p class="lede">
+          Everything a person names — a <b>board</b>, a board's <b>stage</b>, an <b>artifact</b>, a
+          <b>memory</b>, a <b>workspace</b> — carries the same two things: an <b>indicator</b> (the
+          mark the sidebar, the title dropdowns, cards and every picker draw beside its name) and a
+          <b>description</b> (plain text saying what it is for). Before this, boards and artifacts
+          asked for a colour, memories for a typed emoji, boards had rich text and stages had
+          nothing. Now there is one model, one picker, one component, and agents get a sentence of
+          intent on everything they can list.
+        </p>
+
+        <h2 id="a">A · The indicator</h2>
+        <p>
+          <code>shared/src/types/indicator.ts</code>. Exactly one of four kinds; nothing is ever
+          typed character by character:
+        </p>
+        <table>
+          <tr>
+            <th>kind</th>
+            <th>stored</th>
+            <th>drawn as</th>
+          </tr>
+          <tr>
+            <td><code>color</code></td>
+            <td>
+              <code>{ kind, color: '#rrggbb' }</code> — one of <code>INDICATOR_COLORS</code> (14)
+            </td>
+            <td>a filled dot (small sizes) or rounded square (md and up)</td>
+          </tr>
+          <tr>
+            <td><code>icon</code></td>
+            <td>
+              <code>{ kind, icon, color }</code> — <code>icon</code> one of
+              <code>INDICATOR_ICONS</code> (≈ 90 lucide names, kebab-case), tinted with a palette
+              colour
+            </td>
+            <td>the lucide icon in that colour</td>
+          </tr>
+          <tr>
+            <td><code>emoji</code></td>
+            <td>
+              <code>{ kind, emoji }</code> — one emoji (a grapheme, ≤ 32 code units; the schema
+              refuses anything without a pictographic code point)
+            </td>
+            <td>the emoji</td>
+          </tr>
+          <tr>
+            <td><code>image</code></td>
+            <td>
+              <code>{ kind, path }</code> —
+              <code>indicators/{uid}/{fileId}/{name}</code> (<code>INDICATOR_PATH_RE</code>)
+            </td>
+            <td>the uploaded picture, rounded, object-fit cover</td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <b>The emoji is PICKED.</b> The picker is a grid with categories and a search by name
+            and keyword over a compact built-in dataset, loaded lazily; there is no text box an
+            emoji could be typed into. The schema check is the server's half of the same rule.
+          </li>
+          <li>
+            <b>The icon list is closed.</b> The app maps each id to its lucide component through a
+            static import map (<code>frontend/src/lib/ui/indicatorIcons.ts</code>), so the bundle
+            holds exactly those icons, and nothing outside the list can be stored.
+          </li>
+          <li>
+            <b>A new entity gets one</b>: what the create call sent, else
+            <code>defaultIndicator(seed)</code> — a palette colour from a stable hash of its name.
+          </li>
+          <li>
+            <b>A tint</b> where the app needs a colour (a stage column, a board's key chip):
+            <code>indicatorColor(i)</code> — the colour of a colour or icon indicator, else the
+            palette's first. A board's legacy <code>color</code> is kept equal to it on every write,
+            so readers that still use <code>board.color</code> stay right.
+          </li>
+        </ul>
+
+        <h2 id="b">B · Uploaded images</h2>
+        <ul>
+          <li>
+            The app uploads straight to Storage (like an avatar), at
+            <code>indicators/{uid}/{fileId}/{name}</code> with a fresh <code>fileId</code>, then
+            stores the path in the indicator.
+          </li>
+          <li>
+            <b>storage.rules</b>: <code>create</code> only by
+            <code>request.auth.uid == uid</code> (and not refused by the allow list),
+            <code>fileId</code> matching <code>[A-Za-z0-9_-]{6,64}</code>, ≤ 1 MB
+            (<code>INDICATOR_IMAGE_MAX_BYTES</code>), content type one of
+            <code>INDICATOR_IMAGE_TYPES</code> (PNG, JPEG, WebP, GIF, SVG). Written once (a new
+            picture is a new file id); the owner may delete. <b>Read: any signed-in person</b> — an
+            indicator is shown to everyone who sees the entity, and the path is unguessable.
+          </li>
+          <li>
+            It is DRAWN through the file door (<code>GET /api/files/url</code>, which accepts
+            <code>indicators/…</code> for any signed-in caller, as it does avatars), cached per path
+            by <code>lib/files/source</code> until the signed URL nears expiry. Right after an
+            upload the local object URL is used, so the new mark shows at once.
+          </li>
+          <li>
+            A command that stores an <code>image</code> indicator validates the path's shape;
+            nothing ties the picture to one entity, so the same upload may mark several.
+          </li>
+        </ul>
+
+        <h2 id="c">C · The description</h2>
+        <ul>
+          <li>
+            <b>Plain text</b> (Markdown allowed), at most <code>DESCRIPTION_MAX</code> = 2000
+            characters, the same limit everywhere (artifact and memory descriptions grew from 500).
+            Shown under the name in settings and as a tooltip or subtitle where there is room.
+          </li>
+          <li>
+            <b>Mostly for agents.</b> MCP and REST list them: an agent reads a board's description
+            to know what goes there, a memory's to know what it holds, and a <b>stage's</b> to know
+            when a ticket belongs in it — "Ready for QA: the build is on staging and the PR is
+            linked" says more than the name. The MCP tool descriptions say so.
+          </li>
+          <li>
+            <b>Boards used to hold rich text.</b> A board's <code>description</code> is now
+            <code>string | RichText</code> until the migration flattens it;
+            <code>descriptionText()</code> (<code>shared/src/logic/description.ts</code>) reads
+            either, turning a doc into Markdown. An old client that still sends a rich-text doc to
+            <code>boardUpdate</code> is accepted and stored flattened.
+          </li>
+        </ul>
+
+        <h2 id="d">D · Where each entity keeps them</h2>
+        <table>
+          <tr>
+            <th>entity</th>
+            <th>indicator</th>
+            <th>description</th>
+            <th>legacy fields (kept, read through <code>indicatorOf</code>)</th>
+          </tr>
+          <tr>
+            <td>board <code>boards/{b}</code></td>
+            <td><code>indicator</code></td>
+            <td><code>description</code> (string; RichText before the migration)</td>
+            <td>
+              <code>color</code> (a name like <code>'blue'</code> or hex), typed <code>icon</code>
+            </td>
+          </tr>
+          <tr>
+            <td>stage (in <code>board.stages[]</code>)</td>
+            <td><code>indicator</code></td>
+            <td><code>description</code> (optional)</td>
+            <td><code>color</code></td>
+          </tr>
+          <tr>
+            <td>artifact <code>artifacts/{a}</code></td>
+            <td><code>indicator</code></td>
+            <td><code>description</code></td>
+            <td>emoji <code>icon</code> (none = the old ◆ glyph)</td>
+          </tr>
+          <tr>
+            <td>memory <code>memories/{m}</code></td>
+            <td><code>indicator</code></td>
+            <td><code>description</code></td>
+            <td>emoji <code>icon</code> (none = 🧠, <code>MEMORY_DEFAULT_INDICATOR</code>)</td>
+          </tr>
+          <tr>
+            <td>workspace <code>users/{u}/workspaces/{w}</code></td>
+            <td><code>indicator</code></td>
+            <td><code>description</code> (optional)</td>
+            <td><code>color</code></td>
+          </tr>
+        </table>
+        <p>
+          <code>indicatorOf(entity, seed, fallback?)</code> is the one reader: the entity's own
+          <code>indicator</code>, else an emoji <code>icon</code>, else a lucide-name
+          <code>icon</code> tinted with its colour, else its colour (legacy names map through
+          <code>NAMED_COLORS</code>), else <code>fallback</code> or a palette colour from the seed.
+          So an old document draws the same mark before and after the migration.
+        </p>
+
+        <h2 id="e">E · Commands and the doors</h2>
+        <ul>
+          <li>
+            <b>Create and update</b> take <code>indicator</code> and <code>description</code>:
+            <code>boardCreate</code> / <code>boardUpdate</code> (patch), stages inside
+            <code>boardUpdate</code>'s <code>stages</code> patch (each validated),
+            <code>artifactCreate</code> / <code>artifactUpdate</code>, <code>memoryCreate</code> /
+            <code>memoryUpdate</code> (the old <code>icon</code> emoji is still accepted from old
+            clients), <code>workspaceCreate</code> / <code>workspaceUpdate</code>. A bad icon id, a
+            typed non-emoji or a path outside <code>indicators/</code> is a 400.
+          </li>
+          <li>
+            <b>Out</b>: <code>PublicBoard</code> has <code>indicator</code> and
+            <code>description_md</code>; every <code>PublicStage</code> has
+            <code>indicator</code> and <code>description</code>; <code>PublicArtifact</code> and
+            <code>MemoryOut</code> have <code>indicator</code>. REST (<code>POST /v1/boards</code>),
+            MCP (board, artifact, memory and workspace tools) and the SDK accept and return them
+            (SDK 1.6.0).
+          </li>
+        </ul>
+
+        <h2 id="f">F · In the app</h2>
+        <ul>
+          <li>
+            <code>lib/ui/Indicator.svelte</code> draws one (sizes xs–xl; pass the entity as
+            <code>of</code> or an explicit <code>indicator</code>).
+            <code>lib/ui/IndicatorPicker.svelte</code> is the picker — tabs
+            <b>Colour · Icon · Emoji · Upload</b>: swatches, an icon grid with a tint row, the emoji
+            grid with categories and search, and a file input that checks type and size, uploads and
+            previews.
+          </li>
+          <li>
+            <b>Everywhere an entity is shown or picked</b>: the sidebar (boards, artifacts,
+            memories, workspaces and their children), the title switchers, every dropdown and menu
+            that lists boards, artifacts, memories, workspaces or stages (<code>MenuItem</code>
+            takes an <code>indicator</code>), the command palette and search results, cards, the
+            kanban column headers (with the stage description as a tooltip) and a ticket's stage
+            chip.
+          </li>
+          <li>
+            <b>Settings and create dialogs</b> — board General and Stages, artifact and memory
+            General, the workspace dialog, and New board / artifact / memory / workspace — all ask
+            for <b>name, description, indicator</b>, with the same component in the same order. The
+            free-typed icon box and the colour-only input are gone.
+          </li>
+        </ul>
+
+        <h2 id="g">G · The migration</h2>
+        <p>
+          <code>scripts/migrate-indicators.mjs</code> (logic in
+          <code>scripts/lib/indicators.mjs</code>; unit-tested in
+          <code>qaqc/test/migrate-indicators.test.ts</code>, emulator-tested in
+          <code>qaqc/rules/migrate-indicators.test.ts</code>):
+        </p>
+        <ul>
+          <li>
+            every board: <code>indicator = indicatorOf(board)</code> when missing (a board with no
+            usable colour gets <code>color = indicatorColor(…)</code>); a rich-text description →
+            plain text; every stage without one gets <code>indicatorOf(stage)</code> — stage
+            descriptions stay absent;
+          </li>
+          <li>
+            every artifact: its emoji, else a palette colour; every memory: its emoji, else 🧠;
+            every workspace: its colour.
+          </li>
+        </ul>
+        <p>
+          Nothing legacy is removed. Dry run by default; idempotent (a document that already has its
+          indicator plans nothing).
+        </p>
+        <pre>
+pnpm --filter @tm/shared build
+node scripts/migrate-indicators.mjs --project &lt;id&gt;            # dry run
+node scripts/migrate-indicators.mjs --project &lt;id&gt; --apply    # write</pre>
+        <p>
+          Credentials as for the other migrations: application-default,
+          <code>TM_GCLOUD_ACCOUNT=&lt;you@…&gt;</code>, or the emulator with
+          <code>FIRESTORE_EMULATOR_HOST</code>.
+        </p>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

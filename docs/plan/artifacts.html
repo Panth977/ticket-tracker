@@ -335,9 +335,11 @@ Storage artifacts/{id}/files/…      THE ARTIFACT'S STORAGE</pre>
     <h3 id="k1">K1 · The grant is a ceiling, the viewer's role is the floor</h3>
     <pre>artifacts/{id}.boards = { [boardId]: 'read' | 'write' }        // artifactBoardAccessSet, owner only</pre>
     <ul>
-      <li><b>Who grants:</b> the artifact's owner (Settings › <b>Board access</b>, or <code>artifactBoardAccessSet</code> /
+      <li><b>Who grants:</b> the artifact's owner (Settings › <b>Subscriptions</b>, or <code>artifactBoardAccessSet</code> /
         MCP <code>artifact_board_access_set</code>). <code>read</code> needs them on the board; <code>write</code> needs them editor
-        or admin there. <code>null</code> removes it. At most 20 boards.</li>
+        or admin there. <code>null</code> removes it — which <b>either side</b> may do: the artifact's owner, or an admin of that
+        board (board settings › <b>Subscribers</b> lists the artifacts that use the board, through the app-only
+        <code>boardArtifactList</code>; an artifact the admin is not on shows unnamed). At most 20 boards.</li>
       <li><b>Who it works for:</b> the broker in the host page acts as the <b>viewer</b>, exactly as for the artifact's own data
         (§E3). Reads are Firestore queries in the viewer's session, so the rules decide; writes are the ordinary ticket commands
         (<code>ticketCreate</code>, <code>ticketUpdate</code>, <code>messagePost</code>) as the viewer. So someone the artifact is

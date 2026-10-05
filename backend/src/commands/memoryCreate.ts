@@ -3,9 +3,16 @@
  * Never an agent (D-M4: agents reach memory only through boards), never a
  * board token acting as a person. At most MEMORIES_OWNED_MAX owned.
  */
-import { errors, isAgentId, MEMORIES_OWNED_MAX, type Memory } from '@tm/shared';
+import {
+  errors,
+  isAgentId,
+  MEMORIES_OWNED_MAX,
+  MEMORY_DEFAULT_INDICATOR,
+  type Memory,
+} from '@tm/shared';
 import { isBoardTokenAsPerson, memoriesCol, memoryRef, withMembers } from '../memory/shared.js';
 import { defineCommand } from './_registry.js';
+import { markOnCreate } from './indicatorShared.js';
 
 export default defineCommand('memoryCreate', async (ctx, input) => {
   if (isAgentId(ctx.actor))
@@ -24,7 +31,7 @@ export default defineCommand('memoryCreate', async (ctx, input) => {
   const memory: Memory = {
     name: input.name,
     description: input.description || null,
-    icon: input.icon || null,
+    ...markOnCreate(input, MEMORY_DEFAULT_INDICATOR),
     ownerUid: ctx.actor,
     ...withMembers({ [ctx.actor]: 'owner' }),
     boards: {},

@@ -15,6 +15,7 @@
   import { toast } from '$lib/ui/toast.svelte';
   import ChoicePicker from '$lib/views/pickers/ChoicePicker.svelte';
   import Section from './Section.svelte';
+  import { stageChoices } from '../stageMark';
   import { useSettings } from './draft.svelte';
 
   const s = useSettings();
@@ -222,7 +223,7 @@
         <div class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[8rem_1fr] sm:items-center">
           <span class="text-muted">Stage</span>
           <ChoicePicker
-            items={opts(s.board.stages)}
+            items={stageChoices(s.board.stages)}
             selected={defaults.stageId ? [defaults.stageId] : []}
             allowNone
             placeholder="First stage"

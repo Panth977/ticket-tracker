@@ -44,6 +44,7 @@ import {
   SIGNED_URL_TTL_MS,
   type FileAccessRes,
 } from '@tm/shared';
+import { INDICATOR_PATH_RE } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { readStream } from '../adapters/files.js';
 import type { AppEnv } from '../http/env.js';
@@ -103,7 +104,9 @@ export async function requireFileRead(ctx: ServerCtx, path: string): Promise<str
     if (!(await reachFor(ctx, memory))) throw errors.not_found('File not found');
     return path;
   }
-  if (AVATAR.test(path) || parseAgentAvatarPath(path)) return path;
+  // indicators.html: an uploaded indicator image — readable by any signed-in
+  // person (storage.rules agrees); the path carries an unguessable file id.
+  if (AVATAR.test(path) || parseAgentAvatarPath(path) || INDICATOR_PATH_RE.test(path)) return path;
   throw errors.not_found('File not found');
 }
 

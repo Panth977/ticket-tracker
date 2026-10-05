@@ -1,5 +1,5 @@
 <!--
-  Board settings › Memory › Ticket attachments (memory.html §J). A board takes
+  Board settings › Subscriptions › Ticket attachments (memory.html §J). A board takes
   no files of its own: a file put on a ticket goes into a memory granted
   `write` to the board. Here an admin picks WHICH memory the attach dialog
   starts on and the PATH TEMPLATE it fills in — variables are chips that
@@ -13,7 +13,7 @@
     ATTACH_VARS,
     attachTemplateProblem,
     DEFAULT_ATTACH_TEMPLATE,
-    memoryGlyph,
+    MEMORY_DEFAULT_INDICATOR,
   } from '@tm/shared';
   import { command } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
@@ -155,7 +155,7 @@
       <p class="text-sm text-danger">Could not load this board's memories.</p>
     {:else if !candidates.length}
       <p class="rounded-md bg-surface-2 px-3 py-2 text-sm text-muted" data-attach-empty>
-        Grant a memory <b>Read &amp; write</b> access above, then pick it here.
+        Add a memory above with <b>Write</b>, then pick it here.
       </p>
     {:else}
       <Select
@@ -166,7 +166,11 @@
           edited = true;
         }}
         placeholder="Choose a memory"
-        options={candidates.map((m) => ({ value: m.id, label: `${memoryGlyph(m)} ${m.name}` }))}
+        options={candidates.map((m) => ({
+          value: m.id,
+          label: m.name,
+          indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
+        }))}
         data-attach-memory-select
       />
       <div class="flex flex-col gap-2">

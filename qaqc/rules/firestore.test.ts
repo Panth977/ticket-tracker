@@ -122,6 +122,7 @@ beforeAll(async () => {
     await put(`boards/${BOARD}/webhooks/w1`, fixtures.webhooks);
     await put(`boards/${BOARD}/webhooks/w1/deliveries/wd1`, fixtures.webhookDeliveries);
     await put(`boards/${BOARD}/integrations/github`, fixtures.installs);
+    await put(`boards/${BOARD}/aggStats/daily:2026-09-26`, fixtures.aggStats);
 
     await put(T, {
       ...fixtures.tickets,
@@ -287,7 +288,7 @@ describe('users/{uid}/apiKeys, oauthGrants, workspaces and ui (§AB)', () => {
       await assertFails(setDoc(doc(db(ADMIN), `${path}-new`), { name: 'x' }));
     });
   }
-  it('workspaces: the owner lists their own, nobody lists anyone else\'s', async () => {
+  it("workspaces: the owner lists their own, nobody lists anyone else's", async () => {
     await assertSucceeds(getDocs(collection(db(ADMIN), `users/${ADMIN}/workspaces`)));
     await assertFails(getDocs(collection(db(EDITOR), `users/${ADMIN}/workspaces`)));
   });
@@ -393,6 +394,35 @@ describe('server-only collections', () => {
 });
 
 // ------------------------------------------------------------------ boards
+
+describe('boards/{b}/aggStats (aggregates.html)', () => {
+  const P = `boards/${BOARD}/aggStats/daily:2026-09-26`;
+  it('everyone on the board reads the buckets (the Analytics query); a stranger may not', async () => {
+    for (const uid of MEMBERS) {
+      await assertSucceeds(getDoc(doc(db(uid), P)));
+      await assertSucceeds(
+        getDocs(
+          query(
+            collection(db(uid), `boards/${BOARD}/aggStats`),
+            where('period', '==', 'daily'),
+            where('key', '>=', '2026-09-01'),
+          ),
+        ),
+      );
+    }
+    await assertFails(getDoc(doc(db(STRANGER), P)));
+    await assertFails(getDoc(doc(db(null), P)));
+  });
+  it('nobody writes them (messagePost does)', async () => {
+    for (const uid of MEMBERS) {
+      await assertFails(setDoc(doc(db(uid), P), fixtures.aggStats));
+      await assertFails(
+        setDoc(doc(db(uid), `boards/${BOARD}/aggStats/weekly:2026-W40`), fixtures.aggStats),
+      );
+      await assertFails(deleteDoc(doc(db(uid), P)));
+    }
+  });
+});
 
 describe('boards', () => {
   it('every role may get the board; a stranger may not', async () => {

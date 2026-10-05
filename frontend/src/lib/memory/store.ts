@@ -69,11 +69,12 @@ export function splitMemories<T extends Pick<Memory, 'name' | 'archivedAt'>>(
 export const MEMORY_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General', owner: true },
   { id: 'people', label: 'People', owner: true },
-  { id: 'access', label: 'Board & artifact access', owner: false },
+  /** lib/access: the boards and artifacts that use it. */
+  { id: 'subscribers', label: 'Subscribers', owner: false },
 ] as const;
 export type MemorySettingsSection = (typeof MEMORY_SETTINGS_SECTIONS)[number]['id'];
 
-/** The owner sees all; an editor or viewer only the (read-only) access list. */
+/** The owner sees all; an editor or viewer only Subscribers. */
 export function memorySettingsFor(
   role: MemoryRole | null,
 ): readonly { id: MemorySettingsSection; label: string }[] {

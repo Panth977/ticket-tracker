@@ -1,11 +1,15 @@
 <!-- /b/[boardKey]/settings/[section] — picks the section; the layout provides the board. -->
 <script lang="ts">
+  // goto() targets are built by lib/layout/routes (the SPA has no base path).
+  /* eslint-disable svelte/no-navigation-without-resolve */
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { SearchX } from 'lucide-svelte';
   import { BOARD_SETTINGS_SECTIONS, routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import PeopleAndRoles from '$lib/board/PeopleAndRoles.svelte';
+  import AggregatesSection from '$lib/board/settings/AggregatesSection.svelte';
   import AnalyticsSection from '$lib/board/settings/AnalyticsSection.svelte';
   import DangerSection from '$lib/board/settings/DangerSection.svelte';
   import FieldsSection from '$lib/board/settings/FieldsSection.svelte';
@@ -13,16 +17,23 @@
   import GrantsSection from '$lib/board/settings/GrantsSection.svelte';
   import IntakeSection from '$lib/board/settings/IntakeSection.svelte';
   import IntegrationsSection from '$lib/board/settings/IntegrationsSection.svelte';
-  import MemorySection from '$lib/board/settings/MemorySection.svelte';
   import OptionsSection from '$lib/board/settings/OptionsSection.svelte';
   import Section from '$lib/board/settings/Section.svelte';
   import StagesSection from '$lib/board/settings/StagesSection.svelte';
+  import SubscribersSection from '$lib/board/settings/SubscribersSection.svelte';
+  import SubscriptionsSection from '$lib/board/settings/SubscriptionsSection.svelte';
   import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
 
   const s = useSettings();
   const section = $derived(page.params.section ?? 'general');
   const known = $derived(BOARD_SETTINGS_SECTIONS.some((x) => x.id === section));
+  // Renamed sections (lib/access): old links still land.
+  const MOVED: Record<string, 'subscriptions'> = { memory: 'subscriptions' };
+  $effect(() => {
+    const to = MOVED[section];
+    if (to) void goto(routes.boardSettings(s.board.key, to), { replaceState: true });
+  });
 </script>
 
 {#key section}
@@ -51,13 +62,17 @@
     <IntakeSection />
   {:else if section === 'integrations'}
     <IntegrationsSection />
-  {:else if section === 'memory'}
-    <MemorySection />
+  {:else if section === 'subscriptions'}
+    <SubscriptionsSection />
+  {:else if section === 'subscribers'}
+    <SubscribersSection />
+  {:else if section === 'aggregates'}
+    <AggregatesSection />
   {:else if section === 'analytics'}
     <AnalyticsSection />
   {:else if section === 'danger'}
     <DangerSection />
-  {:else if !known}
+  {:else if !known && !(section in MOVED)}
     <EmptyState
       icon={SearchX}
       title="No such section"

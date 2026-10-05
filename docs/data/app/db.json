@@ -144,12 +144,25 @@
       ]
     },
     {
+      "name": "Indicator",
+      "code": [
+        "// plan/indicators.html — the mark of a board, stage, artifact, memory, workspace.",
+        "type Indicator =",
+        "  | { kind: 'color', color: Hex }                 // INDICATOR_COLORS",
+        "  | { kind: 'icon', icon: IndicatorIcon, color: Hex }  // INDICATOR_ICONS (lucide)",
+        "  | { kind: 'emoji', emoji: string }              // PICKED, never typed",
+        "  | { kind: 'image', path: string }               // indicators/{uid}/{fileId}/{name}, ≤ 1 MB"
+      ]
+    },
+    {
       "name": "Stage",
       "code": [
         "interface Stage {",
         "  id: string          // 7-char base36, board-local",
         "  name: string",
-        "  color: string",
+        "  color: string          // LEGACY: read through indicatorOf()",
+        "  indicator?: Indicator  // plan/indicators.html: column header, pickers, the card's stage chip",
+        "  description?: string | null  // what the stage MEANS — agents read it to pick a stage",
         "  category: StageCategory",
         "  position: number",
         "  wipLimit?: number    // kanban column warns above this",
@@ -742,9 +755,10 @@
         "  name: string",
         "  key: BoardKey              // 'ENG' — claimed in boardKeys/{key}, app-wide",
         "  nextNumber: number         // allocateKey increments in a transaction",
-        "  color: string",
-        "  icon: string",
-        "  description: RichText | null",
+        "  color: string              // LEGACY (plan/indicators.html): kept coherent = indicatorColor(indicator)",
+        "  icon: string               // LEGACY: a typed icon; read through indicatorOf()",
+        "  indicator?: Indicator      // colour | lucide icon | picked emoji | uploaded image",
+        "  description: string | null // plain text ≤ 2000 (old boards: RichText until migrate-indicators)",
         "",
         "  access:     Record<PrincipalId, BoardRole>   // THE authority; mirrored in members/ — people AND agents",
         "  stageGrants: Record<PrincipalId, StageGrant>   // per principal, commenters only",
@@ -1263,8 +1277,9 @@
       "schema": [
         "interface Artifact {",
         "  name: string",
-        "  description: string | null",
-        "  icon: string | null",
+        "  description: string | null   // plain text ≤ 2000, agents read it",
+        "  icon: string | null          // LEGACY emoji; read through indicatorOf()",
+        "  indicator?: Indicator        // plan/indicators.html",
         "  access: Record<Uid, 'owner' | 'editor' | 'viewer'>",
         "  memberUids: Uid[]",
         "  agents: Record<AgentId, { build: boolean, data: 'none' | 'read' | 'write' }>",
@@ -1289,7 +1304,9 @@
       "schema": [
         "interface Workspace {",
         "  name: string           // ≤ 60",
-        "  color: string          // '#RRGGBB', the sidebar dot",
+        "  color: string          // LEGACY '#RRGGBB'; read through indicatorOf()",
+        "  indicator?: Indicator  // plan/indicators.html: the sidebar mark",
+        "  description?: string | null  // what the workspace is for (≤ 2000)",
         "  boardIds: BoardId[]     // in the person's order, ≤ 200",
         "  artifactIds: string[]",
         "  position: number",
@@ -1332,8 +1349,9 @@
       "schema": [
         "interface Memory {",
         "  name: string",
-        "  description: string | null",
-        "  icon: string | null",
+        "  description: string | null   // plain text ≤ 2000, agents read it",
+        "  icon: string | null          // LEGACY emoji (null = 🧠); read through indicatorOf()",
+        "  indicator?: Indicator        // plan/indicators.html",
         "  ownerUid: Uid",
         "  access: Record<Uid, 'owner' | 'editor' | 'viewer'>",
         "  memberUids: Uid[]          // keys of access (list queries)",

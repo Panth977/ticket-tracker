@@ -375,6 +375,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "aggStats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "period",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "key",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

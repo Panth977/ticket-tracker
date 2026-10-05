@@ -13,6 +13,7 @@ const out = (id: string, reach: MemoryOut['reach'], archived = false): MemoryOut
   name: `M ${id}`,
   description: null,
   icon: null,
+  indicator: { kind: 'emoji', emoji: '🧠' },
   reach,
   archived,
   stats: { files: 2, folders: 1, bytes: 30 },

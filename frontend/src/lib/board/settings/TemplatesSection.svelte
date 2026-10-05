@@ -11,7 +11,7 @@
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
   import { Copy } from 'lucide-svelte';
-  import { BoardKeySchema } from '@tm/shared';
+  import { BoardKeySchema, indicatorOf } from '@tm/shared';
   import { command, isAppError } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -49,6 +49,7 @@
           template: { fromBoardId: s.board.id },
           color: s.board.color,
           icon: s.board.icon,
+          indicator: indicatorOf(s.board, s.board.id),
         },
         { toast: false },
       );

@@ -11,9 +11,10 @@
   import type { ArtifactRole } from '@tm/shared';
   import { relativeTime } from '$lib/account/format';
   import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
-  import { artifactGlyph, myArtifacts, roleIn, splitArtifacts } from '$lib/artifacts/store';
+  import { myArtifacts, roleIn, splitArtifacts } from '$lib/artifacts/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import ItemTile from '$lib/layout/ItemTile.svelte';
+  import Indicator from '$lib/ui/Indicator.svelte';
   import { routes } from '$lib/layout/routes';
   import { Principal } from '$lib/people';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
@@ -75,7 +76,7 @@
             id={a.id}
             href={routes.artifact(a.id)}
             name={a.name}
-            glyph={artifactGlyph(a)}
+            of={a}
             description={a.description}
             badge={role ? ROLE_LABEL[role] : null}
             hidden={$hiddenQ.artifacts.has(a.id)}
@@ -126,7 +127,7 @@
       <ul class="divide-y divide-line border-t border-line">
         {#each groups.archived as a (a.id)}
           <li class="flex flex-wrap items-center gap-3 px-4 py-2.5">
-            <span aria-hidden="true">{artifactGlyph(a)}</span>
+            <Indicator of={a} seed={a.id} size="sm" />
             <a
               class="flex-1 truncate text-sm hover:underline"
               href={routes.artifact(a.id)}

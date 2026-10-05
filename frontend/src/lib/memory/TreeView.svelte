@@ -13,7 +13,7 @@
   import { ChevronRight, Folder, FolderOpen, MoreHorizontal } from 'lucide-svelte';
   import Menu from '$lib/ui/Menu.svelte';
   import type { MenuItem } from '$lib/ui/types';
-  import { KIND_ICON, kindOf } from '$lib/files/kinds';
+  import { fileIcon } from '$lib/files/fileIcons';
   import { memoryDrag } from './drag.svelte';
   import Self from './TreeView.svelte';
   import { memoryParentPath, type Node, type TreeNode } from './tree';
@@ -86,11 +86,8 @@
       {@const isFolder = n.kind === 'folder'}
       {@const open = isFolder && expanded.has(n.path)}
       {@const target = isFolder && memoryDrag.over === n.path}
-      {@const Icon = isFolder
-        ? open
-          ? FolderOpen
-          : Folder
-        : KIND_ICON[kindOf({ name: n.name, mime: n.file?.mime ?? '' })]}
+      {@const fi = isFolder ? null : fileIcon({ name: n.name, mime: n.file?.mime })}
+      {@const Icon = isFolder ? (open ? FolderOpen : Folder) : fi!.icon}
       <li
         role="treeitem"
         aria-expanded={isFolder ? open : undefined}
@@ -139,7 +136,11 @@
             ondblclick={() => isFolder && onopen(n)}
             onkeydown={(e) => onkey(e, n)}
           >
-            <Icon size={14} class="shrink-0 {isFolder ? 'text-accent' : ''}" aria-hidden="true" />
+            <Icon
+              size={14}
+              class="shrink-0 {isFolder ? 'text-accent' : fi!.tone}"
+              aria-hidden="true"
+            />
             <span class="truncate">{n.name}</span>
           </button>
           <Menu items={itemsFor(n)} placement="bottom-end">

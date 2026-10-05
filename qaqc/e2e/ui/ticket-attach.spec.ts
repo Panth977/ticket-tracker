@@ -1,7 +1,7 @@
 /**
  * TICKET ATTACHMENTS LIVE IN A MEMORY, end to end (docs/plan/memory.html §J).
  *
- *   · an admin grants a memory `write` to a board and, in Settings › Memory ›
+ *   · an admin grants a memory `write` to a board and, in Settings › Subscriptions ›
  *     Ticket attachments, makes it the default with a path template
  *   · a COMMENTER adds a file in a ticket thread → the attach dialog starts on
  *     that memory with the path filled in and the file's name selected; typing
@@ -19,7 +19,7 @@ import {
   newPerson,
   read,
 } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, subscribe } from '../support/ui.js';
 
 async function nodeByPath(memoryId: string, path: string) {
   const q = await admin()
@@ -56,13 +56,9 @@ test('§J: the board default memory + template; a commenter attaches into it', a
   const { memoryId } = await call(ada, 'memoryCreate', { name: 'Ticket files' });
 
   // ── the admin: grant write, then make it the attachment default ──────────
-  await signIn(page, ada.email, `/b/${eng.key}/settings/memory`);
-  const row = page.locator(`[data-memory-grant="${memoryId}"]`);
-  await row.getByRole('button', { name: 'Read & write' }).click();
-  await expect(row.getByRole('button', { name: 'Read & write' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await signIn(page, ada.email, `/b/${eng.key}/settings/subscriptions`);
+  await subscribe(page, 'board', `memory:${memoryId}`, ['read', 'write']);
+  await expect(page.locator(`[data-subscription="memory:${memoryId}"]`)).toContainText('Write');
   const box = page.locator('[data-attach-settings]');
   const select = box.locator('select[data-attach-memory-select]');
   await expect(select).toHaveValue(memoryId);
@@ -94,7 +90,9 @@ test('§J: the board default memory + template; a commenter attaches into it', a
       ? true
       : null;
   });
-  await expect(row.locator('[data-attach-badge]')).toHaveText('Attachments');
+  await expect(page.locator(`[data-subscription="memory:${memoryId}"]`)).toContainText(
+    'ticket attachments go here',
+  );
 
   // ── the commenter attaches a file in the thread ─────────────────────────
   const ctx = await browser.newContext();
@@ -147,16 +145,14 @@ test('§J: a board with no memory to write to says so', async ({ page, browser }
   const { memoryId } = await call(ada, 'memoryCreate', { name: 'Read only' });
   await call(ada, 'memoryGrantSet', { memoryId, boardId: eng.id, access: 'read' });
 
-  // An admin is pointed at Settings › Memory.
+  // An admin is pointed at Settings › Subscriptions.
   await signIn(page, ada.email, `/t/${key}`);
   await attachWithClip(page, 'a.txt', 'a');
   const dlg = page.getByRole('dialog', { name: 'Attach a file' });
   await expect(dlg.locator('[data-attach-none]')).toContainText('no memory is shared');
   await dlg.locator('[data-attach-settings]').click();
-  await page.waitForURL(new RegExp(`/b/${eng.key}/settings/memory$`));
-  await expect(page.locator('[data-attach-empty]')).toContainText(
-    'Grant a memory Read & write access above',
-  );
+  await page.waitForURL(new RegExp(`/b/${eng.key}/settings/subscriptions$`));
+  await expect(page.locator('[data-attach-empty]')).toContainText('Add a memory above with Write');
 
   // Anyone else is told to ask an admin.
   const ctx = await browser.newContext();

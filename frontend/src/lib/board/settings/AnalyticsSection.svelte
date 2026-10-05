@@ -1,6 +1,6 @@
-<!-- Board settings › Analytics: what the board's agents cost, day by day (agents.html §Y3). -->
+<!-- Board settings › Analytics: the board's aggregate fields, per period and by ticket (aggregates.html). -->
 <script lang="ts">
-  import BoardAnalytics from '$lib/cost/BoardAnalytics.svelte';
+  import AggAnalytics from '$lib/aggregates/AggAnalytics.svelte';
   import Section from './Section.svelte';
   import { useSettings } from './draft.svelte';
 
@@ -9,7 +9,7 @@
 
 <Section
   title="Analytics"
-  description="What the agents' turns on this board cost — the receipt each run posts, summed by day and by ticket."
+  description="What this board's aggregate fields add up to — Cost from the agents' turn receipts, and any field of your own — by period and by ticket."
 >
-  <BoardAnalytics board={s.board} />
+  <AggAnalytics board={s.board} />
 </Section>

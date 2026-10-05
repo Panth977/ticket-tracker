@@ -14,7 +14,13 @@
  * A file put on a ticket goes INTO a memory (memory.html §J): the bytes are
  * uploaded under the memory and the message carries `memoryUploads`.
  */
-import { AppError, type Message, type Question, type RichTextDoc } from '@tm/shared';
+import {
+  AppError,
+  type Message,
+  type MessageAgg,
+  type Question,
+  type RichTextDoc,
+} from '@tm/shared';
 import { outbox, type OutboxEntry, type OutboxStatus, type OutboxUpload } from '$lib/api';
 import type { DraftAttachment, UploadItem } from '$lib/editor';
 import { routes } from '$lib/layout/routes';
@@ -26,7 +32,7 @@ export interface PendingMsg {
   ticketId: string;
   boardId: string;
   /** Phase 5 (§N1): a question a person asked is a bubble too, until it lands. */
-  kind: 'comment' | 'question';
+  kind: 'comment' | 'question' | 'agg';
   authorUid: string;
   authorName: string;
   createdAt: number;
@@ -38,6 +44,8 @@ export interface PendingMsg {
   error?: string;
   /** The form card, while the ask is still in the outbox. */
   question?: Question | null;
+  /** aggregates.html: the entries row, while it is still in the outbox. */
+  agg?: MessageAgg | null;
 }
 
 /** A row in the thread: a stored message or an optimistic bubble. */
@@ -54,6 +62,8 @@ export interface MessageDraft {
   ticketKey?: string;
   /** Set on a queued questionAsk: the card the bubble draws (§N1). */
   question?: Question | null;
+  /** Set on a queued 'agg' post (aggregates.html): the row the thread draws. */
+  agg?: MessageAgg | null;
 }
 
 export function pendingOf(e: OutboxEntry): PendingMsg {
@@ -62,7 +72,7 @@ export function pendingOf(e: OutboxEntry): PendingMsg {
     id: e.id,
     ticketId: e.ticketId ?? '',
     boardId: e.boardId ?? '',
-    kind: e.command === 'questionAsk' ? 'question' : 'comment',
+    kind: e.command === 'questionAsk' ? 'question' : d.agg ? 'agg' : 'comment',
     authorUid: d.authorUid ?? e.uid,
     authorName: d.authorName ?? 'You',
     createdAt: e.createdAt,
@@ -75,6 +85,7 @@ export function pendingOf(e: OutboxEntry): PendingMsg {
     status: e.status,
     error: e.error,
     question: d.question ?? null,
+    agg: d.agg ?? null,
   };
 }
 
@@ -294,6 +305,51 @@ export function askQuestion(a: AskMsgInput): string {
       // 'message' puts it in the thread as a bubble, like any unsent message.
       kind: 'message',
       label: `ask “${a.ask.title}”`,
+      draft,
+      persist: true,
+      boardId: a.boardId,
+      ticketId: a.ticketId,
+      linger: 30_000,
+      openTo: routes.ticket(a.ticketKey),
+    },
+  );
+  return id;
+}
+
+// ─────────────────────── adding to a total (aggregates.html) ──────────────────
+
+export interface AggMsgInput {
+  boardId: string;
+  ticketId: string;
+  ticketKey: string;
+  authorUid: string;
+  authorName: string;
+  agg: MessageAgg;
+  /** The optional note, as the message body (empty → the server writes the entries out). */
+  body: RichTextDoc;
+}
+
+/**
+ * Post entries for the board's aggregate fields through the outbox, like any
+ * message: the row shows in the thread at once (kind 'agg'), the entry id is
+ * messagePost's clientId (a retry counts once), and a refusal rolls it back.
+ */
+export function sendAgg(a: AggMsgInput): string {
+  const draft: MessageDraft = {
+    authorUid: a.authorUid,
+    authorName: a.authorName,
+    body: a.body,
+    replyTo: null,
+    attachments: [],
+    ticketKey: a.ticketKey,
+    agg: a.agg,
+  };
+  const { id } = outbox.queue(
+    'messagePost',
+    { boardId: a.boardId, ticketId: a.ticketId, body: a.body, agg: a.agg },
+    {
+      kind: 'message',
+      label: 'add to a total',
       draft,
       persist: true,
       boardId: a.boardId,

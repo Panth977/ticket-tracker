@@ -53,6 +53,9 @@ export default defineCommand('messageEdit', async (ctx, input) => {
     const msg = found.message;
     requireNotDeleted(msg);
     if (msg.kind === 'system') throw errors.forbidden('System lines cannot be changed');
+    // aggregates.html: an entry is history — a correction is another entry.
+    if (msg.kind === 'agg')
+      throw errors.forbidden('Aggregate entries cannot be changed: post a correcting entry');
     const mine = msg.authorUid === ctx.actor;
 
     if (isDelete) {

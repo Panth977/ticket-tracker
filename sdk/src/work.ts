@@ -166,7 +166,9 @@ function semaphore(n: number): { acquire: () => Promise<void>; release: () => vo
   const waiting: (() => void)[] = [];
   return {
     acquire: () =>
-      free > 0 ? ((free -= 1), Promise.resolve()) : new Promise<void>((resolve) => waiting.push(() => (free -= 1, resolve()))),
+      free > 0
+        ? ((free -= 1), Promise.resolve())
+        : new Promise<void>((resolve) => waiting.push(() => ((free -= 1), resolve()))),
     release: () => {
       free += 1;
       waiting.shift()?.();
@@ -178,12 +180,20 @@ function semaphore(n: number): { acquire: () => Promise<void>; release: () => vo
  * Run the orchestrator loop until the signal aborts, the stream ends, or
  * `max` events have been handled. Resolves with what it did.
  */
-export async function workLoop(deps: WorkDeps, tm: TmClient, handler: WorkHandler, opts: WorkOptions = {}): Promise<WorkSummary> {
+export async function workLoop(
+  deps: WorkDeps,
+  tm: TmClient,
+  handler: WorkHandler,
+  opts: WorkOptions = {},
+): Promise<WorkSummary> {
   const concurrency = Math.max(1, opts.concurrency ?? 1);
   const wants = matcher(opts.filter);
   const slots = semaphore(concurrency);
   const ackHandled = opts.ack ?? true;
-  const onError = opts.onError ?? ((e: unknown, ev: TmEvent): void => void console.error(`[tm.work] ${ev.type} ${ev.ticket_key ?? ''}`, e));
+  const onError =
+    opts.onError ??
+    ((e: unknown, ev: TmEvent): void =>
+      void console.error(`[tm.work] ${ev.type} ${ev.ticket_key ?? ''}`, e));
   // Our own controller so a handler's `ctx.signal` also fires when the loop stops.
   const stopper = new AbortController();
   const onOuterAbort = (): void => stopper.abort(opts.signal?.reason);
@@ -249,7 +259,8 @@ export async function workLoop(deps: WorkDeps, tm: TmClient, handler: WorkHandle
       if (key) busy.set(key, task);
       inFlight.add(task);
       void task.finally(() => inFlight.delete(task));
-      if (opts.max !== undefined && summary.handled + summary.failed + inFlight.size >= opts.max) break;
+      if (opts.max !== undefined && summary.handled + summary.failed + inFlight.size >= opts.max)
+        break;
     }
   } finally {
     opts.signal?.removeEventListener('abort', onOuterAbort);

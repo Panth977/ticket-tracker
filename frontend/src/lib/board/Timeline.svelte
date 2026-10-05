@@ -19,6 +19,7 @@
   import { boardFields } from '$lib/views/fields';
   import { barOf, dayDiff, dayStart, setDatePatch, shiftBarPatch } from '$lib/views/dates';
   import { useBoard, type BoardDoc, type BoardTicket } from './context.svelte';
+  import { stageMark } from './stageMark';
   import { updateTicket } from './ops';
 
   interface Props {
@@ -175,7 +176,10 @@
   function page(n: number) {
     origin = addDaysTz(from, Math.round((span / 3) * n), tz);
   }
-  const barColor = (t: BoardTicket) => bs.stage(t.stageId)?.color ?? 'var(--tm-accent)';
+  const barColor = (t: BoardTicket) => {
+    const st = bs.stage(t.stageId);
+    return st ? stageMark(st).color : 'var(--tm-accent)';
+  };
 </script>
 
 <div class="flex h-full min-h-0 flex-col">

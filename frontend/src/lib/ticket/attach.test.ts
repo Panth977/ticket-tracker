@@ -19,6 +19,7 @@ const mem = (id: string, over: Partial<BoardMemoryOut> = {}): BoardMemoryOut => 
   name: id,
   description: null,
   icon: null,
+  indicator: { kind: 'emoji', emoji: '🧠' },
   reach: 'read',
   archived: false,
   stats: { files: 0, folders: 0, bytes: 0 },

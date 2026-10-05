@@ -101,7 +101,7 @@
         <a href="/integrate#2-how-an-agent-gets-in">token model</a> the rest of the API does.
       </p>
       <div class="stamp">
-        <span>version 1.5.0</span>
+        <span>version 1.6.0</span>
         <span>api v1</span>
         <span>updated 2026-10-05</span>
         <span><a href="/integrate">integrate</a></span>
@@ -208,8 +208,8 @@ unzip claude-plugin.zip            # → ./claude-plugin/</code></pre></figure>
 <h2 id="what-claude-can-do-once-it-is-in"><a class="anchor" href="#what-claude-can-do-once-it-is-in" aria-label="Link to this section">#</a>What Claude can do once it is in</h2>
 <p>The same tools, whichever route you took — the connector, the command and the plugin all reach the one MCP endpoint:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>whoami               read   Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
-list_boards          read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
-get_board            read   The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+list_boards          read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes. Each board carries its description (what it is for) and its stages with THEIR descriptions — what each stage means; read them to decide which stage a ticket belongs in before moving it.
+get_board            read   The board: its description, stages (with categories and descriptions — what each stage means, so you know where a ticket goes), priorities, tags, custom fields, and members (people and agents).
 list_my_tickets      read   Tickets assigned to you, most recently updated first.
 search_tickets       read   Find tickets by text, assignee, stage, state or dates.
 get_ticket           read   A ticket with fields, links, pinned messages, files and its last messages (Markdown).
@@ -218,7 +218,8 @@ create_ticket        write  Create a ticket.
 update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
-post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+get_aggregates       read   One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.
 upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         write  Link two tickets: blocks, relates or duplicates.
@@ -264,7 +265,9 @@ tags and fields are facets  status, area, priority — the things you will filte
 Treat it as my long-term memory, not as a scratchpad.
 
 Boards are areas of my life; each has a key. Call list_boards first and use the key as the
-`board` argument. A ticket key like ENG-42 already names its board.
+`board` argument. A ticket key like ENG-42 already names its board. Read each board's and each
+stage's description: they say what the board is for and what a stage means — that is how you
+pick where a ticket goes and when to move it.
 
 How I want you to use it:
 - Before answering anything that has a history, search TaskManager for it.

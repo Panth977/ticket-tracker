@@ -17,6 +17,7 @@
   import type { Snippet } from 'svelte';
   import { tick } from 'svelte';
   import Popover from './Popover.svelte';
+  import Indicator from './Indicator.svelte';
   import { uid } from './ids';
   import type { Placement } from './floating';
   import type { MenuItem } from './types';
@@ -127,7 +128,13 @@
           class="flex h-8 items-center gap-2 px-3 text-sm outline-none hover:bg-surface-2 focus-visible:bg-surface-2
             {item.danger ? 'text-danger' : 'text-text'}"
         >
-          {#if item.icon}<item.icon size={15} aria-hidden="true" class="text-muted" />{/if}
+          {#if item.indicator}<Indicator
+              indicator={item.indicator.indicator}
+              of={item.indicator.of}
+              seed={item.indicator.seed}
+              fallback={item.indicator.fallback}
+              size="sm"
+            />{:else if item.icon}<item.icon size={15} aria-hidden="true" class="text-muted" />{/if}
           <span class="flex-1 truncate">{item.label}</span>
           {#if item.kbd}<span class="text-xs text-subtle">{item.kbd}</span>{/if}
         </a>
@@ -141,7 +148,13 @@
           class="flex h-8 w-full items-center gap-2 px-3 text-left text-sm outline-none hover:bg-surface-2 focus-visible:bg-surface-2
             aria-disabled:opacity-50 {item.danger ? 'text-danger' : 'text-text'}"
         >
-          {#if item.icon}<item.icon
+          {#if item.indicator}<Indicator
+              indicator={item.indicator.indicator}
+              of={item.indicator.of}
+              seed={item.indicator.seed}
+              fallback={item.indicator.fallback}
+              size="sm"
+            />{:else if item.icon}<item.icon
               size={15}
               aria-hidden="true"
               class={item.danger ? '' : 'text-muted'}

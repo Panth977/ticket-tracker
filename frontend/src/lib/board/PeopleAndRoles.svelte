@@ -5,13 +5,14 @@
     Invite by email · Role ▾ · Message
     Picture · Name · Email · Role on this board · Stage grant · ⋯ Remove
     Pending invites — revoke or resend
-    Agents (agents.html §C): Add agent (admins, their own agents) · agent rows
-    with role / stage grant / remove (./people/*)
+    Agents are not here: board settings › Subscribers lists them (with
+    Remove), and an agent is added from its own page's Subscriptions (lib/access)
   Rendered by the sidebar's People page AND Board settings › People & roles,
   so it loads what it needs from `boardId` alone. Admins change roles and
   grants (boardAccessSet); admins — or editors when the board allows it — invite.
 -->
 <script lang="ts">
+  /* eslint-disable svelte/no-navigation-without-resolve -- hrefs from lib/layout/routes; no base path */
   import { Clock, Mail, MoreHorizontal, RotateCw, Send, UserMinus, X } from 'lucide-svelte';
   import {
     BOARD_ROLES,
@@ -25,6 +26,7 @@
   import { page } from '$app/state';
   import { command, outbox } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
+  import { routes } from '$lib/layout/routes';
   import { docStore, queryStore } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
   import Menu from '$lib/ui/Menu.svelte';
@@ -32,8 +34,6 @@
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import { toast } from '$lib/ui/toast.svelte';
   import StageGrantEditor from './StageGrantEditor.svelte';
-  import AddAgentCard from './people/AddAgentCard.svelte';
-  import AgentMembers from './people/AgentMembers.svelte';
 
   interface Props {
     boardId: string;
@@ -55,9 +55,7 @@
   const isAgent = (m: BoardMember) => m.kind === 'agent' || isAgentId(m.uid);
   // Tell person() where this board's agents live (their profiles are private to the owner).
   $effect(() => noteBoardMembers(boardId, $membersStore.data));
-  const agents = $derived(
-    $membersStore.data.filter(isAgent).sort((a, b) => a.name.localeCompare(b.name)),
-  );
+  const agentCount = $derived($membersStore.data.filter(isAgent).length);
   const members = $derived(
     $membersStore.data
       .filter((m) => !isAgent(m))
@@ -380,10 +378,15 @@
       </table>
     </div>
 
-    {#if isAdmin && !archived}
-      <AddAgentCard {board} />
-    {/if}
-    <AgentMembers {board} {agents} {isAdmin} />
+    <p class="text-sm text-muted" data-agents-pointer>
+      {agentCount
+        ? `${agentCount} ${agentCount === 1 ? 'agent is' : 'agents are'} on this board too.`
+        : 'Agents join a board from their own page.'}
+      They are listed under
+      <a class="text-accent hover:underline" href={routes.boardSettings(board.key, 'subscribers')}
+        >Settings › Subscribers</a
+      >.
+    </p>
 
     {#if isAdmin}
       <section class="flex flex-col gap-2" aria-label="Pending invites">

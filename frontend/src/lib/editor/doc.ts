@@ -139,6 +139,8 @@ export const SLASH_COMMANDS = [
   { id: 'priority', label: '/priority', hint: 'Set priority by name', needsArg: true },
   // Phase 5 (§N1): opens the question builder — it takes no argument.
   { id: 'ask', label: '/ask', hint: 'Ask a question with options', needsArg: false },
+  // aggregates.html: opens 'Add to a total' — it takes no argument.
+  { id: 'agg', label: '/agg', hint: 'Add to a total (Cost, Time…)', needsArg: false },
   { id: 'watch', label: '/watch', hint: 'Watch this ticket', needsArg: false },
   { id: 'unwatch', label: '/unwatch', hint: 'Stop watching', needsArg: false },
 ] as const;

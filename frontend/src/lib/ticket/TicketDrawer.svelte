@@ -75,7 +75,7 @@
   import TicketFileViewer from './TicketFileViewer.svelte';
   import { noteBoardMembers } from '$lib/people';
   import TicketAgentHealth from '$lib/agents/TicketAgentHealth.svelte';
-  import { fmtTurns, fmtUsdExact } from '$lib/cost/format';
+  import { aggCountersOf, ticketChips } from '$lib/aggregates/fields';
 
   interface Props {
     ticketKey: string;
@@ -94,6 +94,8 @@
   // A ticket still stored as the pre-phase-6 'cancelled' reads as archived.
   const ticket = $derived($tk.data ? withReadState($tk.data) : $tk.data);
   const board = $derived($bd.data);
+  /** aggregates.html: the ticket's total on every active field that has entries. */
+  const aggChips = $derived(board && ticket ? ticketChips(board, aggCountersOf(ticket)) : []);
   const me = $derived(auth.uid ?? '');
   const perms = $derived(ticketPerms(board, ticket, me));
   const tz = $derived(auth.profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -431,17 +433,18 @@
         {tkey}
       </button>
       {#if stateLabel}<Badge tone="warning">{stateLabel}</Badge>{/if}
-      {#if ticket?.cost && ticket.cost.usd > 0}
-        <!-- Phase 17 (§Y2): '$402.27 · 9 turns' — the ticket's cost counter, kept by messagePost. -->
+      {#each aggChips as a (a.id)}
+        <!-- aggregates.html: '$402.27' · '2 h' — the ticket's counters, kept by messagePost. -->
         <span
-          data-cost
+          data-agg={a.id}
+          data-cost={a.id === 'cost' ? '' : undefined}
           class="inline-flex shrink-0 items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted tabular-nums"
-          title="What the agents' turns on this ticket have cost"
+          title={a.title}
         >
-          {fmtUsdExact(ticket.cost.usd)}
-          <span class="hidden sm:inline">&nbsp;· {fmtTurns(ticket.cost.runs)}</span>
+          {a.text}
+          <span class="hidden sm:inline">&nbsp;{a.label}</span>
         </span>
-      {/if}
+      {/each}
       {#if waiting.length}
         <button
           type="button"

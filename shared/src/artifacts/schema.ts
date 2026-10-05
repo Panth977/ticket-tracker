@@ -15,6 +15,7 @@
  * board gives nothing here.
  */
 import { z } from 'zod';
+import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import {
   AgentIdSchema,
   BoardIdSchema,
@@ -115,7 +116,8 @@ export const artifactAgentCan = {
 } as const;
 
 export const ARTIFACT_NAME_MAX = 80;
-export const ARTIFACT_DESCRIPTION_MAX = 500;
+/** indicators.html: the one description limit. */
+export const ARTIFACT_DESCRIPTION_MAX = DESCRIPTION_MAX;
 /** §C1 limits on one build. */
 export const ARTIFACT_BUILD_MAX_BYTES = 25 * 1024 * 1024;
 export const ARTIFACT_BUILD_MAX_FILES = 2000;
@@ -164,8 +166,10 @@ export const ARTIFACT_BOARDS_MAX = 20;
 export const ArtifactSchema = z.object({
   name: z.string().min(1).max(ARTIFACT_NAME_MAX),
   description: z.string().max(ARTIFACT_DESCRIPTION_MAX).nullable(),
-  /** One emoji, or null for the default glyph. */
+  /** LEGACY (indicators.html): one typed emoji. Read through indicatorOf(). */
   icon: z.string().max(16).nullable(),
+  /** indicators.html: what the sidebar, dropdowns and cards draw. */
+  indicator: IndicatorSchema.optional(),
   ownerUid: UidSchema,
   /** Every PERSON with a role, the owner included. Rules read this. */
   access: z.record(UidSchema, ArtifactRoleSchema),

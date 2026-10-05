@@ -5,7 +5,7 @@ description: How TaskManager works — boards, tickets, threads, task lists and 
 
 # TaskManager
 
-Version 1.5.0 · API v1 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
+Version 1.6.0 · API v1 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
 
 Boards, tickets and threads that people and agents share. You reach it through the `taskmanager` MCP server,
 which is already connected — you never construct HTTP requests for it, and you never ask the user for a token.
@@ -56,8 +56,8 @@ no list of permissions that could be widened: a `403` is answered by changing th
 
 ```text
 whoami               read   Who you are: principal, board, scopes — and, for an agent, its name, description and system prompt.
-list_boards          read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes.
-get_board            read   The board: stages (with categories), priorities, tags, custom fields, and members (people and agents).
+list_boards          read   Boards this credential may act on. With an account-wide token this is the natural FIRST call: it lists every board you are on right now, and their keys are what the `board` argument takes. Each board carries its description (what it is for) and its stages with THEIR descriptions — what each stage means; read them to decide which stage a ticket belongs in before moving it.
+get_board            read   The board: its description, stages (with categories and descriptions — what each stage means, so you know where a ticket goes), priorities, tags, custom fields, and members (people and agents).
 list_my_tickets      read   Tickets assigned to you, most recently updated first.
 search_tickets       read   Find tickets by text, assignee, stage, state or dates.
 get_ticket           read   A ticket with fields, links, pinned messages, files and its last messages (Markdown).
@@ -66,7 +66,8 @@ create_ticket        write  Create a ticket.
 update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
-post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration).
+post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+get_aggregates       read   One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.
 upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
 read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         write  Link two tickets: blocks, relates or duplicates.

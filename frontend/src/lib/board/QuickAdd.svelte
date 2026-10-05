@@ -33,6 +33,7 @@
     type QuickAddToken,
   } from '@tm/shared/logic/quickAdd';
   import { firstStage } from '@tm/shared/logic/stages';
+  import { stageChoices } from './stageMark';
   import { docFromText } from '@tm/shared/logic/richtext/derive';
   import { command, newClientId, outbox } from '$lib/api';
   import { page } from '$app/state';
@@ -507,7 +508,7 @@
       ></textarea>
       <span class="font-medium">Stage</span>
       <ChoicePicker
-        items={opts(board.stages)}
+        items={stageChoices(board.stages)}
         selected={[f.stageId]}
         label="Stage"
         onchange={(v) => v[0] && (f.stageId = v[0])}
