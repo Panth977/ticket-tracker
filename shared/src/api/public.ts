@@ -122,6 +122,8 @@ export const PublicAggCountersSchema = z.record(
 export type PublicAggCounters = z.infer<typeof PublicAggCountersSchema>;
 /** PublicMessage.agg — the entries a message added (kind 'agg', or a receipt's cost). */
 export const PublicMessageAggSchema = z.object({
+  /** ISO — the moment the entries are for (a backdated log); absent = when posted. */
+  at: z.string().optional(),
   entries: z.array(z.object({ field_id: z.string(), value: z.number() })),
 });
 export type PublicMessageAgg = z.infer<typeof PublicMessageAggSchema>;
@@ -131,6 +133,12 @@ export type PublicMessageAgg = z.infer<typeof PublicMessageAggSchema>;
  * case-insensitive). A negative value takes away.
  */
 export const PublicAggInputSchema = z.object({
+  /**
+   * What the entries are FOR, when not now: a date ('2026-10-04' — that day),
+   * an ISO date-time, or millis. A backfilled daily log lands in its own day's
+   * bucket. Not in the future; at most 400 days back.
+   */
+  at: z.union([z.string().min(1).max(40), z.number()]).optional(),
   entries: z
     .array(
       z

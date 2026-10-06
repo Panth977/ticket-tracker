@@ -7,7 +7,7 @@
 version:           1.6.0
 api:               v1
 updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    48531fb4afd82ad138ca9b1d5ddbebff3f3ccf7707301b2ddd429ee8a48fcf3a
+content-sha256:    0e86eeed57c94c63091d38aeaf3eb64c815ba7692c6c983dc8e7e941e2e96095
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -1688,12 +1688,12 @@ Idempotency-Key  string    A retried request with the same key is one change.
 
 Body (application/json, required):
 ```text
-body_markdown  string           (default "", ≤ 100000 chars)
-attachments    string[]         (≤ 20 items)
+body_markdown  string             (default "", ≤ 100000 chars)
+attachments    string[]           (≤ 20 items)
 reply_to       string
 run            object | null
-agg            { entries }
-memory_files   object[]         (≤ 20 items)
+agg            { at, entries }
+memory_files   object[]           (≤ 20 items)
 ```
 
 → 201 Message
@@ -3310,7 +3310,7 @@ attachments   string[]                                      File ids from upload
 memory_files  object[]                                      Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).
 reply_to      string                                        Message id to quote
 run           { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Its cost_usd lands on the board's Cost aggregate field.
-agg           { entries }                                   Entries for the board's aggregate fields (get_board → agg_fields): { entries: [{ field_id | field (label), value }] }. A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time").
+agg           { at, entries }                               Entries for the board's aggregate fields (get_board → agg_fields): { at?, entries: [{ field_id | field (label), value }] }. A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time"). BACKFILLING a past day's log? Set `at` to that day ('2026-10-04') so it lands in that day's bucket — otherwise it counts for today.
 ```
 
 #### get_aggregates
@@ -4868,6 +4868,14 @@ const t = await db.tickets.get('ENG-42');           // null when there is no suc
 await db.tickets.create('ENG', { title: 'From the dashboard', priority: 'High', assignees: ['me'] });
 await db.tickets.update('ENG-42', { stage: 'Done', dueAt: '2026-10-31' });
 await db.tickets.comment('ENG-42', 'Shipped — see **v2**.');
+
+// Read-only, on any granted board (read or write grant):
+const msgs = await db.tickets.thread('ENG-42');                       // newest 50, oldest → newest (limit ≤ 200)
+const older = await db.tickets.thread('ENG-42', { before: msgs[0].id }); // page back (or before: millis)
+const offT = db.tickets.onThread('ENG-42', (msgs) => render(msgs));   // live: the newest window
+img.src = await db.tickets.fileUrl('ENG-42', msgs[0].attachments[0].id);
+const cost = await db.tickets.aggregates('ENG', { field: 'Cost' });   // { field, total, count, lifetime, buckets }
+const offA = db.tickets.onAggregates('ENG', { field: 'Time', from: '2026-W30' }, (a) => chart(a.buckets));
 ```
 
 Tickets come back with **names, not ids** (`stage.name`, `priority.name`, tag names, custom fields by
@@ -4875,6 +4883,20 @@ field name, select options by name), the description as **Markdown**, and times 
 What you send takes names too (or ids), `'me'` and emails for people; an unknown name is
 `invalid-argument` and the message lists the names that exist. Writes are refused for a viewer of a
 read-only artifact, like every other write.
+
+**Threads and aggregates.** A message is `{ id, kind: 'comment' | 'system' | 'question' | 'agg',
+author, markdown, createdAt, editedAt, deleted, replyTo, pinned, attachments: [{ id, name, mime, size }],
+question?, agg?, run? }` — a deleted message stays as a tombstone (`deleted: true`, empty `markdown`);
+`question` is the form card with its `answer` (values by field label); `agg` is
+`{ at?, entries: [{ fieldId, label, unit, value }] }`; `run` is a turn receipt `{ n, outcome, costUsd,
+durationMs, model }`. Attachments carry no URL: ask `fileUrl(key, id)` when you need the bytes.
+Boards carry `aggFields` (`[{ id, label, unit, period: 'daily' | 'weekly' | 'monthly', archived }]`) and
+`aggs` (lifetime `{ [fieldId]: { total, count } }`); tickets carry their own `aggs`.
+`aggregates(board, { field?, from?, to? })` answers one field's period buckets — `field` by id or label
+(default the first active one), keys inclusive (`'2026-10-05'` · `'2026-W40'` · `'2026-10'`), `from`
+defaulting to 30 days / 12 weeks / 12 months back — as `{ field, from, to, total, count, lifetime,
+buckets: [{ key, total, count, tickets: { 'ENG-42': { total, count } } }] }`, oldest first, empty buckets
+left out. Outside TaskManager the mock's DEMO board has a sample thread and a month of buckets.
 
 **Memory files (`db.memory`).** A *memory* is a bucket of files — Markdown notes, images, video,
 anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's
@@ -5054,6 +5076,29 @@ export interface Board {
   tags: { id: string; name: string }[];
   fields: { id: string; name: string; type: string; options?: string[] }[];
   members: Person[];
+  /** The board's aggregate fields (numbers it adds up — Cost, hours…), archived ones included. */
+  aggFields: AggField[];
+  /** Lifetime { total, count } per aggregate field id. */
+  aggs: Record<string, AggCounter>;
+}
+
+/** An aggregate field: a number the board adds up per ticket and per period. */
+export interface AggField {
+  /** 'cost', or 'a_' + 6 characters. */
+  id: string;
+  label: string;
+  /** '$', 'h', 'pts'… — '' for a plain count. */
+  unit: string;
+  /** How its buckets are cut: '2026-10-05' · '2026-W40' (ISO week) · '2026-10'. */
+  period: 'daily' | 'weekly' | 'monthly';
+  /** Removed from the board: history kept, no new entries. */
+  archived: boolean;
+}
+
+/** A running sum: the entries' total and how many there were. */
+export interface AggCounter {
+  total: number;
+  count: number;
 }
 
 /** A ticket: names, not ids; Markdown description; times in millis. */
@@ -5077,8 +5122,106 @@ export interface Ticket {
   fields: Record<string, unknown>;
   /** How many messages its thread has. */
   messages: number;
+  /** This ticket's { total, count } per aggregate field id. */
+  aggs: Record<string, AggCounter>;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A file on a message. Its bytes: tickets.fileUrl(key, id). */
+export interface Attachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** A question card (kind 'question'): the form an agent asked, and the answer once given. */
+export interface Question {
+  title: string;
+  status: 'open' | 'answered' | 'cancelled' | 'expired';
+  /** The ticket waits on it ('Waiting for your answer'). */
+  blocking: boolean;
+  fields: {
+    id: string;
+    label: string;
+    type: 'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date';
+    required: boolean;
+    /** single / multi: the choices' labels. */
+    options?: string[];
+  }[];
+  /** null until answered. `values` by field LABEL; choices by label, dates in millis. */
+  answer: {
+    values: Record<string, unknown>;
+    comment: string | null;
+    by: Person;
+    at: number;
+  } | null;
+}
+
+/** One message of a ticket's thread. */
+export interface Message {
+  id: string;
+  /** comment · system ('Priya moved this to QA') · question (a form card) · agg (entries on aggregate fields). */
+  kind: 'comment' | 'system' | 'question' | 'agg';
+  /** Who wrote it; for system lines and outsiders (email) the id is ''. */
+  author: Person;
+  /** Markdown; '' when deleted. */
+  markdown: string;
+  createdAt: number;
+  editedAt: number | null;
+  /** A tombstone: 'This message was deleted' — markdown and attachments are empty. */
+  deleted: boolean;
+  /** The quoted message's id. */
+  replyTo: string | null;
+  pinned: boolean;
+  attachments: Attachment[];
+  question?: Question;
+  /** Entries on aggregate fields (a kind 'agg' message, or a turn receipt's cost). */
+  agg?: {
+    /** When the entries count (millis), if it is not createdAt. */
+    at?: number;
+    entries: { fieldId: string; label: string; unit: string; value: number }[];
+  };
+  /** A turn receipt: one run of an agent. */
+  run?: { n: number; outcome: string; costUsd: number; durationMs: number; model: string | null };
+}
+
+export interface ThreadQuery {
+  /** Default 50, at most 200. */
+  limit?: number;
+  /** Only messages older than this message id, or than this time (millis) — page back with the first id you hold. */
+  before?: string | number;
+}
+
+export interface AggregateQuery {
+  /** Field id or label (case-insensitive). Default: the board's first active field. */
+  field?: string;
+  /** First and last bucket keys, inclusive, in the field's period ('2026-10-01' · '2026-W38' · '2026-07'). */
+  from?: string;
+  to?: string;
+}
+
+/** One period bucket of one field. `tickets` is per ticket KEY. */
+export interface AggBucket {
+  key: string;
+  total: number;
+  count: number;
+  tickets: Record<string, AggCounter>;
+}
+
+/** One field's buckets in a range, oldest first (empty buckets left out). */
+export interface Aggregates {
+  field: AggField;
+  /** The range read: `from` defaults to 30 days / 12 weeks / 12 months back; `to` null = up to now. */
+  from: string;
+  to: string | null;
+  /** Summed over the buckets returned. */
+  total: number;
+  count: number;
+  /** The board's lifetime counter for the field. */
+  lifetime: AggCounter;
+  buckets: AggBucket[];
 }
 
 export interface TicketQuery {
@@ -5137,6 +5280,29 @@ export interface TicketsApi {
   update(key: string, patch: Partial<TicketInput>): Promise<void>;
   /** Post in the ticket's thread, as the viewer. */
   comment(key: string, markdown: string): Promise<void>;
+  /**
+   * The thread, oldest → newest: the newest `limit` (default 50, at most 200)
+   * messages, or those before `before` (a message id or millis) to page back.
+   */
+  thread(key: string, query?: ThreadQuery): Promise<Message[]>;
+  /** The newest messages, live: now and on every change (`before` is refused). */
+  onThread(key: string, callback: (messages: Message[]) => void, onError?: OnError): Unsubscribe;
+  onThread(
+    key: string,
+    query: Pick<ThreadQuery, 'limit'> | null | undefined,
+    callback: (messages: Message[]) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+  /** A short-lived URL (for <img>, <video>, <a href>) of a file on the ticket — an attachment id. */
+  fileUrl(key: string, fileId: string): Promise<string>;
+  /** One aggregate field's period buckets on a board. */
+  aggregates(board: string, query?: AggregateQuery): Promise<Aggregates>;
+  onAggregates(
+    board: string,
+    query: AggregateQuery | null | undefined,
+    callback: (aggregates: Aggregates) => void,
+    onError?: OnError,
+  ): Unsubscribe;
 }
 
 // ─── memory (memory.html §H) ─────────────────────────────────────────────────
@@ -5916,6 +6082,13 @@ keeps working. The SDK's own patch releases do not change the wire format.
   `{ field, total, buckets: [{ key, total, count, tickets }] }` — one field (id or label), period
   keys inclusive (also `GET /v1/board/aggregates?board=`, SDK `tm.aggregates()`, MCP
   `get_aggregates`).
+- **Artifacts (`BackendDriver.tickets`)** read everything readable on a granted board:
+  `tickets.thread(key, { limit?, before? })` (messages oldest → newest — kinds, authors, Markdown,
+  tombstones, attachments, question cards with answers, `agg` entries, turn receipts),
+  `tickets.onThread(key, cb)` (live), `tickets.fileUrl(key, attachmentId)`,
+  `tickets.aggregates(board, { field?, from?, to? })` and `tickets.onAggregates(…)` (one field's period
+  buckets with per-ticket shares); boards gain `aggFields` and `aggs`, tickets gain `aggs`. Same fence
+  as `tickets.get`: a granted board the viewer can read. The mock has a sample thread and buckets.
 - **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, memories
   and workspaces each have an `indicator` — `{ kind: 'color', color }` | `{ kind: 'icon', icon,
   color }` (an icon from the app's list, tinted) | `{ kind: 'emoji', emoji }` | `{ kind: 'image',

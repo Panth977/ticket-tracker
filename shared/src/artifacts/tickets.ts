@@ -21,10 +21,21 @@ import type {
   TicketQuery,
 } from './driver.js';
 import type { ArtifactBoardAccess } from './schema.js';
+import { boardAggFields } from '../schema/aggregates.js';
+import { toDriverAggCounters, toDriverAggField } from './aggregates.js';
 
 export type TicketBoard = Pick<
   BoardWithId,
-  'id' | 'key' | 'name' | 'stages' | 'priorities' | 'tags' | 'fields'
+  | 'id'
+  | 'key'
+  | 'name'
+  | 'stages'
+  | 'priorities'
+  | 'tags'
+  | 'fields'
+  | 'aggFields'
+  | 'aggs'
+  | 'cost'
 >;
 type Member = Pick<BoardMember, 'uid' | 'kind' | 'name' | 'email'>;
 
@@ -64,6 +75,8 @@ export function toDriverBoard(
       ...(f.options ? { options: byPos(f.options).map((o) => o.name) } : {}),
     })),
     members: members.map(toDriverPerson),
+    aggFields: boardAggFields(board).map(toDriverAggField),
+    aggs: toDriverAggCounters(board),
   };
 }
 
@@ -116,6 +129,7 @@ export function toDriverTicket(
       }),
     ),
     messages: t.counts?.messages ?? 0,
+    aggs: toDriverAggCounters(t),
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   };

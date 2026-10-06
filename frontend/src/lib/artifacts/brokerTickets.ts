@@ -18,14 +18,23 @@
  */
 import {
   applyTicketPlan,
+  boardAggFields,
   boardKeyOfTicketKey,
   can,
+  inlineMessages,
+  planAggregates,
+  planThread,
+  readThread,
+  toDriverAggregates,
+  toDriverMessage,
   markdownToDoc,
   planTicketQuery,
   ticketInputToCommand,
   toDriverBoard,
   toDriverPerson,
   toDriverTicket,
+  type AggPeriod,
+  type AggStats,
   type ArtifactBoardAccess,
   type BoardMember,
   type BoardWithId,
@@ -33,9 +42,13 @@ import {
   type DriverOp,
   type DriverPerson,
   type RichTextDoc,
+  type StoredMessage,
   type TicketInput,
   type TicketQuery,
   type TicketWithId,
+  type ThreadQuery,
+  type AggregateQuery,
+  type AggPlan,
 } from '@tm/shared';
 import { isPlainObject } from './convert';
 
@@ -75,6 +88,34 @@ export interface TicketBackend {
   }): Promise<{ ticketId: string; key: string }>;
   update(boardId: string, ticketId: string, patch: Record<string, unknown>): Promise<void>;
   comment(boardId: string, ticketId: string, body: RichTextDoc, markdown: string): Promise<void>;
+  /** The ticket document, live (the thread's inline window is on it). null = gone or unreadable. */
+  onTicket(
+    boardId: string,
+    ticketId: string,
+    next: (ticket: TicketWithId | null) => void,
+    error: OnError,
+  ): Stop;
+  /** data/{n}'s messages — a frozen page of the older thread; null when missing. */
+  page(boardId: string, ticketId: string, n: number): Promise<StoredMessage[] | null>;
+  /** The board document, live (fields and lifetime counters for onAggregates). */
+  onBoard(boardId: string, next: (board: BoardWithId | null) => void, error: OnError): Stop;
+  /** aggStats docs of one period with fromKey <= key (<= toKey), by doc id range. */
+  aggStats(
+    boardId: string,
+    period: AggPeriod,
+    fromKey: string,
+    toKey: string | null,
+  ): Promise<AggStats[]>;
+  onAggStats(
+    boardId: string,
+    period: AggPeriod,
+    fromKey: string,
+    toKey: string | null,
+    next: (docs: AggStats[]) => void,
+    error: OnError,
+  ): Stop;
+  /** The file door, as the viewer: a short-lived URL for a Storage path; null when refused. */
+  fileAccess(path: string): Promise<{ url: string; expiresAt: number } | null>;
 }
 
 export type TicketOp = Extract<DriverOp, `tk.${string}`>;
@@ -91,7 +132,13 @@ export interface TicketOpsOptions {
   subscribe: (reqId: string, start: (next: (v: unknown) => void, error: OnError) => Stop) => void;
   /** Raise a driver error ('permission-denied' | 'invalid-argument' …). */
   fail: (code: 'permission-denied' | 'invalid-argument' | 'not-found', message: string) => never;
+  /** The clock, for the default aggregate range. */
+  now?: () => number;
 }
+
+/** The plan's field as the board has it now (a relabel shows live); the plan's own if it is gone. */
+const fieldNow = (board: BoardWithId, plan: AggPlan) =>
+  boardAggFields(board).find((f) => f.id === plan.field.id) ?? plan.field;
 
 interface Granted {
   board: BoardWithId;
@@ -100,6 +147,38 @@ interface Granted {
 
 export function createTicketOps(o: TicketOpsOptions) {
   const { uid, backend: tk, fail } = o;
+  const now = o.now ?? Date.now;
+
+  /**
+   * data/{NNN} pages, fetched once per host page: a page is frozen when it is
+   * written (only an edit inside it ever touches it again), exactly as the
+   * app's own thread caches them (lib/ticket/data.ts › pageCache).
+   */
+  const pages = new Map<string, Promise<StoredMessage[] | null>>();
+  const pageOf = (boardId: string, ticketId: string) => (n: number) => {
+    const k = `${boardId}/${ticketId}/${n}`;
+    let p = pages.get(k);
+    if (!p) {
+      p = tk.page(boardId, ticketId, n).catch((e: unknown) => {
+        pages.delete(k); // a transient failure must be retryable
+        throw e;
+      });
+      pages.set(k, p);
+    }
+    return p;
+  };
+
+  /** The thread rows the plan asks for → DriverMessage[], oldest first. */
+  const threadOut = async (
+    board: BoardWithId,
+    ticket: TicketWithId,
+    plan: ReturnType<typeof planThread>,
+    people: ReadonlyMap<string, DriverPerson>,
+  ) => {
+    const rows = await readThread(ticket, plan, pageOf(board.id, ticket.id));
+    const fields = boardAggFields(board);
+    return rows.map((m) => toDriverMessage(m, people, fields));
+  };
 
   /** Every granted board this viewer can read, in grant order. */
   async function grantedBoards(): Promise<Granted[]> {
@@ -252,6 +331,110 @@ export function createTicketOps(o: TicketOpsOptions) {
         });
         await tk.comment(board.id, ticket.id, body, a.markdown);
         return { ok: true };
+      }
+      case 'tk.thread': {
+        const { board, ticket } = await ticketAt(a.key, false);
+        if (!ticket) return fail('not-found', `No ticket ${String(a.key)}`);
+        const plan = planThread(plain(a.query, 'query') as ThreadQuery | undefined);
+        return threadOut(board, ticket, plan, peopleOf(await tk.members(board.id)));
+      }
+      case 'tk.onThread': {
+        const { board, ticket } = await ticketAt(a.key, false);
+        if (!ticket) return fail('not-found', `No ticket ${String(a.key)}`);
+        const plan = planThread(plain(a.query, 'query') as ThreadQuery | undefined, true);
+        const people = peopleOf(await tk.members(board.id));
+        o.subscribe(reqId, (next, error) => {
+          let seq = 0;
+          return tk.onTicket(
+            board.id,
+            ticket.id,
+            (t) => {
+              const mine = ++seq;
+              if (!t) return error({ code: 'not-found', message: `No ticket ${String(a.key)}` });
+              // Older pages may have to be read: only the newest snapshot's answer is sent.
+              threadOut(board, t, plan, people).then(
+                (out) => mine === seq && next(out),
+                (e: unknown) => mine === seq && error(e),
+              );
+            },
+            error,
+          );
+        });
+        return undefined;
+      }
+      case 'tk.fileUrl': {
+        const { ticket } = await ticketAt(a.key, false);
+        if (!ticket) return fail('not-found', `No ticket ${String(a.key)}`);
+        if (typeof a.file !== 'string' || !a.file)
+          return fail('invalid-argument', 'file must be an attachment id');
+        // Only a file OF THIS TICKET: its file rows (every message's, spilled
+        // pages included), else an attachment of an inline message.
+        const path =
+          (ticket.files ?? []).find((f) => f.id === a.file && f.deletedAt == null)?.path ??
+          inlineMessages(ticket)
+            .filter((m) => m.deletedAt == null)
+            .flatMap((m) => m.attachments ?? [])
+            .find((x) => x.id === a.file)?.path;
+        if (!path) return fail('not-found', `No file ${a.file} on ${ticket.key}`);
+        const access = await tk.fileAccess(path);
+        if (!access) return fail('not-found', 'This file is not available');
+        // The file door answers a same-origin path where it cannot sign (dev):
+        // the page lives on another origin, so make it absolute.
+        const url = o.origin ? new URL(access.url, o.origin).href : access.url;
+        return { url, expiresAt: access.expiresAt };
+      }
+      case 'tk.aggregates': {
+        const { board } = await resolve(a.board, false);
+        const plan = planAggregates(board, plain(a.query, 'query') as AggregateQuery, now());
+        const docs = await tk.aggStats(board.id, plan.field.period, plan.from, plan.to);
+        return toDriverAggregates(board, plan, docs);
+      }
+      case 'tk.onAggregates': {
+        const { board } = await resolve(a.board, false);
+        const query = plain(a.query, 'query') as AggregateQuery | undefined;
+        const plan = planAggregates(board, query, now());
+        o.subscribe(reqId, (next, error) => {
+          // The buckets, and the board for the field and its lifetime counter.
+          let latest: BoardWithId = board;
+          let docs: AggStats[] | null = null;
+          const emit = () => {
+            if (!docs) return;
+            try {
+              next(toDriverAggregates(latest, { ...plan, field: fieldNow(latest, plan) }, docs));
+            } catch (e) {
+              error(e);
+            }
+          };
+          const offBoard = tk.onBoard(
+            board.id,
+            (b) => {
+              if (!b)
+                return error({
+                  code: 'permission-denied',
+                  message: `This artifact has no access to board ${board.key}`,
+                });
+              latest = { ...b, id: board.id };
+              emit();
+            },
+            error,
+          );
+          const offStats = tk.onAggStats(
+            board.id,
+            plan.field.period,
+            plan.from,
+            plan.to,
+            (d) => {
+              docs = d;
+              emit();
+            },
+            error,
+          );
+          return () => {
+            offBoard();
+            offStats();
+          };
+        });
+        return undefined;
       }
     }
   }

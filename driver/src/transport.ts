@@ -15,7 +15,8 @@ import type {
   DriverResult,
 } from '@tm/shared/artifacts/driver';
 
-export type SubOp = 'fs.onDoc' | 'fs.onList' | 'rtdb.on' | 'tk.onList';
+export type SubOp =
+  'fs.onDoc' | 'fs.onList' | 'rtdb.on' | 'tk.onList' | 'tk.onThread' | 'tk.onAggregates';
 export type SignalName = 'readonly' | 'revoked' | 'build';
 
 export interface Transport {

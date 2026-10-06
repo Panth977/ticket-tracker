@@ -137,6 +137,39 @@ describe('messagePost agg', () => {
     expect(month.fields[PAGES.id]).toMatchObject({ total: 3, count: 1 });
   });
 
+  it('a backfilled entry (agg.at) lands in the bucket of the day it is FOR; future / too old refused', async () => {
+    const { cora, b, ticketId, key } = await setup();
+    const DAY = 86_400_000;
+    const post = (at: number | undefined, value: number) =>
+      call(cora, 'messagePost', {
+        boardId: b.id,
+        ticketId,
+        clientId: uniq('c'),
+        body: { type: 'doc', content: [] },
+        agg: {
+          ...(at !== undefined ? { at } : {}),
+          entries: [{ fieldId: COST_AGG_FIELD.id, value }],
+        },
+      });
+    const r = await post(NOW - 2 * DAY, 1.5);
+    expect((await msgOf(b.id, ticketId, r.messageId))!.agg?.at).toBe(NOW - 2 * DAY);
+    await post(undefined, 0.25);
+
+    const then = (await bucket(b.id, COST_AGG_FIELD, NOW - 2 * DAY))!;
+    expect(then.key).toBe(aggPeriodKey('daily', NOW - 2 * DAY));
+    expect(then.fields[COST_AGG_FIELD.id]).toEqual({
+      total: 1.5,
+      count: 1,
+      tickets: { [key]: { total: 1.5, count: 1 } },
+    });
+    expect((await bucket(b.id, COST_AGG_FIELD))!.fields[COST_AGG_FIELD.id]!.total).toBe(0.25);
+    // The ticket's and the board's totals count both.
+    expect((await T(b.id, ticketId)).aggs?.[COST_AGG_FIELD.id]).toEqual({ total: 1.75, count: 2 });
+
+    await expect(post(NOW + 2 * DAY, 1)).rejects.toMatchObject({ code: 'invalid' });
+    await expect(post(NOW - 500 * DAY, 1)).rejects.toMatchObject({ code: 'invalid' });
+  });
+
   it('an unknown or archived field is a 400; a viewer cannot post one', async () => {
     const { cora, vic, b, ticketId } = await setup();
     const post = (u: typeof cora, fieldId: string) =>

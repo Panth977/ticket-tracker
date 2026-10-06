@@ -43,6 +43,7 @@ import {
   type AggStats,
   type MessageAgg,
   activeAggFields,
+  aggAtFrom,
   aggKeyFits,
   aggPeriodKeys,
   boardAggFields,
@@ -419,7 +420,17 @@ export function aggFieldFor(board: BoardWithId, ref: string, what = 'agg'): AggF
 
 /** The wire entries (field_id | field) → what messagePost takes (it checks archived / duplicates). */
 export function aggIn(board: BoardWithId, agg: PublicAggInput): MessageAgg {
+  let at: number | undefined;
+  if (agg.at !== undefined) {
+    const ms = aggAtFrom(agg.at);
+    if (ms === null)
+      throw errors.invalid("agg.at: give a date ('2026-10-04'), an ISO date-time or millis", {
+        field: 'agg',
+      });
+    at = ms;
+  }
   return {
+    ...(at !== undefined ? { at } : {}),
     entries: agg.entries.map((e) => ({
       fieldId: aggFieldFor(board, (e.field_id ?? e.field)!).id,
       value: e.value,

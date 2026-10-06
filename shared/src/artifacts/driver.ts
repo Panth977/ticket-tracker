@@ -114,6 +114,29 @@ export interface DriverBoard {
   tags: { id: string; name: string }[];
   fields: { id: string; name: string; type: string; options?: string[] }[];
   members: DriverPerson[];
+  /** The board's aggregate fields (aggregates.html), in board order, archived ones included. */
+  aggFields: DriverAggField[];
+  /** Lifetime { total, count } per aggregate field id. */
+  aggs: Record<string, DriverAggCounter>;
+}
+
+/** An aggregate field of a board (aggregates.html): a number the board adds up per ticket and per period. */
+export interface DriverAggField {
+  /** 'cost', or 'a_' + 6 characters. */
+  id: string;
+  label: string;
+  /** '$', 'h', 'pts'… — '' for a plain count. */
+  unit: string;
+  /** How its buckets are cut ('2026-10-05' · '2026-W40' · '2026-10', in the board owner's time zone). */
+  period: 'daily' | 'weekly' | 'monthly';
+  /** Removed from the board: history kept, no new entries. */
+  archived: boolean;
+}
+
+/** A running sum: the total of the entries and how many there were. */
+export interface DriverAggCounter {
+  total: number;
+  count: number;
 }
 
 /** A ticket as the page sees it: names, not ids; Markdown, not rich text; millis for times. */
@@ -134,8 +157,108 @@ export interface DriverTicket {
   /** Custom fields by NAME; select options by name. */
   fields: Record<string, unknown>;
   messages: number;
+  /** This ticket's { total, count } per aggregate field id. */
+  aggs: Record<string, DriverAggCounter>;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A file on a message. Get its bytes with tickets.fileUrl(key, id). */
+export interface DriverAttachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** A question card (kind 'question'): the form an agent asked, and the answer once given. */
+export interface DriverQuestion {
+  title: string;
+  status: 'open' | 'answered' | 'cancelled' | 'expired';
+  /** The ticket waits on it ('Waiting for your answer'). */
+  blocking: boolean;
+  fields: {
+    id: string;
+    label: string;
+    type: 'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date';
+    required: boolean;
+    /** single / multi: the choices' labels. */
+    options?: string[];
+  }[];
+  /** null until answered. `values` by field LABEL; choices by label, dates in millis. */
+  answer: {
+    values: Record<string, unknown>;
+    comment: string | null;
+    by: DriverPerson;
+    at: number;
+  } | null;
+}
+
+/** One message of a ticket's thread (tickets.thread). */
+export interface DriverMessage {
+  id: string;
+  /** comment · system ('Priya moved this to QA') · question (a form card) · agg (entries on aggregate fields). */
+  kind: 'comment' | 'system' | 'question' | 'agg';
+  /** Who wrote it; for system lines and outsiders (email) the id is ''. */
+  author: DriverPerson;
+  /** Markdown; '' when deleted. */
+  markdown: string;
+  createdAt: number;
+  editedAt: number | null;
+  /** A tombstone: 'This message was deleted' — markdown and attachments are empty. */
+  deleted: boolean;
+  /** The quoted message's id. */
+  replyTo: string | null;
+  pinned: boolean;
+  attachments: DriverAttachment[];
+  question?: DriverQuestion;
+  /** Entries on aggregate fields (a kind 'agg' message, or a turn receipt's cost). */
+  agg?: {
+    /** When the entries count (millis), if it is not createdAt. */
+    at?: number;
+    entries: { fieldId: string; label: string; unit: string; value: number }[];
+  };
+  /** A turn receipt: one run of an agent. */
+  run?: { n: number; outcome: string; costUsd: number; durationMs: number; model: string | null };
+}
+
+export interface ThreadQuery {
+  /** Default 50, at most 200. */
+  limit?: number;
+  /** Only messages older than this message id, or than this time (millis) — page back with the first id you hold. */
+  before?: string | number;
+}
+export const THREAD_DEFAULT = 50;
+export const THREAD_MAX = 200;
+
+export interface AggregateQuery {
+  /** Field id or label (case-insensitive). Default: the board's first active field. */
+  field?: string;
+  /** First and last bucket keys, inclusive, in the field's period ('2026-10-01' · '2026-W38' · '2026-07'). */
+  from?: string;
+  to?: string;
+}
+
+/** One period bucket of one field. `tickets` is per ticket KEY. */
+export interface DriverAggBucket {
+  key: string;
+  total: number;
+  count: number;
+  tickets: Record<string, DriverAggCounter>;
+}
+
+/** tickets.aggregates: one field's buckets in a range, oldest first (empty buckets left out). */
+export interface DriverAggregates {
+  field: DriverAggField;
+  /** The range read: `from` defaults to 30 days / 12 weeks / 12 months back; `to` null = up to now. */
+  from: string;
+  to: string | null;
+  /** Summed over the buckets returned. */
+  total: number;
+  count: number;
+  /** The board's lifetime counter for the field. */
+  lifetime: DriverAggCounter;
+  buckets: DriverAggBucket[];
 }
 
 export interface TicketQuery {
@@ -235,6 +358,13 @@ export interface DriverOps {
   'tk.create': [{ board: string; ticket: TicketInput }, { id: string; key: string }];
   'tk.update': [{ key: string; patch: Partial<TicketInput> }, { ok: true }];
   'tk.comment': [{ key: string; markdown: string }, { ok: true }];
+  'tk.thread': [{ key: string; query?: ThreadQuery }, DriverMessage[]];
+  /** Live: the newest `limit` messages, again on every change. `before` is refused. */
+  'tk.onThread': [{ key: string; query?: ThreadQuery }, { sub: string }];
+  /** A file of the ticket (an attachment id) → a short-lived URL. */
+  'tk.fileUrl': [{ key: string; file: string }, { url: string; expiresAt: number }];
+  'tk.aggregates': [{ board: string; query?: AggregateQuery }, DriverAggregates];
+  'tk.onAggregates': [{ board: string; query?: AggregateQuery }, { sub: string }];
   // memory.html §H — memories granted to this artifact, as far as the viewer reaches
   'mem.list': [Record<string, never>, DriverMemory[]];
   'mem.tree': [{ memory: string; path?: string }, DriverMemoryNode[]];
@@ -279,6 +409,11 @@ export const DRIVER_OPS = [
   'tk.create',
   'tk.update',
   'tk.comment',
+  'tk.thread',
+  'tk.onThread',
+  'tk.fileUrl',
+  'tk.aggregates',
+  'tk.onAggregates',
   'mem.list',
   'mem.tree',
   'mem.read',
@@ -307,6 +442,15 @@ export const DRIVER_WRITE_OPS: ReadonlySet<DriverOp> = new Set([
   'mem.write',
   'mem.mkdir',
   'mem.remove',
+]);
+/** Ops that answer { sub } and then send `event`s until unsubscribed. */
+export const DRIVER_SUB_OPS: ReadonlySet<DriverOp> = new Set([
+  'fs.onDoc',
+  'fs.onList',
+  'rtdb.on',
+  'tk.onList',
+  'tk.onThread',
+  'tk.onAggregates',
 ]);
 export const isDriverOp = (s: unknown): s is DriverOp =>
   typeof s === 'string' && (DRIVER_OPS as readonly string[]).includes(s);

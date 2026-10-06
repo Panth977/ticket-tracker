@@ -6,7 +6,7 @@
   ticket's and the board's totals move when it lands.
 -->
 <script lang="ts">
-  import { formatAgg, formatAggEntry, type RichTextDoc } from '@tm/shared';
+  import { aggAtFrom, formatAgg, formatAggEntry, type RichTextDoc } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { Button, Dialog, Input, Textarea } from '$lib/ui';
   import {
@@ -31,13 +31,27 @@
   let raw = $state<Record<string, string>>({});
   let note = $state('');
   let touched = $state(false);
+  /** The day the entries are FOR (aggregates.html): today, or a past day being backfilled. */
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  let forDay = $state(today());
   $effect(() => {
     if (open) {
       raw = {};
       note = '';
       touched = false;
+      forDay = today();
     }
   });
+  const forProblem = $derived(
+    !/^\d{4}-\d{2}-\d{2}$/.test(forDay)
+      ? 'Pick a day'
+      : forDay > today()
+        ? 'Not in the future'
+        : null,
+  );
 
   const check = $derived(
     draftEntries(fields.map((f) => ({ fieldId: f.id, raw: raw[f.id] ?? '' }))),
@@ -63,14 +77,16 @@
   function submit(e: SubmitEvent) {
     e.preventDefault();
     touched = true;
-    if (!check.ok) return;
+    if (!check.ok || forProblem) return;
+    // Today: no date (counted when posted). A past day: that day's bucket.
+    const at = forDay === today() ? null : aggAtFrom(forDay);
     const id = sendAgg({
       boardId: t.boardId,
       ticketId: t.ticketId,
       ticketKey: t.ticket.key,
       authorUid: t.me,
       authorName: auth.profile?.name || auth.user?.displayName || 'You',
-      agg: { entries: check.entries },
+      agg: at !== null ? { at, entries: check.entries } : { entries: check.entries },
       body: noteDoc(note),
     });
     open = false;
@@ -104,6 +120,16 @@
         data-agg-input={f.id}
       />
     {/each}
+    <Input
+      label="For"
+      type="date"
+      value={forDay}
+      max={today()}
+      error={forProblem}
+      hint={forDay !== today() ? "Counts in that day's (week's, month's) total" : undefined}
+      oninput={(e) => (forDay = e.currentTarget.value)}
+      data-agg-for
+    />
     <Textarea
       label="Note (optional)"
       value={note}

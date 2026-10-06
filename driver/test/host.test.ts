@@ -224,6 +224,29 @@ describe('request / response', () => {
     expect(seen).toEqual([[{ key: 'ENG-1' }]]);
   });
 
+  it('tickets (§K): thread, onThread (both forms), fileUrl and aggregates are their tk.* ops', async () => {
+    const { host, frame, db } = await greeted();
+    void db.tickets.thread('ENG-1', { limit: 10, before: 'm9' });
+    void db.tickets.thread('ENG-1');
+    db.tickets.onThread('ENG-1', () => {});
+    db.tickets.onThread('ENG-1', { limit: 5 }, () => {});
+    const url = db.tickets.fileUrl('ENG-1', 'att_1');
+    void db.tickets.aggregates('ENG', { field: 'Cost', from: '2026-10-01' });
+    db.tickets.onAggregates('ENG', null, () => {});
+    await flush();
+    expect(reqs(host).map((r) => [r.op, r.args])).toEqual([
+      ['tk.thread', { key: 'ENG-1', query: { limit: 10, before: 'm9' } }],
+      ['tk.thread', { key: 'ENG-1' }],
+      ['tk.onThread', { key: 'ENG-1' }],
+      ['tk.onThread', { key: 'ENG-1', query: { limit: 5 } }],
+      ['tk.fileUrl', { key: 'ENG-1', file: 'att_1' }],
+      ['tk.aggregates', { board: 'ENG', query: { field: 'Cost', from: '2026-10-01' } }],
+      ['tk.onAggregates', { board: 'ENG' }],
+    ]);
+    answer(host, frame, 4, { ok: true, value: { url: 'https://signed/f', expiresAt: 1 } });
+    await expect(url).resolves.toBe('https://signed/f');
+  });
+
   it('storage.url resolves to the URL string', async () => {
     const { host, frame, db } = await greeted();
     const p = db.storage.url('/f.png');

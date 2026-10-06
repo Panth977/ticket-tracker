@@ -470,6 +470,102 @@ describe('tickets (§K): the DEMO board', () => {
   });
 });
 
+describe('tickets (§K): threads and aggregates on the DEMO board', () => {
+  it('a sample thread: every kind, an answered question, receipts, a tombstone, a file', async () => {
+    const { db } = await mock();
+    const all = await db.tickets.thread('DEMO-2', { limit: 200 });
+    expect(all.length).toBeGreaterThan(5);
+    const at = all.map((m) => m.createdAt);
+    expect(at).toEqual([...at].sort((a, b) => a - b)); // oldest → newest
+    expect(new Set(all.map((m) => m.kind))).toEqual(
+      new Set(['comment', 'system', 'question', 'agg']),
+    );
+    expect(all.find((m) => m.kind === 'question')!.question).toMatchObject({
+      status: 'answered',
+      answer: { values: { Chart: 'Bars' } },
+    });
+    expect(all.find((m) => m.run)!.agg!.entries[0]).toMatchObject({ fieldId: 'cost', unit: '$' });
+    expect(all.at(-1)).toMatchObject({ deleted: true, markdown: '', attachments: [] });
+    const withFile = all.find((m) => m.attachments.length)!;
+    const url = await db.tickets.fileUrl('DEMO-2', withFile.attachments[0]!.id);
+    expect(typeof url).toBe('string');
+    await expect(db.tickets.fileUrl('DEMO-2', 'nope')).rejects.toMatchObject({ code: 'not-found' });
+
+    // Paging back: limit, then before = the first id held.
+    const last3 = await db.tickets.thread('DEMO-2', { limit: 3 });
+    expect(last3.map((m) => m.id)).toEqual(all.slice(-3).map((m) => m.id));
+    const prev = await db.tickets.thread('DEMO-2', { limit: 2, before: last3[0]!.id });
+    expect(prev.map((m) => m.id)).toEqual(all.slice(-5, -3).map((m) => m.id));
+    expect(
+      (await db.tickets.thread('DEMO-2', { before: all[1]!.createdAt })).map((m) => m.id),
+    ).toEqual([all[0]!.id]);
+    await expect(db.tickets.thread('DEMO-2', { before: 'nope' })).rejects.toMatchObject({
+      code: 'not-found',
+    });
+    await expect(db.tickets.thread('ENG-1')).rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
+  it('onThread follows the newest messages; a comment lands in it', async () => {
+    const { db } = await mock();
+    const seen: string[] = [];
+    const off = db.tickets.onThread('DEMO-4', { limit: 2 }, (ms) =>
+      seen.push(ms.at(-1)?.markdown ?? ''),
+    );
+    await flush();
+    await db.tickets.comment('DEMO-4', 'Looks **good**');
+    await flush();
+    expect(seen.at(-1)).toBe('Looks **good**');
+    expect((await db.tickets.get('DEMO-4'))!.messages).toBeGreaterThan(0);
+    off();
+    const errs: string[] = [];
+    db.tickets.onThread(
+      'DEMO-4',
+      { before: 1 } as never,
+      () => {},
+      (e) => errs.push(e.code),
+    );
+    await flush();
+    expect(errs).toEqual(['invalid-argument']);
+  });
+
+  it('aggregates: fields on the board, counters on tickets, buckets by period', async () => {
+    const { db } = await mock();
+    const [board] = await db.tickets.boards();
+    expect(board!.aggFields.map((f) => [f.label, f.unit, f.period])).toEqual([
+      ['Cost', '$', 'daily'],
+      ['Time', 'h', 'weekly'],
+    ]);
+    const cost = await db.tickets.aggregates('DEMO');
+    expect(cost.field.id).toBe('cost');
+    expect(cost.buckets.length).toBeGreaterThan(10);
+    expect(cost.buckets.every((b) => /^\d{4}-\d{2}-\d{2}$/.test(b.key))).toBe(true);
+    const sum = cost.buckets.reduce((n, b) => n + b.total, 0);
+    expect(cost.total).toBeCloseTo(sum, 6);
+    expect(cost.lifetime).toEqual(board!.aggs.cost);
+    expect(Object.keys(cost.buckets[0]!.tickets)[0]).toMatch(/^DEMO-\d$/);
+    const time = await db.tickets.aggregates('DEMO', { field: 'time' });
+    expect(time.buckets.every((b) => /^\d{4}-W\d{2}$/.test(b.key))).toBe(true);
+    // A ticket's own counters add up to the board's.
+    const ts = await db.tickets.list('DEMO');
+    expect(ts.reduce((n, t) => n + (t.aggs.cost?.count ?? 0), 0)).toBe(board!.aggs.cost!.count);
+    // A range, and refusals.
+    const one = cost.buckets.at(-1)!.key;
+    const r = await db.tickets.aggregates('DEMO', { field: 'Cost', from: one, to: one });
+    expect(r.buckets.map((b) => b.key)).toEqual([one]);
+    await expect(db.tickets.aggregates('DEMO', { field: 'Nope' })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(db.tickets.aggregates('DEMO', { from: '2026-W01' })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    let live: number | null = null;
+    const off = db.tickets.onAggregates('DEMO', { field: 'Time' }, (a) => (live = a.count));
+    await flush();
+    expect(live).toBe(time.count);
+    off();
+  });
+});
+
 describe('memory (memory.html §H): the demo memory', () => {
   it('list, tree, read, write text and a Blob, url, mkdir, remove', async () => {
     const { db } = await mock();

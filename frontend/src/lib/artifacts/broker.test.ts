@@ -226,7 +226,7 @@ function setup(
   async function req(op: string, args: unknown, extra: Record<string, unknown> = {}) {
     const id = `q${++n}`;
     say({ type: 'req', id, op, args, ...extra });
-    for (let i = 0; i < 20 && !posted.some((p) => p.msg.id === id); i++) await Promise.resolve();
+    for (let i = 0; i < 60 && !posted.some((p) => p.msg.id === id); i++) await Promise.resolve();
     const res = posted.find((p) => p.msg.id === id)?.msg;
     if (!res) throw new Error(`no answer to ${op}`);
     return res as Posted & {
@@ -634,7 +634,14 @@ describe('read-only viewer', () => {
       blob: new Blob(['x']),
       key: 'k',
     };
-    const tkArgs = { board: 'ENG', key: 'ENG-1', ticket: { title: 'x' }, patch: {}, markdown: 'm' };
+    const tkArgs = {
+      board: 'ENG',
+      key: 'ENG-1',
+      ticket: { title: 'x' },
+      patch: {},
+      markdown: 'm',
+      file: 'att_1',
+    };
     for (const op of DRIVER_OPS) {
       const a = op.startsWith('tk.')
         ? tkArgs
@@ -1087,5 +1094,143 @@ describe('§K board tickets: the grant, then the viewer', () => {
     expect(events().at(-1)).toEqual(['ENG-1', 'ENG-4']);
     expect(t.broker.listeners).toBe(1);
     expect((await t.req('tk.onList', { board: 'ENG' })).error).toMatchObject({ code: 'quota' });
+  });
+});
+
+describe('§K reads: threads and aggregates, within the grant', () => {
+  type Msg = {
+    id: string;
+    kind: string;
+    markdown: string;
+    author: { name: string };
+    attachments: { id: string }[];
+    agg?: { entries: { label: string; unit: string; value: number }[] };
+  };
+  it('tk.thread: inline window first, the frozen page only when asked past it; mapped for the page', async () => {
+    const t = setup({ boards: { [ENG_ID]: 'read' } });
+    const last = await t.req('tk.thread', { key: 'ENG-1', query: { limit: 2 } });
+    const rows = last.value as Msg[];
+    expect(rows.map((m) => m.id)).toEqual(['m3', 'm4']);
+    expect(t.tk.pageReads).toEqual([]); // the ticket document was enough
+    expect(rows[0]).toMatchObject({
+      kind: 'comment',
+      markdown: 'message m3',
+      author: { name: 'Asha' },
+      attachments: [{ id: 'att_1', name: 'screenshot.png', mime: 'image/png' }],
+    });
+    expect(rows[1]!.agg).toEqual({
+      entries: [{ fieldId: 'a_hours1', label: 'Time', unit: 'h', value: 2 }],
+    });
+    // Paging back past the inline window reads data/000 — once.
+    const older = await t.req('tk.thread', { key: 'ENG-1', query: { before: 'm3' } });
+    expect((older.value as Msg[]).map((m) => m.id)).toEqual(['m1', 'm2']);
+    await t.req('tk.thread', { key: 'ENG-1', query: { limit: 200 } });
+    expect(t.tk.pageReads).toEqual(['t1/0']);
+    expect((await t.req('tk.thread', { key: 'ENG-1', query: { before: {} } })).error).toMatchObject(
+      { code: 'invalid-argument' },
+    );
+    expect((await t.req('tk.thread', { key: 'ENG-99' })).error).toMatchObject({
+      code: 'not-found',
+    });
+  });
+
+  it('every read op is refused for a board that is not granted (or that the viewer cannot read)', async () => {
+    const none = setup();
+    for (const [op, args] of [
+      ['tk.thread', { key: 'ENG-1' }],
+      ['tk.onThread', { key: 'ENG-1' }],
+      ['tk.fileUrl', { key: 'ENG-1', file: 'att_1' }],
+      ['tk.aggregates', { board: 'ENG' }],
+      ['tk.onAggregates', { board: 'ENG' }],
+    ] as const)
+      expect((await none.req(op, args)).error).toMatchObject({ code: 'permission-denied' });
+    const sec = setup({ boards: { [SEC_ID]: 'write' } });
+    expect((await sec.req('tk.aggregates', { board: 'SEC' })).error).toMatchObject({
+      code: 'permission-denied',
+    });
+    expect(none.tk.pageReads).toEqual([]);
+    expect(none.tk.fileAsks).toEqual([]);
+    // Reads stay open to a read-only viewer.
+    const ro = setup({ role: 'viewer', readOnly: true, boards: { [ENG_ID]: 'read' } });
+    expect((await ro.req('tk.thread', { key: 'ENG-1' })).ok).toBe(true);
+  });
+
+  it('tk.fileUrl: only a file of that ticket, through the file door, made absolute', async () => {
+    const t = setup({ boards: { [ENG_ID]: 'read' } });
+    const r = await t.req('tk.fileUrl', { key: 'ENG-1', file: 'att_1' });
+    expect(r.value).toEqual({
+      url: `https://app.example/api/files/blob?path=${encodeURIComponent(t.tk.attachment.path)}`,
+      expiresAt: 99,
+    });
+    expect((await t.req('tk.fileUrl', { key: 'ENG-2', file: 'att_1' })).error).toMatchObject({
+      code: 'not-found',
+    });
+    expect(t.tk.fileAsks).toEqual([t.tk.attachment.path]);
+  });
+
+  it('tk.onThread: the newest window, again when a comment lands; before is refused', async () => {
+    const t = setup({ boards: { [ENG_ID]: 'write' } });
+    const res = await t.req('tk.onThread', { key: 'ENG-1', query: { limit: 3 } });
+    const sub = (res.value as { sub: string }).sub;
+    await new Promise((r) => setTimeout(r, 0));
+    const events = () =>
+      t
+        .of('event')
+        .filter((e) => e.sub === sub)
+        .map((e) => (e.value as Msg[]).map((m) => m.id));
+    expect(events()).toEqual([['m2', 'm3', 'm4']]);
+    await t.req('tk.comment', { key: 'ENG-1', markdown: 'New one' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(events().at(-1)).toEqual(['m3', 'm4', 'c1']);
+    expect(
+      (await t.req('tk.onThread', { key: 'ENG-1', query: { before: 5 } })).error,
+    ).toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('tk.aggregates: one field by id or label, its period’s buckets in range, the lifetime counter', async () => {
+    const t = setup({ boards: { [ENG_ID]: 'read' } });
+    const cost = await t.req('tk.aggregates', {
+      board: 'ENG',
+      query: { field: 'cost', from: '2026-10-01', to: '2026-10-31' },
+    });
+    expect(cost.value).toEqual({
+      field: { id: 'cost', label: 'Cost', unit: '$', period: 'daily', archived: false },
+      from: '2026-10-01',
+      to: '2026-10-31',
+      total: 3,
+      count: 3,
+      lifetime: { total: 3, count: 3 },
+      buckets: [
+        { key: '2026-10-01', total: 1, count: 1, tickets: { 'ENG-1': { total: 1, count: 1 } } },
+        { key: '2026-10-02', total: 2, count: 2, tickets: { 'ENG-2': { total: 2, count: 2 } } },
+      ],
+    });
+    const time = await t.req('tk.aggregates', {
+      board: 'ENG',
+      query: { field: 'Time', from: '2026-W01' },
+    });
+    expect((time.value as { buckets: { key: string }[] }).buckets.map((b) => b.key)).toEqual([
+      '2026-W40',
+    ]);
+    expect(
+      (await t.req('tk.aggregates', { board: 'ENG', query: { field: 'Nope' } })).error,
+    ).toMatchObject({ code: 'invalid-argument' });
+    // Board and ticket carry the fields and counters too.
+    const [b] = (await t.req('tk.boards', {})).value as {
+      aggFields: { id: string }[];
+      aggs: Record<string, unknown>;
+    }[];
+    expect(b!.aggFields.map((f) => f.id)).toEqual(['cost', 'a_hours1']);
+    expect(b!.aggs).toEqual({ cost: { total: 3, count: 3 }, a_hours1: { total: 2, count: 1 } });
+  });
+
+  it('tk.onAggregates: { sub }, then the same answer as tk.aggregates', async () => {
+    const t = setup({ boards: { [ENG_ID]: 'read' } });
+    const query = { field: 'Cost', from: '2026-09-01' };
+    const res = await t.req('tk.onAggregates', { board: 'ENG', query });
+    const sub = (res.value as { sub: string }).sub;
+    await new Promise((r) => setTimeout(r, 0));
+    const ev = t.of('event').filter((e) => e.sub === sub);
+    expect(ev.at(-1)!.value).toEqual((await t.req('tk.aggregates', { board: 'ENG', query })).value);
   });
 });

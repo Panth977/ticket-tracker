@@ -355,7 +355,45 @@ db.tickets.list(board, query?)              → tickets   query: { stage?, assig
 db.tickets.onList(board, query, cb, onErr?) → unsubscribe (live)
 db.tickets.get('ENG-42')                    → ticket | null
 db.tickets.create(board, { title, description?, stage?, priority?, tags?, assignees?, dueAt?, startAt?, fields? }) → { id, key }
-db.tickets.update('ENG-42', patch)          · db.tickets.comment('ENG-42', markdown)</pre>
+db.tickets.update('ENG-42', patch)          · db.tickets.comment('ENG-42', markdown)
+db.tickets.thread('ENG-42', { limit?, before? })   → messages, oldest → newest (default the newest 50, at most 200)
+db.tickets.onThread('ENG-42', [{ limit? },] cb, onErr?) → unsubscribe (live: the newest window, again on every change)
+db.tickets.fileUrl('ENG-42', attachmentId)  → a short-lived URL (for &lt;img&gt;, &lt;video&gt;, &lt;a href&gt;)
+db.tickets.aggregates(board, { field?, from?, to? }) → { field, from, to, total, count, lifetime, buckets: [{ key, total, count, tickets: { KEY: { total, count } } }] }
+db.tickets.onAggregates(board, query, cb, onErr?)   → unsubscribe (live)</pre>
+    <h3 id="k3">K3 · Reading threads and aggregates</h3>
+    <p>Everything readable about a granted board is readable from the page — the same fence as <code>tk.get</code>: the board
+    must be in the grant (<code>read</code> or <code>write</code>) <b>and</b> the viewer must be able to read it; anything else
+    is <code>permission-denied</code>, and reads stay open to a read-only viewer.</p>
+    <ul>
+      <li><b>Boards and tickets</b> carry the aggregate fields: <code>board.aggFields</code>
+        (<code>[{ id, label, unit, period, archived }]</code>), <code>board.aggs</code> and <code>ticket.aggs</code>
+        (<code>{ [fieldId]: { total, count } }</code>; a board or ticket from before aggregates shows its legacy cost as
+        <code>aggs.cost</code>).</li>
+      <li><b>A message</b> is <code>{ id, kind: comment | system | question | agg, author, markdown, createdAt, editedAt,
+        deleted, replyTo, pinned, attachments: [{ id, name, mime, size }], question?, agg?, run? }</code>. A deleted message
+        keeps its place as a tombstone (<code>deleted: true</code>, empty <code>markdown</code> and
+        <code>attachments</code>). <code>question</code> is <code>{ title, status, blocking, fields: [{ id, label, type,
+        required, options? }], answer: { values (by field label, choices by label), comment, by, at } | null }</code>;
+        <code>agg</code> is <code>{ at?, entries: [{ fieldId, label, unit, value }] }</code>; <code>run</code> (a turn
+        receipt) is <code>{ n, outcome, costUsd, durationMs, model }</code>.</li>
+      <li><b>Paging.</b> The broker reads the thread the way the app does (<code>lib/ticket/data.ts</code>): the inline
+        window on the ticket document first, then the frozen <code>data/{NNN}</code> pages from the newest back, only as far
+        as the request needs (each page fetched once per host page). <code>before</code> is a message id (page back with the
+        first id you hold) or a time in millis. <code>onThread</code> follows the newest window and refuses
+        <code>before</code>.</li>
+      <li><b>Files</b> are never inline: <code>fileUrl(key, attachmentId)</code> goes through the app's file door as the
+        viewer (<code>/api/files/url</code>, can(read) on the board) and only for a file of that ticket.</li>
+      <li><b>Aggregates</b> read <code>boards/{b}/aggStats/{period}:{key}</code> by document-id range, as the app's
+        Analytics does; one field (id or label, default the first active one), period keys inclusive, <code>from</code>
+        defaulting to 30 days / 12 weeks / 12 months back like the REST <code>GET …/aggregates</code>. <code>total</code> and
+        <code>count</code> sum the buckets returned; <code>lifetime</code> is the board's counter. Empty buckets are left
+        out.</li>
+    </ul>
+    <p>The mock backend (§E5) has all of it: the DEMO board's tickets carry threads (comments, a system line, an answered
+    question, turn receipts, hours logged, an attachment, a tombstone) and the fields Cost ($, daily) and Time (h, weekly)
+    with a month of buckets, so a page can be built outside TaskManager. The conversions are
+    <code>shared/artifacts/thread.ts</code> and <code>shared/artifacts/aggregates.ts</code>.</p>
     <p>Tickets come out with names, not ids (stage, priority, tags, people, select options), Markdown descriptions and millis
     times, and go in the same way; an unknown name is <code>invalid-argument</code> listing the ones that exist. The shapes and the
     conversion are <code>shared/artifacts/tickets.ts</code>; the driver's own documentation is §8.6 of

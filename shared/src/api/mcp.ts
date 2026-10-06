@@ -175,8 +175,9 @@ export const McpToolShapes = {
           "session_usd, duration_ms, api_turns, model, usage }. Its cost_usd lands on the board's Cost aggregate field.",
       ),
     agg: PublicAggInputSchema.optional().describe(
-      "Entries for the board's aggregate fields (get_board → agg_fields): { entries: [{ field_id | field (label), value }] }. " +
-        'A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time").',
+      "Entries for the board's aggregate fields (get_board → agg_fields): { at?, entries: [{ field_id | field (label), value }] }. " +
+        'A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time"). ' +
+        "BACKFILLING a past day's log? Set `at` to that day ('2026-10-04') so it lands in that day's bucket — otherwise it counts for today.",
     ),
   },
   get_aggregates: {

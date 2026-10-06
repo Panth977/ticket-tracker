@@ -291,10 +291,15 @@ import db from '__ORIGIN__/backend-driver/v1/driver.mjs';
               <code>boards()</code> · <code>list(board, query?)</code> ·
               <code>onList(board, query, cb, onError?)</code> · <code>get('ENG-42')</code> ·
               <code>create(board, ticket)</code> · <code>update(key, patch)</code> ·
-              <code>comment(key, markdown)</code> — the tickets of boards the artifact's
-              <b>owner</b> granted it (Settings › Board access), read or read &amp; write. Always as
-              the person looking: they see and change only what their own role on that board
-              allows. Names, not ids; Markdown descriptions; times in milliseconds.
+              <code>comment(key, markdown)</code> · <code>thread(key, { limit?, before? })</code> ·
+              <code>onThread(key, cb, onError?)</code> · <code>fileUrl(key, fileId)</code> ·
+              <code>aggregates(board, { field?, from?, to? })</code> ·
+              <code>onAggregates(board, query, cb, onError?)</code> — the tickets of boards the
+              artifact's <b>owner</b> granted it (Settings › Board access), read or read &amp;
+              write, with their threads and the board's aggregate fields (<code>board.aggFields</code>,
+              <code>board.aggs</code>, <code>ticket.aggs</code>, period buckets). Always as the
+              person looking: they see and change only what their own role on that board allows.
+              Names, not ids; Markdown descriptions and messages; times in milliseconds.
             </td>
           </tr>
           <tr>

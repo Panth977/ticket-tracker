@@ -174,6 +174,22 @@ export function createDriver(win: WindowLike | undefined): Api.BackendDriver {
       create: (board, ticket) => call('tk.create', { board, ticket }),
       update: (key, patch) => done(call('tk.update', { key, patch })),
       comment: (key, markdown) => done(call('tk.comment', { key, markdown })),
+      thread: (key, query) => call('tk.thread', { key, ...(query ? { query } : {}) }),
+      onThread: (key: string, a: unknown, b?: unknown, c?: Api.OnError): Api.Unsubscribe => {
+        // onThread(key, cb, onError?) or onThread(key, query, cb, onError?)
+        const [query, callback, onError] =
+          typeof a === 'function' ? [null, a, b as Api.OnError | undefined] : [a, b, c];
+        return subscribe(
+          'tk.onThread',
+          { key, ...(query ? { query: query as Api.ThreadQuery } : {}) },
+          callback as (value: never) => void,
+          onError,
+        );
+      },
+      fileUrl: (key, file) => call('tk.fileUrl', { key, file }).then((r) => r.url),
+      aggregates: (board, query) => call('tk.aggregates', { board, ...(query ? { query } : {}) }),
+      onAggregates: (board, query, callback, onError) =>
+        subscribe('tk.onAggregates', { board, ...(query ? { query } : {}) }, callback, onError),
     },
     memory: {
       list: () => call('mem.list', {}),

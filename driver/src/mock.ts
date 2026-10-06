@@ -26,7 +26,9 @@ import {
   type DriverMe,
   type DriverOp,
   type DriverResult,
+  type AggregateQuery,
   type ListQuery,
+  type ThreadQuery,
   type TicketInput,
   type TicketQuery,
   type WhereOp,
@@ -53,10 +55,13 @@ import {
   commentTicket,
   createTicket,
   listTickets,
-  MOCK_BOARD,
+  mockAggregates,
   mockBoard,
+  mockBoardOut,
   seedTickets,
+  threadOf,
   ticketByKey,
+  ticketFile,
   updateTicket,
   type MockTicketState,
 } from './mockTickets.js';
@@ -270,7 +275,9 @@ export function createMock(win: WindowLike | undefined): Session {
         rtdb: parsed.rtdb ?? null,
         kv: isPlain(parsed.kv) ? parsed.kv : {},
         tk:
-          isPlain(parsed.tk) && Array.isArray((parsed.tk as Json).tickets)
+          isPlain(parsed.tk) &&
+          Array.isArray((parsed.tk as Json).tickets) &&
+          isPlain((parsed.tk as Json).threads)
             ? (parsed.tk as MockTicketState)
             : seedTickets(),
         mem: isPlain(parsed.mem) ? (parsed.mem as MockMemoryState) : seedMemory(),
@@ -541,7 +548,7 @@ export function createMock(win: WindowLike | undefined): Session {
       }
       // §K — the DEMO board (./mockTickets)
       case 'tk.boards':
-        return [structuredClone(MOCK_BOARD)];
+        return [mockBoardOut(state.tk)];
       case 'tk.list':
         mockBoard(a.board);
         return listTickets(state.tk, a.query as TicketQuery | undefined);
@@ -561,6 +568,22 @@ export function createMock(win: WindowLike | undefined): Session {
         commentTicket(state.tk, a.key, a.markdown);
         changed('tk');
         return { ok: true };
+      case 'tk.thread':
+        return threadOf(state.tk, a.key, a.query as ThreadQuery | undefined);
+      case 'tk.fileUrl': {
+        const f = ticketFile(state.tk, a.key, a.file);
+        let entry = memBlobs.get(`tk/${f.id}`);
+        if (!entry) {
+          const blob = new Blob([`Mock attachment ${f.name}: notes from the review.`], {
+            type: f.mime,
+          });
+          entry = { blob, url: objectUrl(blob, `/tickets/${f.id}`) };
+          memBlobs.set(`tk/${f.id}`, entry);
+        }
+        return { url: entry.url, expiresAt: Date.now() + 3_600_000 };
+      }
+      case 'tk.aggregates':
+        return mockAggregates(state.tk, a.board, a.query as AggregateQuery | undefined);
       // memory.html §H — the demo memory (./mockMemory)
       case 'mem.list':
         return [mockMemoryInfo(state.mem, me.readOnly)];
@@ -651,6 +674,25 @@ export function createMock(win: WindowLike | undefined): Session {
           listener = {
             touches: (k, p) => k === 'fs' && parentOf(p) === col,
             fire: () => onValue(list(col, a.query)),
+          };
+        } else if (op === 'tk.onThread') {
+          const t = args as { key: unknown; query?: ThreadQuery };
+          if (t.query?.before != null)
+            fail(
+              'invalid-argument',
+              'onThread follows the newest messages; page back with thread()',
+            );
+          threadOf(state.tk, t.key, t.query); // a bad key is refused now
+          listener = {
+            touches: (k) => k === 'tk',
+            fire: () => onValue(threadOf(state.tk, t.key, t.query)),
+          };
+        } else if (op === 'tk.onAggregates') {
+          const t = args as { board: unknown; query?: AggregateQuery };
+          mockAggregates(state.tk, t.board, t.query);
+          listener = {
+            touches: (k) => k === 'tk',
+            fire: () => onValue(mockAggregates(state.tk, t.board, t.query)),
           };
         } else if (op === 'tk.onList') {
           const t = args as { board: unknown; query?: TicketQuery };

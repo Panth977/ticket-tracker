@@ -174,7 +174,11 @@ export interface PostMessageInput {
    * case-insensitive); a negative value takes away. Without `run`, `markdown`
    * may be empty (the server writes '+2.5 h Time').
    */
-  agg?: { entries: AggEntryInput[] };
+  agg?: {
+    /** What the entries are FOR when not now: a date ('2026-10-04'), an ISO date-time, millis or a Date. */
+    at?: string | number | Date;
+    entries: AggEntryInput[];
+  };
 }
 
 /** One aggregate entry: the field by id or by label, and the amount. */
@@ -185,8 +189,14 @@ export interface AggEntryInput {
 }
 
 /** The SDK's agg entries → the wire's `{ entries: [{ field_id | field, value }] }`. */
-export function aggBody(agg: { entries: AggEntryInput[] }): Record<string, unknown> {
+export function aggBody(agg: {
+  at?: string | number | Date;
+  entries: AggEntryInput[];
+}): Record<string, unknown> {
   return {
+    ...(agg.at !== undefined
+      ? { at: agg.at instanceof Date ? agg.at.toISOString() : agg.at }
+      : {}),
     entries: agg.entries.map((e) =>
       e.fieldId !== undefined
         ? { field_id: e.fieldId, value: e.value }

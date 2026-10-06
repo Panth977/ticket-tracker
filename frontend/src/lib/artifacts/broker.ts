@@ -33,6 +33,7 @@ import {
   artifactStoragePrefix,
   DRIVER_PROTOCOL_VERSION,
   DRIVER_TAG,
+  DRIVER_SUB_OPS,
   DRIVER_WRITE_OPS,
   isDriverMessage,
   isDriverOp,
@@ -428,6 +429,7 @@ export function createBroker(o: BrokerOptions): Broker {
     backend: backend.tickets,
     grants: () => o.boards?.() ?? {},
     origin: o.origin ?? '',
+    now,
     subscribe,
     fail: (code, message) => {
       throw new BrokerError(code, message);
@@ -599,8 +601,7 @@ export function createBroker(o: BrokerOptions): Broker {
       if (DRIVER_WRITE_OPS.has(op) && readOnly)
         throw new BrokerError('permission-denied', 'This artifact is read-only for you');
       if (!isPlainObject(msg.args)) return bad('args must be an object');
-      const isSub =
-        op === 'fs.onDoc' || op === 'fs.onList' || op === 'rtdb.on' || op === 'tk.onList';
+      const isSub = DRIVER_SUB_OPS.has(op);
       run(op, reqId, msg.args).then(
         // subscribe() has already answered with { sub }.
         (value) => isSub || respond(reqId, value),

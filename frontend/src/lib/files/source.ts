@@ -166,7 +166,7 @@ export function createFileSource(deps: FileSourceDeps) {
     texts.clear();
   }
 
-  return { fileUrl, fileBytesUrl, fileText, downloadFile, clearFileCache };
+  return { fileUrl, fileBytesUrl, fileText, downloadFile, clearFileCache, fileAccess: accessFor };
 }
 
 const source = createFileSource({
@@ -180,3 +180,5 @@ export const fileBytesUrl = source.fileBytesUrl;
 export const fileText = source.fileText;
 export const downloadFile = source.downloadFile;
 export const clearFileCache = source.clearFileCache;
+/** { url, bytesUrl, expiresAt } for a path (cached until close to expiry); null when refused. */
+export const fileAccess = source.fileAccess;

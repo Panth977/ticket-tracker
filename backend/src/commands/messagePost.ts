@@ -48,6 +48,7 @@
  */
 import {
   addAgg,
+  aggAtProblem,
   aggPeriodKey,
   aggStatsId,
   aggSummary,
@@ -154,6 +155,12 @@ export default defineCommand('messagePost', async (ctx, input) => {
   const fields = boardAggFields(board);
   const entries = planAggEntries(fields, input.agg, receipt ? receipt.costUsd : null);
   const isAgg = !!input.agg && !receipt;
+  // aggregates.html: a backfilled entry is bucketed by the moment it is FOR.
+  const aggAt = input.agg?.at ?? ctx.now;
+  if (input.agg?.at !== undefined) {
+    const why = aggAtProblem(input.agg.at, ctx.now);
+    if (why) throw errors.invalid(why, { field: 'agg' });
+  }
 
   const empty = isEmptyDoc(input.body);
   if (
@@ -208,7 +215,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
       const periods = [...new Set(entries.map((e) => byId.get(e.fieldId)!.period))];
       const bucketRefs = new Map(
         periods.map((p) => {
-          const key = aggPeriodKey(p, ctx.now);
+          const key = aggPeriodKey(p, aggAt);
           return [
             p,
             { key, ref: typedDoc('aggStats', paths.aggStat(boardId, aggStatsId(p, key))) },
@@ -216,7 +223,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
         }),
       );
       const hasCost = entries.some((e) => e.fieldId === COST_AGG_FIELD_ID);
-      const day = costDayOf(ctx.now);
+      const day = costDayOf(aggAt);
       const statRef = typedDoc('stats', paths.stat(boardId, day));
       const [boardNow, dayNow, ...bucketsNow] = entries.length
         ? await Promise.all([
@@ -233,7 +240,9 @@ export default defineCommand('messagePost', async (ctx, input) => {
         body: parsed.rich,
         ...(markdown ? { markdown } : summary ? { markdown: summary } : {}),
         ...(receipt ? { run: receipt } : {}),
-        ...(entries.length ? { agg: { entries } } : {}),
+        ...(entries.length
+          ? { agg: { ...(input.agg?.at !== undefined ? { at: input.agg.at } : {}), entries } }
+          : {}),
         authorUid: ctx.actor,
         authorName: byName,
         via: ctx.via,

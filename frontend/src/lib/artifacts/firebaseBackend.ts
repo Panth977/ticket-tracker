@@ -42,13 +42,18 @@ import {
 } from 'firebase/database';
 import { ref as sRef, uploadBytes } from 'firebase/storage';
 import {
+  aggStatsId,
   paths,
+  type AggPeriod,
+  type AggStats,
   type BoardMember,
   type BoardWithId,
   type Memory,
+  type TicketDataPage,
   type TicketWithId,
 } from '@tm/shared';
 import { command } from '$lib/api';
+import { fileAccess } from '$lib/files/source';
 import { getDb, getRtdb, getStorageClient } from '$lib/firebase/client';
 import { BrokerError, type BrokerBackend, type CheckedQuery, type StoredRow } from './broker';
 import { ValueError } from './convert';
@@ -201,6 +206,40 @@ export function firebaseBackend(artifactId: string): BrokerBackend {
       async comment(boardId, ticketId, body, markdown) {
         await command('messagePost', { boardId, ticketId, body, markdown }, { toast: false });
       },
+      onTicket: (boardId, ticketId, next, error) =>
+        onSnapshot(
+          doc(getDb(), paths.ticket(boardId, ticketId)),
+          (snap) =>
+            next(
+              snap.exists() ? ({ ...snap.data(), id: ticketId, boardId } as TicketWithId) : null,
+            ),
+          error,
+        ),
+      async page(boardId, ticketId, n) {
+        const snap = await getDoc(doc(getDb(), paths.ticketPage(boardId, ticketId, n)));
+        return snap.exists() ? (snap.data() as TicketDataPage).messages : null;
+      },
+      onBoard: (boardId, next, error) =>
+        onSnapshot(
+          doc(getDb(), paths.board(boardId)),
+          (snap) => next(snap.exists() ? ({ ...snap.data(), id: boardId } as BoardWithId) : null),
+          error,
+        ),
+      aggStats: async (boardId, period, fromKey, toKey) =>
+        (await getDocs(aggStatsQuery(boardId, period, fromKey, toKey))).docs.map(
+          (d) => d.data() as AggStats,
+        ),
+      onAggStats: (boardId, period, fromKey, toKey, next, error) =>
+        onSnapshot(
+          aggStatsQuery(boardId, period, fromKey, toKey),
+          (snap) => next(snap.docs.map((d) => d.data() as AggStats)),
+          error,
+        ),
+      // The app's file door, as the viewer (can(read) on the board, server side).
+      fileAccess: async (path) => {
+        const a = await fileAccess(path);
+        return a ? { url: a.url, expiresAt: a.expiresAt } : null;
+      },
     },
     // memory.html §H: every op is a memory command in the viewer's name. The
     // grant to THIS artifact is read off the memory document when the viewer
@@ -244,6 +283,28 @@ export function firebaseBackend(artifactId: string): BrokerBackend {
       },
     },
   };
+}
+
+/**
+ * One period's bucket docs by DOCUMENT-ID range, as the app's Analytics reads
+ * them (lib/aggregates/stats.ts): ids are '{period}:{key}', so
+ * ['daily:2026-09-06', 'daily;') — ';' follows ':' — needs no composite index.
+ * `toKey` is inclusive.
+ */
+function aggStatsQuery(
+  boardId: string,
+  period: AggPeriod,
+  fromKey: string,
+  toKey: string | null,
+): Query {
+  return query(
+    collection(getDb(), paths.aggStats(boardId)),
+    qWhere(documentId(), '>=', aggStatsId(period, fromKey)),
+    toKey
+      ? qWhere(documentId(), '<=', aggStatsId(period, toKey))
+      : qWhere(documentId(), '<', `${period};`),
+    qOrderBy(documentId()),
+  );
 }
 
 function ticketQuery(boardId: string, state: string, stageId: string | null): Query {

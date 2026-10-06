@@ -495,7 +495,10 @@ export function toPublicMessageWith(
     pinned: m.pinnedAt !== null,
     run: m.run ? toPublicRun(m.run) : null,
     agg: m.agg
-      ? { entries: m.agg.entries.map((e) => ({ field_id: e.fieldId, value: e.value })) }
+      ? {
+          ...(m.agg.at !== undefined ? { at: toIso(m.agg.at)! } : {}),
+          entries: m.agg.entries.map((e) => ({ field_id: e.fieldId, value: e.value })),
+        }
       : null,
     created_at: toIso(m.createdAt)!,
     edited_at: toIso(m.editedAt),

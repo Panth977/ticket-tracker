@@ -120,3 +120,21 @@ describe('aggregates', () => {
     expect(ok([{ fieldId: 'nope', value: 1 }])).toBe(false);
   });
 });
+
+describe('agg.at: what an entry is FOR', () => {
+  it('reads a bare date as noon of that day in the owner zone; ISO and millis as given', async () => {
+    const { aggAtFrom, aggPeriodKey } = await import('./aggregates.js');
+    const d = aggAtFrom('2026-10-04')!;
+    expect(aggPeriodKey('daily', d)).toBe('2026-10-04');
+    expect(aggAtFrom('2026-10-04T10:00:00Z')).toBe(Date.parse('2026-10-04T10:00:00Z'));
+    expect(aggAtFrom(1234)).toBe(1234);
+    expect(aggAtFrom('last tuesday')).toBeNull();
+  });
+  it('refuses the future and more than 400 days back', async () => {
+    const { aggAtProblem } = await import('./aggregates.js');
+    const now = Date.UTC(2026, 9, 6);
+    expect(aggAtProblem(now - 86_400_000, now)).toBeNull();
+    expect(aggAtProblem(now + 86_400_000, now)).toMatch(/future/);
+    expect(aggAtProblem(now - 401 * 86_400_000, now)).toMatch(/400 days/);
+  });
+});

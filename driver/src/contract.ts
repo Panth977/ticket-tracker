@@ -10,6 +10,12 @@ import type {
   DriverPerson,
   DriverTicket,
   DriverMemory,
+  DriverMessage,
+  DriverAggregates,
+  DriverAggField,
+  DriverAggCounter,
+  ThreadQuery as WireThreadQuery,
+  AggregateQuery as WireAggregateQuery,
   DriverMemoryNode,
   TicketInput as WireTicketInput,
   TicketQuery as WireTicketQuery,
@@ -44,6 +50,14 @@ same<Api.TicketQuery, WireTicketQuery>(true);
 same<Api.TicketInput, WireTicketInput>(true);
 same<Api.Ticket | null, DriverResult<'tk.get'>>(true);
 same<{ id: string; key: string }, DriverResult<'tk.create'>>(true);
+same<Api.Message, DriverMessage>(true);
+same<Api.Message[], DriverResult<'tk.thread'>>(true);
+same<Api.ThreadQuery, WireThreadQuery>(true);
+same<Api.AggregateQuery, WireAggregateQuery>(true);
+same<Api.Aggregates, DriverAggregates>(true);
+same<Api.Aggregates, DriverResult<'tk.aggregates'>>(true);
+same<Api.AggField, DriverAggField>(true);
+same<Api.AggCounter, DriverAggCounter>(true);
 // memory.html §H
 same<Api.Memory, DriverMemory>(true);
 same<Api.MemoryNode, DriverMemoryNode>(true);

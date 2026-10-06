@@ -291,6 +291,8 @@ export type AggCounters = Record<string, { total: number; count: number }>;
 
 /** `Message.agg`: the entries a message added (kind 'agg', or a receipt's cost). */
 export interface MessageAgg {
+  /** ISO — the moment the entries are for, when backdated. */
+  at?: string;
   entries: { field_id: string; value: number }[];
 }
 

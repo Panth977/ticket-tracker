@@ -77,5 +77,17 @@
     <span class="max-w-32 truncate">{authorName}</span>
     <span aria-hidden="true">·</span>
     <time title={timeTitle}>{time}</time>
+    {#if agg.at !== undefined}
+      <!-- A backfilled entry: counted for the day it is FOR, not the day it was posted. -->
+      <span
+        class="rounded bg-surface-3 px-1 text-[10px] text-muted"
+        title="Counted for {new Date(agg.at).toLocaleString()}"
+        data-agg-for
+        >for {new Date(agg.at).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })}</span
+      >
+    {/if}
   </span>
 </div>

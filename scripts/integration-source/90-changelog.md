@@ -36,6 +36,13 @@ keeps working. The SDK's own patch releases do not change the wire format.
   `{ field, total, buckets: [{ key, total, count, tickets }] }` — one field (id or label), period
   keys inclusive (also `GET /v1/board/aggregates?board=`, SDK `tm.aggregates()`, MCP
   `get_aggregates`).
+- **Artifacts (`BackendDriver.tickets`)** read everything readable on a granted board:
+  `tickets.thread(key, { limit?, before? })` (messages oldest → newest — kinds, authors, Markdown,
+  tombstones, attachments, question cards with answers, `agg` entries, turn receipts),
+  `tickets.onThread(key, cb)` (live), `tickets.fileUrl(key, attachmentId)`,
+  `tickets.aggregates(board, { field?, from?, to? })` and `tickets.onAggregates(…)` (one field's period
+  buckets with per-ticket shares); boards gain `aggFields` and `aggs`, tickets gain `aggs`. Same fence
+  as `tickets.get`: a granted board the viewer can read. The mock has a sample thread and buckets.
 - **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, memories
   and workspaces each have an `indicator` — `{ kind: 'color', color }` | `{ kind: 'icon', icon,
   color }` (an icon from the app's list, tinted) | `{ kind: 'emoji', emoji }` | `{ kind: 'image',

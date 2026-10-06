@@ -42,8 +42,10 @@ const FILES = ['driver.js', 'driver.mjs', 'driver.d.ts'];
 /**
  * "A few kilobytes of postMessage plumbing" — the mock is most of it. Shout if it balloons.
  * 24 KB → 28 KB with memory.html §H (db.memory and the mock's demo memory, ~2 KB).
+ * 28 KB → 34 KB with §K reads (tickets.thread / aggregates and the mock's
+ * sample thread and buckets, ~5.5 KB).
  */
-const MAX_BYTES = 28 * 1024;
+const MAX_BYTES = 34 * 1024;
 
 const args = new Set(process.argv.slice(2));
 const quiet = args.has('--quiet');
@@ -176,6 +178,13 @@ export async function go(file: Blob): Promise<Doc<{ n: number }>> {
   const url: string = await db.storage.url('/f.png'); void url;
   db.on('readonly', (v: boolean) => void v);
   window.BackendDriver.rtdb.on('/x', () => {}, (e) => void e.code);
+  const msgs = await db.tickets.thread('ENG-1', { limit: 10, before: 5 });
+  void msgs[0]?.agg?.entries[0]?.label;
+  db.tickets.onThread('ENG-1', (ms) => void ms.length)();
+  db.tickets.onThread('ENG-1', { limit: 5 }, (ms) => void ms[0]?.question?.answer?.by.name)();
+  const agg = await db.tickets.aggregates('ENG', { field: 'Cost' });
+  void agg.buckets[0]?.tickets['ENG-1']?.total;
+  const fileUrl: string = await db.tickets.fileUrl('ENG-1', 'att_1'); void fileUrl;
   return db.firestore.get<{ n: number }>('/a/b');
 }
 `,

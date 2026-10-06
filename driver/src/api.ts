@@ -151,6 +151,29 @@ export interface Board {
   tags: { id: string; name: string }[];
   fields: { id: string; name: string; type: string; options?: string[] }[];
   members: Person[];
+  /** The board's aggregate fields (numbers it adds up — Cost, hours…), archived ones included. */
+  aggFields: AggField[];
+  /** Lifetime { total, count } per aggregate field id. */
+  aggs: Record<string, AggCounter>;
+}
+
+/** An aggregate field: a number the board adds up per ticket and per period. */
+export interface AggField {
+  /** 'cost', or 'a_' + 6 characters. */
+  id: string;
+  label: string;
+  /** '$', 'h', 'pts'… — '' for a plain count. */
+  unit: string;
+  /** How its buckets are cut: '2026-10-05' · '2026-W40' (ISO week) · '2026-10'. */
+  period: 'daily' | 'weekly' | 'monthly';
+  /** Removed from the board: history kept, no new entries. */
+  archived: boolean;
+}
+
+/** A running sum: the entries' total and how many there were. */
+export interface AggCounter {
+  total: number;
+  count: number;
 }
 
 /** A ticket: names, not ids; Markdown description; times in millis. */
@@ -174,8 +197,106 @@ export interface Ticket {
   fields: Record<string, unknown>;
   /** How many messages its thread has. */
   messages: number;
+  /** This ticket's { total, count } per aggregate field id. */
+  aggs: Record<string, AggCounter>;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A file on a message. Its bytes: tickets.fileUrl(key, id). */
+export interface Attachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** A question card (kind 'question'): the form an agent asked, and the answer once given. */
+export interface Question {
+  title: string;
+  status: 'open' | 'answered' | 'cancelled' | 'expired';
+  /** The ticket waits on it ('Waiting for your answer'). */
+  blocking: boolean;
+  fields: {
+    id: string;
+    label: string;
+    type: 'single' | 'multi' | 'text' | 'longText' | 'number' | 'boolean' | 'date';
+    required: boolean;
+    /** single / multi: the choices' labels. */
+    options?: string[];
+  }[];
+  /** null until answered. `values` by field LABEL; choices by label, dates in millis. */
+  answer: {
+    values: Record<string, unknown>;
+    comment: string | null;
+    by: Person;
+    at: number;
+  } | null;
+}
+
+/** One message of a ticket's thread. */
+export interface Message {
+  id: string;
+  /** comment · system ('Priya moved this to QA') · question (a form card) · agg (entries on aggregate fields). */
+  kind: 'comment' | 'system' | 'question' | 'agg';
+  /** Who wrote it; for system lines and outsiders (email) the id is ''. */
+  author: Person;
+  /** Markdown; '' when deleted. */
+  markdown: string;
+  createdAt: number;
+  editedAt: number | null;
+  /** A tombstone: 'This message was deleted' — markdown and attachments are empty. */
+  deleted: boolean;
+  /** The quoted message's id. */
+  replyTo: string | null;
+  pinned: boolean;
+  attachments: Attachment[];
+  question?: Question;
+  /** Entries on aggregate fields (a kind 'agg' message, or a turn receipt's cost). */
+  agg?: {
+    /** When the entries count (millis), if it is not createdAt. */
+    at?: number;
+    entries: { fieldId: string; label: string; unit: string; value: number }[];
+  };
+  /** A turn receipt: one run of an agent. */
+  run?: { n: number; outcome: string; costUsd: number; durationMs: number; model: string | null };
+}
+
+export interface ThreadQuery {
+  /** Default 50, at most 200. */
+  limit?: number;
+  /** Only messages older than this message id, or than this time (millis) — page back with the first id you hold. */
+  before?: string | number;
+}
+
+export interface AggregateQuery {
+  /** Field id or label (case-insensitive). Default: the board's first active field. */
+  field?: string;
+  /** First and last bucket keys, inclusive, in the field's period ('2026-10-01' · '2026-W38' · '2026-07'). */
+  from?: string;
+  to?: string;
+}
+
+/** One period bucket of one field. `tickets` is per ticket KEY. */
+export interface AggBucket {
+  key: string;
+  total: number;
+  count: number;
+  tickets: Record<string, AggCounter>;
+}
+
+/** One field's buckets in a range, oldest first (empty buckets left out). */
+export interface Aggregates {
+  field: AggField;
+  /** The range read: `from` defaults to 30 days / 12 weeks / 12 months back; `to` null = up to now. */
+  from: string;
+  to: string | null;
+  /** Summed over the buckets returned. */
+  total: number;
+  count: number;
+  /** The board's lifetime counter for the field. */
+  lifetime: AggCounter;
+  buckets: AggBucket[];
 }
 
 export interface TicketQuery {
@@ -234,6 +355,29 @@ export interface TicketsApi {
   update(key: string, patch: Partial<TicketInput>): Promise<void>;
   /** Post in the ticket's thread, as the viewer. */
   comment(key: string, markdown: string): Promise<void>;
+  /**
+   * The thread, oldest → newest: the newest `limit` (default 50, at most 200)
+   * messages, or those before `before` (a message id or millis) to page back.
+   */
+  thread(key: string, query?: ThreadQuery): Promise<Message[]>;
+  /** The newest messages, live: now and on every change (`before` is refused). */
+  onThread(key: string, callback: (messages: Message[]) => void, onError?: OnError): Unsubscribe;
+  onThread(
+    key: string,
+    query: Pick<ThreadQuery, 'limit'> | null | undefined,
+    callback: (messages: Message[]) => void,
+    onError?: OnError,
+  ): Unsubscribe;
+  /** A short-lived URL (for <img>, <video>, <a href>) of a file on the ticket — an attachment id. */
+  fileUrl(key: string, fileId: string): Promise<string>;
+  /** One aggregate field's period buckets on a board. */
+  aggregates(board: string, query?: AggregateQuery): Promise<Aggregates>;
+  onAggregates(
+    board: string,
+    query: AggregateQuery | null | undefined,
+    callback: (aggregates: Aggregates) => void,
+    onError?: OnError,
+  ): Unsubscribe;
 }
 
 // ─── memory (memory.html §H) ─────────────────────────────────────────────────

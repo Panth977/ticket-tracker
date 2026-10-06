@@ -85,8 +85,17 @@ export const AggEntrySchema = z
 export type AggEntry = z.infer<typeof AggEntrySchema>;
 
 /** Message.agg — present on a kind 'agg' message, and on a turn receipt (its cost entry). */
+/** How far back an entry may be dated (a backfilled log), in days. */
+export const AGG_BACKDATE_MAX_DAYS = 400;
+
 export const MessageAggSchema = z
   .object({
+    /**
+     * The moment the entries are FOR — a log backfilled today for Monday says
+     * Monday, and lands in Monday's bucket. Absent = when it was posted. Never
+     * in the future; at most AGG_BACKDATE_MAX_DAYS back (the server checks).
+     */
+    at: MillisSchema.optional(),
     entries: z
       .array(AggEntrySchema)
       .min(1)
@@ -246,3 +255,29 @@ export function boardAggFields(board: { aggFields?: AggFieldDef[] | undefined })
 /** The fields that take new entries. */
 export const activeAggFields = (board: { aggFields?: AggFieldDef[] | undefined }): AggFieldDef[] =>
   boardAggFields(board).filter((f) => !f.archived);
+
+/**
+ * What a person or an agent says an entry is FOR → millis: millis as is, an
+ * ISO date-time as is, and a bare date ('2026-10-04') as NOON of that day in
+ * AGG_TZ (so it can never slip into a neighbouring day). null when unreadable.
+ */
+export function aggAtFrom(v: string | number): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.round(v) : null;
+  const t = v.trim();
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (d) {
+    // Asia/Kolkata is UTC+05:30 all year (no DST): noon there is 06:30 UTC.
+    const ms = Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), 6, 30);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const ms = Date.parse(t);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Why `at` cannot date an entry posted `now`, or null. */
+export function aggAtProblem(at: number, now: number): string | null {
+  if (at > now + 60_000) return 'An entry cannot be dated in the future';
+  if (at < now - AGG_BACKDATE_MAX_DAYS * 86_400_000)
+    return `An entry can be dated at most ${AGG_BACKDATE_MAX_DAYS} days back`;
+  return null;
+}

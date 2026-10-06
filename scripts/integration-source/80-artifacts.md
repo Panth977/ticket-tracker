@@ -234,6 +234,14 @@ const t = await db.tickets.get('ENG-42');           // null when there is no suc
 await db.tickets.create('ENG', { title: 'From the dashboard', priority: 'High', assignees: ['me'] });
 await db.tickets.update('ENG-42', { stage: 'Done', dueAt: '2026-10-31' });
 await db.tickets.comment('ENG-42', 'Shipped — see **v2**.');
+
+// Read-only, on any granted board (read or write grant):
+const msgs = await db.tickets.thread('ENG-42');                       // newest 50, oldest → newest (limit ≤ 200)
+const older = await db.tickets.thread('ENG-42', { before: msgs[0].id }); // page back (or before: millis)
+const offT = db.tickets.onThread('ENG-42', (msgs) => render(msgs));   // live: the newest window
+img.src = await db.tickets.fileUrl('ENG-42', msgs[0].attachments[0].id);
+const cost = await db.tickets.aggregates('ENG', { field: 'Cost' });   // { field, total, count, lifetime, buckets }
+const offA = db.tickets.onAggregates('ENG', { field: 'Time', from: '2026-W30' }, (a) => chart(a.buckets));
 ```
 
 Tickets come back with **names, not ids** (`stage.name`, `priority.name`, tag names, custom fields by
@@ -241,6 +249,20 @@ field name, select options by name), the description as **Markdown**, and times 
 What you send takes names too (or ids), `'me'` and emails for people; an unknown name is
 `invalid-argument` and the message lists the names that exist. Writes are refused for a viewer of a
 read-only artifact, like every other write.
+
+**Threads and aggregates.** A message is `{ id, kind: 'comment' | 'system' | 'question' | 'agg',
+author, markdown, createdAt, editedAt, deleted, replyTo, pinned, attachments: [{ id, name, mime, size }],
+question?, agg?, run? }` — a deleted message stays as a tombstone (`deleted: true`, empty `markdown`);
+`question` is the form card with its `answer` (values by field label); `agg` is
+`{ at?, entries: [{ fieldId, label, unit, value }] }`; `run` is a turn receipt `{ n, outcome, costUsd,
+durationMs, model }`. Attachments carry no URL: ask `fileUrl(key, id)` when you need the bytes.
+Boards carry `aggFields` (`[{ id, label, unit, period: 'daily' | 'weekly' | 'monthly', archived }]`) and
+`aggs` (lifetime `{ [fieldId]: { total, count } }`); tickets carry their own `aggs`.
+`aggregates(board, { field?, from?, to? })` answers one field's period buckets — `field` by id or label
+(default the first active one), keys inclusive (`'2026-10-05'` · `'2026-W40'` · `'2026-10'`), `from`
+defaulting to 30 days / 12 weeks / 12 months back — as `{ field, from, to, total, count, lifetime,
+buckets: [{ key, total, count, tickets: { 'ENG-42': { total, count } } }] }`, oldest first, empty buckets
+left out. Outside TaskManager the mock's DEMO board has a sample thread and a month of buckets.
 
 **Memory files (`db.memory`).** A *memory* is a bucket of files — Markdown notes, images, video,
 anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's
