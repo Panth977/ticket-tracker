@@ -6,7 +6,7 @@
  */
 import { artifactPrefix, artifactStoragePrefix } from '@tm/shared';
 import { fenced, loadArtifact } from '../artifacts/shared.js';
-import { storageAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { defineCommand } from './_registry.js';
 
 const MAX_LISTED = 1000;
@@ -15,9 +15,11 @@ export default defineCommand('artifactFileList', async (ctx, { artifactId, path 
   await loadArtifact(null, artifactId, ctx, 'open');
   const prefix = fenced(() => artifactStoragePrefix(artifactId, path));
   const root = `${artifactPrefix.storageFiles(artifactId)}/`;
-  const [files] = await storageAdmin()
-    .bucket()
-    .getFiles({ prefix, maxResults: MAX_LISTED, autoPaginate: false });
+  const [files] = await storageBucket().getFiles({
+    prefix,
+    maxResults: MAX_LISTED,
+    autoPaginate: false,
+  });
   return {
     files: files.map((f) => ({
       path: `/${f.name.slice(root.length)}`,

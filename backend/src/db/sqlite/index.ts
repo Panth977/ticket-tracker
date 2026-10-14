@@ -1,8 +1,10 @@
 /**
  * The SQLite adapter (TM_DB=sqlite). Files under TM_DB_DIR (default
- * ./data/db); TM_DB_DIR=':memory:' for tests. See store.ts for the layout
+ * $TM_DATA_DIR/db); TM_DB_DIR=':memory:' for tests. See store.ts for the layout
  * and db.ts for the semantics.
  */
+import { join } from 'node:path';
+import { dataDir } from '../../runtime/platform.js';
 import type { DbAdapter } from '../types.js';
 import { DocRef, SqliteDb } from './db.js';
 import { Store } from './store.js';
@@ -12,7 +14,7 @@ let instance: SqliteDb | undefined;
 
 /** The process's SQLite database (opened on first use). */
 export function sqliteDb(): SqliteDb {
-  if (!instance) instance = new SqliteDb(new Store(process.env.TM_DB_DIR || './data/db'));
+  if (!instance) instance = new SqliteDb(new Store(process.env.TM_DB_DIR || join(dataDir(), 'db')));
   return instance;
 }
 

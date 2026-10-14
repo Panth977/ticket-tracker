@@ -15,7 +15,8 @@ import type { StorageObjectData } from 'firebase-functions/v2/storage';
 import { paths, storage as storagePaths, type Board, type Message, type Ticket } from '@tm/shared';
 import { fixtures } from '@tm/shared/schema/fixtures';
 import { setupEmulators, setPorts, uniq } from '../harness/index.js';
-import { db, storageAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { storageBucket } from '../../src/blob/index.js';
 import type { MessageWrittenEvent, TicketWrittenEvent } from '../../src/runtime/functions.js';
 import { memorySearchIndex } from '../../src/search/memory.js';
 import { PROCESSED_META } from '../../src/search/images.js';
@@ -230,7 +231,7 @@ describe('the thread is part of the ticket (§W)', () => {
 });
 
 describe('onAttachmentFinalized', () => {
-  const bucket = () => storageAdmin().bucket();
+  const bucket = () => storageBucket();
   const png = (w: number, h: number) =>
     sharp({ create: { width: w, height: h, channels: 3, background: '#3366cc' } })
       .png()

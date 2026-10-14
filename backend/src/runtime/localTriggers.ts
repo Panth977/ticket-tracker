@@ -1,16 +1,21 @@
 /**
- * DOCUMENT TRIGGERS, store-neutral.
+ * TRIGGERS WITHOUT CLOUD FUNCTIONS — document writes and stored objects.
  *
- * On Firebase, Cloud Functions deliver onDocumentWritten events (index.ts
- * registers DOC_TRIGGERS with firebase-functions). A store without that
- * service (SQLite) announces each committed change instead, and
- * installDbTriggers() turns those announcements into the SAME events for the
- * SAME handlers — so onTicketWritten / onMessageWritten neither know nor care
- * which store fired them.
+ * On Firebase, Cloud Functions deliver onDocumentWritten and
+ * onObjectFinalized events (index.ts registers them). A store without that
+ * service announces each change itself — SQLite its committed documents
+ * (db/sqlite), the disk store its written objects (blob/disk) — and
+ * installLocalTriggers() turns those announcements into the SAME events for
+ * the SAME handlers: onTicketWritten, onMessageWritten and
+ * onAttachmentFinalized neither know nor care what fired them.
  *
- * Delivery matches Firestore's contract: after the commit, asynchronously,
- * at least once, with a unique event id (handlers dedupe on it).
+ * Delivery matches the Firebase contract: after the write, asynchronously,
+ * with a unique event id (handlers dedupe on it).
  */
+import { randomUUID } from 'node:crypto';
+import { blobKind } from '../blob/index.js';
+import { onFinalize } from '../blob/disk.js';
+import type { FinalizedObject } from '../blob/types.js';
 import { dbKind } from '../db/index.js';
 import { sqliteDb, type DocChange } from '../db/sqlite/index.js';
 import { getTrigger, type TriggerHandlers } from './functions.js';
@@ -75,11 +80,30 @@ function dispatch(changes: DocChange[]): void {
   }
 }
 
+function finalized(obj: FinalizedObject): void {
+  const handler = getTrigger('onAttachmentFinalized');
+  if (!handler) return;
+  const event = {
+    id: randomUUID(),
+    time: new Date().toISOString(),
+    type: 'google.cloud.storage.object.v1.finalized',
+    source: 'tm/blob/disk',
+    specversion: '1.0',
+    data: obj,
+  } as unknown as Parameters<TriggerHandlers['onAttachmentFinalized']>[0];
+  setImmediate(() => {
+    handler(event).catch((e) =>
+      console.error(`[trigger] onAttachmentFinalized ${obj.name} failed`, e),
+    );
+  });
+}
+
 let installed = false;
 
-/** Deliver document triggers from the store's change feed (no-op on Firestore). */
-export function installDbTriggers(): void {
-  if (installed || dbKind() !== 'sqlite') return;
+/** Deliver triggers from the local stores' change feeds (each a no-op on its Firebase twin). */
+export function installLocalTriggers(): void {
+  if (installed) return;
   installed = true;
-  sqliteDb().onChange(dispatch);
+  if (dbKind() === 'sqlite') sqliteDb().onChange(dispatch);
+  if (blobKind() === 'disk') onFinalize(finalized);
 }

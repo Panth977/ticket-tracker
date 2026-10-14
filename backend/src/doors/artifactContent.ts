@@ -40,7 +40,7 @@ import { verifyCapability, type Capability } from '../artifacts/capability.js';
 import type { AppEnv } from '../http/env.js';
 import { door } from '../http/mounts.js';
 import { parseRange } from '../platform/fileAccess.js';
-import { storageAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 
 /** The sandbox an artifact runs in — the same tokens as the host page's iframe (§D1). */
 export const ARTIFACT_SANDBOX =
@@ -84,7 +84,7 @@ interface Found {
 /** One metadata call; null when the object is not there. */
 async function find(name: string): Promise<Found | null> {
   try {
-    const [m] = await storageAdmin().bucket().file(name).getMetadata();
+    const [m] = await storageBucket().file(name).getMetadata();
     return {
       name,
       size: Number(m.size ?? 0),
@@ -175,8 +175,7 @@ async function serve(c: C): Promise<Response> {
     ...(object?.startsWith('source/') ? { 'content-disposition': 'attachment' } : {}),
   };
   if (c.req.method === 'HEAD') return new Response(null, { status: range ? 206 : 200, headers });
-  const node = storageAdmin()
-    .bucket()
+  const node = storageBucket()
     .file(found.name)
     .createReadStream(range ? { start: range.start, end: range.end } : {});
   return new Response(Readable.toWeb(node) as ReadableStream, {

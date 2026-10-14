@@ -18,7 +18,8 @@ import {
   type Memory,
   type MemoryNode,
 } from '@tm/shared';
-import { db, storageAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { storageBucket } from '../../src/blob/index.js';
 import { asAgent, makeAgent } from '../agents/helpers.js';
 import { call, queue, request, setupEmulators, uniq, type TestUser } from '../harness/index.js';
 import { doc, people, seedBoard } from '../tickets/helpers.js';
@@ -26,7 +27,7 @@ import { doc, people, seedBoard } from '../tickets/helpers.js';
 setupEmulators();
 
 const inProcess = it.skipIf(!!process.env.TM_API_URL);
-const bucket = () => storageAdmin().bucket();
+const bucket = () => storageBucket();
 const stored = async (prefix: string) =>
   (await bucket().getFiles({ prefix }))[0].map((f) => f.name).sort();
 const memDoc = async (id: string) =>

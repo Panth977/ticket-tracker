@@ -23,7 +23,8 @@ import {
 } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { artifactHousekeeping } from '../artifacts/housekeeping.js';
-import { db, storageAdmin } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { typedCol } from '../runtime/index.js';
 import { batchWriter } from '../tickets/doc.js';
 import { readFiles } from '../tickets/read.js';
@@ -160,7 +161,7 @@ export async function autoArchive(now: number): Promise<number> {
  * not the ticket row is ever posted in a message.
  */
 export async function pruneUploads(now: number): Promise<number> {
-  const bucket = storageAdmin().bucket();
+  const bucket = storageBucket();
   const [files] = await bucket.getFiles({ prefix: 'boards/' });
   let n = 0;
   const attached = new Map<string, Promise<Set<string>>>();

@@ -36,6 +36,8 @@ export const MOUNTS = {
    * usercontent Hosting site this is the ONLY path that reaches the function.
    */
   content: '/c',
+  /** Signed object URLs of the disk store, /blob/{read|write}/… (doors/blob.ts; VM only). */
+  blob: '/blob',
 } as const;
 export type MountName = keyof typeof MOUNTS;
 

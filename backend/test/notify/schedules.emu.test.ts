@@ -9,7 +9,8 @@ import { fixtures } from '@tm/shared/schema/fixtures';
 import { digestDue, digestSend } from '../../src/notify/digest.js';
 import { housekeeping, pruneUploads } from '../../src/notify/housekeeping.js';
 import { deadlineSweep } from '../../src/notify/sweep.js';
-import { db, storageAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { storageBucket } from '../../src/blob/index.js';
 import { typedDoc } from '../../src/runtime/index.js';
 import { setupEmulators, uniq } from '../harness/index.js';
 import { seedBoard, seedTicket, seedUser, T, useFakes } from './_seed.js';
@@ -301,7 +302,7 @@ describe('housekeeping', () => {
       const u = await seedUser();
       const board = await seedBoard([u.uid]);
       const t = await seedTicket(board.id);
-      const bucket = storageAdmin().bucket();
+      const bucket = storageBucket();
       const kept = `boards/${board.id}/tickets/${t.id}/a1/kept.txt`;
       const orphan = `boards/${board.id}/tickets/${t.id}/a2/orphan.txt`;
       await bucket.file(kept).save('k');

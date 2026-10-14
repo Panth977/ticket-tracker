@@ -25,6 +25,7 @@ import {
   type TicketDataPage,
   type TicketFile,
 } from '@tm/shared';
+import { dbKind } from '../../src/db/index.js';
 import { db } from '../../src/runtime/firebase.js';
 import { readThread } from '../../src/tickets/read.js';
 import { call, setupEmulators, uniq } from '../harness/index.js';
@@ -51,7 +52,7 @@ const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
  * Firestore itself, not the database port), so the cases that run it only
  * mean something on the Firestore store.
  */
-const itFirestore = it.skipIf(process.env.TM_DB === 'sqlite');
+const itFirestore = it.skipIf(dbKind() !== 'firestore');
 
 async function migrate(...args: string[]): Promise<string> {
   const { stdout } = await run(

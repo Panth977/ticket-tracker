@@ -24,7 +24,7 @@ import {
   type Artifact,
 } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { storageAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { artifactsCol, buildsCol, syncArtifactMirror } from './shared.js';
 
 /** Drop the builds beyond the newest ARTIFACT_BUILDS_KEPT of one artifact (never the current). */
@@ -45,9 +45,9 @@ export async function pruneBuilds(
 
 /** Delete this artifact's upload zips older than ARTIFACT_UPLOAD_TTL_MS. */
 export async function sweepUploads(artifactId: string, now: number): Promise<number> {
-  const [files] = await storageAdmin()
-    .bucket()
-    .getFiles({ prefix: artifactPrefix.storageUploads(artifactId) });
+  const [files] = await storageBucket().getFiles({
+    prefix: artifactPrefix.storageUploads(artifactId),
+  });
   let n = 0;
   for (const f of files) {
     const created = Date.parse(String(f.metadata.timeCreated ?? f.metadata.updated ?? ''));

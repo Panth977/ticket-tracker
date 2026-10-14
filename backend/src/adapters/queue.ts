@@ -6,6 +6,8 @@
  *
  * Mode (env TM_QUEUE overrides):
  *   cloud   production, or the functions emulator with the tasks emulator
+ *   local   TM_PLATFORM=vm: persisted in the database, run in-process by
+ *           runtime/localJobs.ts with the same retry policy
  *   memory  everything else under the emulators (vitest runs the api
  *           in-process, with no functions emulator to dispatch to): tasks
  *           are held in memory and run by `drain()` through the handlers
@@ -14,21 +16,18 @@
  * Task names DEDUPLICATE in both modes. Cloud Tasks ids allow only
  * [A-Za-z0-9_-]; names like `uid:group:minute` are mapped to a safe id.
  */
-import { createHash } from 'node:crypto';
 import type { EnqueueOptions, QueueName, QueuePayloads, TaskQueue } from '@tm/shared';
 import { functionsAdmin, isEmulated } from '../runtime/firebase.js';
 import { region } from '../runtime/deploy.js';
 import { getTaskHandler, QUEUE_FUNCTIONS } from '../runtime/functions.js';
+import { localQueue } from '../runtime/localJobs.js';
+import { platform } from '../runtime/platform.js';
+import { taskId } from './taskId.js';
 
 /** Where the queue functions live (TM_REGION — see runtime/deploy.ts). */
 export const LOCATION = region();
 
-/** A Cloud Tasks-safe id for a logical task name (stable: same name → same id). */
-export function taskId(name: string): string {
-  if (/^[A-Za-z0-9_-]{1,400}$/.test(name)) return name;
-  const safe = name.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
-  return `${safe}-${createHash('sha256').update(name).digest('hex').slice(0, 24)}`;
-}
+export { taskId } from './taskId.js';
 
 export function cloudQueue(): TaskQueue {
   return {
@@ -113,5 +112,6 @@ export function createQueue(): TaskQueue {
   const mode = process.env.TM_QUEUE;
   if (mode === 'memory') return memoryQueue();
   if (mode === 'cloud') return cloudQueue();
+  if (mode === 'local' || (!mode && platform() === 'vm')) return localQueue();
   return !isEmulated() || process.env.CLOUD_TASKS_EMULATOR_HOST ? cloudQueue() : memoryQueue();
 }

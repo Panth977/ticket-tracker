@@ -27,7 +27,8 @@ import {
   type Scope,
 } from '@tm/shared';
 import { createApp } from '../../src/http/app.js';
-import { db, rtdbAdmin, storageAdmin } from '../../src/runtime/firebase.js';
+import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { storageBucket } from '../../src/blob/index.js';
 import { makeAgent } from '../agents/helpers.js';
 import { newBoard } from '../boards/helpers.js';
 import {
@@ -692,9 +693,9 @@ describe('§AA4 files', () => {
     await put('logo.png', new Uint8Array([1, 2, 3]), 'image/png');
 
     // Stored under artifacts/{id}/files/ with the Content-Type of the request.
-    const [meta] = await storageAdmin().bucket().file(artifactStorageFile(id, 'reports/q3.csv')).getMetadata();
+    const [meta] = await storageBucket().file(artifactStorageFile(id, 'reports/q3.csv')).getMetadata();
     expect(meta.contentType).toBe('text/csv');
-    const [bytes] = await storageAdmin().bucket().file(artifactStorageFile(id, 'reports/q3.csv')).download();
+    const [bytes] = await storageBucket().file(artifactStorageFile(id, 'reports/q3.csv')).download();
     expect(bytes.toString()).toBe('a,b\n1,2\n');
 
     const all = (await rest(key, 'GET', data(id, 'files'))).body as { data: { path: string; size: number; content_type: string }[] };
@@ -717,7 +718,7 @@ describe('§AA4 files', () => {
     expect((await put(encodeURIComponent('../../builds/evil.html'), 'x', 'text/html')).status).toBe(400);
     expect((await put(encodeURIComponent('a/../../b'), 'x')).status).toBe(400);
     expect((await rest(key, 'GET', data(id, `files?prefix=${encodeURIComponent('../')}`))).status).toBe(400);
-    const objects = (await storageAdmin().bucket().getFiles({ prefix: artifactPrefix.storageAll(id) }))[0].map((f) => f.name);
+    const objects = (await storageBucket().getFiles({ prefix: artifactPrefix.storageAll(id) }))[0].map((f) => f.name);
     expect(objects.every((n) => n.startsWith(`${artifactPrefix.storageFiles(id)}/`))).toBe(true);
 
     expect((await rest(key, 'DELETE', data(id, 'files/reports/q3.csv'))).body).toEqual({ ok: true });
@@ -736,7 +737,7 @@ describe('§AA4 files', () => {
       body: new Uint8Array(ARTIFACT_UPLOAD_MAX_BYTES + 1),
     });
     expect(r.status).toBe(413);
-    expect((await storageAdmin().bucket().file(artifactStorageFile(id, 'huge.bin')).exists())[0]).toBe(false);
+    expect((await storageBucket().file(artifactStorageFile(id, 'huge.bin')).exists())[0]).toBe(false);
   });
 });
 

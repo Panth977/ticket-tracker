@@ -48,6 +48,41 @@ export const QUEUE_FUNCTIONS: Record<QueueName, string> = {
   email: 'queueEmail',
 };
 
+/**
+ * Retry / rate policy per queue — ONE table for both platforms: index.ts
+ * hands it to Cloud Tasks, runtime/localJobs.ts applies it on a VM.
+ * (platform/backend.json: webhooks 500/s, 8 attempts over ~24h.)
+ */
+export interface QueuePolicy {
+  maxAttempts: number;
+  minBackoffSeconds: number;
+  maxBackoffSeconds?: number;
+  maxDoublings?: number;
+  maxDispatchesPerSecond?: number;
+}
+export const QUEUE_POLICY: Record<QueueName, QueuePolicy> = {
+  deliver: {
+    maxAttempts: 5,
+    minBackoffSeconds: 30,
+    maxBackoffSeconds: 3600,
+    maxDispatchesPerSecond: 200,
+  },
+  webhooks: {
+    maxAttempts: 8,
+    minBackoffSeconds: 60,
+    maxBackoffSeconds: 12 * 3600,
+    maxDoublings: 5,
+    maxDispatchesPerSecond: 500,
+  },
+  boardDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
+  // Artifacts (artifacts.html §G): the same shape of job — a recursive delete of unknown size.
+  artifactDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
+  // Memory (memory.html §G): the same shape again.
+  memoryDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
+  export: { maxAttempts: 3, minBackoffSeconds: 60 },
+  email: { maxAttempts: 5, minBackoffSeconds: 30, maxDispatchesPerSecond: 50 },
+};
+
 export interface TaskMeta {
   /** Cloud Tasks task name / id when known. */
   id?: string;

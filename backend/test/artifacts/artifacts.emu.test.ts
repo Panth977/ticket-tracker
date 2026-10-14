@@ -29,7 +29,8 @@ import {
 } from '@tm/shared';
 import { artifactHousekeeping } from '../../src/artifacts/housekeeping.js';
 import { createApp } from '../../src/http/app.js';
-import { db, rtdbAdmin, storageAdmin } from '../../src/runtime/firebase.js';
+import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { storageBucket } from '../../src/blob/index.js';
 import { newBoard } from '../boards/helpers.js';
 import {
   call,
@@ -52,7 +53,7 @@ setupEmulators();
 /** Tests that swap ports (the clock, the queue) only make sense in-process. */
 const inProcess = it.skipIf(!!process.env.TM_API_URL);
 
-const bucket = () => storageAdmin().bucket();
+const bucket = () => storageBucket();
 const artifactDoc = async (id: string) =>
   (await db().doc(`artifacts/${id}`).get()).data() as Artifact | undefined;
 const buildDoc = async (id: string, b: string) =>

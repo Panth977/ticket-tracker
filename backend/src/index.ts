@@ -28,12 +28,13 @@ import { onTaskDispatched, type Request, type TaskQueueOptions } from 'firebase-
 import type { QueueName, QueuePayloads } from '@tm/shared';
 import { createApp } from './http/app.js';
 import { autoloadSync } from './runtime/autoload.js';
-import { DOC_TRIGGERS } from './runtime/dbTriggers.js';
+import { DOC_TRIGGERS } from './runtime/localTriggers.js';
 import { boundSecrets, region, withServerSecrets } from './runtime/deploy.js';
 import {
   getScheduleHandler,
   getTaskHandler,
   getTrigger,
+  QUEUE_POLICY,
   SCHEDULES,
   type ScheduleName,
   type TriggerHandlers,
@@ -76,42 +77,28 @@ export const api = onRequest(
 
 // ─── task queues ─────────────────────────────────────────────────────────────
 
-/** Retry / rate policy per queue (platform/backend.json: webhooks 500/s, 8 attempts over ~24h). */
-const QUEUE_OPTIONS: Record<QueueName, TaskQueueOptions> = {
-  deliver: {
-    retryConfig: { maxAttempts: 5, minBackoffSeconds: 30, maxBackoffSeconds: 3600 },
-    rateLimits: { maxDispatchesPerSecond: 200 },
-  },
-  webhooks: {
-    retryConfig: {
-      maxAttempts: 8,
-      minBackoffSeconds: 60,
-      maxBackoffSeconds: 12 * 3600,
-      maxDoublings: 5,
-    },
-    rateLimits: { maxDispatchesPerSecond: 500 },
-  },
-  boardDelete: { retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, timeoutSeconds: 540 },
-  // Artifacts (artifacts.html §G): the same shape of job — a recursive delete of unknown size.
-  artifactDelete: { retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, timeoutSeconds: 540 },
-  // Memory (memory.html §G): the same shape again.
-  memoryDelete: { retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 }, timeoutSeconds: 540 },
-  export: {
-    retryConfig: { maxAttempts: 3, minBackoffSeconds: 60 },
-    timeoutSeconds: 540,
-    memory: '1GiB',
-  },
-  email: {
-    retryConfig: { maxAttempts: 5, minBackoffSeconds: 30 },
-    rateLimits: { maxDispatchesPerSecond: 50 },
-  },
-};
+/** Cloud Tasks options per queue: the shared retry / rate policy plus Cloud-only sizing. */
+const CLOUD_ONLY: Partial<Record<QueueName, Pick<TaskQueueOptions, 'timeoutSeconds' | 'memory'>>> =
+  {
+    boardDelete: { timeoutSeconds: 540 },
+    artifactDelete: { timeoutSeconds: 540 },
+    memoryDelete: { timeoutSeconds: 540 },
+    export: { timeoutSeconds: 540, memory: '1GiB' },
+  };
+function queueOptions(queue: QueueName): TaskQueueOptions {
+  const { maxDispatchesPerSecond, ...retryConfig } = QUEUE_POLICY[queue];
+  return {
+    retryConfig,
+    ...(maxDispatchesPerSecond ? { rateLimits: { maxDispatchesPerSecond } } : {}),
+    ...CLOUD_ONLY[queue],
+  };
+}
 
 function queueFn<Q extends QueueName>(queue: Q) {
   const handler = getTaskHandler(queue);
   if (!handler) return undefined;
   return onTaskDispatched(
-    QUEUE_OPTIONS[queue],
+    queueOptions(queue),
     withServerSecrets((req: Request<QueuePayloads[Q]>) =>
       handler(req.data, { id: req.id, retryCount: req.retryCount ?? 0 }),
     ),

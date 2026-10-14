@@ -30,7 +30,7 @@ import {
   stripSingleTopFolder,
   type ArtifactInlineFile,
 } from '@tm/shared';
-import { storageAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { openZip } from './unzip.js';
 
 export interface BuildFile {
@@ -182,7 +182,7 @@ export async function storeBuild(
   buildId: string,
   files: readonly BuildFile[],
 ): Promise<StoredBuild> {
-  const bucket = storageAdmin().bucket();
+  const bucket = storageBucket();
   const prefix = artifactPrefix.storageBuild(artifactId, buildId);
   const warnings: string[] = [];
   let bytes = 0;

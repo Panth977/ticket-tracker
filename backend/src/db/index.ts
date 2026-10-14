@@ -1,10 +1,10 @@
 /**
- * The database, behind one port (types.ts). TM_DB picks the adapter once,
- * at startup:
+ * The database, behind one port (types.ts). TM_DB (else TM_PLATFORM) picks
+ * the adapter once, at startup:
  *
- *   TM_DB unset / 'firestore'   Cloud Firestore through the Admin SDK (the
+ *   'firestore' (firebase)      Cloud Firestore through the Admin SDK (the
  *                               Firebase deploy; emulator-aware as before)
- *   TM_DB = 'sqlite'            SQLite files under TM_DB_DIR (the VM / Docker
+ *   'sqlite' (vm)               SQLite files under TM_DB_DIR (the VM / Docker
  *                               deploy) — see src/db/sqlite/
  *
  * Everything above this file imports db(), the value classes and the types
@@ -26,16 +26,18 @@ import type {
 } from './types.js';
 import { firestoreAdapter } from './firestore.js';
 import { sqliteAdapter } from './sqlite/index.js';
+import { adapterFor } from '../runtime/platform.js';
 
 export type * from './types.js';
 
 export type DbKind = 'firestore' | 'sqlite';
 
-/** The store this process uses (TM_DB). */
+/** The store this process uses: TM_DB, else the platform's (runtime/platform.ts). */
 export function dbKind(): DbKind {
-  const v = (process.env.TM_DB || 'firestore').toLowerCase();
-  if (v === 'firestore' || v === 'sqlite') return v;
-  throw new Error(`TM_DB must be 'firestore' or 'sqlite', not ${JSON.stringify(v)}`);
+  return adapterFor<DbKind>('TM_DB', { firebase: 'firestore', vm: 'sqlite' }, [
+    'firestore',
+    'sqlite',
+  ]);
 }
 
 const adapter: DbAdapter = dbKind() === 'sqlite' ? sqliteAdapter : firestoreAdapter;

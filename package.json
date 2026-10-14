@@ -14,7 +14,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:emu": "pnpm --filter @tm/shared build && pnpm --filter @tm/backend build && PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node scripts/lock.mjs emulators -- firebase emulators:exec --project demo-taskmanager --only auth,firestore,database,storage,functions,tasks 'pnpm -r --workspace-concurrency=1 test:emu'",
-    "test:emu:sqlite": "rm -rf \"${TMPDIR:-/tmp}/tm-emu-sqlite\" && TM_DB=sqlite TM_DB_DIR=\"${TMPDIR:-/tmp}/tm-emu-sqlite\" pnpm test:emu",
+    "test:emu:vm": "rm -rf \"${TMPDIR:-/tmp}/tm-emu-vm\" && TM_PLATFORM=vm TM_DATA_DIR=\"${TMPDIR:-/tmp}/tm-emu-vm\" pnpm test:emu",
     "emulators": "pnpm --filter @tm/shared build && pnpm --filter @tm/backend build && PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" firebase emulators:start --project demo-taskmanager",
     "lint": "eslint .",
     "format": "prettier --write shared backend frontend qaqc --ignore-path .gitignore",

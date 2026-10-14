@@ -27,7 +27,8 @@ import {
   type Message,
 } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { db, storageAdmin } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { defineTrigger } from '../runtime/functions.js';
 import { openTicket } from '../tickets/doc.js';
 import {
@@ -51,7 +52,7 @@ export async function handleAttachmentFinalized(
   if (obj.metadata?.[PROCESSED_META]) return { kind: 'skipped', reason: 'our own output' };
   if (!isThumbnailable(obj.contentType)) return { kind: 'skipped', reason: 'not a raster image' };
 
-  const file = storageAdmin().bucket(obj.bucket).file(name);
+  const file = storageBucket(obj.bucket).file(name);
 
   if (parseAvatarPath(name)) {
     const [input] = await file.download();
@@ -77,8 +78,7 @@ export async function handleAttachmentFinalized(
     return { kind: 'skipped', reason: 'undecodable image' };
   }
   const thumbPath = storagePaths.thumb(att.boardId, att.ticketId, att.attachmentId);
-  await storageAdmin()
-    .bucket(obj.bucket)
+  await storageBucket(obj.bucket)
     .file(thumbPath)
     .save(result.thumb.data, {
       resumable: false,

@@ -78,7 +78,8 @@ import { ports } from '../adapters/index.js';
 import { objectLink, objectOf } from '../artifacts/files.js';
 import { assertNotArchived, fenced, loadArtifact } from '../artifacts/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { db, rtdbAdmin, storageAdmin } from '../runtime/firebase.js';
+import { db, rtdbAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import type { DocumentSnapshot } from '../db/index.js';
 
 // ─── who ─────────────────────────────────────────────────────────────────────
@@ -509,8 +510,7 @@ export async function filesList(
 ): Promise<{ data: ArtifactDataFile[] }> {
   await gate(ctx, artifactId, 'read');
   const full = fenced(() => artifactStoragePrefix(artifactId, prefix), 'prefix');
-  const [files] = await storageAdmin()
-    .bucket()
+  const [files] = await storageBucket()
     .getFiles({ prefix: full, maxResults: ARTIFACT_FILE_LIST_MAX, autoPaginate: false });
   return { data: files.map((f) => toFile(artifactId, f.name, f.metadata as ObjectMeta)) };
 }
@@ -528,8 +528,7 @@ export async function fileUpload(
   await gate(ctx, artifactId, 'write');
   const full = fenced(() => artifactStorageFile(artifactId, path));
   const type = contentType?.trim() || 'application/octet-stream';
-  await storageAdmin()
-    .bucket()
+  await storageBucket()
     .file(full)
     // A VIEW of the request's bytes, not a copy (as publishZip does).
     .save(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), {

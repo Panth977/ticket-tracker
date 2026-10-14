@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { StorageFiles, StoredObject } from '@tm/shared';
-import { storageAdmin } from '../runtime/firebase.js';
+import { blobKind, storageBucket } from '../blob/index.js';
 
 /**
  * A read stream over a stored object, optionally one byte range (`end` is
@@ -19,15 +19,15 @@ import { storageAdmin } from '../runtime/firebase.js';
  * objects through `read`.
  */
 export function readStream(path: string, range?: { start: number; end: number }): Readable {
-  return storageAdmin()
-    .bucket()
+  return storageBucket()
     .file(path)
     .createReadStream(range ? { start: range.start, end: range.end } : {});
 }
 
 export function adminFiles(): StorageFiles {
-  const bucket = () => storageAdmin().bucket();
-  const emu = () => process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+  const bucket = () => storageBucket();
+  // Only Cloud Storage has an emulator; the disk store signs its own URLs.
+  const emu = () => (blobKind() === 'gcs' ? process.env.FIREBASE_STORAGE_EMULATOR_HOST : undefined);
   const meta = (
     path: string,
     m: { size?: string | number; contentType?: string; metadata?: Record<string, unknown> },

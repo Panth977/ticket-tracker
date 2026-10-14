@@ -55,7 +55,7 @@ import {
 } from '../artifacts/shared.js';
 import { appUrl, profileOf } from '../commands/boardShared.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { storageAdmin } from '../runtime/firebase.js';
+import { storageBucket } from '../blob/index.js';
 import { invoke } from './ops.js';
 
 const iso = (ms: number): string => toIso(ms)!;
@@ -249,7 +249,7 @@ export async function publishZip(
   const { artifact } = await loadArtifact(null, artifactId, ctx, 'publish');
   assertNotArchived(artifact);
 
-  const bucket = storageAdmin().bucket();
+  const bucket = storageBucket();
   const put = async (bytes: Uint8Array): Promise<string> => {
     const path = artifactPrefix.storageUpload(artifactId, ctx.ids.id());
     await bucket
