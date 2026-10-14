@@ -16,6 +16,7 @@ import { expect, test } from '@playwright/test';
 import { SCOPE_PRESETS } from '@tm/shared';
 import { API_URL, call, newBoard, newPerson, giveAttachMemory } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
+import { VM } from '../../seed/vm.js';
 
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -89,7 +90,9 @@ test('an agent uploads four kinds of file; the app previews, opens, and download
       timeout: 15_000,
     })
     .toBeGreaterThan(0);
-  expect(await img.getAttribute('src')).toContain('/api/files/blob');
+  // The emulators cannot sign, so media comes through the api; a VM signs its
+  // own disk URLs (/blob/read), as Cloud Storage does in production.
+  expect(await img.getAttribute('src')).toContain(VM ? '/blob/read/' : '/api/files/blob');
   await expect(msg.locator('[data-kind="pdf"]')).toBeVisible();
 
   // ── the viewer: the image, then the PDF ──
@@ -111,7 +114,7 @@ test('an agent uploads four kinds of file; the app previews, opens, and download
 
   await msg.getByRole('button', { name: 'Open summary.pdf' }).click();
   const pdfViewer = page.getByRole('dialog', { name: 'Viewing summary.pdf' });
-  await expect(pdfViewer.locator('iframe')).toHaveAttribute('src', /\/api\/files\/blob|storage/);
+  await expect(pdfViewer.locator('iframe')).toHaveAttribute('src', /\/api\/files\/blob|storage|\/blob\/read\//);
   await page.keyboard.press('Escape');
 
   // ── /f/{board}/{ticket}/{file}: a whole window for the Markdown plan ──

@@ -1,5 +1,6 @@
 /**
- * EmailSender: Resend when RESEND_API_KEY is set; else the dev outbox
+ * EmailSender: Resend when RESEND_API_KEY is set; SMTP when SMTP_URL is
+ * (adapters/smtp.ts — a VM's own relay); else the dev outbox
  * (_dev/mail/items) under the emulators, and OFF in production (send()
  * throws NotConfiguredError — see notConfigured.ts). The sender address is
  * ours, never user-supplied.
@@ -8,6 +9,7 @@ import type { Resend } from 'resend';
 import type { EmailMessage, EmailSender } from '@tm/shared';
 import { isEmulated } from '../runtime/firebase.js';
 import { recordDev } from './dev.js';
+import { smtpEmail } from './smtp.js';
 import { NotConfiguredError } from './notConfigured.js';
 
 export const DEFAULT_FROM = process.env.EMAIL_FROM ?? 'TaskManager <notify@taskmanager.app>';
@@ -58,5 +60,6 @@ export function offEmail(): EmailSender {
 export function createEmail(): EmailSender {
   const key = process.env.RESEND_API_KEY;
   if (key) return resendEmail(key);
+  if (process.env.SMTP_URL) return smtpEmail(process.env.SMTP_URL, DEFAULT_FROM);
   return isEmulated() ? devEmail() : offEmail();
 }

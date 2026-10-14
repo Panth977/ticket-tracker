@@ -54,7 +54,7 @@ export class RtdbSession {
   private off: (() => void) | undefined;
 
   constructor(
-    private readonly auth: RtdbAuth | null,
+    public auth: RtdbAuth | null,
     private readonly send: (m: unknown) => void,
   ) {}
 

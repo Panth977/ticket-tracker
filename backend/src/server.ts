@@ -23,6 +23,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createApp } from './http/app.js';
 import { identity } from './identity/index.js';
 import { DataSession } from './live/data.js';
+import { ensureVapid } from './adapters/webPush.js';
 import { ensureServerSecrets } from './runtime/deploy.js';
 import { startLocalJobs } from './runtime/localJobs.js';
 import { platform } from './runtime/platform.js';
@@ -164,14 +165,39 @@ export async function startServer(
   const app = await createApp();
   const api = getRequestListener(app.fetch);
   const { rewrites, headers } = loadHosting();
+  const { publicKey: vapidKey } = await ensureVapid();
   const config = JSON.stringify({
     platform: 'vm',
+    vapidKey,
     adminEmail: process.env.TM_ADMIN_EMAIL ?? null,
     artifactOrigin: process.env.TM_ARTIFACT_ORIGIN ?? null,
   });
 
+  // The SPA's $env/dynamic/public, decided HERE rather than at build time: one
+  // image serves any deploy. TM_ADMIN_EMAIL is the admin the app shows; any
+  // PUBLIC_* variable of the server is passed through.
+  const publicEnv: Record<string, string> = {
+    PUBLIC_USE_EMULATORS: 'false',
+    PUBLIC_FIREBASE_PROJECT_ID: 'vm',
+    PUBLIC_FCM_VAPID_KEY: 'from-server',
+    ...(process.env.TM_ADMIN_EMAIL ? { PUBLIC_TM_ADMIN_EMAIL: process.env.TM_ADMIN_EMAIL } : {}),
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(
+        (e): e is [string, string] => e[0].startsWith('PUBLIC_') && typeof e[1] === 'string',
+      ),
+    ),
+  };
+  const envJs = `export const env=${JSON.stringify(publicEnv)}`;
+
   const server = createServer((req, res) => {
     const urlPath = (req.url ?? '/').split('?')[0]!;
+    if (urlPath === '/_app/env.js') {
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-cache',
+      });
+      return void res.end(envJs);
+    }
     if (urlPath === '/config.json') {
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
@@ -247,8 +273,13 @@ function onSocket(ws: WebSocket): void {
             return;
           }
         }
-        session?.close();
-        session = new DataSession(auth, send);
+        // A refreshed token for the same person keeps the session (its
+        // listeners and onDisconnect writes); anyone else starts afresh.
+        if (session && (session.auth?.uid ?? null) === (auth?.uid ?? null)) session.reauth(auth);
+        else {
+          session?.close();
+          session = new DataSession(auth, send);
+        }
         send({ id: msg.id, ok: true, result: { uid: auth?.uid ?? null } });
         return;
       }

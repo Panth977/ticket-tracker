@@ -77,6 +77,14 @@ const PASSTHROUGH = [
   // ARTIFACTS, cross-origin, from a sandboxed frame. Same reasoning — and a
   // pinned /v1/ the worker cached would outlive hosting's own cache rules.
   '/backend-driver',
+  // The VM deploy's own doors (backend src/server.ts): sign-in, objects, the
+  // RTDB REST stream, the live socket, the deploy's config, artifact content.
+  '/identity/',
+  '/blob/',
+  '/rtdb/',
+  '/live',
+  '/config.json',
+  '/c/',
 ];
 
 // ── one worker ───────────────────────────────────────────────────────────────

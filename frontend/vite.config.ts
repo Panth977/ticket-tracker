@@ -63,10 +63,29 @@ const bypass = (req: { url?: string }) =>
     ? req.url
     : undefined;
 
+// THE VM BUILD (TM_PLATFORM=vm): the same app, with the Firebase SDK's modules
+// swapped for src/lib/platform/vm — the same API over the VM server's /live
+// socket, /identity, /blob (backend src/server.ts). No call site knows.
+const VM = process.env.TM_PLATFORM === 'vm';
+const VM_SHIMS = ['app', 'auth', 'firestore', 'database', 'storage', 'messaging'];
+const vmAlias = VM_SHIMS.map((m) => ({
+  find: new RegExp(`^firebase/${m}$`),
+  replacement: fileURLToPath(new URL(`./src/lib/platform/vm/${m}.ts`, import.meta.url)),
+}));
+if (VM) {
+  // No Firebase project and no emulators; push keys come from the server.
+  process.env.PUBLIC_USE_EMULATORS = 'false';
+  process.env.PUBLIC_FIREBASE_PROJECT_ID ||= 'vm';
+  process.env.PUBLIC_FCM_VAPID_KEY ||= 'from-server';
+}
+
 export default defineConfig({
   plugins: [icons, driver, tailwindcss(), sveltekit()],
   // "@tm/source" resolves @tm/shared to its TypeScript source: live HMR, no prebuild.
-  resolve: { conditions: ['@tm/source', ...defaultClientConditions] },
+  resolve: {
+    conditions: ['@tm/source', ...defaultClientConditions],
+    ...(VM ? { alias: vmAlias } : {}),
+  },
   ssr: {
     resolve: {
       conditions: ['@tm/source', ...defaultServerConditions],

@@ -46,22 +46,27 @@ import {
 
 const id = door('identity');
 
-/** Our errors → the app's problem vocabulary (never echo token details). */
+/**
+ * Our errors → the app's problem vocabulary (never echo token details). The
+ * Firebase-style code rides along as `authCode`, so the VM build's auth shim
+ * can throw exactly what the Firebase SDK would.
+ */
 function fail(e: unknown): never {
   if (!(e instanceof IdentityError)) throw e;
+  const ext = { authCode: e.code };
   switch (e.code) {
     case 'auth/requires-recent-login':
-      throw errors.forbidden(e.message, { reason: 'requiresRecentLogin' });
+      throw errors.forbidden(e.message, { ...ext, reason: 'requiresRecentLogin' });
     case 'auth/email-already-exists':
     case 'auth/account-exists-with-different-credential':
-      throw errors.conflict(e.message);
+      throw errors.conflict(e.message, ext);
     case 'auth/weak-password':
     case 'auth/invalid-email':
-      throw errors.invalid(e.message);
+      throw errors.invalid(e.message, ext);
     case 'auth/operation-not-allowed':
-      throw errors.forbidden(e.message);
+      throw errors.forbidden(e.message, ext);
     default:
-      throw errors.unauthenticated(e.message);
+      throw errors.unauthenticated(e.message, ext);
   }
 }
 

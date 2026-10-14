@@ -106,10 +106,16 @@ export class DataSession {
   private readonly rtdb: RtdbSession;
 
   constructor(
-    readonly auth: RulesAuth | null,
+    public auth: RulesAuth | null,
     private readonly send: (msg: unknown) => void,
   ) {
     this.rtdb = new RtdbSession(auth, send);
+  }
+
+  /** A fresh token for the same user (claims may have changed). */
+  reauth(auth: RulesAuth | null): void {
+    this.auth = auth;
+    this.rtdb.auth = auth;
   }
 
   // ─── reads ─────────────────────────────────────────────────────────────────

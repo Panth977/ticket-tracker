@@ -5,7 +5,8 @@
  * exactly as opening the email would.
  */
 import { expect, type Page } from '@playwright/test';
-import { eventually, PROJECT_ID } from './stack.js';
+import { eventually, mailTo, PROJECT_ID } from './stack.js';
+import { VM } from '../../seed/vm.js';
 
 interface OobCode {
   email: string;
@@ -14,6 +15,12 @@ interface OobCode {
 }
 
 async function signInLinks(email: string): Promise<OobCode[]> {
+  // On a VM the link is in the mail the server "sent" (the dev outbox).
+  if (VM)
+    return (await mailTo(email))
+      .filter((m) => m.subject === 'Sign in to TaskManager')
+      .reverse()
+      .map((m) => ({ email, requestType: 'EMAIL_SIGNIN', oobLink: /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0] }));
   const host = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
   const r = await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/oobCodes`);
   const { oobCodes } = (await r.json()) as { oobCodes: OobCode[] };

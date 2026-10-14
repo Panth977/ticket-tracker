@@ -9,7 +9,9 @@
 import { getMessaging } from 'firebase-admin/messaging';
 import type { PushMessage, PushResult, PushSender } from '@tm/shared';
 import { adminApp, isEmulated } from '../runtime/firebase.js';
+import { platform } from '../runtime/platform.js';
 import { recordDev } from './dev.js';
+import { webPush, WEBPUSH_PREFIX } from './webPush.js';
 
 export function devPush(): PushSender {
   return {
@@ -70,8 +72,40 @@ export function fcmPush(): PushSender {
   };
 }
 
-export function createPush(): PushSender {
+function basePush(): PushSender | null {
   if (process.env.TM_PUSH === 'fcm') return fcmPush();
   if (process.env.TM_PUSH === 'dev' || isEmulated()) return devPush();
-  return fcmPush();
+  // A VM has no FCM: only Web Push subscriptions can be reached.
+  return platform() === 'vm' ? null : fcmPush();
+}
+
+/**
+ * One sender for every device: a `webpush:` token (the VM build's browsers)
+ * goes straight to its push service (adapters/webPush.ts); any other token
+ * to FCM, or to the dev outbox under the emulators.
+ */
+export function createPush(): PushSender {
+  const base = basePush();
+  const web = webPush();
+  return {
+    async send(tokens: string[], msg: PushMessage): Promise<PushResult[]> {
+      const isWeb = (t: string) => t.startsWith(WEBPUSH_PREFIX);
+      const other = tokens.filter((t) => !isWeb(t));
+      const [a, b] = await Promise.all([
+        web.send(tokens.filter(isWeb), msg),
+        base
+          ? base.send(other, msg)
+          : other.map(
+              (token): PushResult => ({
+                token,
+                ok: false,
+                unregistered: true,
+                error: 'push/not-deliverable-here',
+              }),
+            ),
+      ]);
+      const by = new Map([...a, ...b].map((r) => [r.token, r]));
+      return tokens.map((t) => by.get(t)!);
+    },
+  };
 }

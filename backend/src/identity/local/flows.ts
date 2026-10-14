@@ -51,6 +51,8 @@ export interface Session {
   refreshToken: string;
   expiresIn: number;
   user: UserRecord;
+  /** The account's first sign-in (Firebase's getAdditionalUserInfo().isNewUser). */
+  isNewUser: boolean;
 }
 
 const nowS = () => Math.floor(Date.now() / 1000);
@@ -96,6 +98,7 @@ async function startSession(
     refreshToken,
     expiresIn: ID_TOKEN_TTL_S,
     user: toRecord(fresh),
+    isNewUser: !a.lastSignInAt,
   };
 }
 
@@ -117,6 +120,7 @@ export async function refreshSession(refreshToken: string): Promise<Session> {
     refreshToken,
     expiresIn: ID_TOKEN_TTL_S,
     user: toRecord(a),
+    isNewUser: false,
   };
 }
 

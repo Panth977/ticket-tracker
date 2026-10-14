@@ -73,6 +73,19 @@ pnpm integrate:gen    # regenerate /llms*.txt, /integrate*, the Claude plugin
 
 The run book with every environment variable, the Firebase console steps and the cost notes is `docs/plan/run.html` (`pnpm docs`).
 
+### Or on your own VM, with Docker
+
+The same app runs as one container on one port, with no Firebase project. Every Firebase service has a local adapter, picked by `TM_PLATFORM=vm`: SQLite files for the documents (one per board, memory and artifact, plus a root file), a JSON tree for the realtime data, the disk for files, the server's own sign-in (email links, passwords, Google and Microsoft), and in-process task queues and schedules. The same `firestore.rules`, `storage.rules` and `database.rules.json` guard it.
+
+```bash
+cp .env.vm.example .env.vm      # set APP_URL; add SMTP_URL to send mail
+docker compose up -d            # ghcr.io/panth977/ticket-tracker on :8080
+```
+
+Port 8080 serves the web app, `/api`, `/v1`, `/mcp`, `/oauth`, `/identity`, `/blob`, `/rtdb`, artifacts under `/c`, and the `/live` WebSocket. Put a TLS proxy in front of it. All state lives in the `/data` volume, so that is what you back up. Push notifications use Web Push, with a VAPID key the server makes on its first start.
+
+`pnpm test:emu:vm` runs the backend suites on the VM adapters, and `pnpm --filter @tm/qaqc e2e:vm` runs the browser suites against the VM server (after `TM_PLATFORM=vm pnpm --filter @tm/frontend build`).
+
 ## Give an agent a ticket
 
 An agent is a member of a board with its own token. Anything that speaks REST or MCP can work its tickets: claim one, post its plan as a task list, ask questions in the thread, move it to **Review**. `GET /v1/live` is a wake stream, so an orchestrator does not poll. `qaqc/orch-sample/` is a small orchestrator that exercises every SDK method; `docs/plan/agents.html` describes the full loop.
