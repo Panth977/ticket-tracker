@@ -226,7 +226,7 @@ function restore(): Promise<void> {
     const fromPage = takeFragmentSession();
     if (fromPage) adopt(fromPage);
     else {
-      let saved: { refreshToken: string; user: ServerUser; idToken?: string; expiresAt?: number } | null = null;
+      let saved: { refreshToken: string; user: ServerUser; idToken?: string; expiresAt?: number } | null;
       try {
         const raw = store()?.getItem(KEY);
         saved = raw ? JSON.parse(raw) : null;

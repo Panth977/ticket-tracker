@@ -11,7 +11,7 @@
  * VM only (TM_E2E_PLATFORM=vm): Firebase's SDK and Hosting are not ours to test.
  */
 import { createServer, connect, type Server } from 'node:net';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mailTo, eventually, uniqueEmail } from '../support/stack.js';
 import { VM, VM_PORT } from '../../seed/vm.js';
 
@@ -46,7 +46,7 @@ test('sign-in link opened in a second tab, over a slow link: both tabs signed in
 }) => {
   const email = uniqueEmail('slow');
   const warnings: string[] = [];
-  const watch = (p: import('@playwright/test').Page, tab: string) =>
+  const watch = (p: Page, tab: string) =>
     p.on('console', (m) => {
       if (/WebSocket|Maximum call stack/i.test(m.text())) warnings.push(`${tab}: ${m.text()}`);
     });
