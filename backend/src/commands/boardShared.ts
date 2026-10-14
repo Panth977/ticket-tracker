@@ -12,7 +12,7 @@
  *   deleteBoardTx  tombstone the key, drop the board doc, queue the recursive delete
  */
 import { createHash } from 'node:crypto';
-import { FieldValue, type DocumentReference, type Query } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentReference, type Query } from '../db/index.js';
 import {
   errors,
   isAgentId,
@@ -34,6 +34,7 @@ import { typedDoc } from '../runtime/converters.js';
 import { auth, db, isEmulated, rtdbAdmin } from '../runtime/firebase.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { batchWriter } from '../tickets/doc.js';
+import type { QueryDocumentSnapshot, WriteBatch } from '../db/index.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 /** boardCreate: 10 new boards per person per day (platform/db.json rateLimits). */
@@ -231,7 +232,7 @@ export function memberDoc(
 /** Run `apply` over refs in Firestore batches of at most 400 writes. */
 export async function inBatches<T>(
   items: T[],
-  apply: (batch: FirebaseFirestore.WriteBatch, item: T) => void,
+  apply: (batch: WriteBatch, item: T) => void,
   size = 200,
 ): Promise<void> {
   for (let i = 0; i < items.length; i += size) {
@@ -243,8 +244,8 @@ export async function inBatches<T>(
 
 /** Every document of a query, paged (for board-wide sweeps). */
 export async function allDocs<T>(q: Query<T>, page = 500) {
-  const out: FirebaseFirestore.QueryDocumentSnapshot<T>[] = [];
-  let cursor: FirebaseFirestore.QueryDocumentSnapshot<T> | undefined;
+  const out: QueryDocumentSnapshot<T>[] = [];
+  let cursor: QueryDocumentSnapshot<T> | undefined;
   for (;;) {
     let qq = q.orderBy('__name__').limit(page);
     if (cursor) qq = qq.startAfter(cursor);

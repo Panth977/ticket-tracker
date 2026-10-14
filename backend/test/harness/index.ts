@@ -12,7 +12,7 @@
  * use uniq() ids rather than wiping the database.
  */
 import './env.js';
-import type { Query } from 'firebase-admin/firestore';
+import type { Query } from '../../src/db/index.js';
 import { afterEach, beforeAll } from 'vitest';
 import {
   ports,

@@ -50,6 +50,7 @@ import {
 import { deriveAccess } from '../commands/boardShared.js';
 import { agentKeyDoc, mintApiKey } from '../platform/apiKeyMint.js';
 import { db } from '../runtime/firebase.js';
+import type { WriteBatch } from '../db/index.js';
 
 /** A stored key row as it may be found (older rows lack newer fields). */
 type StoredKey = Partial<ApiKey>;
@@ -225,7 +226,7 @@ export async function applyAgentTokenMigration(
   const fs = db();
   const inBatches = async <T>(
     items: readonly T[],
-    add: (b: FirebaseFirestore.WriteBatch, item: T) => void,
+    add: (b: WriteBatch, item: T) => void,
   ) => {
     for (let i = 0; i < items.length; i += 400) {
       const b = fs.batch();

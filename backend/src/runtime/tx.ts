@@ -10,7 +10,7 @@
  *   });
  *   await notify('created', ticket, ctx);
  */
-import type { DocumentReference, Transaction } from 'firebase-admin/firestore';
+import type { DocumentReference, Transaction } from '../db/index.js';
 import { errors, type AppErrorCode } from '@tm/shared';
 import { db } from './firebase.js';
 

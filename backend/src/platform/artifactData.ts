@@ -46,7 +46,7 @@ import {
   GeoPoint,
   Timestamp,
   type Query,
-} from 'firebase-admin/firestore';
+} from '../db/index.js';
 import { ServerValue } from 'firebase-admin/database';
 import {
   ARTIFACT_FILE_LIST_MAX,
@@ -79,6 +79,7 @@ import { objectLink, objectOf } from '../artifacts/files.js';
 import { assertNotArchived, fenced, loadArtifact } from '../artifacts/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { db, rtdbAdmin, storageAdmin } from '../runtime/firebase.js';
+import type { DocumentSnapshot } from '../db/index.js';
 
 // ─── who ─────────────────────────────────────────────────────────────────────
 
@@ -199,7 +200,7 @@ const colRef = (artifactId: string, path: unknown) =>
 
 function toDoc(
   artifactId: string,
-  snap: FirebaseFirestore.DocumentSnapshot,
+  snap: DocumentSnapshot,
 ): ArtifactDataDoc {
   return {
     id: snap.id,

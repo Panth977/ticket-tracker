@@ -30,3 +30,7 @@ pubsub-debug.log*
 # scripts/migrate-agent-tokens.mjs (§AA6): the ONE place a minted agent token secret is written
 .agent-tokens/
 /frontend/mcp-ui/dist/
+
+# TM_DB=sqlite default store (src/db/sqlite): ./data/db under the working directory
+/backend/data/
+/data/

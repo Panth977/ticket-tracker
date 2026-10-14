@@ -13,7 +13,7 @@
  * Tickets that #mention this one keep their text; their `refs` entry now
  * resolves to a tombstoned key.
  */
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../db/index.js';
 import { COLLECTIONS, errors, paths, storage, type BoardPref, type KeyIndex } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { typedDoc } from '../runtime/converters.js';

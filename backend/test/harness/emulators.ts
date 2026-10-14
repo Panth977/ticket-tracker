@@ -27,6 +27,12 @@ export async function assertEmulators(): Promise<void> {
  * owns the whole database.
  */
 export async function clearFirestore(): Promise<void> {
+  if (process.env.TM_DB === 'sqlite') {
+    // The database port's SQLite store (TM_DB=sqlite): same wipe, same callers.
+    const { sqliteDb } = await import('../../src/db/sqlite/index.js');
+    sqliteDb().wipe();
+    return;
+  }
   const res = await fetch(
     `http://${FIRESTORE_HOST}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`,
     {

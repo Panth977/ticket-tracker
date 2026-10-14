@@ -42,6 +42,7 @@ import type { ServerCtx } from '../runtime/context.js';
 import { auth, db } from '../runtime/firebase.js';
 import { toAppError } from '../runtime/runner.js';
 import { requireCan } from '../tickets/access.js';
+import type { Query } from '../db/index.js';
 
 /** Covered by a friendlier hand-written tool in mcp.ts (names, not ids). */
 const COVERED = new Set<CommandName>([
@@ -276,7 +277,7 @@ const run =
 
 const hasAny = (ctx: ServerCtx, want: readonly Scope[]) =>
   !ctx.scopes || want.some((s) => ctx.scopes!.includes(s));
-const docs = async (q: FirebaseFirestore.Query) =>
+const docs = async (q: Query) =>
   (await q.get()).docs.map((d) => ({ id: d.id, ...(scrub(d.data()) as object) }));
 
 const boardArg = z

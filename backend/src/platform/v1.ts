@@ -82,6 +82,7 @@ import {
 import { decodeCursor, encodeCursor, markdownIn, peopleUids, readableBoards } from './resolve.js';
 import { requireFileRead } from './fileAccess.js';
 import { memoryRefsIn } from '../memory/refs.js';
+import type { DocumentSnapshot, QueryDocumentSnapshot } from '../db/index.js';
 
 /** The API key behind a ctx, when one authenticated the request (middleware/apiKey.ts). */
 export const apiKeyOf = (ctx: ServerCtx): ApiKeyInfo | null =>
@@ -681,7 +682,7 @@ export async function ackEvents(
   }
   const boards = new Set((await readableBoards(ctx, { includeArchived: true })).map((b) => b.id));
   const col = db().collection(paths.inbox(ctx.actor));
-  let rows: FirebaseFirestore.QueryDocumentSnapshot[] | FirebaseFirestore.DocumentSnapshot[];
+  let rows: QueryDocumentSnapshot[] | DocumentSnapshot[];
   if (a.ids) {
     rows = (
       await db().getAll(...a.ids.filter((id) => !id.includes('/')).map((id) => col.doc(id)))

@@ -9,7 +9,7 @@
  *   upTo  every unacked event whose id ≤ upTo — event ids sort by time
  *         (agentEventId), so the feed cursor doubles as the bound.
  */
-import { FieldPath } from 'firebase-admin/firestore';
+import { FieldPath } from '../db/index.js';
 import { errors, isAgentId, paths } from '@tm/shared';
 import { loadOwnAgent } from '../agents/shared.js';
 import { inBatches } from './boardShared.js';

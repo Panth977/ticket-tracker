@@ -75,6 +75,7 @@ import { sha256hex } from '../platform/crypto.js';
 import { rateLimit } from '../platform/rateLimit.js';
 import { makeCtx, type ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
+import type { DocumentSnapshot } from '../db/index.js';
 
 /** lastUsedAt is refreshed at most once a minute (a write per call would be a hot document). */
 export const LAST_USED_EVERY_MS = 60_000;
@@ -146,8 +147,8 @@ export async function resolveApiKey(
   const hash = sha256hex(token);
   const place = keyPlaces.get(token);
   /** Read in the same round trip as the key when we know where they are. */
-  let prefetched: Map<string, FirebaseFirestore.DocumentSnapshot> | null = null;
-  let doc: FirebaseFirestore.DocumentSnapshot | undefined;
+  let prefetched: Map<string, DocumentSnapshot> | null = null;
+  let doc: DocumentSnapshot | undefined;
   if (place) {
     const refs = [
       db().doc(paths.apiKey(place.ownerUid, place.keyId)),

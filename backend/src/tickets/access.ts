@@ -6,7 +6,7 @@
  * exist. Only an actor who CAN read the board learns 403 for what they may
  * not do.
  */
-import type { DocumentReference } from 'firebase-admin/firestore';
+import type { DocumentReference } from '../db/index.js';
 import { can, type Action, type CanCtx, type CanTicket } from '@tm/shared/logic/index';
 import {
   errors,

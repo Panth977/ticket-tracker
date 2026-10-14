@@ -4,7 +4,7 @@
  * real MCP client does it.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../../src/db/index.js';
 import {
   paths,
   type Agent,

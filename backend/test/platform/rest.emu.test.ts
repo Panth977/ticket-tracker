@@ -4,7 +4,7 @@
  * are in agent-api.emu.test.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../../src/db/index.js';
 import { paths, SCOPE_PRESETS, type ApiKey, type Ticket } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { call, createUser, setupEmulators } from '../harness/index.js';

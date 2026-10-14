@@ -31,6 +31,7 @@ import { typedDoc } from '../runtime/converters.js';
 import { db } from '../runtime/firebase.js';
 import { base62, safeEqual, sha256b64url, sha256hex } from './crypto.js';
 import { revokeGrantTokens } from './grants.js';
+import type { Transaction } from '../db/index.js';
 
 /** RFC 6749 §5.2 error, answered as { error, error_description } (not problem+json). */
 export class OAuthError extends Error {
@@ -188,7 +189,7 @@ export interface TokenPair {
 }
 
 function mintPair(
-  tx: FirebaseFirestore.Transaction,
+  tx: Transaction,
   base: Omit<TokenRow, 'kind' | 'expiresAt'>,
   now: number,
 ): TokenPair {

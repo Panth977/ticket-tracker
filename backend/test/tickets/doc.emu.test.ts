@@ -46,6 +46,13 @@ const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 
 /** The migration, as a real `node scripts/…` run against the emulator. */
+/**
+ * scripts/migrate-ticket-doc.mjs is a one-off Firestore migration (it opens
+ * Firestore itself, not the database port), so the cases that run it only
+ * mean something on the Firestore store.
+ */
+const itFirestore = it.skipIf(process.env.TM_DB === 'sqlite');
+
 async function migrate(...args: string[]): Promise<string> {
   const { stdout } = await run(
     process.execPath,
@@ -178,7 +185,7 @@ describe('the ticket IS the thread (§W)', () => {
 });
 
 describe('the spill (§W)', () => {
-  it('2,000 messages page correctly and read back in order', async () => {
+  itFirestore('2,000 messages page correctly and read back in order', async () => {
     spyPorts();
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha });
@@ -306,116 +313,119 @@ describe('the spill (§W)', () => {
 });
 
 describe('scripts/migrate-ticket-doc.mjs', () => {
-  it('folds the old subcollections in, verifies, prunes — and is a no-op twice', async () => {
-    spyPorts();
-    const { asha } = await people('asha');
-    const b = await seedBoard({ admin: asha });
-    const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Legacy' });
-    const at = paths.ticket(b.id, ticketId);
-    const now = Date.now() - 10_000;
+  itFirestore(
+    'folds the old subcollections in, verifies, prunes — and is a no-op twice',
+    async () => {
+      spyPorts();
+      const { asha } = await people('asha');
+      const b = await seedBoard({ admin: asha });
+      const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Legacy' });
+      const at = paths.ticket(b.id, ticketId);
+      const now = Date.now() - 10_000;
 
-    // A ticket as phase 14 left it: four subcollections, no §W fields.
-    const message: Message = {
-      kind: 'comment',
-      body: {
-        doc: { type: 'doc', content: [] },
-        text: 'from the old world',
-        mentions: [],
-        refs: [],
-      },
-      authorUid: asha.uid,
-      authorName: 'Asha',
-      via: 'app',
-      replyTo: null,
-      attachments: [],
-      reactions: {},
-      pinnedAt: null,
-      pinnedBy: null,
-      editedAt: null,
-      deletedAt: null,
-      createdAt: now,
-    };
-    const activity: Activity = {
-      action: 'update',
-      changes: { title: { from: 'a', to: 'b' } },
-      actor: asha.uid,
-      via: 'app',
-      createdAt: now + 1,
-    };
-    const file: TicketFile = {
-      id: 'att_old',
-      path: `boards/${b.id}/tickets/${ticketId}/att_old/old.txt`,
-      name: 'old.txt',
-      mime: 'text/plain',
-      size: 3,
-      uploadedBy: asha.uid,
-      source: 'message',
-      messageId: 'm_old',
-      createdAt: now,
-      deletedAt: null,
-    };
-    const list: StoredTasklist = {
-      id: 'tl_old',
-      title: 'Old plan',
-      owner: asha.uid,
-      items: [{ id: 'i1', title: 'one', status: 'done', updatedAt: now }],
-      position: 0,
-      createdAt: now,
-      updatedAt: now,
-      closedAt: null,
-    };
-    const { id: _listId, ...listDoc } = list;
-    const seed = db().batch();
-    seed.set(db().doc(`${at}/messages/m_old`), message);
-    seed.set(db().doc(`${at}/activity/a_old`), activity);
-    seed.set(db().doc(`${at}/files/att_old`), file);
-    seed.set(db().doc(`${at}/tasklists/tl_old`), listDoc);
-    seed.update(db().doc(at), {
-      recentMessages: [],
-      recentActivity: [],
-      files: [],
-      fileIds: [],
-      tasklists: [],
-      signals: null,
-      counts: { messages: 0, files: 0, pinned: 0 },
-    });
-    await seed.commit();
+      // A ticket as phase 14 left it: four subcollections, no §W fields.
+      const message: Message = {
+        kind: 'comment',
+        body: {
+          doc: { type: 'doc', content: [] },
+          text: 'from the old world',
+          mentions: [],
+          refs: [],
+        },
+        authorUid: asha.uid,
+        authorName: 'Asha',
+        via: 'app',
+        replyTo: null,
+        attachments: [],
+        reactions: {},
+        pinnedAt: null,
+        pinnedBy: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: now,
+      };
+      const activity: Activity = {
+        action: 'update',
+        changes: { title: { from: 'a', to: 'b' } },
+        actor: asha.uid,
+        via: 'app',
+        createdAt: now + 1,
+      };
+      const file: TicketFile = {
+        id: 'att_old',
+        path: `boards/${b.id}/tickets/${ticketId}/att_old/old.txt`,
+        name: 'old.txt',
+        mime: 'text/plain',
+        size: 3,
+        uploadedBy: asha.uid,
+        source: 'message',
+        messageId: 'm_old',
+        createdAt: now,
+        deletedAt: null,
+      };
+      const list: StoredTasklist = {
+        id: 'tl_old',
+        title: 'Old plan',
+        owner: asha.uid,
+        items: [{ id: 'i1', title: 'one', status: 'done', updatedAt: now }],
+        position: 0,
+        createdAt: now,
+        updatedAt: now,
+        closedAt: null,
+      };
+      const { id: _listId, ...listDoc } = list;
+      const seed = db().batch();
+      seed.set(db().doc(`${at}/messages/m_old`), message);
+      seed.set(db().doc(`${at}/activity/a_old`), activity);
+      seed.set(db().doc(`${at}/files/att_old`), file);
+      seed.set(db().doc(`${at}/tasklists/tl_old`), listDoc);
+      seed.update(db().doc(at), {
+        recentMessages: [],
+        recentActivity: [],
+        files: [],
+        fileIds: [],
+        tasklists: [],
+        signals: null,
+        counts: { messages: 0, files: 0, pinned: 0 },
+      });
+      await seed.commit();
 
-    // Dry run writes nothing.
-    const dry = await migrate('--board', b.id);
-    expect(dry).toContain('DRY RUN');
-    expect((await T(b.id, ticketId)).recentMessages).toEqual([]);
+      // Dry run writes nothing.
+      const dry = await migrate('--board', b.id);
+      expect(dry).toContain('DRY RUN');
+      expect((await T(b.id, ticketId)).recentMessages).toEqual([]);
 
-    await migrate('--apply', '--board', b.id);
-    let t = await T(b.id, ticketId);
-    expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
-    expect(t.recentActivity!.map((a) => a.id)).toEqual(['a_old']);
-    expect(t.files!.map((f) => f.id)).toEqual(['att_old']);
-    expect(t.tasklists!.map((l) => l.id)).toEqual(['tl_old']);
-    expect(t.counts).toMatchObject({ messages: 1, files: 1, pinned: 0 });
-    expect(t.signals).toMatchObject({ messageCount: 1, fileCount: 1 });
-    expect(t.tasklistProgress).toEqual({ done: 1, total: 1 });
+      await migrate('--apply', '--board', b.id);
+      let t = await T(b.id, ticketId);
+      expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
+      expect(t.recentActivity!.map((a) => a.id)).toEqual(['a_old']);
+      expect(t.files!.map((f) => f.id)).toEqual(['att_old']);
+      expect(t.tasklists!.map((l) => l.id)).toEqual(['tl_old']);
+      expect(t.counts).toMatchObject({ messages: 1, files: 1, pinned: 0 });
+      expect(t.signals).toMatchObject({ messageCount: 1, fileCount: 1 });
+      expect(t.tasklistProgress).toEqual({ done: 1, total: 1 });
 
-    // Folding twice changes nothing (the marker makes it a skip).
-    const second = await migrate('--apply', '--board', b.id);
-    expect(second).toContain('folded 0');
-    t = await T(b.id, ticketId);
-    expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
+      // Folding twice changes nothing (the marker makes it a skip).
+      const second = await migrate('--apply', '--board', b.id);
+      expect(second).toContain('folded 0');
+      t = await T(b.id, ticketId);
+      expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
 
-    // Pass 2 verifies, then deletes.
-    await migrate('--prune', '--apply', '--board', b.id);
-    for (const sub of ['messages', 'activity', 'files', 'tasklists'])
-      expect((await db().collection(`${at}/${sub}`).get()).size).toBe(0);
-    expect(await msgsOf(b.id, ticketId)).toHaveLength(1);
-    expect(await actsOf(b.id, ticketId)).toHaveLength(1);
-    expect(await filesOf(b.id, ticketId)).toHaveLength(1);
-    expect(await listsOf(b.id, ticketId)).toHaveLength(1);
+      // Pass 2 verifies, then deletes.
+      await migrate('--prune', '--apply', '--board', b.id);
+      for (const sub of ['messages', 'activity', 'files', 'tasklists'])
+        expect((await db().collection(`${at}/${sub}`).get()).size).toBe(0);
+      expect(await msgsOf(b.id, ticketId)).toHaveLength(1);
+      expect(await actsOf(b.id, ticketId)).toHaveLength(1);
+      expect(await filesOf(b.id, ticketId)).toHaveLength(1);
+      expect(await listsOf(b.id, ticketId)).toHaveLength(1);
 
-    // …and a third run of either pass is a no-op that keeps the fold.
-    await migrate('--apply', '--board', b.id);
-    await migrate('--prune', '--apply', '--board', b.id);
-    t = await T(b.id, ticketId);
-    expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
-    expect(t.counts.messages).toBe(1);
-  });
+      // …and a third run of either pass is a no-op that keeps the fold.
+      await migrate('--apply', '--board', b.id);
+      await migrate('--prune', '--apply', '--board', b.id);
+      t = await T(b.id, ticketId);
+      expect(t.recentMessages!.map((m) => m.id)).toEqual(['m_old']);
+      expect(t.counts.messages).toBe(1);
+    },
+  );
 });

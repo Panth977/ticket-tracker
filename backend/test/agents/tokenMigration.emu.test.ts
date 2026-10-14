@@ -51,7 +51,7 @@ describe('§AA6 migrate-agent-tokens', () => {
     const mine = await call(owner, 'apiKeyCreate', { name: 'me', boardId: eng.id, scopes: ['board:read'] });
 
     // Boards and an artifact as they were written BEFORE §AA: no agentIds, the literal 'editor'.
-    const { FieldValue } = await import('firebase-admin/firestore');
+    const { FieldValue } = await import('../../src/db/index.js');
     await db().doc(paths.board(eng.id)).update({ agentIds: FieldValue.delete() });
     await db().doc(paths.board(ops.id)).update({ agentIds: FieldValue.delete() });
     const { artifactId } = await call(owner, 'artifactCreate', { name: 'Old dashboard' });

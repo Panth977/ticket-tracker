@@ -9,7 +9,7 @@
  * transaction. A person with no prefs doc yet gets one with the defaults.
  * Watching is allowed on closed tickets (you may want to know if it is restored).
  */
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../db/index.js';
 import { isAgentId, paths, type BoardPref } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';

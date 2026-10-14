@@ -32,7 +32,7 @@ import {
 } from '@tm/shared';
 import { descriptionText } from '@tm/shared/logic/index';
 import { indicatorColor } from '@tm/shared';
-import type { DocumentReference } from 'firebase-admin/firestore';
+import type { DocumentReference } from '../db/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
 import { db } from '../runtime/firebase.js';

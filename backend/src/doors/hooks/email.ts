@@ -11,7 +11,7 @@
  * works under the emulators (dev); in production it answers 401.
  * A mismatch → 401 and the body is never logged.
  */
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../../db/index.js';
 import { errors, paths } from '@tm/shared';
 import { ports } from '../../adapters/index.js';
 import { door } from '../../http/mounts.js';

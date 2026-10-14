@@ -12,7 +12,7 @@
  * ticket (and its last messages) at handling time makes every run converge
  * on the present state, so a duplicate or reordered event is harmless.
  */
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from '../db/index.js';
 import { COLLECTIONS, paths, type SearchIndex } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { typedDoc } from '../runtime/converters.js';

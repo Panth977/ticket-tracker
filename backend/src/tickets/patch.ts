@@ -8,7 +8,7 @@
  * and a custom field at once both land. Used by ticketUpdate (inside its
  * transaction) and ticketBulk (batched).
  */
-import { FieldPath, FieldValue } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue } from '../db/index.js';
 import type {
   BoardWithId,
   FieldValue as TmFieldValue,

@@ -24,7 +24,7 @@
  * board that still claims overdue tickets: time makes a ticket overdue and no
  * write would notice.
  */
-import { FieldPath, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { FieldPath, type QueryDocumentSnapshot } from '../db/index.js';
 import {
   parseTicketPath,
   paths,

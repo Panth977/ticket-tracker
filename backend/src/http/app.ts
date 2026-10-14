@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { errors } from '@tm/shared';
 import { autoload } from '../runtime/autoload.js';
+import { installDbTriggers } from '../runtime/dbTriggers.js';
 import { ports } from '../adapters/index.js';
 import { registeredCommandNames, unimplementedCommands } from '../commands/_registry.js';
 import { isEmulated } from '../runtime/firebase.js';
@@ -47,7 +48,14 @@ export function buildApp(): Hono<AppEnv> {
 
 let appPromise: Promise<Hono<AppEnv>> | undefined;
 
-/** Load every handler / door module, then build the app (once per process). */
+/**
+ * Load every handler / door module, then build the app (once per process).
+ * On a store without managed triggers (SQLite) this process also delivers
+ * the document triggers (runtime/dbTriggers.ts).
+ */
 export function createApp(): Promise<Hono<AppEnv>> {
-  return (appPromise ??= autoload().then(buildApp));
+  return (appPromise ??= autoload().then(() => {
+    installDbTriggers();
+    return buildApp();
+  }));
 }

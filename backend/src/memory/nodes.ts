@@ -20,10 +20,11 @@ import {
   type MemoryNode,
   type PrincipalId,
 } from '@tm/shared';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '../db/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { nodeRef, nodesCol, rawMemoryRef } from './shared.js';
+import type { DocumentReference } from '../db/index.js';
 
 export interface Found {
   id: string;
@@ -172,7 +173,7 @@ export function writeParents(tx: Tx, memoryId: string, plan: ParentPlan): void {
 /** Bump the memory's counters (and updatedAt) in the same transaction / batch. */
 export function bumpStats(
   w: {
-    update: (ref: FirebaseFirestore.DocumentReference, data: Record<string, unknown>) => unknown;
+    update: (ref: DocumentReference, data: Record<string, unknown>) => unknown;
   },
   memoryId: string,
   d: { files?: number; folders?: number; bytes?: number },

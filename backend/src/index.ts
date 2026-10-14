@@ -28,6 +28,7 @@ import { onTaskDispatched, type Request, type TaskQueueOptions } from 'firebase-
 import type { QueueName, QueuePayloads } from '@tm/shared';
 import { createApp } from './http/app.js';
 import { autoloadSync } from './runtime/autoload.js';
+import { DOC_TRIGGERS } from './runtime/dbTriggers.js';
 import { boundSecrets, region, withServerSecrets } from './runtime/deploy.js';
 import {
   getScheduleHandler,
@@ -159,10 +160,10 @@ function trig<T extends TriggerName>(name: T, wrap: (h: TriggerHandlers[T]) => u
 }
 
 export const onTicketWritten = trig('onTicketWritten', (h) =>
-  onDocumentWritten('boards/{boardId}/tickets/{ticketId}', h),
+  onDocumentWritten(DOC_TRIGGERS.onTicketWritten, h),
 );
 export const onMessageWritten = trig('onMessageWritten', (h) =>
-  onDocumentWritten('boards/{boardId}/tickets/{ticketId}/messages/{messageId}', h),
+  onDocumentWritten(DOC_TRIGGERS.onMessageWritten, h),
 );
 export const onAttachmentFinalized = trig('onAttachmentFinalized', (h) =>
   onObjectFinalized({ memory: '1GiB' }, h),

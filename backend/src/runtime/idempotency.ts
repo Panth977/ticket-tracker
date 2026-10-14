@@ -15,7 +15,7 @@
  * reaps records after 24h; until the reaper runs, expired records are
  * treated as absent here.
  */
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from '../db/index.js';
 import { errors, paths } from '@tm/shared';
 import { db } from './firebase.js';
 

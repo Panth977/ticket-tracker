@@ -15,7 +15,7 @@
  *   answerBubble    the person's reply bubble that a submitted answer posts
  *   expireQuestions the sweep that locks questions whose expiresAt has passed
  */
-import type { Query } from 'firebase-admin/firestore';
+import type { Query } from '../db/index.js';
 import {
   COLLECTIONS,
   isAgentId,

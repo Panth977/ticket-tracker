@@ -23,7 +23,7 @@ import {
   type QueryDocumentSnapshot,
   type SetOptions,
   type WithFieldValue,
-} from 'firebase-admin/firestore';
+} from '../db/index.js';
 import { DOC_SCHEMAS, type DocName, type DocOf } from '@tm/shared';
 import type { z } from 'zod';
 import { db, isEmulated } from './firebase.js';

@@ -11,7 +11,7 @@
  * The query reads one map key (boards.<boardId>), which Firestore indexes on
  * its own; deleted artifacts are left out.
  */
-import { FieldPath } from 'firebase-admin/firestore';
+import { FieldPath } from '../db/index.js';
 import { errors, indicatorOf, isAgentId } from '@tm/shared';
 import { artifactsCol } from '../artifacts/shared.js';
 import { defineCommand } from './_registry.js';

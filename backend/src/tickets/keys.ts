@@ -12,7 +12,7 @@
  * tx.create means a key can never be issued twice: a tombstoned or
  * redirected keys/ doc makes the transaction fail rather than overwrite it.
  */
-import type { DocumentReference } from 'firebase-admin/firestore';
+import type { DocumentReference } from '../db/index.js';
 import { paths, type Board, type KeyIndex, type TicketKey } from '@tm/shared';
 import { ticketKey } from '@tm/shared/logic/index';
 import { typedDoc } from '../runtime/converters.js';

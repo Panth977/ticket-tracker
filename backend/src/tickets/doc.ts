@@ -23,7 +23,7 @@
  * (openTicket, locateMessage, loadPage) belongs to the read phase; the rest is
  * synchronous staging and commit() is the only write.
  */
-import { type Transaction, type WriteBatch } from 'firebase-admin/firestore';
+import { type Transaction, type WriteBatch } from '../db/index.js';
 import {
   byTime,
   docBytes,

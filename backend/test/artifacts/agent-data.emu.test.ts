@@ -12,7 +12,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from '../../src/db/index.js';
 import { describe, expect, it } from 'vitest';
 import {
   ARTIFACT_UPLOAD_MAX_BYTES,
