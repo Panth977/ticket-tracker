@@ -133,7 +133,7 @@ export function webPush(fetchImpl: typeof fetch = fetch): PushSender {
                 ttl: '86400',
                 urgency: 'high',
               },
-              body: encryptPayload(sub, payload),
+              body: new Uint8Array(encryptPayload(sub, payload)),
             });
             if (res.ok) return { token, ok: true, providerId: res.headers.get('location') };
             const gone = res.status === 404 || res.status === 410;
