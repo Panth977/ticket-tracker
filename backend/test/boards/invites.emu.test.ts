@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { paths, rateBuckets, rtdb, type InboxItem, type Invite } from '@tm/shared';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { devOutbox, fixedClock, setPorts, setupEmulators } from '../harness/index.js';
 import {
   addMember,
@@ -137,7 +138,7 @@ describe('inviteCreate', () => {
     const alice = await createUser();
     const { boardId } = await newBoard(alice);
     const day = Math.floor(Date.now() / 86_400_000);
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(rtdb.rate(rateBuckets.invites(alice.uid), day))
       .set(49);
     await expect(

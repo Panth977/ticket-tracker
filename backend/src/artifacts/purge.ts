@@ -17,7 +17,8 @@
 import { artifactPrefix, COLLECTIONS, paths } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { inBatches } from '../commands/boardShared.js';
-import { db, rtdbAdmin } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 import { artifactPath, artifactRef, buildsPath } from './shared.js';
 
 export async function purgeArtifactData(artifactId: string): Promise<void> {
@@ -26,7 +27,7 @@ export async function purgeArtifactData(artifactId: string): Promise<void> {
   // it; deleting the `db` collection recursively takes all of them.
   await db().recursiveDelete(db().collection(`${root}/db`));
   await db().recursiveDelete(db().collection(`${root}/${COLLECTIONS.viewers}`));
-  await rtdbAdmin().ref(artifactPrefix.rtdb(artifactId)).remove();
+  await realtimeDb().ref(artifactPrefix.rtdb(artifactId)).remove();
   await ports().files.deletePrefix(`${artifactPrefix.storageFiles(artifactId)}/`);
 }
 
@@ -35,7 +36,7 @@ export async function purgeArtifact(artifactId: string): Promise<void> {
   await db().recursiveDelete(db().collection(buildsPath(artifactId)));
   // builds/, source/, uploads/ — and files/ again, harmlessly.
   await ports().files.deletePrefix(artifactPrefix.storageAll(artifactId));
-  const r = rtdbAdmin();
+  const r = realtimeDb();
   await Promise.all([
     r.ref(artifactPrefix.rtdbReaders(artifactId)).remove(),
     r.ref(artifactPrefix.rtdbFlags(artifactId)).remove(),

@@ -1,6 +1,7 @@
 /** Shared setup for the cmd-boards emulator tests. */
 import { paths, rtdb, type Board, type BoardMember, type View } from '@tm/shared';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { call, createUser, uniq, type TestUser } from '../harness/index.js';
 
 /** A fresh, unique board key (2–6 chars, A–Z then A–Z/0–9). */
@@ -27,7 +28,7 @@ export async function getViews(boardId: string): Promise<(View & { id: string })
 }
 
 export async function readers(boardId: string): Promise<Record<string, true> | null> {
-  const s = await rtdbAdmin().ref(rtdb.boardReaders(boardId)).get();
+  const s = await realtimeDb().ref(rtdb.boardReaders(boardId)).get();
   return s.exists() ? (s.val() as Record<string, true>) : null;
 }
 

@@ -21,7 +21,8 @@ import {
 } from '@tm/shared';
 import { agentSilenceSweep, LIVE_STATUS_TTL_MS } from '../../src/agents/silence.js';
 import { bumpsBoardRev } from '../../src/platform/rtdbPaths.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { call, setupEmulators } from '../harness/index.js';
 import { listDocs, people, seedBoard, spyPorts } from '../tickets/helpers.js';
 import {
@@ -160,7 +161,7 @@ describe('agentHeartbeat → the RTDB', () => {
     // each other.
     expect(await liveStatus(sc.boardId, sc.agent.id, sc.ticketId)).toBeNull();
     expect(
-      (await rtdbAdmin().ref(live.agentStatus(sc.boardId, sc.agent.id)).get()).val(),
+      (await realtimeDb().ref(live.agentStatus(sc.boardId, sc.agent.id)).get()).val(),
     ).toHaveProperty('_');
   });
 
@@ -251,9 +252,9 @@ describe('rev/{boardId} — the board revision', () => {
     spyPorts();
     const { asha } = await people('asha');
     // agentCreate has no boardId: there is no board to tell.
-    const revBefore = (await rtdbAdmin().ref(live.revRoot()).get()).val();
+    const revBefore = (await realtimeDb().ref(live.revRoot()).get()).val();
     await makeAgent(asha, {});
-    expect((await rtdbAdmin().ref(live.revRoot()).get()).val()).toEqual(revBefore);
+    expect((await realtimeDb().ref(live.revRoot()).get()).val()).toEqual(revBefore);
   });
 });
 

@@ -27,7 +27,8 @@ import {
   type Scope,
 } from '@tm/shared';
 import { createApp } from '../../src/http/app.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { storageBucket } from '../../src/blob/index.js';
 import { makeAgent } from '../agents/helpers.js';
 import { newBoard } from '../boards/helpers.js';
@@ -50,7 +51,7 @@ const artifactDoc = async (id: string) =>
 const fsDoc = async (id: string, path: string) =>
   (await db().doc(artifactFirestoreDoc(id, path)).get()).data();
 const rtVal = async (id: string, path: string) =>
-  (await rtdbAdmin().ref(artifactRtdbPath(id, path)).get()).val() as unknown;
+  (await realtimeDb().ref(artifactRtdbPath(id, path)).get()).val() as unknown;
 const data = (id: string, rest_: string) => `/v1/artifacts/${id}/data/${rest_}`;
 
 function accountKey(user: TestUser, scopes: Scope[] = ['artifacts:read', 'artifacts:write']) {
@@ -191,7 +192,7 @@ describe('§AA3 on an artifact: build and data, separately', () => {
     const owner = await createUser();
     const id = await newArtifact(owner);
     await db().doc(artifactFirestoreDoc(id, 'scores/a')).set({ n: 1 });
-    await rtdbAdmin().ref(artifactRtdbPath(id, 'live/count')).set(7);
+    await realtimeDb().ref(artifactRtdbPath(id, 'live/count')).set(7);
     const { key } = await agentOn(owner, id, { build: false, data: 'read' });
 
     expect((await rest(key, 'GET', data(id, 'firestore/scores/a'))).body).toMatchObject({
@@ -670,7 +671,7 @@ describe('§AA4 Realtime Database', () => {
     expect((await rest(key, 'DELETE', rt('game'))).body).toEqual({ ok: true });
     expect(await rtVal(id, 'game')).toBe(null);
     // Nothing was written outside artifactData/{id}.
-    expect((await rtdbAdmin().ref('x').get()).val()).toBe(null);
+    expect((await realtimeDb().ref('x').get()).val()).toBe(null);
   });
 });
 

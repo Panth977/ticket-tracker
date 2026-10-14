@@ -31,7 +31,7 @@
  * moment a bucket approaches its limit every call is checked again.
  */
 import { errors, rtdb } from '@tm/shared';
-import { rtdbAdmin } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 
 export interface Limits {
   perMin?: number;
@@ -97,7 +97,7 @@ export async function rateLimit(bucket: string, limits: Limits, now: number): Pr
     if (!strict && cur.pending < RECONCILE_EVERY) return;
     const add = cur.pending;
     cur.pending = 0;
-    const ref = rtdbAdmin().ref(rtdb.rate(bucket, `${w.prefix}${idx}`));
+    const ref = realtimeDb().ref(rtdb.rate(bucket, `${w.prefix}${idx}`));
     const res = await ref.transaction(
       (shared: number | null) => {
         const n = typeof shared === 'number' ? shared : 0;

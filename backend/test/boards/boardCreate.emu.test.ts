@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { paths, rateBuckets, rtdb } from '@tm/shared';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { setupEmulators } from '../harness/index.js';
 import {
   addMember,
@@ -140,7 +141,7 @@ describe('boardCreate', () => {
   it('rate limit: 10 boards per person per day → 429', async () => {
     const u = await createUser();
     const day = Math.floor(Date.now() / 86_400_000);
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(rtdb.rate(rateBuckets.boardCreates(u.uid), day))
       .set(10);
     await expect(call(u, 'boardCreate', { name: 'X', key: uniqKey() })).rejects.toMatchObject({
@@ -156,7 +157,7 @@ describe('boardCreate', () => {
     });
     const day = Math.floor(Date.now() / 86_400_000);
     const n = (
-      await rtdbAdmin()
+      await realtimeDb()
         .ref(rtdb.rate(rateBuckets.boardCreates(u.uid), day))
         .get()
     ).val();

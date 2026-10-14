@@ -14,7 +14,8 @@
  */
 import { paths, rtdb, storage, type Ticket } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { db, rtdbAdmin } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 import { clearBoardLive } from '../platform/rtdbPaths.js';
 import { defineTask } from '../runtime/functions.js';
 import { allDocs, inBatches } from './boardShared.js';
@@ -57,7 +58,7 @@ export async function purgeBoard(boardId: string): Promise<void> {
   await ports()
     .files.deletePrefix(storage.boardPrefix(boardId))
     .catch((e) => console.warn(`[boardDelete] storage cleanup for ${boardId} failed`, e));
-  const r = rtdbAdmin();
+  const r = realtimeDb();
   await Promise.all([
     r.ref(rtdb.presenceBoard(boardId)).remove(),
     r.ref(`typing/${boardId}`).remove(),

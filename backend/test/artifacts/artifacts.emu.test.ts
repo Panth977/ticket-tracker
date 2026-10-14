@@ -29,7 +29,8 @@ import {
 } from '@tm/shared';
 import { artifactHousekeeping } from '../../src/artifacts/housekeeping.js';
 import { createApp } from '../../src/http/app.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { storageBucket } from '../../src/blob/index.js';
 import { newBoard } from '../boards/helpers.js';
 import {
@@ -61,11 +62,11 @@ const buildDoc = async (id: string, b: string) =>
 const stored = async (prefix: string) =>
   (await bucket().getFiles({ prefix }))[0].map((f) => f.name).sort();
 const mirror = async (id: string) => ({
-  readers: (await rtdbAdmin().ref(artifactPrefix.rtdbReaders(id)).get()).val() as Record<
+  readers: (await realtimeDb().ref(artifactPrefix.rtdbReaders(id)).get()).val() as Record<
     string,
     string
   > | null,
-  flags: (await rtdbAdmin().ref(artifactPrefix.rtdbFlags(id)).get()).val() as {
+  flags: (await realtimeDb().ref(artifactPrefix.rtdbFlags(id)).get()).val() as {
     readOnly: boolean;
     archived: boolean;
   } | null,
@@ -1106,7 +1107,7 @@ describe('the delete queue', () => {
     await db()
       .doc(artifactKvDoc(id, viewer.uid, 'theme'))
       .set({ value: 'dark', updatedAt: 1 });
-    await rtdbAdmin().ref(artifactRtdbPath(id, '/counter')).set(7);
+    await realtimeDb().ref(artifactRtdbPath(id, '/counter')).set(7);
     await bucket()
       .file(artifactStorageFile(id, '/pics/cat.png'))
       .save(Buffer.from('png'), { resumable: false });
@@ -1116,7 +1117,7 @@ describe('the delete queue', () => {
   const dataLeft = async (id: string) => ({
     doc: (await db().doc(artifactFirestoreDoc(id, '/my/doc')).get()).exists,
     deep: (await db().doc(artifactFirestoreDoc(id, '/my/doc/items/deep')).get()).exists,
-    rtdb: (await rtdbAdmin().ref(artifactPrefix.rtdb(id)).get()).exists(),
+    rtdb: (await realtimeDb().ref(artifactPrefix.rtdb(id)).get()).exists(),
     files: (await stored(`${artifactPrefix.storageFiles(id)}/`)).length,
   });
 
@@ -1224,7 +1225,7 @@ describe('housekeeping', () => {
       // Roll back to the OLDEST build: it is beyond the newest ten and must survive.
       await call(owner, 'artifactSetCurrent', { artifactId: id, buildId: builds[0]! });
       const stale = await upload(id, makeZip(SITE));
-      await rtdbAdmin().ref(artifactPrefix.rtdbReaders(id)).remove(); // a mirror write that was lost
+      await realtimeDb().ref(artifactPrefix.rtdbReaders(id)).remove(); // a mirror write that was lost
 
       // "Tomorrow": the upload is now more than a day old.
       const res = await artifactHousekeeping(Date.now() + ARTIFACT_UPLOAD_TTL_MS + 60_000);

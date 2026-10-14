@@ -47,7 +47,6 @@ import {
   Timestamp,
   type Query,
 } from '../db/index.js';
-import { ServerValue } from 'firebase-admin/database';
 import {
   ARTIFACT_FILE_LIST_MAX,
   ARTIFACT_UPLOAD_MAX_BYTES,
@@ -78,7 +77,8 @@ import { ports } from '../adapters/index.js';
 import { objectLink, objectOf } from '../artifacts/files.js';
 import { assertNotArchived, fenced, loadArtifact } from '../artifacts/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { db, rtdbAdmin } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { realtimeDb, ServerValue } from '../rtdb/index.js';
 import { storageBucket } from '../blob/index.js';
 import type { DocumentSnapshot } from '../db/index.js';
 
@@ -392,7 +392,7 @@ export async function dataBatch(
 // ─── Realtime Database ───────────────────────────────────────────────────────
 
 const rtRef = (artifactId: string, path: unknown, field = 'path') =>
-  rtdbAdmin().ref(fenced(() => artifactRtdbPath(artifactId, path), field));
+  realtimeDb().ref(fenced(() => artifactRtdbPath(artifactId, path), field));
 /** The artifact's own view of a full RTDB path ('/scores/today'; '/' is its root). */
 const rtRelative = (artifactId: string, full: string): string =>
   `/${full.slice(artifactPrefix.rtdb(artifactId).length).replace(/^\/+/, '')}`;

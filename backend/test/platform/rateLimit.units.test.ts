@@ -7,8 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const transaction = vi.fn();
-vi.mock('../../src/runtime/firebase.js', () => ({
-  rtdbAdmin: () => ({ ref: () => ({ transaction }) }),
+vi.mock('../../src/rtdb/index.js', () => ({
+  realtimeDb: () => ({ ref: () => ({ transaction }) }),
 }));
 
 const { RECONCILE_EVERY, forgetLocalRateCounts, rateLimit } =

@@ -24,7 +24,8 @@ import {
   type User,
 } from '@tm/shared';
 import { syncReaders } from '../../src/commands/boardShared.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { call, setupEmulators } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
 import { msgsOf } from '../tickets/store.js';
@@ -357,9 +358,9 @@ describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
       const res = await fetch(`${url.origin}/${path}.json?${q}`);
       return res.status;
     };
-    await rtdbAdmin().ref(`rev/${b.id}`).set({ at: Date.now() });
-    await rtdbAdmin().ref(`rev/${other.id}`).set({ at: Date.now() });
-    await rtdbAdmin().ref(`agents/${agentId}/wake`).set({ at: Date.now() });
+    await realtimeDb().ref(`rev/${b.id}`).set({ at: Date.now() });
+    await realtimeDb().ref(`rev/${other.id}`).set({ at: Date.now() });
+    await realtimeDb().ref(`agents/${agentId}/wake`).set({ at: Date.now() });
     expect(await read(`rev/${b.id}`)).toBe(200);
     expect(await read(`agents/${agentId}/wake`)).toBe(200);
     expect(await read(`rev/${other.id}`)).toBe(401);
@@ -395,7 +396,7 @@ describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
     // Read through the boardReaders mirror (no claim needed).
     const url = new URL(all.database_url);
     const ns = url.searchParams.get('ns');
-    await rtdbAdmin().ref(`rev/${ops.id}`).set({ at: Date.now() });
+    await realtimeDb().ref(`rev/${ops.id}`).set({ at: Date.now() });
     const q = new URLSearchParams({ ...(ns ? { ns } : {}), auth: all.auth });
     expect((await fetch(`${url.origin}/rev/${ops.id}.json?${q}`)).status).toBe(200);
 

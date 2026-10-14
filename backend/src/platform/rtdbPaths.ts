@@ -27,7 +27,7 @@ import {
   type AgentStatus,
   type LiveStatus,
 } from '@tm/shared';
-import { rtdbAdmin } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 
 /** A hint that must never fail the change that produced it. */
 export async function liveSafe(what: string, fn: () => Promise<unknown>): Promise<void> {
@@ -56,7 +56,7 @@ export async function beat(
   ticketId: string | null,
   b: { state: LiveStatus['state']; message: string | null; progress: number | null; at: number },
 ): Promise<AgentStatus> {
-  const ref = rtdbAdmin().ref(live.status(boardId, agentId, ticketId));
+  const ref = realtimeDb().ref(live.status(boardId, agentId, ticketId));
   const ends = b.state === 'done' || b.state === 'error';
   const res = await ref.transaction((current: unknown) => {
     const parsed = LiveStatusSchema.safeParse(current);
@@ -85,7 +85,7 @@ export async function readStatus(
   agentId: string,
   ticketId: string | null,
 ): Promise<AgentStatus | null> {
-  const snap = await rtdbAdmin()
+  const snap = await realtimeDb()
     .ref(live.status(boardId, agentId, ticketId))
     .get();
   const parsed = LiveStatusSchema.safeParse(snap.val());
@@ -94,7 +94,7 @@ export async function readStatus(
 
 /** Every beat stream on one board. ~100 bytes a row: one read, whole board. */
 export async function readBoardStatuses(boardId: string): Promise<AgentStatus[]> {
-  const snap = await rtdbAdmin().ref(live.boardStatus(boardId)).get();
+  const snap = await realtimeDb().ref(live.boardStatus(boardId)).get();
   return statusesOfBoard(snap.val() as Record<string, Record<string, unknown>> | null);
 }
 
@@ -106,7 +106,7 @@ export async function readBoardStatuses(boardId: string): Promise<AgentStatus[]>
 export async function readAllStatuses(): Promise<
   { boardId: string; status: AgentStatus; key: string }[]
 > {
-  const snap = await rtdbAdmin().ref(live.statusRoot()).get();
+  const snap = await realtimeDb().ref(live.statusRoot()).get();
   const tree = (snap.val() ?? {}) as Record<string, Record<string, Record<string, unknown>>>;
   const out: { boardId: string; status: AgentStatus; key: string }[] = [];
   for (const [boardId, board] of Object.entries(tree)) {
@@ -120,10 +120,10 @@ export async function readAllStatuses(): Promise<
 
 /** Drop everything an agent has said on a board (it left, or the board is gone). */
 export const clearAgentStatus = (boardId: string, agentId: string): Promise<void> =>
-  rtdbAdmin().ref(live.agentStatus(boardId, agentId)).remove();
+  realtimeDb().ref(live.agentStatus(boardId, agentId)).remove();
 
 export const clearBoardLive = async (boardId: string): Promise<void> => {
-  const r = rtdbAdmin();
+  const r = realtimeDb();
   await Promise.all([
     r.ref(live.boardStatus(boardId)).remove(),
     r.ref(live.rev(boardId)).remove(),
@@ -141,7 +141,7 @@ export const clearBoardLive = async (boardId: string): Promise<void> => {
  */
 export const bumpBoardRev = (boardId: string, by: string | null, at: number): Promise<void> =>
   liveSafe(`rev ${boardId}`, () =>
-    rtdbAdmin()
+    realtimeDb()
       .ref(live.rev(boardId))
       .set({ at, ...(by ? { by } : {}) }),
   );
@@ -202,7 +202,7 @@ export function wakeAgents(
   if (!ids.length) return Promise.resolve();
   const patch: Record<string, unknown> = {};
   for (const id of ids) patch[live.wake(id)] = { at, ...(boardId ? { boardId } : {}) };
-  return liveSafe(`wake ${ids.join(',')}`, () => rtdbAdmin().ref().update(patch));
+  return liveSafe(`wake ${ids.join(',')}`, () => realtimeDb().ref().update(patch));
 }
 
 // ─── the silence sweep's bookkeeping (server-only subtree) ───────────────────
@@ -215,7 +215,7 @@ export function wakeAgents(
  * subtree to clients in one line.
  */
 export async function readSilenceMarks(): Promise<Map<string, number>> {
-  const snap = await rtdbAdmin().ref(live.silenceRoot()).get();
+  const snap = await realtimeDb().ref(live.silenceRoot()).get();
   const tree = (snap.val() ?? {}) as Record<
     string,
     Record<string, Record<string, { notifiedAt?: unknown }>>
@@ -249,7 +249,7 @@ export async function pruneLive(
   for (const k of marks) patch[`${live.silenceRoot()}/${k}`] = null;
   const n = Object.keys(patch).length;
   if (!n) return 0;
-  await liveSafe(`prune ${n}`, () => rtdbAdmin().ref().update(patch));
+  await liveSafe(`prune ${n}`, () => realtimeDb().ref().update(patch));
   return n;
 }
 
@@ -259,6 +259,6 @@ export const markSilenceNotified = (
   ticketId: string | null,
   at: number,
 ): Promise<void> =>
-  rtdbAdmin()
+  realtimeDb()
     .ref(live.silence(boardId, agentId, ticketId))
     .set({ notifiedAt: at });

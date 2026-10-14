@@ -37,7 +37,8 @@ import {
 } from '@tm/shared';
 import { createApp } from '../../src/http/app.js';
 import { readStatus } from '../../src/platform/rtdbPaths.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { call, setupEmulators } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
 import { listOf, msgOf, putTasklist } from '../tickets/store.js';
@@ -596,7 +597,7 @@ describe('heartbeat', () => {
     const { ownerKey, agentKey, agentId, t, b } = await stage();
     const now = Date.now();
     // Seeded straight into the live tree: a beat is an RTDB node now (§W).
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(liveTree.status(b.id, agentId, t.id))
       .set({
         ticketId: t.id,
@@ -606,7 +607,7 @@ describe('heartbeat', () => {
         at: now - 5_000,
         startedAt: now - 60_000,
       } satisfies LiveStatus);
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(liveTree.status(b.id, agentId, null))
       .set({
         state: 'working',

@@ -31,7 +31,8 @@ import { can, roleOf, type Action } from '@tm/shared/logic/index';
 import { ports } from '../adapters/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
-import { db, isEmulated, rtdbAdmin } from '../runtime/firebase.js';
+import { db, isEmulated } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 import { identity } from '../identity/index.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { batchWriter } from '../tickets/doc.js';
@@ -142,7 +143,7 @@ export const adminCount = (access: Record<Uid, BoardRole>): number =>
  * it can never drift by more than one write.
  */
 export async function syncReaders(boardId: string, readerUids: Uid[] | null): Promise<void> {
-  const ref = rtdbAdmin().ref(rtdb.boardReaders(boardId));
+  const ref = realtimeDb().ref(rtdb.boardReaders(boardId));
   if (!readerUids || readerUids.length === 0) await ref.remove();
   else await ref.set(Object.fromEntries(readerUids.map((u) => [u, true])));
 }
@@ -160,7 +161,7 @@ export async function takeRate(
   windowMs = DAY_MS,
 ): Promise<() => Promise<void>> {
   const window = Math.floor(now / windowMs);
-  const ref = rtdbAdmin().ref(rtdb.rate(bucket, window));
+  const ref = realtimeDb().ref(rtdb.rate(bucket, window));
   const res = await ref.transaction((cur: number | null) => {
     const c = typeof cur === 'number' ? cur : 0;
     if (c + n > limit) return undefined; // abort

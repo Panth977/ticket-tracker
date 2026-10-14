@@ -27,7 +27,8 @@ import {
 } from '@tm/shared';
 import { getRegisteredCommand } from '../../src/commands/_registry.js';
 import { autoload } from '../../src/runtime/autoload.js';
-import { db, rtdbAdmin } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { realtimeDb } from '../../src/rtdb/index.js';
 import { makeCtx } from '../../src/runtime/context.js';
 import { readStatus } from '../../src/platform/rtdbPaths.js';
 import { call, uniq, type TestUser } from '../harness/index.js';
@@ -48,16 +49,16 @@ export const liveStatusNode = async (
   ticketId: string | null = null,
 ): Promise<Record<string, unknown> | null> =>
   (
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(live.status(boardId, agentId, ticketId))
       .get()
   ).val() as Record<string, unknown> | null;
 
 export const liveRev = async (boardId: string): Promise<BoardRev | null> =>
-  (await rtdbAdmin().ref(live.rev(boardId)).get()).val() as BoardRev | null;
+  (await realtimeDb().ref(live.rev(boardId)).get()).val() as BoardRev | null;
 
 export const liveWake = async (agentId: string): Promise<{ at: number; boardId?: string } | null> =>
-  (await rtdbAdmin().ref(live.wake(agentId)).get()).val() as {
+  (await realtimeDb().ref(live.wake(agentId)).get()).val() as {
     at: number;
     boardId?: string;
   } | null;
@@ -68,7 +69,7 @@ export const liveSilence = async (
   ticketId: string | null = null,
 ): Promise<{ notifiedAt: number } | null> =>
   (
-    await rtdbAdmin()
+    await realtimeDb()
       .ref(live.silence(boardId, agentId, ticketId))
       .get()
   ).val() as {

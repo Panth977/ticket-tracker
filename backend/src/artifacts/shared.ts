@@ -53,7 +53,7 @@ import {
 } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedCol, typedDoc } from '../runtime/converters.js';
-import { rtdbAdmin } from '../runtime/firebase.js';
+import { realtimeDb } from '../rtdb/index.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 
 const C = COLLECTIONS;
@@ -215,7 +215,7 @@ export async function syncArtifactMirror(
   artifactId: string,
   artifact: Pick<Artifact, 'access' | 'readOnly' | 'archivedAt' | 'deletingAt'> | null,
 ): Promise<void> {
-  const r = rtdbAdmin();
+  const r = realtimeDb();
   const readers = r.ref(artifactPrefix.rtdbReaders(artifactId));
   const flags = r.ref(artifactPrefix.rtdbFlags(artifactId));
   const people = artifact && !artifact.deletingAt ? Object.entries(artifact.access) : [];
