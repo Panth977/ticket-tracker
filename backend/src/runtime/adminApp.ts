@@ -19,14 +19,20 @@ export function projectId(): string {
   return process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || DEMO_PROJECT_ID;
 }
 
-/** True when any Firebase emulator is wired in (dev, tests, CI). Adapters use it to pick dev fakes. */
+/**
+ * True when any Firebase emulator is wired in (dev, tests, CI). Adapters use
+ * it to pick dev fakes. A VM (TM_PLATFORM=vm) has no project id, so the
+ * `demo-` fallback must not count there — only real emulator hosts, or
+ * TM_DEV=1 for a local dev box — else production would sign with the dev key.
+ */
 export function isEmulated(): boolean {
-  return (
+  const emulatorHosts =
     process.env.FUNCTIONS_EMULATOR === 'true' ||
     !!process.env.FIRESTORE_EMULATOR_HOST ||
-    !!process.env.FIREBASE_AUTH_EMULATOR_HOST ||
-    projectId().startsWith('demo-')
-  );
+    !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  if ((process.env.TM_PLATFORM || '').toLowerCase() === 'vm')
+    return emulatorHosts || process.env.TM_DEV === '1';
+  return emulatorHosts || projectId().startsWith('demo-');
 }
 
 let app: App | undefined;

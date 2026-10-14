@@ -80,6 +80,9 @@ importers:
       typesense:
         specifier: ^3.0.6
         version: 3.0.6(@babel/runtime@7.29.7)
+      ws:
+        specifier: ^8
+        version: 8.22.0
       yauzl:
         specifier: ^3.2.0
         version: 3.4.0
@@ -90,6 +93,9 @@ importers:
       '@types/node':
         specifier: ^22.20.4
         version: 22.20.4
+      '@types/ws':
+        specifier: ^8
+        version: 8.18.2
       '@types/yauzl':
         specifier: ^2.10.3
         version: 2.10.3
@@ -1800,6 +1806,9 @@ packages:
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
 
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
@@ -3840,6 +3849,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -5330,6 +5351,10 @@ snapshots:
 
   '@types/trusted-types@2.0.7':
     optional: true
+
+  '@types/ws@8.18.2':
+    dependencies:
+      '@types/node': 22.20.4
 
   '@types/yauzl@2.10.3':
     dependencies:
@@ -7572,6 +7597,8 @@ snapshots:
     optional: true
 
   wrappy@1.0.2: {}
+
+  ws@8.22.0: {}
 
   xml-name-validator@5.0.0: {}
 
