@@ -17,6 +17,7 @@
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -146,9 +147,45 @@ function sendFile(
         : 'public, max-age=3600',
   );
   for (const h of headers) if (h.test(urlPath)) for (const [k, v] of h.headers) res.setHeader(k, v);
+  // Compressed as Hosting serves it: brotli or gzip for text, made once per
+  // file (the build never changes under a running server) and kept in memory.
+  const enc = compressible(file) ? pickEncoding(req.headers['accept-encoding']) : null;
+  res.setHeader('vary', 'accept-encoding');
+  if (enc) {
+    const body = compressed(file, enc);
+    res.setHeader('content-encoding', enc);
+    res.setHeader('content-length', body.length);
+    return void res.end(req.method === 'HEAD' ? undefined : body);
+  }
   res.setHeader('content-length', statSync(file).size);
   if (req.method === 'HEAD') return void res.end();
   createReadStream(file).pipe(res);
+}
+
+const COMPRESSIBLE = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.xml', '.webmanifest', '.map', '.md', '.ts']);
+const compressible = (file: string) =>
+  COMPRESSIBLE.has(extname(file).toLowerCase()) && statSync(file).size > 1024;
+
+function pickEncoding(header: string | string[] | undefined): 'br' | 'gzip' | null {
+  const h = String(header ?? '');
+  if (/\bbr\b/.test(h)) return 'br';
+  if (/\bgzip\b/.test(h)) return 'gzip';
+  return null;
+}
+
+const zipped = new Map<string, Buffer>();
+function compressed(file: string, enc: 'br' | 'gzip'): Buffer {
+  const key = `${enc}:${file}`;
+  let b = zipped.get(key);
+  if (!b) {
+    const raw = readFileSync(file);
+    b =
+      enc === 'br'
+        ? brotliCompressSync(raw, { params: { [zlib.BROTLI_PARAM_QUALITY]: 9 } })
+        : gzipSync(raw, { level: 9 });
+    zipped.set(key, b);
+  }
+  return b;
 }
 
 /** Routes the VM adds to what Firebase Hosting rewrites to the api. */
@@ -246,6 +283,15 @@ export async function startServer(
 
 function onSocket(ws: WebSocket): void {
   let session: DataSession | undefined;
+  // A ping every 25 s keeps proxies (nginx, load balancers) from closing an
+  // idle socket, and ends one whose browser vanished without a close.
+  let alive = true;
+  ws.on('pong', () => (alive = true));
+  const beat = setInterval(() => {
+    if (!alive) return void ws.terminate();
+    alive = false;
+    ws.ping();
+  }, 25_000);
   const send = (m: unknown) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   };
@@ -287,7 +333,10 @@ function onSocket(ws: WebSocket): void {
       await session.handle(msg as never);
     });
   });
-  ws.on('close', () => session?.close());
+  ws.on('close', () => {
+    clearInterval(beat);
+    session?.close();
+  });
 }
 
 // `node lib/server.js` runs it; importing (tests) does not.

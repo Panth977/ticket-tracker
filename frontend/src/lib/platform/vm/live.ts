@@ -44,46 +44,61 @@ function url(): string {
 
 function connect(): Promise<void> {
   if (ready) return ready;
-  ready = gate.then(() => new Promise<void>((resolve) => {
-    const ws = new WebSocket(url());
-    socket = ws;
-    ws.onopen = () => {
-      backoff = 250;
-      // Authenticate first, then re-establish what the last socket carried
-      // (anything not yet sent is sent by its caller once this resolves).
-      ws.send(JSON.stringify({ id: `auth${++seq}`, op: 'auth', token }));
-      for (const [lid, s] of subs) if (s.sent) ws.send(JSON.stringify({ ...s.msg, id: `re${++seq}`, lid }));
-      for (const [id, p] of pending) if (p.sent) ws.send(JSON.stringify({ ...p.msg, id }));
-      resolve();
-    };
-    ws.onmessage = (e) => {
-      let f: Frame;
-      try {
-        f = JSON.parse(String(e.data)) as Frame;
-      } catch {
-        return;
-      }
-      if (f.lid) {
-        subs.get(f.lid)?.onFrame(f);
-        if (f.error) subs.delete(f.lid);
-        return;
-      }
-      const p = f.id ? pending.get(f.id) : undefined;
-      if (!p) return;
-      pending.delete(f.id!);
-      if (f.ok) p.resolve(f.result);
-      else {
-        const err = (f.error ?? {}) as { code?: string; message?: string };
-        p.reject(new LiveError(err.code ?? 'internal', err.message ?? 'Request failed'));
-      }
-    };
-    ws.onclose = () => {
-      if (socket === ws) socket = null;
-      ready = null;
-      // Reconnect while anything is listening or waiting.
-      if (subs.size || pending.size) setTimeout(() => void connect(), (backoff = Math.min(backoff * 2, 10_000)));
-    };
-  }));
+  ready = gate.then(
+    () =>
+      new Promise<void>((resolve) => {
+        const ws = new WebSocket(url());
+        socket = ws;
+        ws.onopen = () => {
+          backoff = 250;
+          // Authenticate first, then send EVERYTHING this page is waiting on:
+          // what an earlier socket carried and what never got out (a socket
+          // can close before it opens — a sign-in does that — and whatever
+          // was queued for it must not be left hanging).
+          ws.send(JSON.stringify({ id: `auth${++seq}`, op: 'auth', token }));
+          for (const [lid, s] of subs) {
+            ws.send(JSON.stringify({ ...s.msg, id: `s${++seq}`, lid }));
+            s.sent = true;
+          }
+          for (const [id, p] of pending) {
+            ws.send(JSON.stringify({ ...p.msg, id }));
+            p.sent = true;
+          }
+          resolve();
+        };
+        ws.onmessage = (e) => {
+          let f: Frame;
+          try {
+            f = JSON.parse(String(e.data)) as Frame;
+          } catch {
+            return;
+          }
+          if (f.lid) {
+            subs.get(f.lid)?.onFrame(f);
+            if (f.error) subs.delete(f.lid);
+            return;
+          }
+          const p = f.id ? pending.get(f.id) : undefined;
+          if (!p) return;
+          pending.delete(f.id!);
+          if (f.ok) p.resolve(f.result);
+          else {
+            const err = (f.error ?? {}) as { code?: string; message?: string };
+            p.reject(new LiveError(err.code ?? 'internal', err.message ?? 'Request failed'));
+          }
+        };
+        ws.onclose = () => {
+          if (socket === ws) socket = null;
+          ready = null;
+          resolve(); // never leave a caller waiting on a socket that is gone
+          for (const s of subs.values()) s.sent = false;
+          for (const p of pending.values()) p.sent = false;
+          // Reconnect while anything is listening or waiting.
+          if (subs.size || pending.size)
+            setTimeout(() => void connect(), (backoff = Math.min(backoff * 2, 10_000)));
+        };
+      }),
+  );
   return ready;
 }
 
@@ -93,6 +108,7 @@ export function setLiveToken(next: string | null): void {
   const changedUser = !!token !== !!next;
   token = next;
   if (!socket) return;
+  if (socket.readyState === WebSocket.CONNECTING) return; // onopen sends the new token
   if (changedUser) socket.close(); // everything re-subscribes under the new identity
   else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ id: `auth${++seq}`, op: 'auth', token }));
 }

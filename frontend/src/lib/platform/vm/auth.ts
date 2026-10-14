@@ -139,7 +139,9 @@ function adopt(s: ServerSession): User {
   refreshToken = s.refreshToken;
   const before = AUTH.currentUser?.uid;
   AUTH.currentUser = new User(s.user);
-  store()?.setItem(KEY, JSON.stringify({ refreshToken, user: s.user }));
+  // The ID token too (as Firebase keeps it): a reload within the hour needs
+  // no round trip before the app can talk to the server.
+  store()?.setItem(KEY, JSON.stringify({ refreshToken, user: s.user, idToken, expiresAt }));
   setLiveToken(idToken);
   schedule();
   if (before !== AUTH.currentUser.uid) emit();
@@ -194,8 +196,13 @@ async function call<T>(path: string, body: unknown, bearer?: string): Promise<T 
 
 async function freshToken(force: boolean): Promise<string> {
   await restore();
-  if (!refreshToken) throw new AuthError('auth/no-current-user', 'No user is signed in.');
-  if (!force && idToken && Date.now() < expiresAt - 60_000) return idToken;
+  return tokenNow(force);
+}
+
+/** The ID token, refreshed when needed — without waiting for restore() (which calls this). */
+function tokenNow(force: boolean): Promise<string> {
+  if (!refreshToken) return Promise.reject(new AuthError('auth/no-current-user', 'No user is signed in.'));
+  if (!force && idToken && Date.now() < expiresAt - 60_000) return Promise.resolve(idToken);
   refreshing ??= (async () => {
     try {
       const s = await call<ServerSession>('/token/refresh', { refreshToken });
@@ -219,18 +226,27 @@ function restore(): Promise<void> {
     const fromPage = takeFragmentSession();
     if (fromPage) adopt(fromPage);
     else {
-      const raw = store()?.getItem(KEY);
-      if (raw) {
-        try {
-          const saved = JSON.parse(raw) as { refreshToken: string; user: ServerUser };
-          refreshToken = saved.refreshToken;
-          AUTH.currentUser = new User(saved.user);
-          await freshToken(true).catch((e: AuthError) => {
+      let saved: { refreshToken: string; user: ServerUser; idToken?: string; expiresAt?: number } | null = null;
+      try {
+        const raw = store()?.getItem(KEY);
+        saved = raw ? JSON.parse(raw) : null;
+      } catch {
+        saved = null;
+      }
+      if (saved?.refreshToken && saved.user) {
+        refreshToken = saved.refreshToken;
+        AUTH.currentUser = new User(saved.user);
+        if (saved.idToken && (saved.expiresAt ?? 0) > Date.now() + 5 * 60_000) {
+          // Still good: use it now, refresh in the background before it lapses.
+          idToken = saved.idToken;
+          expiresAt = saved.expiresAt!;
+          setLiveToken(idToken);
+          schedule();
+        } else {
+          await tokenNow(true).catch((e: AuthError) => {
             // Offline: keep the user (the app runs from what it has); else signed out.
             if (e.code !== 'auth/network-request-failed') drop();
           });
-        } catch {
-          store()?.removeItem(KEY);
         }
       }
     }
