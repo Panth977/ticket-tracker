@@ -115,12 +115,9 @@ export class LocalTree {
     return cur;
   }
 
-  /** Put a stored value at a path (null removes), pruning emptied parents. */
-  private put(segs: string[], value: Json): void {
-    if (!segs.length) {
-      this.root = value;
-      return;
-    }
+  /** The tree after putting a stored value at a path (null removes), pruning emptied parents. */
+  private static putInto(root: Json, segs: string[], value: Json): Json {
+    if (!segs.length) return value;
     const walk = (node: Json, i: number): Json => {
       const o: Record<string, Json> = node !== null && typeof node === 'object' ? { ...node } : {};
       const k = segs[i]!;
@@ -134,14 +131,26 @@ export class LocalTree {
       }
       return Object.keys(o).length ? o : null;
     };
-    this.root = walk(this.root, 0);
+    return walk(root, 0);
   }
 
   write(entries: [string[], unknown][]): void {
+    this.writeIf(entries, () => true);
+  }
+
+  /**
+   * Write atomically if `allow(root, newRoot)` says so (the rules check of a
+   * client write). Answers whether it was written.
+   */
+  writeIf(entries: [string[], unknown][], allow: (root: Json, newRoot: Json) => boolean): boolean {
     const now = Date.now();
     const norm = entries.map(([s, v]) => [s, normalize(v, now)] as [string[], Json]);
-    for (const [s, v] of norm) this.put(s, v);
+    let next = this.root;
+    for (const [s, v] of norm) next = LocalTree.putInto(next, s, v);
+    if (!allow(this.root, next)) return false;
+    this.root = next;
     this.changed(norm.map(([s]) => '/' + s.join('/')));
+    return true;
   }
 
   transaction(segs: string[], fn: (cur: never) => unknown): TransactionResult {

@@ -40,6 +40,8 @@ export const MOUNTS = {
   blob: '/blob',
   /** Sign-in endpoints of the local identity, /identity/… (doors/identity.ts; VM only). */
   identity: '/identity',
+  /** The Realtime Database's REST API from the local tree, /rtdb/{path}.json (doors/rtdbRest.ts; VM only). */
+  rtdb: '/rtdb',
 } as const;
 export type MountName = keyof typeof MOUNTS;
 

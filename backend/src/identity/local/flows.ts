@@ -69,7 +69,11 @@ async function beforeSignIn(a: AccountDoc): Promise<void> {
 
 // ─── sessions ────────────────────────────────────────────────────────────────
 
-async function startSession(a: AccountDoc, provider: string): Promise<Session> {
+async function startSession(
+  a: AccountDoc,
+  provider: string,
+  claims: Record<string, unknown> = {},
+): Promise<Session> {
   if (a.disabled)
     throw new IdentityError('auth/user-disabled', 'The user account has been disabled');
   await beforeSignIn(a);
@@ -80,6 +84,7 @@ async function startSession(a: AccountDoc, provider: string): Promise<Session> {
     uid: a.uid,
     provider,
     authTime,
+    claims,
     createdAt: now,
     lastUsedAt: now,
   });
@@ -87,7 +92,7 @@ async function startSession(a: AccountDoc, provider: string): Promise<Session> {
   await db().collection(USERS).doc(a.uid).update({ lastSignInAt: now, providers });
   const fresh = { ...a, lastSignInAt: now, providers };
   return {
-    idToken: mintIdToken(fresh, provider, authTime),
+    idToken: mintIdToken(fresh, provider, authTime, undefined, claims),
     refreshToken,
     expiresIn: ID_TOKEN_TTL_S,
     user: toRecord(fresh),
@@ -97,7 +102,8 @@ async function startSession(a: AccountDoc, provider: string): Promise<Session> {
 export async function refreshSession(refreshToken: string): Promise<Session> {
   const ref = db().collection(SESSIONS).doc(sessionId(refreshToken));
   const s = (await ref.get()).data() as
-    { uid: string; provider: string; authTime: number } | undefined;
+    | { uid: string; provider: string; authTime: number; claims?: Record<string, unknown> }
+    | undefined;
   if (!s)
     throw new IdentityError('auth/invalid-refresh-token', 'This session has ended — sign in again');
   const a = await readAccount(s.uid);
@@ -107,7 +113,7 @@ export async function refreshSession(refreshToken: string): Promise<Session> {
   }
   await ref.update({ lastUsedAt: Date.now() });
   return {
-    idToken: mintIdToken(a, s.provider, s.authTime),
+    idToken: mintIdToken(a, s.provider, s.authTime, undefined, s.claims ?? {}),
     refreshToken,
     expiresIn: ID_TOKEN_TTL_S,
     user: toRecord(a),
@@ -278,12 +284,8 @@ export async function signInWithCustomToken(token: string): Promise<Session> {
     a = (await readAccount(uid))!;
     await afterCreate(a);
   }
-  const claims = (p.claims ?? {}) as Record<string, unknown>;
-  if (Object.keys(claims).length) {
-    await db().collection(USERS).doc(uid).update({ customClaims: claims });
-    a = { ...a, customClaims: claims };
-  }
-  return startSession(a, 'custom');
+  // Developer claims belong to this session alone (as in Firebase), not the account.
+  return startSession(a, 'custom', (p.claims ?? {}) as Record<string, unknown>);
 }
 
 // ─── OpenID Connect (Google, Microsoft) ──────────────────────────────────────

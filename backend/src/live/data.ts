@@ -27,6 +27,7 @@
 import { db, type DocumentData, type Query, type WhereFilterOp } from '../db/index.js';
 import { sqliteDb, type DocChange } from '../db/sqlite/index.js';
 import { firestoreAllows, type RulesAuth } from '../rules/firestore.js';
+import { RtdbDenied, RtdbSession } from './rtdb.js';
 import { fromWire, resolveForRules, toWire } from './wire.js';
 
 export interface QuerySpec {
@@ -101,11 +102,15 @@ interface Listener {
 export class DataSession {
   private readonly listeners = new Map<string, Listener>();
   private offChanges: (() => void) | undefined;
+  /** The Realtime-Database half of the same socket (ops named rtdb.*). */
+  private readonly rtdb: RtdbSession;
 
   constructor(
     readonly auth: RulesAuth | null,
     private readonly send: (msg: unknown) => void,
-  ) {}
+  ) {
+    this.rtdb = new RtdbSession(auth, send);
+  }
 
   // ─── reads ─────────────────────────────────────────────────────────────────
 
@@ -237,6 +242,8 @@ export class DataSession {
   async handle(msg: Msg): Promise<void> {
     const reply = (result: unknown) => this.send({ id: msg.id, ok: true, result });
     try {
+      if (typeof msg.op === 'string' && (msg.op as string).startsWith('rtdb.'))
+        return reply(await this.rtdb.handle(msg as never));
       switch (msg.op) {
         case 'get':
           return reply(await this.getDoc(msg.path));
@@ -258,18 +265,23 @@ export class DataSession {
       const err =
         e instanceof LiveError
           ? e
-          : (e as { code?: number }).code === 5
-            ? new LiveError('not-found', (e as Error).message)
-            : (e as { code?: number }).code === 6
-              ? new LiveError('already-exists', (e as Error).message)
-              : (e as { code?: number }).code === 3
-                ? new LiveError('invalid-argument', (e as Error).message)
-                : new LiveError('internal', 'Internal error');
+          : e instanceof RtdbDenied
+            ? new LiveError('permission-denied', e.message)
+            : /invalid key|undefined|Cannot store/.test(String((e as Error)?.message))
+              ? new LiveError('invalid-argument', (e as Error).message)
+              : (e as { code?: number }).code === 5
+                ? new LiveError('not-found', (e as Error).message)
+                : (e as { code?: number }).code === 6
+                  ? new LiveError('already-exists', (e as Error).message)
+                  : (e as { code?: number }).code === 3
+                    ? new LiveError('invalid-argument', (e as Error).message)
+                    : new LiveError('internal', 'Internal error');
       this.send({ id: msg.id, ok: false, error: { code: err.code, message: err.message } });
     }
   }
 
   close(): void {
+    this.rtdb.close();
     this.listeners.clear();
     this.offChanges?.();
     this.offChanges = undefined;

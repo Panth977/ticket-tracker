@@ -26,7 +26,7 @@ import {
 import { syncReaders } from '../../src/commands/boardShared.js';
 import { db } from '../../src/runtime/firebase.js';
 import { realtimeDb } from '../../src/rtdb/index.js';
-import { call, setupEmulators } from '../harness/index.js';
+import { call, request, setupEmulators } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
 import { msgsOf } from '../tickets/store.js';
 import { agentKeyFor, apiKeyFor, rest, seedAgent } from './helpers.js';
@@ -321,9 +321,20 @@ describe('§Z2 — the account-token routes', () => {
   });
 });
 
-// /v1/live hands out a Realtime Database credential: Firebase only until the
-// VM's live stream (the Live port) replaces the RTDB.
-describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
+/**
+ * GET an RTDB REST url: over the network to the emulator on Firebase, or
+ * through the in-process app on a VM (whose /rtdb door serves the same API).
+ */
+async function rtdbStatus(databaseUrl: string, path: string, auth: string): Promise<number> {
+  const url = new URL(databaseUrl);
+  const ns = url.searchParams.get('ns');
+  const q = new URLSearchParams({ ...(ns ? { ns } : {}), auth });
+  const target = `${url.pathname.replace(/\/+$/, '')}/${path}.json?${q}`;
+  if (platform() === 'vm') return (await request(target)).status;
+  return (await fetch(`${url.origin}${target}`)).status;
+}
+
+describe('§W — GET /v1/live', () => {
   it('an agent token gets its wake node and its board, with the uid and board claim the rules read', async () => {
     const { owner } = await people('owner');
     const b = await seedBoard({ admin: owner });
@@ -350,14 +361,8 @@ describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
     // The agent never became a person: no users/ profile, no allow-list verdict.
     expect((await db().doc(paths.user(agentId)).get()).exists).toBe(false);
 
-    // The RTDB emulator honours it: its own nodes answer, anybody else's are refused.
-    const url = new URL(cred.database_url);
-    const ns = url.searchParams.get('ns');
-    const read = async (path: string) => {
-      const q = new URLSearchParams({ ...(ns ? { ns } : {}), auth: cred.auth });
-      const res = await fetch(`${url.origin}/${path}.json?${q}`);
-      return res.status;
-    };
+    // The RTDB honours it: its own nodes answer, anybody else's are refused.
+    const read = (path: string) => rtdbStatus(cred.database_url, path, cred.auth);
     await realtimeDb().ref(`rev/${b.id}`).set({ at: Date.now() });
     await realtimeDb().ref(`rev/${other.id}`).set({ at: Date.now() });
     await realtimeDb().ref(`agents/${agentId}/wake`).set({ at: Date.now() });
@@ -394,11 +399,8 @@ describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
     expect(((await db().doc(paths.user(owner.uid)).get()).data() as User).deletedAt).toBe(null);
 
     // Read through the boardReaders mirror (no claim needed).
-    const url = new URL(all.database_url);
-    const ns = url.searchParams.get('ns');
     await realtimeDb().ref(`rev/${ops.id}`).set({ at: Date.now() });
-    const q = new URLSearchParams({ ...(ns ? { ns } : {}), auth: all.auth });
-    expect((await fetch(`${url.origin}/rev/${ops.id}.json?${q}`)).status).toBe(200);
+    expect(await rtdbStatus(all.database_url, `rev/${ops.id}`, all.auth)).toBe(200);
 
     // Without the scope: 403.
     const { key: noScope } = await apiKeyFor(owner, ['tickets:read'], eng.id);

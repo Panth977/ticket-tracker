@@ -106,6 +106,8 @@ export function mintIdToken(
   provider: string,
   authTimeS: number,
   nowS = Math.floor(Date.now() / 1000),
+  /** A custom token's developer claims: this session's only, never the account's. */
+  sessionClaims: Record<string, unknown> = {},
 ): string {
   return signJwt('id', {
     iss: ISSUER,
@@ -119,6 +121,7 @@ export function mintIdToken(
     auth_time: authTimeS,
     firebase: { sign_in_provider: provider },
     ...(a.customClaims ?? {}),
+    ...sessionClaims,
   });
 }
 

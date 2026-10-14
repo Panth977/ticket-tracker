@@ -28,7 +28,9 @@
 import { errors, isAgentId, live, type RestLiveRes } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
 import { adminApp, isEmulated } from '../runtime/firebase.js';
-import { identity } from '../identity/index.js';
+import { identity, identityKind } from '../identity/index.js';
+import { signInWithCustomToken } from '../identity/local/flows.js';
+import { rtdbKind } from '../rtdb/index.js';
 import { readableBoards } from './resolve.js';
 
 /**
@@ -48,6 +50,9 @@ export function webApiKey(): string {
 
 /** The RTDB origin the SDK streams from: what the Admin SDK itself was given. */
 export function databaseUrl(): string {
+  // A VM serves the RTDB's REST protocol itself, from its JSON tree (doors/rtdbRest.ts).
+  if (rtdbKind() === 'local')
+    return `${(process.env.API_URL || process.env.APP_URL || 'http://localhost:8080').replace(/\/+$/, '')}/rtdb`;
   const url = process.env.TM_DATABASE_URL?.trim() || adminApp().options.databaseURL;
   if (!url) throw errors.unavailable('This deployment has no Realtime Database configured');
   return url;
@@ -65,6 +70,11 @@ export async function exchangeCustomToken(
   token: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ idToken: string; expiresIn: number }> {
+  if (identityKind() === 'local') {
+    // A VM issues its own sessions (identity/local).
+    const s = await signInWithCustomToken(token);
+    return { idToken: s.idToken, expiresIn: s.expiresIn };
+  }
   const res = await fetchImpl(signInUrl(), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

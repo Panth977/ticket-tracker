@@ -151,7 +151,7 @@ function sendFile(
 }
 
 /** Routes the VM adds to what Firebase Hosting rewrites to the api. */
-const VM_API = [glob('/identity/**'), glob('/blob/**'), glob('/c/**')];
+const VM_API = [glob('/identity/**'), glob('/blob/**'), glob('/c/**'), glob('/rtdb/**')];
 
 export async function startServer(
   port = Number(process.env.PORT || 8080),
