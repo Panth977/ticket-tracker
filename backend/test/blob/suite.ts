@@ -20,8 +20,16 @@ async function streamToBuffer(s: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-/** `signs`: false where the store cannot sign URLs (the Storage emulator has no service account). */
-export function blobSuite(label: string, bucket: () => Bucket, opts: { signs: boolean }): void {
+/**
+ * `signs`: false where the store cannot sign URLs (the Storage emulator has
+ * no service account). `preconditions`: false where generation preconditions
+ * are ignored (the Storage emulator; Cloud Storage itself honours them).
+ */
+export function blobSuite(
+  label: string,
+  bucket: () => Bucket,
+  opts: { signs: boolean; preconditions: boolean },
+): void {
   describe(`blob port: ${label}`, () => {
     it('save / exists / download / getMetadata / delete', async () => {
       const f = bucket().file(`${uniq('t')}/a b/hello.txt`);
@@ -115,6 +123,31 @@ export function blobSuite(label: string, bucket: () => Bucket, opts: { signs: bo
       const [left] = await bucket().getFiles({ prefix: root });
       expect(left.map((f) => f.name)).toEqual([`${root}/b/2.txt`, `${root}x/other.txt`]);
     });
+
+    it.skipIf(!opts.preconditions)(
+      'generation: changes on rewrite; ifGenerationMatch refuses a stale or missing object (412)',
+      async () => {
+        const f = bucket().file(`${uniq('g')}/a.bin`);
+        await f.save(Buffer.from('one'), { contentType: 'text/plain' });
+        const g1 = (await f.getMetadata())[0].generation;
+        expect(g1).toBeTruthy();
+        await f.save(Buffer.from('two'), {
+          contentType: 'text/plain',
+          preconditionOpts: { ifGenerationMatch: g1! },
+        });
+        const g2 = (await f.getMetadata())[0].generation;
+        expect(String(g2)).not.toBe(String(g1));
+        await expect(
+          f.save(Buffer.from('three'), { preconditionOpts: { ifGenerationMatch: g1! } }),
+        ).rejects.toMatchObject({ code: 412 });
+        expect((await f.download())[0].toString()).toBe('two');
+        await f.delete();
+        await expect(
+          f.save(Buffer.from('back'), { preconditionOpts: { ifGenerationMatch: g2! } }),
+        ).rejects.toMatchObject({ code: 412 });
+        expect((await f.exists())[0]).toBe(false);
+      },
+    );
 
     it('copy', async () => {
       const root = uniq('c');

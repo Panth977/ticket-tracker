@@ -5,10 +5,10 @@
  * too — is refused from its next request and signs in again.
  * (Added by integration: the screen called an /api command nobody served.)
  */
-import { auth } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { defineCommand } from './_registry.js';
 
 export default defineCommand('sessionRevokeAll', async (ctx) => {
-  await auth().revokeRefreshTokens(ctx.actor);
+  await identity().revokeRefreshTokens(ctx.actor);
   return { ok: true as const };
 });

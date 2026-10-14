@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import type { UserRecord } from 'firebase-admin/auth';
+import type { UserRecord } from '../../src/identity/index.js';
 import { paths, type InboxItem, type User } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { autoload } from '../../src/runtime/autoload.js';

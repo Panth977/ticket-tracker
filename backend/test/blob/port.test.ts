@@ -11,7 +11,7 @@ process.env.TM_BLOB = 'disk';
 const { diskAdapter } = await import('../../src/blob/disk.js');
 const { blobSuite } = await import('./suite.js');
 
-blobSuite('disk', () => diskAdapter.bucket(), { signs: true });
+blobSuite('disk', () => diskAdapter.bucket(), { signs: true, preconditions: true });
 
 describe('blob: disk paths', () => {
   it('refuses names that would leave the bucket', () => {

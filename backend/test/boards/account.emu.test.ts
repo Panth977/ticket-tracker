@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { paths, storage, type BoardMember, type User } from '@tm/shared';
-import { auth, db } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { identity } from '../../src/identity/index.js';
 import {
   devOutbox,
   ports,
@@ -158,7 +159,9 @@ describe('accountDelete', () => {
       deletedAt: expect.any(Number),
     });
     expect((await db().collection(paths.devices(alice.uid)).get()).size).toBe(0);
-    await expect(auth().getUser(alice.uid)).rejects.toMatchObject({ code: 'auth/user-not-found' });
+    await expect(identity().getUser(alice.uid)).rejects.toMatchObject({
+      code: 'auth/user-not-found',
+    });
   });
 
   it('requires the literal confirmations', async () => {

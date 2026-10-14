@@ -10,7 +10,8 @@
 import { INVITE_TTL_MS, paths, type InboxItem, type Invite, type Via } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { typedDoc } from '../runtime/converters.js';
-import { auth, db } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { appUrl } from './boardShared.js';
 
 export { INVITE_TTL_MS };
@@ -73,7 +74,7 @@ export async function uidForEmail(email: string): Promise<string | null> {
   const live = q.docs.find((d) => d.get('deletedAt') == null);
   if (live) return live.id;
   try {
-    return (await auth().getUserByEmail(email)).uid;
+    return (await identity().getUserByEmail(email)).uid;
   } catch {
     return null;
   }

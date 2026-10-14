@@ -23,7 +23,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { paths, type User } from '@tm/shared';
-import { auth, db } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { identity } from '../../src/identity/index.js';
 import { handleUserCreated } from '../../src/triggers/authUserCreated.js';
 import {
   call,
@@ -134,7 +135,7 @@ describe('an address, before anyone has signed in with it', () => {
     // They sign in for the first time.
     const priya = await createUser({ email });
     await waitForProfile(priya.uid);
-    await handleUserCreated(await auth().getUser(priya.uid));
+    await handleUserCreated(await identity().getUser(priya.uid));
     expect((await profile(priya.uid))?.allowed).toBe(true);
 
     // And now the list knows who they are, without a document to keep in step.
@@ -146,7 +147,7 @@ describe('an address, before anyone has signed in with it', () => {
   it('a sign-up the list does not name is mirrored as refused', async () => {
     const outsider = await createUser({ name: 'Outsider' });
     await waitForProfile(outsider.uid);
-    const rec = await auth().getUser(outsider.uid);
+    const rec = await identity().getUser(outsider.uid);
     await strict(() => handleUserCreated(rec));
     expect((await profile(outsider.uid))?.allowed).toBe(false);
   });

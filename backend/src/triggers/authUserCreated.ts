@@ -21,7 +21,7 @@
  * Idempotent (Auth events can be delivered twice): the users/ doc is only
  * created, never overwritten — profileUpdate may have created it first.
  */
-import type { UserRecord } from 'firebase-admin/auth';
+import type { UserRecord } from '../identity/index.js';
 import { isAgentId, MAX_AVATAR_BYTES, storage } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { attachInvitesToInbox } from '../commands/inviteShared.js';

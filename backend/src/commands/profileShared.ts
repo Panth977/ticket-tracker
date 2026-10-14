@@ -4,7 +4,8 @@
  */
 import { DEFAULT_DUE_SOON_LEAD_MINUTES, defaultChannelMatrix, paths, type User } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';
-import { auth, db } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { inBatches } from './boardShared.js';
 
 export const userRef = (uid: string) => typedDoc('users', paths.user(uid));
@@ -44,7 +45,7 @@ export async function ensureUserDoc(uid: string, now: number): Promise<User> {
   const ref = userRef(uid);
   const snap = await ref.get();
   if (snap.exists) return snap.data()!;
-  const rec = await auth().getUser(uid);
+  const rec = await identity().getUser(uid);
   const doc = newUserDoc({ name: rec.displayName, email: rec.email }, now);
   try {
     await ref.create(doc);

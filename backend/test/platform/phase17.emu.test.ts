@@ -11,6 +11,7 @@
  *        it: the token's own nodes answer, anybody else's are refused.
  */
 import { describe, expect, it } from 'vitest';
+import { platform } from '../../src/runtime/platform.js';
 import {
   costDayOf,
   paths,
@@ -319,7 +320,9 @@ describe('§Z2 — the account-token routes', () => {
   });
 });
 
-describe('§W — GET /v1/live', () => {
+// /v1/live hands out a Realtime Database credential: Firebase only until the
+// VM's live stream (the Live port) replaces the RTDB.
+describe.skipIf(platform() === 'vm')('§W — GET /v1/live', () => {
   it('an agent token gets its wake node and its board, with the uid and board claim the rules read', async () => {
     const { owner } = await people('owner');
     const b = await seedBoard({ admin: owner });

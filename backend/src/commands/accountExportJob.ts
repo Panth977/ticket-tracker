@@ -14,7 +14,8 @@
  */
 import { paths, storage, type Message, type Ticket, type User } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { auth, db } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { defineTask } from '../runtime/functions.js';
 import { readAllMessages } from '../tickets/read.js';
 
@@ -173,7 +174,7 @@ export async function runExport(jobId: string, uid: string): Promise<string> {
   if (!to)
     to =
       (
-        await auth()
+        await identity()
           .getUser(uid)
           .catch(() => null)
       )?.email ?? '';

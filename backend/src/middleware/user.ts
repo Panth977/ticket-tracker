@@ -25,7 +25,7 @@ import { errors } from '@tm/shared';
 import type { AppEnv } from '../http/env.js';
 import { assertAllowed } from '../platform/allow.js';
 import { makeCtx } from '../runtime/context.js';
-import { auth } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 
 /** The token from `Authorization: Bearer <token>`, or null. */
 export function bearer(header: string | undefined | null): string | null {
@@ -38,7 +38,7 @@ export const userAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!token) throw errors.unauthenticated('Missing bearer token');
   let decoded;
   try {
-    decoded = await auth().verifyIdToken(token, true);
+    decoded = await identity().verifyIdToken(token, true);
   } catch (e) {
     const code = (e as { code?: string }).code ?? '';
     // Revoked / disabled / expired are all "sign in again"; never echo token details.

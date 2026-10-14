@@ -18,7 +18,8 @@
 import { errors, paths, storage, type BoardWithId } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { typedCol } from '../runtime/converters.js';
-import { auth, db } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
 import { applyAccess } from './boardAccessSet.js';
@@ -107,7 +108,7 @@ export default defineCommand('accountDelete', async (ctx) => {
   ])
     await db().recursiveDelete(db().collection(sub));
 
-  await auth()
+  await identity()
     .deleteUser(uid)
     .catch((e: { code?: string }) => {
       if (e.code !== 'auth/user-not-found') throw e;

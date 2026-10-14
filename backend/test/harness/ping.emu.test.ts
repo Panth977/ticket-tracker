@@ -3,7 +3,8 @@
  * runner → ping; problem+json for every failure path; idempotency by clientId.
  */
 import { describe, expect, it } from 'vitest';
-import { auth, db } from '../../src/runtime/firebase.js';
+import { db } from '../../src/runtime/firebase.js';
+import { identity } from '../../src/identity/index.js';
 import { claimIdempotency } from '../../src/runtime/idempotency.js';
 import { paths } from '@tm/shared';
 import {
@@ -67,7 +68,7 @@ describe('problem+json', () => {
     const u = await createUser();
     // Revocation is second-granular: make sure the token predates it.
     await new Promise((r) => setTimeout(r, 1100));
-    await auth().revokeRefreshTokens(u.uid);
+    await identity().revokeRefreshTokens(u.uid);
     await expect(call(u, 'ping', {})).rejects.toMatchObject({ code: 'unauthenticated' });
     await new Promise((r) => setTimeout(r, 1100));
     await refreshToken(u);

@@ -49,6 +49,7 @@ export class BlobError extends Error {
 interface StoredMeta {
   contentType: string;
   size: number;
+  generation?: string;
   timeCreated: string;
   updated: string;
   metadata?: Record<string, string>;
@@ -154,6 +155,7 @@ class DiskFile implements BlobFile {
       contentType: m.contentType,
       timeCreated: m.timeCreated,
       updated: m.updated,
+      ...(m.generation ? { generation: m.generation } : {}),
       ...(m.metadata ? { metadata: m.metadata } : {}),
     };
   }
@@ -210,6 +212,18 @@ class DiskFile implements BlobFile {
     }
   }
   async save(data: Buffer | Uint8Array | string, options: SaveOptions = {}): Promise<void> {
+    return this.bucket.locked(this.name, () => this.saveNow(data, options));
+  }
+  private async saveNow(data: Buffer | Uint8Array | string, options: SaveOptions): Promise<void> {
+    const want = options.preconditionOpts?.ifGenerationMatch;
+    if (want !== undefined) {
+      const cur = (await this.exists())[0] ? await this.readMeta() : null;
+      if (!cur || String(cur.generation ?? '') !== String(want))
+        throw new BlobError(
+          412,
+          `Precondition failed: ${this.bucket.name}/${this.name} is not generation ${want}`,
+        );
+    }
     const buf =
       typeof data === 'string'
         ? Buffer.from(data)
@@ -226,6 +240,7 @@ class DiskFile implements BlobFile {
         'application/octet-stream',
       size: buf.byteLength,
       // A rewrite is a new object (a new generation), as in Cloud Storage.
+      generation: nextGeneration(),
       timeCreated: now,
       updated: now,
       ...(custom
@@ -238,6 +253,9 @@ class DiskFile implements BlobFile {
     this.bucket.finalized(this.name, m);
   }
   async delete(options: { ignoreNotFound?: boolean } = {}): Promise<void> {
+    return this.bucket.locked(this.name, () => this.deleteNow(options));
+  }
+  private async deleteNow(options: { ignoreNotFound?: boolean }): Promise<void> {
     if (!(await this.exists())[0]) {
       if (options.ignoreNotFound) return;
       throw this.notFound();
@@ -252,7 +270,7 @@ class DiskFile implements BlobFile {
     await mkdir(dirname(dest.dataPath), { recursive: true });
     await copyFile(this.dataPath, dest.dataPath);
     const now = new Date().toISOString();
-    const next = { ...m, timeCreated: now, updated: now };
+    const next = { ...m, generation: nextGeneration(), timeCreated: now, updated: now };
     await dest.writeMeta(next);
     dest.metadata = DiskFile.toPublic(dest.name, next);
     dest.bucket.finalized(dest.name, next);
@@ -277,8 +295,30 @@ class DiskFile implements BlobFile {
   }
 }
 
+/** Unique and increasing: epoch µs-ish plus a counter (Cloud Storage's are µs timestamps). */
+let genSeq = 0;
+function nextGeneration(): string {
+  genSeq = (genSeq + 1) % 1000;
+  return `${Date.now()}${String(genSeq).padStart(3, '0')}`;
+}
+
+/** Writes to one object never interleave (a precondition check + write is atomic here). */
+const pathLocks = new Map<string, Promise<unknown>>();
+
 class DiskBucket implements Bucket {
   readonly root: string;
+  /** @internal Run fn alone on this object. */
+  locked<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    const key = `${this.root}\0${name}`;
+    const prev = pathLocks.get(key) ?? Promise.resolve();
+    const run = prev.then(fn, fn);
+    const tail = run.catch(() => undefined);
+    pathLocks.set(key, tail);
+    void tail.then(() => {
+      if (pathLocks.get(key) === tail) pathLocks.delete(key);
+    });
+    return run;
+  }
   constructor(readonly name: string) {
     if (!/^[A-Za-z0-9._-]+$/.test(name) || name === '.' || name === '..')
       throw new BlobError(400, `Invalid bucket name: ${name}`);
@@ -331,6 +371,7 @@ class DiskBucket implements Bucket {
     announce({
       bucket: this.name,
       name,
+      ...(m.generation ? { generation: m.generation } : {}),
       contentType: m.contentType,
       size: String(m.size),
       ...(m.metadata ? { metadata: m.metadata } : {}),

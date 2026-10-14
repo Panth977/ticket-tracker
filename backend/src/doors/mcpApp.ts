@@ -39,7 +39,8 @@ import {
 import { invoke } from '../platform/ops.js';
 import { readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { auth, db } from '../runtime/firebase.js';
+import { db } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { toAppError } from '../runtime/runner.js';
 import { requireCan } from '../tickets/access.js';
 import type { Query } from '../db/index.js';
@@ -241,7 +242,7 @@ async function resolveIds(ctx: ServerCtx, args: Record<string, unknown>, wantsBo
 const NEEDS_EMAIL = new Set<CommandName>(['inviteAccept', 'userList', 'userAllow', 'userDisallow']);
 async function withEmail(ctx: ServerCtx): Promise<ServerCtx> {
   if (isAgentId(ctx.actor)) return ctx;
-  const u = await auth().getUser(ctx.actor);
+  const u = await identity().getUser(ctx.actor);
   return { ...ctx, email: u.email ?? null, emailVerified: u.emailVerified };
 }
 

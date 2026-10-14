@@ -21,6 +21,8 @@ export interface ObjectMetadata {
   contentType?: string;
   timeCreated?: string;
   updated?: string;
+  /** Changes on every rewrite of the object (Cloud Storage's generation). */
+  generation?: string | number;
   /** Custom metadata (string values). */
   metadata?: Record<string, string | number | boolean | null | undefined>;
 }
@@ -28,6 +30,8 @@ export interface ObjectMetadata {
 export interface SaveOptions {
   contentType?: string;
   resumable?: boolean;
+  /** Write only if the object is still this generation (else an error with code 412). */
+  preconditionOpts?: { ifGenerationMatch?: number | string };
   metadata?: { metadata?: Record<string, string> } & Record<string, unknown>;
 }
 
@@ -75,6 +79,7 @@ export interface Bucket {
 export interface FinalizedObject {
   bucket: string;
   name: string;
+  generation?: string;
   contentType?: string;
   size?: string;
   metadata?: Record<string, string>;

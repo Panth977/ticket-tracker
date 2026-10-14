@@ -26,7 +26,7 @@
  * Neither can loosen anything in production: `openByDefault()` is false there
  * whatever the environment says.
  */
-import type { UserRecord } from 'firebase-admin/auth';
+import type { UserRecord } from '../identity/index.js';
 import { errors, paths, type AllowedUser, type User } from '@tm/shared';
 import {
   ALLOW_DOC,
@@ -43,7 +43,8 @@ import {
   type AllowEntry,
   type AllowList,
 } from '@tm/shared/config';
-import { auth, db, isEmulated } from '../runtime/firebase.js';
+import { db, isEmulated } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 
 /** The configured admin address. Never editable from inside the app. */
 export const theAdmin = (): string => adminEmail(process.env);
@@ -126,7 +127,7 @@ async function authRecords(emails: string[]): Promise<Map<string, UserRecord>> {
   const out = new Map<string, UserRecord>();
   if (!emails.length) return out;
   try {
-    const { users } = await auth().getUsers(emails.slice(0, 100).map((email) => ({ email })));
+    const { users } = await identity().getUsers(emails.slice(0, 100).map((email) => ({ email })));
     for (const u of users) if (u.email) out.set(normalizeEmail(u.email), u);
   } catch (e) {
     console.warn('[allow] could not read Auth records for the Users list', e);
@@ -226,7 +227,7 @@ export async function assertAllowedOwner(ownerUid: string): Promise<void> {
 /** The address behind a uid, or null. */
 export async function emailForUid(uid: string): Promise<string | null> {
   try {
-    return (await auth().getUser(uid)).email ?? null;
+    return (await identity().getUser(uid)).email ?? null;
   } catch {
     return null;
   }
@@ -262,7 +263,7 @@ export async function mirrorAllowed(email: string, allowed: boolean): Promise<st
 /** The uid behind an address, or null when nobody has ever signed in with it. */
 export async function uidForEmail(email: string): Promise<string | null> {
   try {
-    return (await auth().getUserByEmail(normalizeEmail(email))).uid;
+    return (await identity().getUserByEmail(normalizeEmail(email))).uid;
   } catch {
     return null;
   }
@@ -298,7 +299,7 @@ export async function disallowEmail(email: string, now: number): Promise<AllowLi
   if (uid) {
     // verifyIdToken(token, true) in the user middleware checks revocation, so
     // the next app request is a 401 "sign in again" even before the gate.
-    await auth()
+    await identity()
       .revokeRefreshTokens(uid)
       .catch((e: unknown) => console.warn(`[allow] could not revoke sessions for ${uid}`, e));
   }

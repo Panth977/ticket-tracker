@@ -27,7 +27,8 @@
  */
 import { errors, isAgentId, live, type RestLiveRes } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
-import { adminApp, auth, isEmulated } from '../runtime/firebase.js';
+import { adminApp, isEmulated } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { readableBoards } from './resolve.js';
 
 /**
@@ -113,7 +114,7 @@ export async function liveCredential(ctx: ServerCtx): Promise<RestLiveRes> {
   // A board token carries its board as a claim (the rules' `auth.token.board`);
   // a person is found through the boardReaders mirror and needs no claim.
   const claims: Record<string, string> = boardId ? { board: boardId } : {};
-  const custom = await auth().createCustomToken(ctx.actor, claims);
+  const custom = await identity().createCustomToken(ctx.actor, claims);
   const { idToken, expiresIn } = await exchangeCustomToken(custom);
   const paths: string[] = [];
   if (agent) paths.push(live.wake(ctx.actor));

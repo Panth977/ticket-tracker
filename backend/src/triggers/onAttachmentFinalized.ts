@@ -57,11 +57,20 @@ export async function handleAttachmentFinalized(
   if (parseAvatarPath(name)) {
     const [input] = await file.download();
     const out = await makeAvatar(input);
-    await file.save(out.data, {
-      resumable: false,
-      contentType: 'image/webp',
-      metadata: { metadata: { [PROCESSED_META]: 'avatar' } },
-    });
+    try {
+      await file.save(out.data, {
+        resumable: false,
+        contentType: 'image/webp',
+        metadata: { metadata: { [PROCESSED_META]: 'avatar' } },
+        // Only over the very upload that fired this: a profileUpdate may have
+        // deleted (or replaced) it while we resized, and must not see it back.
+        ...(obj.generation ? { preconditionOpts: { ifGenerationMatch: obj.generation } } : {}),
+      });
+    } catch (e) {
+      if ((e as { code?: number }).code === 412)
+        return { kind: 'skipped', reason: 'replaced or deleted meanwhile' };
+      throw e;
+    }
     return { kind: 'avatar' };
   }
 

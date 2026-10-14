@@ -38,6 +38,8 @@ export const MOUNTS = {
   content: '/c',
   /** Signed object URLs of the disk store, /blob/{read|write}/… (doors/blob.ts; VM only). */
   blob: '/blob',
+  /** Sign-in endpoints of the local identity, /identity/… (doors/identity.ts; VM only). */
+  identity: '/identity',
 } as const;
 export type MountName = keyof typeof MOUNTS;
 

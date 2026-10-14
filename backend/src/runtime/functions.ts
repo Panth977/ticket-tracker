@@ -25,7 +25,7 @@ import type {
 } from 'firebase-functions/v2/identity';
 import type { ScheduledEvent } from 'firebase-functions/v2/scheduler';
 import type { StorageObjectData } from 'firebase-functions/v2/storage';
-import type { UserRecord } from 'firebase-admin/auth';
+import type { UserRecord } from '../identity/index.js';
 import type { QueueName, QueuePayloads } from '@tm/shared';
 
 // The response types are not exported by firebase-functions; derive them from the handler signatures.

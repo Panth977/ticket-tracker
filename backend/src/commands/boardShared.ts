@@ -31,7 +31,8 @@ import { can, roleOf, type Action } from '@tm/shared/logic/index';
 import { ports } from '../adapters/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
-import { auth, db, isEmulated, rtdbAdmin } from '../runtime/firebase.js';
+import { db, isEmulated, rtdbAdmin } from '../runtime/firebase.js';
+import { identity } from '../identity/index.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { batchWriter } from '../tickets/doc.js';
 import type { QueryDocumentSnapshot, WriteBatch } from '../db/index.js';
@@ -196,7 +197,7 @@ export async function profileOf(uid: Uid): Promise<Profile> {
     return { name: d.name, email: d.email, avatarPath: d.avatarPath };
   }
   try {
-    const rec = await auth().getUser(uid);
+    const rec = await identity().getUser(uid);
     const email = (rec.email ?? '').toLowerCase();
     return {
       name: (rec.displayName || email.split('@')[0] || 'Someone').slice(0, 60),
