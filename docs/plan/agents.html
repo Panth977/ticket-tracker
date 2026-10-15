@@ -1063,6 +1063,12 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
         One they later lose access to stays in the list and simply is not shown.</li>
       <li><b>Deleting a workspace</b> deletes the grouping; its boards and artifacts are untouched. At most 50 workspaces, 200
         items each.</li>
+      <li><b>Sharing a workspace</b> (<code>workspaceShare</code>, the Share button on <code>/w/{id}</code>) is one-shot and
+        grants nothing by itself: each address is invited to every board in it (<code>inviteCreate</code>, where the owner may
+        invite) and given the role on every artifact and memory the owner owns (<code>artifactShare</code> /
+        <code>memoryShare</code>; <code>admin</code> is <code>editor</code> there). What the owner cannot share is skipped and
+        listed. Each address gets a copy of the grouping in their own sidebar (now, or at sign-up via
+        <code>_workspaceOffers</code>); sharing again refreshes that copy. Items added later are not shared.</li>
     </ul>
     <h3 id="ab2">AB2 · The sidebar: Workspaces, and hiding from the root</h3>
     <ul>

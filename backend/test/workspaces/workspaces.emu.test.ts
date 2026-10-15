@@ -8,6 +8,8 @@ import { paths } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { call, setupEmulators } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
+import { claimWorkspaceOffers, WORKSPACE_OFFERS } from '../../src/commands/workspaceShared.js';
+import { artifactRef } from '../../src/artifacts/shared.js';
 
 setupEmulators();
 
@@ -160,5 +162,97 @@ describe('artifact board access (§K)', () => {
     // Ravi, admin of the other board, ends that one too.
     await call(ravi, 'artifactBoardAccessSet', { artifactId, boardId: other.id, access: null });
     expect(await boards()).toEqual({});
+  });
+});
+
+describe('workspaceShare (one-shot)', () => {
+  it('invites to every board, shares every owned artifact and memory, copies the grouping', async () => {
+    const { asha, bob, priya } = await people('asha', 'bob', 'priya');
+    const mine = await seedBoard({ admin: asha });
+    const theirs = await seedBoard({ admin: priya, viewers: [asha] });
+    const { artifactId } = await call(asha, 'artifactCreate', { name: 'Dash' });
+    const { memoryId } = await call(asha, 'memoryCreate', { name: 'Notes' });
+    const { workspaceId } = await call(asha, 'workspaceCreate', {
+      name: 'Client X',
+      boardIds: [mine.id, theirs.id],
+      artifactIds: [artifactId],
+      memoryIds: [memoryId],
+    });
+    const stranger = `new.${Date.now()}@example.test`;
+
+    const r = await call(asha, 'workspaceShare', {
+      workspaceId,
+      emails: [bob.email, stranger, asha.email],
+      role: 'admin',
+    });
+    // Her own address is dropped; a board she may not invite to is skipped, once.
+    expect(r.shared.map((s) => s.email).sort()).toEqual([bob.email, stranger].sort());
+    expect(r.skipped).toEqual([expect.objectContaining({ kind: 'board', id: theirs.id })]);
+    expect(r.shared.find((s) => s.email === bob.email)).toEqual({
+      email: bob.email,
+      boards: 1,
+      artifacts: 1,
+      memories: 1,
+      workspace: 'copied',
+    });
+    expect(r.shared.find((s) => s.email === stranger)).toMatchObject({
+      boards: 1,
+      workspace: 'pending',
+    });
+
+    // Each item shared the way it always is: an invite at the role, 'admin' → 'editor' elsewhere.
+    const invites = await db()
+      .collection(paths.invites())
+      .where('boardId', '==', mine.id)
+      .where('status', '==', 'pending')
+      .get();
+    expect(invites.docs.map((d) => [d.data().email, d.data().role]).sort()).toEqual(
+      [
+        [bob.email, 'admin'],
+        [stranger, 'admin'],
+      ].sort(),
+    );
+    expect((await artifactRef(artifactId).get()).data()!.access[bob.uid]).toBe('editor');
+    expect((await db().doc(paths.memory(memoryId)).get()).data()!.access[bob.uid]).toBe('editor');
+    // Nothing was granted on the board yet: bob must accept the invitation.
+    expect((await db().doc(paths.board(mine.id)).get()).data()!.access[bob.uid]).toBeUndefined();
+
+    // Bob's sidebar copy; sharing again refreshes it rather than adding another.
+    const copies = async () => (await db().collection(paths.workspaces(bob.uid)).get()).docs;
+    expect((await copies()).map((d) => d.data())).toEqual([
+      expect.objectContaining({
+        name: 'Client X',
+        boardIds: [mine.id, theirs.id],
+        artifactIds: [artifactId],
+      }),
+    ]);
+    await call(asha, 'workspaceUpdate', { workspaceId, name: 'Client X (2025)' });
+    await call(asha, 'workspaceShare', { workspaceId, emails: [bob.email], role: 'viewer' });
+    expect((await copies()).map((d) => d.data().name)).toEqual(['Client X (2025)']);
+
+    // The stranger's copy waits for their account, then becomes theirs.
+    const offers = await db().collection(WORKSPACE_OFFERS).where('email', '==', stranger).get();
+    expect(offers.size).toBe(1);
+    await claimWorkspaceOffers('newcomer-uid', stranger, Date.now());
+    expect(
+      (await db().collection(paths.workspaces('newcomer-uid')).get()).docs[0]!.data(),
+    ).toMatchObject({
+      name: 'Client X',
+      position: 0,
+    });
+    expect(
+      (await db().collection(WORKSPACE_OFFERS).where('email', '==', stranger).get()).size,
+    ).toBe(0);
+  });
+
+  it('only the owner, only a person, a real workspace', async () => {
+    const { asha, bob } = await people('asha', 'bob');
+    const { workspaceId } = await call(asha, 'workspaceCreate', { name: 'Mine' });
+    await expect(
+      call(bob, 'workspaceShare', { workspaceId, emails: [asha.email], role: 'viewer' }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      call(asha, 'workspaceShare', { workspaceId, emails: [asha.email], role: 'viewer' }),
+    ).rejects.toMatchObject({ code: 'invalid' });
   });
 });

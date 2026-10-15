@@ -10,7 +10,7 @@
  *        board from the root list leaves the workspace
  */
 import { expect, test, type Page } from '@playwright/test';
-import { call, eventually, newBoard, newPerson, read } from '../support/stack.js';
+import { admin, call, eventually, newBoard, newPerson, read } from '../support/stack.js';
 import { signIn, subscribe } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
@@ -126,4 +126,46 @@ test('AB1–AB3: create a workspace, work inside it, hide a board from the root'
     .getByRole('button', { name: /Show .* in the sidebar/ })
     .click();
   await expect(boards.locator(`[data-board="${fr.key}"]`)).toBeVisible();
+});
+
+test('share a workspace: one go invites to its board and shares its artifact; the invitee gets the workspace', async ({
+  page,
+  browser,
+}) => {
+  const ada = await newPerson('Ada');
+  const ben = await newPerson('Ben');
+  const b = await newBoard(ada, { name: 'Client Board' });
+  const { artifactId } = await call(ada, 'artifactCreate', { name: 'Client Dashboard' });
+  const { workspaceId } = await call(ada, 'workspaceCreate', {
+    name: 'Client X',
+    boardIds: [b.id],
+    artifactIds: [artifactId],
+  });
+
+  await signIn(page, ada.email, `/w/${workspaceId}`);
+  await page.getByRole('button', { name: 'Share' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share “Client X”' });
+  await dialog.getByLabel('People').fill(ben.email);
+  await dialog.getByLabel('Role').selectOption('viewer');
+  await dialog.getByRole('button', { name: 'Share' }).click();
+  await expect(dialog.locator(`[data-share-email="${ben.email}"]`)).toContainText(
+    '1 board, 1 artifact, 0 memories',
+  );
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  // Ben: the workspace is in his sidebar; the board waits for him to accept.
+  const ctx = await browser.newContext();
+  const bp = await ctx.newPage();
+  await signIn(bp, ben.email, '/me');
+  await expect(sidebar(bp).getByText('Client X')).toBeVisible();
+  await ctx.close();
+  const invite = await eventually('the board invitation', async () => {
+    const q = await admin()
+      .db.collection('invites')
+      .where('boardId', '==', b.id)
+      .where('email', '==', ben.email.toLowerCase())
+      .get();
+    return q.docs[0]?.data();
+  });
+  expect(invite).toMatchObject({ role: 'viewer', status: 'pending' });
 });

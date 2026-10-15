@@ -25,6 +25,7 @@ import type { UserRecord } from '../identity/index.js';
 import { isAgentId, MAX_AVATAR_BYTES, storage } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { attachInvitesToInbox } from '../commands/inviteShared.js';
+import { claimWorkspaceOffers } from '../commands/workspaceShared.js';
 import { newUserDoc, userRef } from '../commands/profileShared.js';
 import { allowVerdict } from '../platform/allow.js';
 import { defineTrigger } from '../runtime/functions.js';
@@ -93,7 +94,11 @@ export async function handleUserCreated(user: UserRecord, fetchImpl: Fetch = fet
           .catch(() => {});
     }
   }
-  if (email && user.emailVerified) await attachInvitesToInbox(user.uid, email, now);
+  if (email && user.emailVerified) {
+    await attachInvitesToInbox(user.uid, email, now);
+    // A workspace someone shared with this address before it had an account.
+    await claimWorkspaceOffers(user.uid, email, now);
+  }
 }
 
 defineTrigger('onUserCreated', (user) => handleUserCreated(user));

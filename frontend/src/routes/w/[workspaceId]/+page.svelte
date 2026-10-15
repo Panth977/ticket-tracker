@@ -2,7 +2,8 @@
   /w/{id} — one of my workspaces (agents.html §AB): its boards, artifacts and
   memories as cards, on one page. Being here enters the workspace, so one
   opened from it keeps "Workspace › Name" and the workspace-only switcher.
-  Edit (name, colour, what is in it), remove one item, or delete the
+  Share it (everything in it, one-shot: WorkspaceShareDialog),
+  edit (name, colour, what is in it), remove one item, or delete the
   workspace — nothing it holds is touched. NO hide / show here: hiding is
   about the sidebar's root lists, and this page is not one of them.
 -->
@@ -11,7 +12,7 @@
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Pencil, Trash2 } from 'lucide-svelte';
+  import { Pencil, Share2, Trash2 } from 'lucide-svelte';
   import { MEMORY_DEFAULT_INDICATOR, paths, type Workspace } from '@tm/shared';
   import { command } from '$lib/api';
   import BoardTile from '$lib/account/BoardTile.svelte';
@@ -25,6 +26,7 @@
   import { Button, EmptyState, Skeleton } from '$lib/ui';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
   import WorkspaceDialog from '$lib/workspaces/WorkspaceDialog.svelte';
+  import WorkspaceShareDialog from '$lib/workspaces/WorkspaceShareDialog.svelte';
 
   const uid = $derived(auth.uid);
   const id = $derived(page.params.workspaceId ?? '');
@@ -54,6 +56,7 @@
   });
 
   let editing = $state(false);
+  let sharing = $state(false);
   let confirmDelete = $state(false);
   let busy = $state(false);
 
@@ -112,6 +115,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <Button icon={Share2} onclick={() => (sharing = true)}>Share</Button>
         <Button icon={Pencil} onclick={() => (editing = true)}>Edit</Button>
         {#if confirmDelete}
           <Button variant="danger" loading={busy} onclick={del}>Delete workspace</Button>
@@ -203,4 +207,13 @@
   {/if}
 </div>
 
-{#if ws}<WorkspaceDialog bind:open={editing} workspace={ws} />{/if}
+{#if ws}
+  <WorkspaceDialog bind:open={editing} workspace={ws} />
+  <WorkspaceShareDialog
+    bind:open={sharing}
+    workspace={ws}
+    names={Object.fromEntries(
+      [...boards, ...artifacts, ...memories].map((x) => [x.id, x.name] as [string, string]),
+    )}
+  />
+{/if}

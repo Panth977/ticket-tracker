@@ -109,6 +109,7 @@ export const COMMANDS = {
   workspaceUpdate: workspaces.workspaceUpdate,
   workspaceDelete: workspaces.workspaceDelete,
   sidebarHide: workspaces.sidebarHide,
+  workspaceShare: workspaces.workspaceShare,
   // memory (docs/plan/memory.html)
   memoryCreate: memory.memoryCreate,
   memoryUpdate: memory.memoryUpdate,
