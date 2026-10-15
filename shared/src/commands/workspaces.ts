@@ -130,7 +130,7 @@ const ShareItemKind = z.enum(['board', 'artifact', 'memory']);
  */
 export const workspaceShare = defineCommand({
   name: 'workspaceShare',
-  source: 'app',
+  source: 'extra',
   scopes: [...SCOPES, 'invites:write'],
   permission:
     "The workspace's owner, a person (never an agent). Each address is invited to every board in it that the owner may invite to (admin, or editor where editors can invite; editors cannot hand out admin), and given the role on every artifact and memory the owner owns ('admin' → 'editor' there). What the owner cannot share is skipped and listed. Each address also gets a copy of the workspace in their sidebar — when they first sign up, if they have no account yet. The board invite limit (50 a day) applies.",
