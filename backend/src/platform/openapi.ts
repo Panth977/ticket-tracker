@@ -67,6 +67,7 @@ import {
   RestLiveResSchema,
   RestOkResSchema,
   RestBoardQuerySchema,
+  RestEnvResSchema,
   RestBoardResSchema,
   RestCreateTicketBodySchema,
   RestDeletedResSchema,
@@ -149,6 +150,8 @@ const COMPONENTS: Record<string, z.ZodTypeAny> = {
   PostMessage: RestPostMessageBodySchema,
   // aggregates.html
   Aggregates: RestAggregatesResSchema,
+  // agents.html §AC
+  Env: RestEnvResSchema,
   File: PublicFileSchema,
   FileList: RestFileListResSchema,
   FileWithContent: RestFileResSchema,
@@ -262,6 +265,13 @@ const IO: Record<string, RouteIO> = {
     res: 'Board',
     notes: 'Members (people and agents) need members:read.',
   },
+  'GET /v1/env': {
+    query: RestBoardQuerySchema,
+    res: 'Env',
+    notes:
+      "agents.html §AC: the board's effective env (its org's pairs, then its own), the agent's own " +
+      "(agent tokens; null otherwise), and `env`, both merged with the agent's winning. Plain text — not for secrets.",
+  },
   'GET /v1/boards': {
     res: 'BoardList',
     notes: 'With an account token: every board you are on right now. Call this first.',
@@ -296,7 +306,8 @@ const IO: Record<string, RouteIO> = {
   'GET /v1/board/aggregates': {
     query: RestAggregatesQuerySchema,
     res: 'Aggregates',
-    notes: 'The same as GET /v1/boards/{KEY}/aggregates, the board named by ?board= (or the token).',
+    notes:
+      'The same as GET /v1/boards/{KEY}/aggregates, the board named by ?board= (or the token).',
   },
   'GET /v1/boards/{KEY}/aggregates': {
     query: RestAggregatesQuerySchema,

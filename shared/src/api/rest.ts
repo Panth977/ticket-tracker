@@ -34,6 +34,7 @@ import { ApiKeyKindSchema } from '../schema/user.js';
 import { AgentBoardRoleSchema } from '../schema/board.js';
 import { AGENT_DESCRIPTION_MAX, AGENT_NAME_MAX, AGENT_SYSTEM_PROMPT_MAX } from '../schema/agent.js';
 import { MAX_API_UPLOAD_BYTES } from '../logic/files.js';
+import { EnvVarsSchema } from '../env/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
 import { BOARD_TEMPLATES } from '../commands/boards.js';
 import {
@@ -348,6 +349,13 @@ export const RestAggregatesQuerySchema = z.object({
   to: z.string().regex(AGG_KEY_RE).optional(),
 });
 export const RestAggregatesResSchema = PublicAggBucketsSchema;
+
+/** GET /v1/env (agents.html §AC): the board's effective env, the agent's, and both merged. */
+export const RestEnvResSchema = z.object({
+  board: EnvVarsSchema,
+  agent: EnvVarsSchema.nullable(),
+  env: EnvVarsSchema,
+});
 
 // ───────────────────────── files ─────────────────────────
 
