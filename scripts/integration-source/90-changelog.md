@@ -17,6 +17,14 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 2.0.1 — 2026-10-15
+
+- **Everything under its owner** (docs/plan/agents.html §AC5). The app lists boards, artifacts and buckets only under
+  their owner (Orgs, Users), so hiding from the sidebar is gone: the app's MCP tool `sidebar_hide` is removed and
+  `list_orgs` no longer returns `hidden`.
+- **`ownerTransfer` to any person**, like transferring a repo: `to: { kind: 'user', id }` may name someone else, who
+  becomes the board's admin or the artifact's / bucket's owner. Its people stay.
+
 ### 2.0.0 — 2026-10-15
 
 Breaking: memories are now **buckets**, and everything has an owner (docs/plan/agents.html §AC).

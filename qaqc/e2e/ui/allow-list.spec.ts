@@ -51,7 +51,9 @@ test('a second account signs in, is refused, is allowed by the admin, and gets i
 
   // ── the admin: the Users module, beside Agents ──────────────────────────
   await signIn(page, owner.email, '/account/users');
-  await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible();
+  await expect(
+    page.locator('main').getByRole('heading', { name: 'Users', exact: true }),
+  ).toBeVisible();
   const list = page.getByRole('list', { name: 'People who may use this TaskManager' });
   const adminRow = list.getByRole('listitem').filter({ hasText: ADMIN_EMAIL });
   await expect(adminRow).toBeVisible();
