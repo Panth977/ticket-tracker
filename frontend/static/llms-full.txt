@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           1.6.0
+version:           2.0.0
 api:               v1
-updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    f8f72871fd1892378a796c54903fed082b21ed5a124217ddd65fc775f3277818
+updated:           2026-10-15  (the newest changelog entry — this file is byte-stable between releases on purpose)
+content-sha256:    349ef08fb67e3183ac98672cd210b81b0743f49363ac1770b6e9377d7b7a3c85
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -75,6 +75,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [8.9 A Vite project](#8-9-a-vite-project)
   - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
 - [9. Version and changelog](#9-version-and-changelog)
+  - [2.0.0 — 2026-10-15](#2-0-0-2026-10-15)
   - [1.6.0 — 2026-10-05](#1-6-0-2026-10-05)
   - [1.5.0 — 2026-10-05](#1-5-0-2026-10-05)
   - [1.4.0 — 2026-10-05](#1-4-0-2026-10-05)
@@ -3619,7 +3620,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **1.6.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **2.0.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -6049,9 +6050,9 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   1.6.0
+version   2.0.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
-updated   2026-10-05    the date of the newest changelog entry below
+updated   2026-10-15    the date of the newest changelog entry below
 ```
 
 **How to tell whether you are current.** Fetch `https://taskmanager-example.web.app/integrate.json` — it is small, never cached,
@@ -6062,6 +6063,21 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 2.0.0 — 2026-10-15
+
+Breaking: memories are now **buckets**, and everything has an owner (docs/plan/agents.html §AC).
+
+- **Memory → bucket, everywhere.** REST `/v1/memories…` → `/v1/buckets…`; MCP `memory_*` →
+  `bucket_*` (`memory_id` → `bucket_id`, `memory_files` → `bucket_files`); SDK `memoryFiles` /
+  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`. The old
+  names are gone, not aliased.
+- **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
+  repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
+  ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.
+- **Env.** Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
+  Env), inherited org → thing. `GET /v1/env` returns the effective env of the token's board merged
+  with its agent's: `{ board, agent, env }` (`env` merged, the agent winning). Not for secrets.
 
 ### 1.6.0 — 2026-10-05
 

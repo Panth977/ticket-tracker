@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "apiVersion": "v1",
-  "updated": "2026-10-05",
-  "contentSha256": "f8f72871fd1892378a796c54903fed082b21ed5a124217ddd65fc775f3277818",
+  "updated": "2026-10-15",
+  "contentSha256": "349ef08fb67e3183ac98672cd210b81b0743f49363ac1770b6e9377d7b7a3c85",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -575,6 +575,14 @@
         "board:read"
       ],
       "summary": "Stages, priorities, tags, fields, members"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/env",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment"
     },
     {
       "method": "GET",
@@ -1439,6 +1447,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "2.0.0",
+      "date": "2026-10-15"
+    },
     {
       "version": "1.6.0",
       "date": "2026-10-05"
