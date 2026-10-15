@@ -1154,6 +1154,10 @@ Agents · Notifications · Tokens · Sign out</pre>
         archived ones (boards restore from here); on my own page also my pending invitations. <code>/</code>, <code>/x</code> and
         <code>/bucket</code> land on my page.</li>
       <li><b>Move</b> (a thing's Danger zone / General settings): to me, to an org I run, or to another person by handle.</li>
+      <li><b>An org's picture</b> (Settings › General, <code>lib/orgs/OrgPictureEditor</code>): uploaded and cropped like a
+        person's own (a 256px WebP), stored as the org's image indicator at <code>indicators/{me}/{fileId}/picture.webp</code> and
+        saved with <code>orgUpdate { indicator }</code>, so the sidebar, the owner page and every "Org ›" crumb show it.
+        Without a picture an owner or admin may pick a colour, icon or emoji instead; Remove goes back to the default colour.</li>
     </ul>
 
     <h2>J · What gets built, in order</h2>
