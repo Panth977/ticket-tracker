@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           2.0.0
+version:           2.0.1
 api:               v1
 updated:           2026-10-15  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    f966fc3bbb28cae0ec572e7036aea20d0e74ad5ca34e141fa3ff55d46219d5d9
+content-sha256:    f35567a12d7b6c934081c55af020239ccf38bf045fbac47449b12f5a0325751d
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -75,6 +75,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [8.9 A Vite project](#8-9-a-vite-project)
   - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
 - [9. Version and changelog](#9-version-and-changelog)
+  - [2.0.1 — 2026-10-15](#2-0-1-2026-10-15)
   - [2.0.0 — 2026-10-15](#2-0-0-2026-10-15)
   - [1.6.0 — 2026-10-05](#1-6-0-2026-10-05)
   - [1.5.0 — 2026-10-05](#1-5-0-2026-10-05)
@@ -3640,7 +3641,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **2.0.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **2.0.1** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -6070,7 +6071,7 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   2.0.0
+version   2.0.1
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
 updated   2026-10-15    the date of the newest changelog entry below
 ```
@@ -6083,6 +6084,14 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 2.0.1 — 2026-10-15
+
+- **Everything under its owner** (docs/plan/agents.html §AC5). The app lists boards, artifacts and buckets only under
+  their owner (Orgs, Users), so hiding from the sidebar is gone: the app's MCP tool `sidebar_hide` is removed and
+  `list_orgs` no longer returns `hidden`.
+- **`ownerTransfer` to any person**, like transferring a repo: `to: { kind: 'user', id }` may name someone else, who
+  becomes the board's admin or the artifact's / bucket's owner. Its people stay.
 
 ### 2.0.0 — 2026-10-15
 

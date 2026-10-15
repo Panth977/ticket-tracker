@@ -197,6 +197,67 @@ describe('orgs (§AC)', () => {
     expect((await artifactRef(artifactId).get()).data()!.access[ben.uid]).toBeUndefined();
   });
 
+  it('transfer to another person, like a GitHub repo: they own it, the mover stays', async () => {
+    const { asha, ben, cy } = await people('asha', 'ben', 'cy');
+    const key = `T${uniq('')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(-5)}`;
+    const { boardId } = await call(asha, 'boardCreate', { name: 'Ops', key });
+    const { artifactId } = await call(asha, 'artifactCreate', { name: 'Wall' });
+    const { bucketId } = await call(asha, 'bucketCreate', { name: 'Kit' });
+    const bens = await ensureUserHandle(ben.uid);
+
+    // Only whoever fully manages it may give it away.
+    await expect(
+      call(cy, 'ownerTransfer', {
+        thing: { kind: 'artifact', id: artifactId },
+        to: { kind: 'user', id: cy.uid },
+      }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    // Never to somebody who is not there.
+    await expect(
+      call(asha, 'ownerTransfer', {
+        thing: { kind: 'board', id: boardId },
+        to: { kind: 'user', id: 'u_nobody_here' },
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    for (const [kind, id] of [
+      ['board', boardId],
+      ['artifact', artifactId],
+      ['bucket', bucketId],
+    ] as const) {
+      const r = await call(asha, 'ownerTransfer', {
+        thing: { kind, id },
+        to: { kind: 'user', id: ben.uid },
+      });
+      expect(r).toMatchObject({ owner: { kind: 'user', id: ben.uid }, handle: bens });
+    }
+    const b = await board(boardId);
+    expect(b).toMatchObject({ ownerKey: `user:${ben.uid}`, ownerHandle: bens });
+    expect(b.access).toMatchObject({ [asha.uid]: 'admin', [ben.uid]: 'admin' });
+    expect(b.readerUids).toContain(ben.uid);
+    expect((await db().doc(paths.member(boardId, ben.uid)).get()).data()).toMatchObject({
+      role: 'admin',
+    });
+    const a = (await artifactRef(artifactId).get()).data()!;
+    expect(a).toMatchObject({ ownerUid: ben.uid, ownerKey: `user:${ben.uid}`, slug: 'wall' });
+    expect(a.access).toMatchObject({ [asha.uid]: 'owner', [ben.uid]: 'owner' });
+    const m = (await bucketRef(bucketId).get()).data()!;
+    expect(m).toMatchObject({ ownerUid: ben.uid, ownerKey: `user:${ben.uid}` });
+    expect(m.memberUids).toContain(ben.uid);
+    // It now lives at Ben's address.
+    const at = await call(ben, 'pathResolve', { handle: bens, kind: 'artifact', slug: 'wall' });
+    expect(at.thing?.id).toBe(artifactId);
+    // And Ben, its owner now, may give it back.
+    await call(ben, 'ownerTransfer', {
+      thing: { kind: 'artifact', id: artifactId },
+      to: { kind: 'user', id: asha.uid },
+    });
+    expect((await artifactRef(artifactId).get()).data()).toMatchObject({ ownerUid: asha.uid });
+  });
+
   it('envs: things inherit their org’s, their own winning', async () => {
     const { asha } = await people('asha');
     const { orgId } = await call(asha, 'orgCreate', { handle: handle(), name: 'Delta' });

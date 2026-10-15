@@ -1,15 +1,25 @@
 /**
- * ownerTransfer (§AC) — move a board, artifact or bucket to another owner
- * (you, or an org where you are an owner or admin). Its people stay; the old
- * org's grants are taken back and the new org's added (syncThing). An
- * artifact or bucket gets a slug that is free at its new owner.
+ * ownerTransfer (§AC) — move a board, artifact or bucket to another owner,
+ * like transferring a GitHub repo: to a person (yourself or anyone else, who
+ * becomes its admin / owner) or to an org where you are an owner or admin.
+ * Its people stay; the old org's grants are taken back and the new org's
+ * added (syncThing). An artifact or bucket gets a slug that is free at its
+ * new owner.
  */
-import { errors, isAgentId, ownerKeyOf, roleOf, type OwnerRef } from '@tm/shared';
+import { errors, isAgentId, ownerKeyOf, paths, roleOf, type OwnerRef } from '@tm/shared';
 import { artifactRef } from '../artifacts/shared.js';
 import { bucketRef, reachFor } from '../bucket/shared.js';
 import { boardRef } from './boardShared.js';
 import { defineCommand } from './_registry.js';
-import { freeSlug, handleOf, loadOrg, requireOrgRole, syncThing } from '../org/shared.js';
+import { db } from '../db/index.js';
+import {
+  freeSlug,
+  grantOwner,
+  handleOf,
+  loadOrg,
+  requireOrgRole,
+  syncThing,
+} from '../org/shared.js';
 
 export default defineCommand('ownerTransfer', async (ctx, input) => {
   if (isAgentId(ctx.actor)) throw errors.forbidden('Agents cannot move things between owners');
@@ -44,7 +54,10 @@ export default defineCommand('ownerTransfer', async (ctx, input) => {
   // May I own things there?
   let org = null;
   if (to.kind === 'user') {
-    if (to.id !== ctx.actor) throw errors.forbidden('You can move things to yourself or to an org');
+    if (isAgentId(to.id)) throw errors.invalid('Things belong to people or orgs, not agents');
+    const u = (await db().doc(paths.user(to.id)).get()).data() as
+      { deletedAt?: number } | undefined;
+    if (!u || u.deletedAt) throw errors.not_found('No such person');
   } else {
     org = await loadOrg(to.id);
     requireOrgRole(org, ctx, 'admin');
@@ -64,5 +77,6 @@ export default defineCommand('ownerTransfer', async (ctx, input) => {
   // The old org's grants go (null org), then the new one's come.
   await syncThing(kind, id, null);
   if (org) await syncThing(kind, id, org);
+  else await grantOwner(kind, id, to.id);
   return { ok: true as const, owner: to, handle: await handleOf(to) };
 });

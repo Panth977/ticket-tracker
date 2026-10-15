@@ -1048,7 +1048,8 @@ DELETE /v1/artifacts/{id}/data/files/{path}</pre>
     <h2 id="ab">AB · Workspaces in the app: your own way to group boards and artifacts</h2>
     <p><b>Superseded by <a href="#ac">§AC</a> (ORCH-6).</b> Workspaces became orgs: the migration turned each into an org
     owned by its creator, with the things they owned in it. What follows is kept as the history of the sidebar and the title
-    switcher, which §AC reuses; hiding from the sidebar's root (§AB2) is unchanged.</p>
+    switcher, which §AC reuses. Hiding from the sidebar's root (§AB2) is gone too: there is no root list left to hide from
+    (§AC5), and the migration removes the hide lists.</p>
     <p>Not §Z's orchestrator workspaces (folders of configuration on the owner's machine): these live in the sidebar. A person with many boards and
     dashboards wanted <b>one place per area of their life or work</b> — Freelance, Health, Social — holding the boards and the
     artifacts that belong together, without moving or re-permissioning anything. Boards and artifacts are still created exactly as
@@ -1113,7 +1114,8 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
       <li><b>Owner on every thing</b> — <code>owner { kind, id }</code>, <code>ownerKey</code> (<code>org:{id}</code> /
         <code>user:{uid}</code>, for queries), <code>ownerHandle</code> (for links, re-stamped on renames and moves), and for an
         artifact or bucket a <code>slug</code> unique per owner. The create commands take an optional <code>owner</code>;
-        <code>ownerTransfer</code> moves a thing (its managers, to themselves or an org they run).</li>
+        <code>ownerTransfer</code> moves a thing, like transferring a repo: whoever fully manages it gives it to any person (who
+        becomes its board admin / artifact or bucket owner) or to an org they run. Its people stay, the mover included.</li>
       <li><b>Access is still the thing's access map.</b> An org reaches its things by <b>fan-out</b>: joining writes the member onto
         everything it owns — owners and admins as board admins and artifact / bucket owners, members at the base role — recorded in
         the thing's <code>orgGranted</code>. Leaving takes away exactly what the org gave; a role given directly survives; the higher of
@@ -1125,11 +1127,33 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
         agent's process environment. Plain text, not for secrets.</li>
       <li><b>The app</b> — <code>src/hooks.ts</code> reroutes owner-first URLs onto the existing pages (a slug through
         <code>pathResolve</code>), and <code>CanonicalUrl</code> rewrites the old <code>/b/KEY</code> · <code>/x/{id}</code> ·
-        <code>/bucket/{id}</code> forms in place. The sidebar's <b>Orgs</b> section holds what each org owns (it is no longer in the
-        root lists); the title switcher and the "Org ›" crumb follow the open item's owner org.</li>
+        <code>/bucket/{id}</code> forms in place. The title switcher and the "Org ›" crumb follow the open item's owner org.</li>
       <li><b>Migration</b> — <code>backend/src/migrate/restructure.ts</code>, one implementation for Firebase
         (<code>scripts/migrate-restructure.mjs</code>) and a VM (<code>node backend/lib/migrate/cli.js</code>): Memory → Bucket in the
-        data and Storage, handles, owners and slugs, workspaces → orgs. Dry run by default, idempotent.</li>
+        data and Storage, handles, owners and slugs, workspaces → orgs, and the sidebar hide lists removed. Dry run by default,
+        idempotent.</li>
+    </ul>
+    <h3 id="ac5">AC5 · Everything under its owner (the sidebar and the owner pages)</h3>
+    <p>Asked on ORCH-6 after §AC shipped: each thing is in a person's scope or an org's, and the app shows it only there — no root
+    lists, no "All boards", no hiding.</p>
+    <pre>— ORGS                      +    ← a new org
+  ▸ ● Freelance            [+]    ← my orgs (+ where I am an owner or admin), then orgs I only reach a thing of
+      ● FL FreeLance
+— USERS
+  ▾ ◯ Panth Patel (you)    [+]    ← my own space, unfolded by default
+      ● ORCH ORCH
+  ▸ ◯ Asha                        ← each person who shares something with me
+— YOU
+Agents · Notifications · Tokens · Sign out</pre>
+    <ul>
+      <li><b>The sidebar</b> (<code>lib/layout/SidebarOwners</code>, groups from <code>lib/orgs/owners.ts</code>) lists every board,
+        artifact and bucket I can open exactly once, under its owner. A row opens the owner's page; ▸ unfolds its things; the
+        group holding the open item is always unfolded.</li>
+      <li><b>+</b> on my own space and on orgs I am an owner or admin of: New board · New artifact · New bucket, owned there.</li>
+      <li><b>The owner's page</b> <code>/{handle}</code> is the only list: their boards, artifacts and buckets I can open, then the
+        archived ones (boards restore from here); on my own page also my pending invitations. <code>/</code>, <code>/x</code> and
+        <code>/bucket</code> land on my page.</li>
+      <li><b>Move</b> (a thing's Danger zone / General settings): to me, to an org I run, or to another person by handle.</li>
     </ul>
 
     <h2>J · What gets built, in order</h2>

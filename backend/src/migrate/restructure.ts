@@ -16,6 +16,8 @@
  *   3  WORKSPACES → ORGS: each person's workspace becomes an org they own
  *      (handle from its name); the boards, artifacts and buckets in it that
  *      they own move into it. The workspace documents are then removed.
+ *   4  NO MORE HIDING: everything lives under its owner in the sidebar, so
+ *      the per-person hide lists (users/{uid}/ui/sidebar) are removed.
  *
  * DRY RUN unless `apply`. IDEMPOTENT: a second run plans nothing.
  */
@@ -52,6 +54,7 @@ export interface RestructureSummary {
   orgs: number;
   movedIntoOrgs: number;
   workspacesRemoved: number;
+  sidebarsRemoved: number;
 }
 
 // ─── 1. the rename in the data ───────────────────────────────────────────────
@@ -148,6 +151,7 @@ const COLLECTION_IDS = [
     'items',
     'aggStats',
     'ui',
+    'workspaces',
   ]),
   // buckets / nodes are moved whole above; viewers hold an artifact's own data (anyone's JSON).
 ].filter((c) => !['buckets', 'nodes', 'viewers', 'builds'].includes(c));
@@ -190,6 +194,7 @@ export async function migrateRestructure(o: RestructureOptions): Promise<Restruc
     orgs: 0,
     movedIntoOrgs: 0,
     workspacesRemoved: 0,
+    sidebarsRemoved: 0,
   };
 
   // 1a. memories/{m} and their nodes → buckets/{m}
@@ -373,6 +378,14 @@ export async function migrateRestructure(o: RestructureOptions): Promise<Restruc
       s.workspacesRemoved++;
       if (apply) await w.ref.delete();
     }
+  }
+
+  // 4. no more hiding
+  for (const u of users.docs) {
+    const side = db.doc(`users/${u.id}/ui/sidebar`);
+    if (!(await side.get()).exists) continue;
+    s.sidebarsRemoved++;
+    if (apply) await side.delete();
   }
 
   log(`summary ${JSON.stringify(s)}`);

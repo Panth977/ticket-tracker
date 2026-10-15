@@ -160,18 +160,6 @@ service cloud.firestore {
         allow read: if isUser(uid);
         allow write: if false;
       }
-
-      // §AB — the person's own workspaces and sidebar (users/{uid}/ui/sidebar):
-      // private, and written only by workspaceCreate / workspaceUpdate /
-      // workspaceDelete / sidebarHide, which check every id is reachable.
-      match /workspaces/{workspaceId} {
-        allow read: if isUser(uid);
-        allow write: if false;
-      }
-      match /ui/{docId} {
-        allow read: if isUser(uid);
-        allow write: if false;
-      }
     }
 
     // ------------------------------------------------------------ top level

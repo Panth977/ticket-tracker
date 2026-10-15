@@ -7,16 +7,17 @@
  *   M5  right-click menus (new / delete file and folder, on a node and on the
  *       empty space), a rename with '/' that moves, the upload dialog's path
  *       field, and the drop target lighting up while a node is dragged
- *   M3  the list page is cards; hiding takes it out of the sidebar's root
+ *   M3  it lives under its owner: under me in the sidebar, a card on my page
+ *       (`/bucket` lands there); nothing hides it
  *   M4  an org owns it: its card is on the org's page, and opening it shows
  *       "Org ›" and the switcher of the org's things
  *
  * And the consistency asks that came with it:
- *   C1  All artifacts is cards too; an artifact's header (and its settings)
+ *   C1  artifacts are cards too (on my page); an artifact's header (and its settings)
  *       has the same title dropdown as a board's
  */
 import { expect, test, type Page } from '@playwright/test';
-import { admin, call, eventually, newBoard, newPerson, read } from '../support/stack.js';
+import { admin, call, eventually, newBoard, newPerson } from '../support/stack.js';
 import { signIn, thingIdAt } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
@@ -148,18 +149,16 @@ test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move 
   );
   await expect(nodeEl(page, 'archive')).toHaveCount(0);
 
-  // ── M3: the list is cards; hide from the sidebar ──────────────────────────
-  await sidebar(page).getByRole('link', { name: 'All bucket' }).click();
+  // ── M3: under its owner — me — in the sidebar and as a card on my page ──
+  await expect(
+    sidebar(page).locator('[data-owners="users"]').locator(`[data-bucket="${bucketId}"]`),
+  ).toBeVisible();
+  await page.goto('/bucket');
+  await page.waitForURL((u) => u.pathname !== '/bucket');
   const card = page.locator(`main a[data-bucket="${bucketId}"]`);
   await expect(card).toHaveClass(/rounded-xl/);
-  await card.hover();
-  await card.getByRole('button', { name: /Hide .* from the sidebar/ }).click();
-  await expect(sidebar(page).locator(`[data-bucket="${bucketId}"]`)).toHaveCount(0);
-  await eventually('hidden saved', async () => {
-    const side = await read<{ hiddenBucketIds?: string[] }>(`users/${ada.uid}/ui/sidebar`);
-    return side?.hiddenBucketIds?.includes(bucketId) ? true : null;
-  });
-  await expect(card).toContainText('Hidden from sidebar');
+  await expect(card).toContainText('Owner');
+  await expect(card.getByRole('button', { name: /Hide/ })).toHaveCount(0);
 
   // ── M4: an org owns it ───────────────────────────────────────────────────
   const handle = `st-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -180,6 +179,13 @@ test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move 
   await orgCard.click();
   await page.waitForURL(`**/${handle}/bucket/**`);
   await expect(page.locator('[data-org-crumb]')).toHaveText('Studio');
+  // …and in the sidebar under the org now, not under me.
+  await expect(
+    sidebar(page).locator('[data-owners="orgs"]').locator(`[data-bucket="${bucketId}"]`),
+  ).toBeVisible();
+  await expect(
+    sidebar(page).locator('[data-owners="users"]').locator(`[data-bucket="${bucketId}"]`),
+  ).toHaveCount(0);
   await page.locator('[data-bucket-switcher]').click();
   const menu = page.getByRole('menu');
   await expect(menu.getByRole('menuitem', { name: `${b.key} · Design` })).toBeVisible();

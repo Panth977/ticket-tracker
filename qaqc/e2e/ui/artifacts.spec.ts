@@ -184,7 +184,10 @@ test('the app: create from the sidebar, the list page, settings for the owner on
   await signIn(page, owner.email);
   await page.getByRole('button', { name: /new artifact/i }).click();
   await page.getByLabel('Name').fill('Wall dashboard');
-  await page.getByRole('button', { name: /^create/i }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^create/i })
+    .click();
   const id = await thingIdAt(page, owner, 'artifact');
   // nothing published yet → the empty state, not a broken frame
   await expect(page.getByText(/nothing published|no build|publish/i).first()).toBeVisible();

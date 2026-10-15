@@ -199,6 +199,9 @@
         "shell": true,
         "blocks": [
           {
+            "note": "agents.html §AC5: `/` (and `/x`, `/bucket`) now lands on my owner page, /{handle} — the boards, artifacts and buckets I own, the archived ones and my invitations. Nothing lists everything any more."
+          },
+          {
             "panel": "Invitations — Priya invited you to OPS · Operations as commenter",
             "lines": 1
           },
@@ -1103,12 +1106,13 @@
           },
           {
             "nav": [
-              "— Boards",
-              "● ENG Engineering •2",
-              "● OPS Operations",
-              "● HOME Home repairs",
-              "All boards & archived",
-              "+ New board"
+              "— Orgs  +",
+              "▸ ● Freelance  [+]",
+              "— Users",
+              "▾ ◯ Panth Patel (you)  [+]",
+              "    ● ENG Engineering •2",
+              "    ● OPS Operations",
+              "▸ ◯ Asha"
             ]
           },
           {
@@ -1121,7 +1125,7 @@
             ]
           },
           {
-            "note": "THE ONE NAVIGATION (agents.html §Q1). A FLAT list: no accordions. A board is one row — colour dot, key, name, unread count — and clicking it opens that board's default view (prefs.lastViewId, else board.defaultViewId). Views, People and Settings are not here: they are on the board page, behind the view tabs and ⚙ Settings. 'Invitations' appears only while one is pending. On a phone it is a drawer behind ☰"
+            "note": "EVERYTHING UNDER ITS OWNER (agents.html §AC5). Orgs (mine, then orgs I only reach a thing of) and Users (me, unfolded by default, then each person who shares something with me); ▸ unfolds an owner's boards, artifacts and buckets, each listed once. The + on my space and on orgs I run makes a board, artifact or bucket owned there. No root lists, no hiding. A board row opens its default view (prefs.lastViewId, else board.defaultViewId). Views, People and Settings are on the board page. 'Invitations' appears only while one is pending. On a phone it is a drawer behind ☰"
           }
         ]
       },

@@ -270,8 +270,8 @@ export const ownerTransfer = defineCommand({
   source: 'extra',
   scopes: ['boards:admin', 'artifacts:write', 'bucket:write'],
   permission:
-    "Whoever fully manages the thing (a board's admin, an artifact's or bucket's owner) AND may own things where it goes: themselves, or an org where they are an owner or admin. Its people stay; the new org's members are added at the org's roles, the old org's go.",
-  errors: ['forbidden', 'not_found', 'conflict'],
+    "Whoever fully manages the thing (a board's admin, an artifact's or bucket's owner). It may go to any person (who becomes its admin / owner), or to an org where the mover is an owner or admin. Its people stay; the new org's members are added at the org's roles, the old org's go.",
+  errors: ['forbidden', 'not_found', 'conflict', 'invalid'],
   req: req({ thing: ThingRefSchema, to: OwnerRefSchema }),
   res: z.object({ ok: z.literal(true), owner: OwnerRefSchema, handle: z.string() }),
 });

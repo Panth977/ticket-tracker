@@ -5,7 +5,7 @@
  */
 import type { Readable } from 'svelte/store';
 import { paths, type Org, type OwnerRef } from '@tm/shared';
-import { docStore, queryStore, type DocState, type QueryState, type WithId } from '$lib/stores';
+import { docStore, queryStore, type DocState, type QueryState } from '$lib/stores';
 
 /** Unsorted (sort by name where shown: an orderBy here would need a composite index). */
 export function myOrgs(uid: string | null | undefined): Readable<QueryState<Org>> {
@@ -25,11 +25,6 @@ export function ownerKeyOfThing(t: {
   createdBy?: string;
 }): string {
   return t.ownerKey ?? `user:${t.ownerUid ?? t.createdBy ?? ''}`;
-}
-
-/** Owned by one of these orgs? (Then it lives under the org in the sidebar, not in the root lists.) */
-export function inOrgs(t: { ownerKey?: string | null }, orgs: readonly WithId<Org>[]): boolean {
-  return !!t.ownerKey && orgs.some((o) => t.ownerKey === `org:${o.id}`);
 }
 
 export type { OwnerRef };

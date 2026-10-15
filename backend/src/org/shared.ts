@@ -275,6 +275,56 @@ export async function syncThing(
     await syncArtifactMirror(id, next as unknown as Parameters<typeof syncArtifactMirror>[1]);
 }
 
+/**
+ * A thing given to a person (ownerTransfer to a user): they get its top role
+ * — admin of a board, owner of an artifact or bucket — and an artifact or
+ * bucket names them its ownerUid. Whatever the org gave them before is
+ * theirs outright now. Everyone else keeps what they had. Idempotent.
+ */
+export async function grantOwner(kind: ThingKind, id: string, uid: Uid): Promise<void> {
+  const now = Date.now();
+  if (kind === 'board') {
+    const res = await runTx(async (tx) => {
+      const b = (await tx.get(boardRef(id))).data();
+      if (!b) return null;
+      const granted = { ...((b as { orgGranted?: Record<string, string> }).orgGranted ?? {}) };
+      const had = b.access[uid];
+      if (had === 'admin' && granted[uid] === undefined) return null;
+      delete granted[uid];
+      const access: Record<Uid, BoardRole> = { ...b.access, [uid]: 'admin' };
+      tx.update(boardRef(id), { access, ...deriveAccess(access), orgGranted: granted });
+      if (had) tx.update(memberRef(id, uid), { role: 'admin' });
+      return { fresh: !had, readerUids: deriveAccess(access).readerUids };
+    });
+    if (!res) return;
+    if (res.fresh)
+      await memberRef(id, uid).set(memberDoc(uid, 'admin', await profileOf(uid), null, now));
+    await syncReaders(id, res.readerUids);
+    return;
+  }
+  const ref = db().doc(`${kind === 'artifact' ? 'artifacts' : 'buckets'}/${id}`);
+  const next = await runTx(async (tx) => {
+    const t = (await tx.get(ref)).data() as
+      | { access: Record<Uid, string>; ownerUid: Uid; orgGranted?: Record<string, string> }
+      | undefined;
+    if (!t) return null;
+    const granted = { ...(t.orgGranted ?? {}) };
+    delete granted[uid];
+    const access = { ...t.access, [uid]: 'owner' };
+    const members =
+      kind === 'artifact'
+        ? artifactMembers(access as Parameters<typeof artifactMembers>[0])
+        : bucketMembers(access as Parameters<typeof bucketMembers>[0]);
+    tx.update(
+      ref as never,
+      { ...members, ownerUid: uid, orgGranted: granted, updatedAt: now } as never,
+    );
+    return { ...t, ...members, ownerUid: uid };
+  });
+  if (next && kind === 'artifact')
+    await syncArtifactMirror(id, next as unknown as Parameters<typeof syncArtifactMirror>[1]);
+}
+
 /** Every thing an org owns: [kind, id]. */
 export async function thingsOf(owner: OwnerRef): Promise<[ThingKind, string][]> {
   const key = ownerKeyOf(owner);

@@ -13,7 +13,6 @@ import * as questions from './questions.js';
 import * as tasklists from './tasklists.js';
 import * as tickets from './tickets.js';
 import * as users from './users.js';
-import * as workspaces from './workspaces.js';
 import * as artifacts from '../artifacts/commands.js';
 import * as bucket from '../bucket/commands.js';
 import * as env from '../env/index.js';
@@ -28,7 +27,6 @@ export * from './agents.js';
 export * from './questions.js';
 export * from './tasklists.js';
 export * from './users.js';
-export * from './workspaces.js';
 
 export const COMMANDS = {
   // boards, people, views
@@ -106,8 +104,6 @@ export const COMMANDS = {
   artifactDataClear: artifacts.artifactDataClear,
   artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
   boardArtifactList: artifacts.boardArtifactList,
-  // workspaces (agents.html §AB): a person's own sidebar
-  sidebarHide: workspaces.sidebarHide,
   // envs: key/value pairs on boards, artifacts, buckets, agents, orgs
   envGet: env.envGet,
   envSet: env.envSet,

@@ -499,19 +499,4 @@ describe('bucket: delete (§G)', () => {
       expect(await stored(`buckets/${bucketId}/`)).toEqual([]);
     },
   );
-
-  it('sidebarHide hides a bucket; never one you cannot reach', async () => {
-    const { owner, other } = await people('owner', 'other');
-    const bucketId = await newBucket(owner);
-    const theirs = await newBucket(other);
-    await expect(
-      call(owner, 'sidebarHide', { bucketId: theirs, hidden: true }),
-    ).rejects.toMatchObject({
-      code: 'invalid',
-    });
-    await call(owner, 'sidebarHide', { bucketId, hidden: true });
-    expect((await db().doc(paths.sidebarPrefs(owner.uid)).get()).data()!.hiddenBucketIds).toEqual([
-      bucketId,
-    ]);
-  });
 });
