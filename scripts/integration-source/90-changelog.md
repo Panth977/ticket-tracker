@@ -17,6 +17,21 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 2.0.0 — 2026-10-15
+
+Breaking: memories are now **buckets**, and everything has an owner (docs/plan/agents.html §AC).
+
+- **Memory → bucket, everywhere.** REST `/v1/memories…` → `/v1/buckets…`; MCP `memory_*` →
+  `bucket_*` (`memory_id` → `bucket_id`, `memory_files` → `bucket_files`); SDK `memoryFiles` /
+  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`. The old
+  names are gone, not aliased.
+- **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
+  repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
+  ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.
+- **Env.** Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
+  Env), inherited org → thing. `GET /v1/env` returns the effective env of the token's board merged
+  with its agent's: `{ board, agent, env }` (`env` merged, the agent winning). Not for secrets.
+
 ### 1.6.0 — 2026-10-05
 
 - **Aggregate fields** (docs/plan/aggregates.html). Cost is no longer a concept of its own: a board

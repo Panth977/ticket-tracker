@@ -926,24 +926,19 @@
       }
     },
     {
-      "name": "Workspace",
+      "name": "Owner",
       "platform": "svelte",
-      "route": "/w/[workspaceId]",
+      "route": "/[handle]",
       "reads": [
-        "app/schema/workspaces",
         "app/schema/boards",
         "app/schema/artifacts"
       ],
-      "calls": [
-        "app/services/workspaceUpdate",
-        "app/services/workspaceDelete"
-      ],
+      "calls": [],
       "components": [
         "Shell"
       ],
       "uses": [
-        "app/schema/workspaces",
-        "app/services/workspaceUpdate"
+        "app/schema/boards"
       ],
       "wire": {
         "shell": true,
@@ -951,8 +946,9 @@
           {
             "bar": [
               "● Freelance",
-              "Edit",
-              "Delete"
+              "@freelance · Org",
+              "New board",
+              "Settings"
             ]
           },
           {

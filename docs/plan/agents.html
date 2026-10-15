@@ -1046,6 +1046,9 @@ DELETE /v1/artifacts/{id}/data/files/{path}</pre>
     </ul>
 
     <h2 id="ab">AB · Workspaces in the app: your own way to group boards and artifacts</h2>
+    <p><b>Superseded by <a href="#ac">§AC</a> (ORCH-6).</b> Workspaces became orgs: the migration turned each into an org
+    owned by its creator, with the things they owned in it. What follows is kept as the history of the sidebar and the title
+    switcher, which §AC reuses; hiding from the sidebar's root (§AB2) is unchanged.</p>
     <p>Not §Z's orchestrator workspaces (folders of configuration on the owner's machine): these live in the sidebar. A person with many boards and
     dashboards wanted <b>one place per area of their life or work</b> — Freelance, Health, Social — holding the boards and the
     artifacts that belong together, without moving or re-permissioning anything. Boards and artifacts are still created exactly as
@@ -1094,6 +1097,40 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
     <p>The four commands carry the account scopes <code>boards:create</code> / <code>boards:admin</code>, so the MCP bridge
     (<code>doors/mcpApp.ts</code>) exposes them as <code>workspace_create</code>, <code>workspace_update</code>,
     <code>workspace_delete</code> and <code>sidebar_hide</code>; <code>list_workspaces</code> reads them back with board keys.</p>
+
+    <h2 id="ac">AC · Owners and orgs: everything belongs to someone, at /{owner}/{thing}</h2>
+    <p>GitHub's shape (decided on ORCH-6): a board, an artifact or a bucket belongs to exactly one <b>owner</b> — a person or an
+    <b>org</b> — and lives at <code>/{handle}/b/{KEY}</code>, <code>/{handle}/x/{slug}</code>, <code>/{handle}/bucket/{slug}</code>.
+    People are invited to an org (and reach everything it owns) or to one thing (a collaborator).</p>
+    <ul>
+      <li><b>Handles</b> — <code>handles/{handle}</code> = <code>{ kind: 'user' | 'org', id }</code>: one namespace for people and orgs,
+        2–39 of <code>a-z 0-9 -</code>, minus the app's own first path segments. Every person gets one (from their e-mail, at
+        sign-up or by the migration) and changes it in Account › Profile (<code>handleSet</code>).</li>
+      <li><b>Orgs</b> — <code>orgs/{orgId}</code>: name, handle, <code>members { uid: owner | admin | member }</code> and a
+        <b>base role</b> (none / viewer / commenter / editor / admin). <code>orgCreate</code>, <code>orgUpdate</code>,
+        <code>orgDelete</code> (only an empty org), <code>orgInvite</code> (invites/ documents with <code>orgId</code>, accepted like a
+        board invite), <code>orgMemberSet</code> (an org always keeps an owner).</li>
+      <li><b>Owner on every thing</b> — <code>owner { kind, id }</code>, <code>ownerKey</code> (<code>org:{id}</code> /
+        <code>user:{uid}</code>, for queries), <code>ownerHandle</code> (for links, re-stamped on renames and moves), and for an
+        artifact or bucket a <code>slug</code> unique per owner. The create commands take an optional <code>owner</code>;
+        <code>ownerTransfer</code> moves a thing (its managers, to themselves or an org they run).</li>
+      <li><b>Access is still the thing's access map.</b> An org reaches its things by <b>fan-out</b>: joining writes the member onto
+        everything it owns — owners and admins as board admins and artifact / bucket owners, members at the base role — recorded in
+        the thing's <code>orgGranted</code>. Leaving takes away exactly what the org gave; a role given directly survives; the higher of
+        the two wins while both apply. So no rule, permission check or list query had to change, and the board is still where a
+        role is read — orgs only write it.</li>
+      <li><b>Envs</b> — key/value pairs on boards, artifacts, buckets, agents and orgs (<code>envGet</code> / <code>envSet</code>,
+        each thing's settings › Env, server-only <code>_env/{kind}:{id}</code>). A thing inherits its org's pairs, its own winning.
+        <code>GET /v1/env</code> gives an orchestrator its board's and its agent's, merged — the workspaces orch puts them in its
+        agent's process environment. Plain text, not for secrets.</li>
+      <li><b>The app</b> — <code>src/hooks.ts</code> reroutes owner-first URLs onto the existing pages (a slug through
+        <code>pathResolve</code>), and <code>CanonicalUrl</code> rewrites the old <code>/b/KEY</code> · <code>/x/{id}</code> ·
+        <code>/bucket/{id}</code> forms in place. The sidebar's <b>Orgs</b> section holds what each org owns (it is no longer in the
+        root lists); the title switcher and the "Org ›" crumb follow the open item's owner org.</li>
+      <li><b>Migration</b> — <code>backend/src/migrate/restructure.ts</code>, one implementation for Firebase
+        (<code>scripts/migrate-restructure.mjs</code>) and a VM (<code>node backend/lib/migrate/cli.js</code>): Memory → Bucket in the
+        data and Storage, handles, owners and slugs, workspaces → orgs. Dry run by default, idempotent.</li>
+    </ul>
 
     <h2>J · What gets built, in order</h2>
     <p>This is on the build dashboard as phase 2:</p>
