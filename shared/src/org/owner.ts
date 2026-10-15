@@ -15,6 +15,8 @@ export const OwnedFieldsShape = {
   owner: OwnerRefSchema.optional(),
   /** ownerKeyOf(owner), for where('ownerKey', '==', …). */
   ownerKey: z.string().optional(),
+  /** The owner's handle, copied here for links (/{ownerHandle}/b/{KEY}); kept in step on renames and moves. */
+  ownerHandle: z.string().optional(),
   /**
    * §AC: roles the OWNER ORG gave (uid → the role it gave), so leaving the
    * org takes away only those. A role given directly is not in here.

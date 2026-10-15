@@ -4,6 +4,7 @@
   Deleting removes every file for good, so it asks for the name.
 -->
 <script lang="ts">
+  import MoveOwner from '$lib/orgs/MoveOwner.svelte';
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { untrack } from 'svelte';
@@ -143,6 +144,7 @@
   <div
     class="flex max-w-2xl flex-col divide-y divide-line rounded-xl border border-danger/40 bg-surface"
   >
+    {#if s.isOwner}<MoveOwner kind="bucket" id={s.bucket.id} ownerKey={s.bucket.ownerKey} />{/if}
     <div class="flex flex-wrap items-center gap-3 p-5">
       <div class="min-w-0 flex-1">
         <h3 class="font-medium">{archived ? 'Restore this bucket' : 'Archive this bucket'}</h3>

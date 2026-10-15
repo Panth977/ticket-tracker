@@ -55,9 +55,16 @@
       const r = await command('inviteAccept', { inviteId, token, accept: true }, { toast: false });
       // A brand-new account still has Welcome to do; the guard sends it there.
       // An invite to an ARTIFACT (artifacts.html §B) names no board.
-      await goto(r.artifactId ? routes.artifact(r.artifactId) : routes.board(r.boardKey), {
-        replaceState: true,
-      });
+      await goto(
+        r.orgHandle
+          ? routes.owner(r.orgHandle)
+          : r.artifactId
+            ? routes.artifact(r.artifactId)
+            : routes.board(r.boardKey),
+        {
+          replaceState: true,
+        },
+      );
     } catch (e) {
       if (!isAppError(e)) throw e;
       // inviteAccept answers 403 { invitedEmail: 'a***@acme.com' } (masked).
@@ -126,7 +133,9 @@
           </h1>
           <p class="text-sm text-muted">
             as <Badge tone="accent">{ROLE_LABELS[invite.role]}</Badge>
-            {#if !invite.artifactId}on <span class="font-mono">{invite.boardKey}</span>{/if}
+            {#if !invite.artifactId && !invite.orgId}on <span class="font-mono"
+                >{invite.boardKey}</span
+              >{/if}
           </p>
         </div>
         {#if invite.message}

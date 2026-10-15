@@ -304,16 +304,22 @@ export async function syncOrg(orgId: string): Promise<void> {
 export async function ownerForCreate(
   creator: Uid,
   wanted: OwnerRef | undefined,
-): Promise<{ fields: { owner: OwnerRef; ownerKey: string }; org: (Org & { id: string }) | null }> {
+): Promise<{
+  fields: { owner: OwnerRef; ownerKey: string; ownerHandle: string };
+  org: (Org & { id: string }) | null;
+}> {
   if (!wanted || (wanted.kind === 'user' && wanted.id === creator)) {
     const owner: OwnerRef = { kind: 'user', id: creator };
-    return { fields: { owner, ownerKey: ownerKeyOf(owner) }, org: null };
+    return {
+      fields: { owner, ownerKey: ownerKeyOf(owner), ownerHandle: await ensureUserHandle(creator) },
+      org: null,
+    };
   }
   if (wanted.kind === 'user')
     throw errors.forbidden('You can only create things for yourself or an org');
   const org = await loadOrg(wanted.id);
   if (!orgRoleOf(org, creator)) throw errors.not_found('No such org');
-  return { fields: { owner: wanted, ownerKey: ownerKeyOf(wanted) }, org };
+  return { fields: { owner: wanted, ownerKey: ownerKeyOf(wanted), ownerHandle: org.handle }, org };
 }
 
 export const ownerKeyOfThing = ownerKeyOf;
@@ -325,3 +331,12 @@ provideOrgEnvTarget(async (ctx, id, op) => {
   else if (!orgRoleOf(org, ctx.actor)) throw errors.not_found('No such org');
   return { id, orgId: null };
 });
+
+/** An owner's handle changed: every thing it owns carries the new one. */
+export async function restampHandle(owner: OwnerRef, handle: string): Promise<void> {
+  const things = await thingsOf(owner);
+  for (const [kind, id] of things) {
+    const col = kind === 'board' ? 'boards' : kind === 'artifact' ? 'artifacts' : 'buckets';
+    await db().doc(`${col}/${id}`).update({ ownerHandle: handle });
+  }
+}

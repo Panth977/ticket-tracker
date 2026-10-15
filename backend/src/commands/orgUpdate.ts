@@ -2,7 +2,15 @@
 import { descriptionText } from '@tm/shared/logic/index';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
-import { claimHandle, handleRef, loadOrg, orgRef, requireOrgRole, syncOrg } from '../org/shared.js';
+import {
+  claimHandle,
+  handleRef,
+  loadOrg,
+  orgRef,
+  requireOrgRole,
+  restampHandle,
+  syncOrg,
+} from '../org/shared.js';
 
 export default defineCommand('orgUpdate', async (ctx, input) => {
   const { orgId } = input;
@@ -27,5 +35,6 @@ export default defineCommand('orgUpdate', async (ctx, input) => {
     tx.update(orgRef(orgId), patch);
   });
   if (resync) await syncOrg(orgId);
+  if (input.handle) await restampHandle({ kind: 'org', id: orgId }, input.handle);
   return { ok: true as const };
 });

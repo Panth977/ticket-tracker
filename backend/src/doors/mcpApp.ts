@@ -123,11 +123,6 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
     'Wipe an artifact’s data (Firestore, RTDB and files) — builds stay. Confirm first.',
   artifactBoardAccessSet:
     'Let an artifact’s page read (or read and write) a board’s tickets through BackendDriver.tickets, or take that away (access null). Viewers still only see what their own board role allows.',
-  workspaceCreate:
-    'Create one of your workspaces: a named bundle of boards and artifacts in your sidebar (grants nothing), with an optional description and indicator.',
-  workspaceUpdate:
-    'Rename a workspace, change its description or indicator, or attach and detach boards and artifacts (add / remove, or whole lists).',
-  workspaceDelete: 'Delete a workspace. Its boards and artifacts are untouched.',
   sidebarHide:
     'Hide a board, artifact or bucket from your sidebar’s root lists, or show it again. Nothing about it changes otherwise.',
   // Bucket (docs/plan/bucket.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
@@ -413,21 +408,25 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
     async (a) => docs(db().collection(paths.integrations((await admin(a)).id))),
   );
   read(
-    'list_workspaces',
+    'list_orgs',
     ['board:read'],
-    'Your workspaces (bundles of boards and artifacts: ids, names, descriptions, indicators) and what you hid from the sidebar.',
+    'Your orgs (agents.html §AC): id, handle, name, your role, the base role every member gets, and the boards, artifacts and buckets each owns that you can open. Also what you hid from the sidebar.',
     {},
     async () => {
-      const [ws, side, boards] = await Promise.all([
-        docs(db().collection(paths.workspaces(ctx.actor)).orderBy('position')),
+      const [orgs, side, boards] = await Promise.all([
+        docs(db().collection(paths.orgs()).where('memberUids', 'array-contains', ctx.actor)),
         db().doc(paths.sidebarPrefs(ctx.actor)).get(),
-        readableBoards(ctx, { includeArchived: true }),
+        readableBoards(ctx, { includeArchived: false }),
       ]);
-      const key = new Map(boards.map((b) => [b.id, b.key]));
-      const keys = (ids: unknown) =>
-        (Array.isArray(ids) ? (ids as string[]) : []).map((id) => key.get(id) ?? id);
       return {
-        workspaces: ws.map((w) => ({ ...w, boards: keys((w as { boardIds?: unknown }).boardIds) })),
+        orgs: orgs.map((o) => {
+          const org = o as { id: string; members?: Record<string, string> };
+          return {
+            ...(scrub(o) as object),
+            my_role: org.members?.[ctx.actor] ?? null,
+            boards: boards.filter((b) => b.ownerKey === `org:${org.id}`).map((b) => b.key),
+          };
+        }),
         hidden: side.exists ? scrub(side.data()) : { hiddenBoardIds: [], hiddenArtifactIds: [] },
       };
     },

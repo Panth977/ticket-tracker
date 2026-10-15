@@ -18,8 +18,7 @@
   import { routes } from '$lib/layout/routes';
   import { Principal } from '$lib/people';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems, setHidden } from '$lib/workspaces/store';
+  import { hiddenItems, setHidden } from '$lib/layout/hidden';
 
   const uid = $derived(auth.uid);
   const q = $derived(myArtifacts(uid));
@@ -90,7 +89,6 @@
                     a.name,
                   )
               : null}
-            onopen={() => workspaceContext.leave()}
           >
             {#snippet meta()}
               <span class="flex min-w-0 items-center gap-1"
@@ -131,8 +129,7 @@
             <a
               class="flex-1 truncate text-sm hover:underline"
               href={routes.artifact(a.id)}
-              data-artifact={a.id}
-              onclick={() => workspaceContext.leave()}>{a.name}</a
+              data-artifact={a.id}>{a.name}</a
             >
             <span class="text-xs text-subtle">archived {relativeTime(a.archivedAt ?? 0)}</span>
           </li>

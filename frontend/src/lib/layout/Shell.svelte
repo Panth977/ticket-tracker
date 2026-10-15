@@ -23,7 +23,7 @@
   import IconButton from '$lib/ui/IconButton.svelte';
   import Sidebar from './Sidebar.svelte';
   import { registerNavProviders } from './navProviders';
-  import { myWorkspaces } from '$lib/workspaces/store';
+  import { myOrgs } from '$lib/orgs/store';
   import { myBuckets } from '$lib/bucket/store';
   import { routes } from './routes';
 
@@ -35,14 +35,14 @@
   const boards = $derived(myBoards(auth.uid));
 
   const artifacts = $derived(myArtifacts(auth.uid));
-  const workspaces = $derived(myWorkspaces(auth.uid));
+  const orgs = $derived(myOrgs(auth.uid));
   const buckets = $derived(myBuckets(auth.uid));
 
   $effect(() =>
     registerNavProviders(
       () => boards,
       () => artifacts,
-      () => workspaces,
+      () => orgs,
       () => buckets,
     ),
   );

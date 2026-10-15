@@ -15,12 +15,11 @@
   import { provideBucketSettings } from '$lib/bucket/settings/context.svelte';
   import { bucketDoc, bucketRoleIn, bucketSettingsFor } from '$lib/bucket/store';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { switcherFor } from '$lib/workspaces/switcherStore';
-  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import { switcherFor } from '$lib/orgs/switcherStore';
+  import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import Indicator from '$lib/ui/Indicator.svelte';
   import { BUCKET_DEFAULT_INDICATOR } from '@tm/shared';
-  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -31,7 +30,7 @@
   const me = $derived(auth.uid ?? '');
   const role = $derived(bucketRoleIn(m, me));
   const sections = $derived(bucketSettingsFor(role));
-  const switchQ = $derived(switcherFor(me, { bucketId }, workspaceContext.id));
+  const switchQ = $derived(switcherFor(me, { bucketId }));
 
   provideBucketSettings({
     get bucket() {
@@ -66,7 +65,7 @@
   </EmptyState>
 {:else}
   <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-    {#if $switchQ.workspace}<WorkspaceCrumb workspace={$switchQ.workspace} />{/if}
+    {#if $switchQ.org}<OrgCrumb org={$switchQ.org} />{/if}
     <TitleSwitcher
       kind="bucket"
       items={$switchQ.items}

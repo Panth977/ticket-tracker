@@ -106,8 +106,6 @@ export const routes = {
    */
   artifacts: () => '/x',
   artifact: (artifactId: string) => `/x/${artifactId}`,
-  /** §AB: one of my workspaces — its boards and artifacts on one page. */
-  workspace: (workspaceId: string) => `/w/${workspaceId}`,
   /** Bucket (docs/plan/bucket.html §F): the list, one bucket (?path= a file or folder), its settings. */
   buckets: () => '/bucket',
   bucket: (bucketId: string, path?: string | null) =>
@@ -120,6 +118,11 @@ export const routes = {
     artifactId: string,
     section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'env',
   ) => `/x/${artifactId}/settings/${section}`,
+  /** §AC: an owner's page — a person or an org (/{handle}). */
+  owner: (handle: string) => `/${handle}`,
+  /** §AC: an org's settings (/{handle}/settings/{section}). */
+  orgSettings: (handle: string, section: 'general' | 'members' | 'env' | 'danger' = 'general') =>
+    `/${handle}/settings/${section}`,
   /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
   integrate: () => '/integrate',
   backendDriver: () => '/backend-driver/',

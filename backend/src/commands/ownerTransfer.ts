@@ -52,7 +52,11 @@ export default defineCommand('ownerTransfer', async (ctx, input) => {
   if (from && ownerKeyOf(from) === ownerKeyOf(to))
     return { ok: true as const, owner: to, handle: await handleOf(to) };
 
-  const fields: Record<string, unknown> = { owner: to, ownerKey: ownerKeyOf(to) };
+  const fields: Record<string, unknown> = {
+    owner: to,
+    ownerKey: ownerKeyOf(to),
+    ownerHandle: await handleOf(to),
+  };
   if (kind !== 'board') fields.slug = await freeSlug(kind, to, name, id);
   const ref =
     kind === 'board' ? boardRef(id) : kind === 'artifact' ? artifactRef(id) : bucketRef(id);

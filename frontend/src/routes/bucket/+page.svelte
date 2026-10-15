@@ -17,8 +17,7 @@
   import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
   import { bucketRoleIn, myBuckets, splitBuckets } from '$lib/bucket/store';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems, setHidden } from '$lib/workspaces/store';
+  import { hiddenItems, setHidden } from '$lib/layout/hidden';
 
   const uid = $derived(auth.uid);
   const q = $derived(myBuckets(uid));
@@ -84,7 +83,6 @@
               ? () =>
                   setHidden(uid, $hiddenQ, { bucketId: m.id }, !$hiddenQ.buckets.has(m.id), m.name)
               : null}
-            onopen={() => workspaceContext.leave()}
           >
             {#snippet meta()}
               <span>{m.stats.files} {m.stats.files === 1 ? 'file' : 'files'}</span>
@@ -119,8 +117,7 @@
             <a
               class="flex-1 truncate text-sm hover:underline"
               href={routes.bucket(m.id)}
-              data-bucket={m.id}
-              onclick={() => workspaceContext.leave()}>{m.name}</a
+              data-bucket={m.id}>{m.name}</a
             >
             <span class="text-xs text-subtle">archived {relativeTime(m.archivedAt ?? 0)}</span>
           </li>

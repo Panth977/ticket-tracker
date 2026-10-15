@@ -500,20 +500,15 @@ describe('bucket: delete (§G)', () => {
     },
   );
 
-  it('workspaces bundle buckets; sidebarHide hides them; only ones you reach', async () => {
+  it('sidebarHide hides a bucket; never one you cannot reach', async () => {
     const { owner, other } = await people('owner', 'other');
     const bucketId = await newBucket(owner);
     const theirs = await newBucket(other);
-    const { workspaceId } = await call(owner, 'workspaceCreate', {
-      name: 'Brand',
-      bucketIds: [bucketId],
-    });
-    expect(
-      (await db().doc(paths.workspace(owner.uid, workspaceId)).get()).data()!.bucketIds,
-    ).toEqual([bucketId]);
     await expect(
-      call(owner, 'workspaceUpdate', { workspaceId, add: { bucketIds: [theirs] } }),
-    ).rejects.toMatchObject({ code: 'invalid', details: { bucketIds: [theirs] } });
+      call(owner, 'sidebarHide', { bucketId: theirs, hidden: true }),
+    ).rejects.toMatchObject({
+      code: 'invalid',
+    });
     await call(owner, 'sidebarHide', { bucketId, hidden: true });
     expect((await db().doc(paths.sidebarPrefs(owner.uid)).get()).data()!.hiddenBucketIds).toEqual([
       bucketId,

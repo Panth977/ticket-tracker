@@ -1,19 +1,12 @@
 /**
- * WORKSPACES (agents.html §AB) — the person's own bundles of boards,
- * artifacts and buckets (bucket.html §F), and what they hid from the sidebar's root. Read straight from
- * users/{uid}/…; written only through the commands (workspaceCreate /
- * workspaceUpdate / workspaceDelete / sidebarHide).
+ * What a person hid from the sidebar's root lists (users/{uid}/ui/sidebar),
+ * read live; written only through sidebarHide. Hiding is about the sidebar
+ * only: the All pages and an owner's page still show the item.
  */
 import { derived, type Readable } from 'svelte/store';
-import { paths, type SidebarPrefs, type Workspace } from '@tm/shared';
+import { paths, type SidebarPrefs } from '@tm/shared';
 import { outbox } from '$lib/api';
-import { docStore, queryStore, type QueryState, type WithId } from '$lib/stores';
-
-export function myWorkspaces(uid: string | null | undefined): Readable<QueryState<Workspace>> {
-  return queryStore<Workspace>(
-    uid ? { path: paths.workspaces(uid), orderBy: [['position', 'asc']] } : null,
-  );
-}
+import { docStore } from '$lib/stores';
 
 export interface Hidden {
   boards: ReadonlySet<string>;
@@ -56,19 +49,5 @@ export function setHidden(
       label: `${hidden ? 'Hide' : 'Show'} ${label}`,
       optimistic: { path: paths.sidebarPrefs(uid), patch },
     },
-  );
-}
-
-/** The workspaces an id belongs to, by name — for "In: Freelance, Clients" hints. */
-export function workspacesOf(
-  list: readonly WithId<Workspace>[],
-  item: { boardId: string } | { artifactId: string } | { bucketId: string },
-): WithId<Workspace>[] {
-  return list.filter((w) =>
-    'boardId' in item
-      ? w.boardIds.includes(item.boardId)
-      : 'artifactId' in item
-        ? w.artifactIds.includes(item.artifactId)
-        : (w.bucketIds ?? []).includes(item.bucketId),
   );
 }

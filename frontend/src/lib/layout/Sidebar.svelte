@@ -2,7 +2,7 @@
   THE ONE NAVIGATION (app.json › Sidebar; agents.html §Q1). A flat list — no
   accordions, nothing two levels deep:
     (picture) Name ▾ · ⌘K Search · Inbox n · My work · Invitations n (only while pending)
-    — Workspaces: ▸ ● Name          ← its page; ▸ unfolds its boards + artifacts (agents.html §AB)
+    — Orgs: ▸ ● Name                ← /{handle}; ▸ unfolds what it owns (agents.html §AC)
     — Boards: ● KEY Name •n        ← one click = that board's default view (minus hidden ones)
         ↳ Analytics                ← under the OPEN board only (agents.html §Y3)
       All boards & archived · + New board
@@ -56,9 +56,10 @@
   import { BUCKET_DEFAULT_INDICATOR } from '@tm/shared';
   import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
   import { myBuckets, splitBuckets } from '$lib/bucket/store';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems, myWorkspaces } from '$lib/workspaces/store';
-  import SidebarWorkspaces from './SidebarWorkspaces.svelte';
+  import { hiddenItems } from '$lib/layout/hidden';
+  import { inOrgs, myOrgs } from '$lib/orgs/store';
+  import { parseThingPath } from '$lib/orgs/path';
+  import SidebarOrgs from './SidebarOrgs.svelte';
 
   const uid = $derived(auth.uid);
   const boardsQ = $derived(myBoards(uid));
@@ -101,26 +102,24 @@
   let newBucket = $state(false);
 
   const path: string = $derived(page.url.pathname);
-  const currentArtifact = $derived(path.startsWith('/x/') ? (path.split('/')[2] ?? null) : null);
-  const currentKey = $derived(path.startsWith('/b/') ? (path.split('/')[2] ?? null) : null);
-  const currentBucket = $derived(path.startsWith('/bucket/') ? (path.split('/')[2] ?? null) : null);
+  // /b/KEY or /{handle}/b/KEY (§AC); an artifact / bucket by id or by slug.
+  const at = $derived(parseThingPath(path));
+  const currentArtifact = $derived(at?.kind === 'artifact' ? at.ref : null);
+  const currentKey = $derived(at?.kind === 'board' ? at.ref.toUpperCase() : null);
+  const currentBucket = $derived(at?.kind === 'bucket' ? at.ref : null);
 
-  // §AB: the root lists leave out what I hid (the All pages and workspaces still show it).
+  // The root lists leave out what I hid, and what an org of mine owns (it is under the org, §AC).
   const hiddenQ = $derived(hiddenItems(uid));
-  const rootBoards = $derived(sorted.filter((b) => !$hiddenQ.boards.has(b.id)));
-  const rootArtifacts = $derived(artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id)));
-  const rootBuckets = $derived(buckets.filter((m) => !$hiddenQ.buckets.has(m.id)));
-  // Highlighted once: under the workspace I came through, when it holds the open item.
-  const wsQ = $derived(myWorkspaces(uid));
-  const inWs = $derived($wsQ.data.find((w) => w.id === workspaceContext.id) ?? null);
-  const currentBoardId = $derived(active.find((b) => b.key === currentKey)?.id ?? null);
-  const shownInWs = $derived(
-    !!inWs &&
-      ((!!currentBoardId && inWs.boardIds.includes(currentBoardId)) ||
-        (!!currentArtifact && inWs.artifactIds.includes(currentArtifact)) ||
-        (!!currentBucket && (inWs.bucketIds ?? []).includes(currentBucket))),
+  const orgsQ = $derived(myOrgs(uid));
+  const rootBoards = $derived(
+    sorted.filter((b) => !$hiddenQ.boards.has(b.id) && !inOrgs(b, $orgsQ.data)),
   );
-  const leave = () => workspaceContext.leave();
+  const rootArtifacts = $derived(
+    artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id) && !inOrgs(a, $orgsQ.data)),
+  );
+  const rootBuckets = $derived(
+    buckets.filter((m) => !$hiddenQ.buckets.has(m.id) && !inOrgs(m, $orgsQ.data)),
+  );
 
   async function signOut() {
     await auth.signOut();
@@ -147,7 +146,7 @@
     {/if}
   </div>
 
-  <SidebarWorkspaces
+  <SidebarOrgs
     boards={active}
     {artifacts}
     {buckets}
@@ -173,13 +172,12 @@
           board={b}
           starred={$prefsQ.get(b.id)?.starred ?? false}
           unread={unreadByBoard.get(b.id) ?? 0}
-          current={b.key === currentKey && !shownInWs}
+          current={b.key === currentKey}
           lastViewId={$prefsQ.get(b.id)?.lastViewId ?? null}
-          onclick={leave}
         />
       {/each}
     {/if}
-    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'} onclick={leave}
+    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'}
       >All boards & archived</NavItem
     >
     <NavItem href={routes.newBoard()} icon={Plus}>New board</NavItem>
@@ -195,10 +193,9 @@
       <p class="px-2 text-xs text-danger">Couldn't load artifacts.</p>
     {:else}
       {#each rootArtifacts as a (a.id)}
-        {@const current = a.id === currentArtifact && !shownInWs}
+        {@const current = a.id === currentArtifact || a.slug === currentArtifact}
         <a
           href={routes.artifact(a.id)}
-          onclick={leave}
           aria-current={current ? 'page' : undefined}
           data-artifact={a.id}
           class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
@@ -211,7 +208,7 @@
         </a>
       {/each}
     {/if}
-    <NavItem href={routes.artifacts()} icon={AppWindow} active={path === '/x'} onclick={leave}
+    <NavItem href={routes.artifacts()} icon={AppWindow} active={path === '/x'}
       >All artifacts</NavItem
     >
     <NavItem icon={Plus} onclick={() => (newArtifact = true)}>New artifact</NavItem>
@@ -225,10 +222,9 @@
       <p class="px-2 text-xs text-danger">Couldn't load bucket.</p>
     {:else}
       {#each rootBuckets as m (m.id)}
-        {@const current = m.id === currentBucket && !shownInWs}
+        {@const current = m.id === currentBucket || m.slug === currentBucket}
         <a
           href={routes.bucket(m.id)}
-          onclick={leave}
           aria-current={current ? 'page' : undefined}
           data-bucket={m.id}
           class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
@@ -241,9 +237,7 @@
         </a>
       {/each}
     {/if}
-    <NavItem href={routes.buckets()} icon={Brain} active={path === '/bucket'} onclick={leave}
-      >All bucket</NavItem
-    >
+    <NavItem href={routes.buckets()} icon={Brain} active={path === '/bucket'}>All bucket</NavItem>
     <NavItem icon={Plus} onclick={() => (newBucket = true)}>New bucket</NavItem>
   </div>
 

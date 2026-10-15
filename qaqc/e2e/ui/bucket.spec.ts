@@ -8,8 +8,8 @@
  *       empty space), a rename with '/' that moves, the upload dialog's path
  *       field, and the drop target lighting up while a node is dragged
  *   M3  the list page is cards; hiding takes it out of the sidebar's root
- *   M4  a workspace bundles it: the card is there (no hide / show on a
- *       workspace page), and opening it keeps "Workspace ›" and the switcher
+ *   M4  an org owns it: its card is on the org's page, and opening it shows
+ *       "Org ›" and the switcher of the org's things
  *
  * And the consistency asks that came with it:
  *   C1  All artifacts is cards too; an artifact's header (and its settings)
@@ -43,7 +43,7 @@ async function menuAction(page: Page, path: string, action: string) {
   await page.getByRole('menuitem', { name: action, exact: true }).click();
 }
 
-test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move / delete, hide, workspace', async ({
+test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move / delete, hide, org', async ({
   page,
 }) => {
   const ada = await newPerson('Ada');
@@ -162,27 +162,28 @@ test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move 
   });
   await expect(card).toContainText('Hidden from sidebar');
 
-  // ── M4: a workspace bundles it ────────────────────────────────────────────
+  // ── M4: an org owns it ───────────────────────────────────────────────────
+  const handle = `st-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const { orgId } = await call(ada, 'orgCreate', { handle, name: 'Studio' });
   const b = await newBoard(ada, { name: 'Design' });
-  const { workspaceId } = await call(ada, 'workspaceCreate', {
-    name: 'Studio',
-    boardIds: [b.id],
-    bucketIds: [bucketId],
+  await call(ada, 'ownerTransfer', {
+    thing: { kind: 'board', id: b.id },
+    to: { kind: 'org', id: orgId },
   });
-  await page.goto(`/w/${workspaceId}`);
+  await call(ada, 'ownerTransfer', {
+    thing: { kind: 'bucket', id: bucketId },
+    to: { kind: 'org', id: orgId },
+  });
+  await page.goto(`/${handle}`);
   await expect(page.getByRole('heading', { name: 'Studio', level: 1 })).toBeVisible();
-  const wsCard = page.locator(`main a[data-bucket="${bucketId}"]`);
-  await expect(wsCard).toBeVisible();
-  // No hide / show on a workspace page — for anything on it.
-  await expect(page.locator('main [data-hide-toggle]')).toHaveCount(0);
-  await expect(page.locator('main')).not.toContainText('Hidden from sidebar');
-  await wsCard.click();
-  await page.waitForURL(`**/bucket/${bucketId}`);
-  await expect(page.locator('[data-workspace-crumb]')).toHaveText('Studio');
+  const orgCard = page.locator(`main a[data-bucket="${bucketId}"]`);
+  await expect(orgCard).toBeVisible();
+  await orgCard.click();
+  await page.waitForURL(`**/${handle}/bucket/**`);
+  await expect(page.locator('[data-org-crumb]')).toHaveText('Studio');
   await page.locator('[data-bucket-switcher]').click();
   const menu = page.getByRole('menu');
   await expect(menu.getByRole('menuitem', { name: `${b.key} · Design` })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: 'Show all bucket' })).toBeVisible();
 });
 
 test('C1: artifacts are cards, and an artifact has the board’s title dropdown — on its settings too', async ({

@@ -48,9 +48,11 @@
           kind: 'success',
           message: `You joined ${invite.boardName}`,
           // An invite to an ARTIFACT (artifacts.html §B) names no board: open the artifact.
-          action: res.artifactId
-            ? { label: 'Open', run: () => void goto(routes.artifact(res.artifactId!)) }
-            : { label: 'Open board', run: () => void goto(routes.board(res.boardKey)) },
+          action: res.orgHandle
+            ? { label: 'Open org', run: () => void goto(routes.owner(res.orgHandle!)) }
+            : res.artifactId
+              ? { label: 'Open', run: () => void goto(routes.artifact(res.artifactId!)) }
+              : { label: 'Open board', run: () => void goto(routes.board(res.boardKey)) },
         });
       } else toast.info('Invitation declined');
     } catch {
@@ -89,7 +91,8 @@
   <div class="min-w-0 flex-1">
     <p class="truncate text-sm {unread ? 'font-medium' : 'text-muted'}">
       {invite.invitedByName} invited you to <span class="font-semibold">{invite.boardName}</span>
-      {#if !invite.artifactId}<span class="font-mono text-xs text-muted">{invite.boardKey}</span
+      {#if !invite.artifactId && !invite.orgId}<span class="font-mono text-xs text-muted"
+          >{invite.boardKey}</span
         >{/if} as {invite.role}
     </p>
     {#if invite.message}<p class="truncate text-xs text-muted">“{invite.message}”</p>{/if}

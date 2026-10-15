@@ -3,7 +3,7 @@ import { errors, isAgentId, paths } from '@tm/shared';
 import { db } from '../db/index.js';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
-import { claimHandle, handleRef } from '../org/shared.js';
+import { claimHandle, handleRef, restampHandle } from '../org/shared.js';
 
 export default defineCommand('handleSet', async (ctx, input) => {
   if (isAgentId(ctx.actor)) throw errors.forbidden('Agents have no handle');
@@ -15,5 +15,6 @@ export default defineCommand('handleSet', async (ctx, input) => {
     if (cur) tx.delete(handleRef(cur));
     tx.update(ref, { handle: input.handle });
   });
+  await restampHandle({ kind: 'user', id: ctx.actor }, input.handle);
   return { ok: true as const };
 });

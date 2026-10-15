@@ -58,10 +58,9 @@
     toast,
   } from '$lib/ui';
   import type { MenuItem } from '$lib/ui/types';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { switcherFor } from '$lib/workspaces/switcherStore';
-  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
-  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import { switcherFor } from '$lib/orgs/switcherStore';
+  import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
+  import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
   import { copyPath, createFile, createFolder, deleteNodes, moveNode } from './actions';
   import { bucketDrag } from './drag.svelte';
   import FilePane from './FilePane.svelte';
@@ -110,7 +109,7 @@
   const writable = $derived(canWrite(reach) && mem?.archivedAt == null);
   const role = $derived(bucketRoleIn(mem, uid));
 
-  const switchQ = $derived(switcherFor(uid, { bucketId }, workspaceContext.id));
+  const switchQ = $derived(switcherFor(uid, { bucketId }));
 
   // ── where I am: ?path= (a file or a folder; '' = the top level) ────────────
   const path = $derived(page.url.searchParams.get('path') ?? '');
@@ -499,7 +498,7 @@
     role="none"
   >
     <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-      {#if $switchQ.workspace}<WorkspaceCrumb workspace={$switchQ.workspace} />{/if}
+      {#if $switchQ.org}<OrgCrumb org={$switchQ.org} />{/if}
       <TitleSwitcher
         kind="bucket"
         items={$switchQ.items}

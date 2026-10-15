@@ -22,7 +22,7 @@ import {
   type Artifact,
   type Board,
   type Bucket,
-  type Workspace,
+  type Org,
 } from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
 import type { QueryState } from '$lib/stores';
@@ -33,8 +33,8 @@ export function registerNavProviders(
   boards: () => Readable<QueryState<Board>> | null,
   /** Artifacts I have a role on (artifacts.html §F: ⌘K finds them by name). */
   artifacts: () => Readable<QueryState<Artifact>> | null = () => null,
-  /** My workspaces (agents.html §AB): ⌘K opens one by name. */
-  workspaces: () => Readable<QueryState<Workspace>> | null = () => null,
+  /** My orgs (agents.html §AC): ⌘K opens one by name. */
+  orgs: () => Readable<QueryState<Org>> | null = () => null,
   /** My buckets (bucket.html §F): ⌘K opens one by name. */
   buckets: () => Readable<QueryState<Bucket>> | null = () => null,
 ): () => void {
@@ -185,21 +185,21 @@ export function registerNavProviders(
       },
     }),
     palette.register({
-      id: 'workspaces',
-      group: 'Workspaces',
+      id: 'orgs',
+      group: 'Orgs',
       order: 11,
       search: (q) => {
-        const s = workspaces();
+        const s = orgs();
         return filterItems(
           q,
           (s ? get(s).data : []).map((w) => ({
-            id: `w-${w.id}`,
+            id: `o-${w.id}`,
             label: w.name,
-            hint: `${w.boardIds.length} boards · ${w.artifactIds.length} artifacts`,
+            hint: `@${w.handle} · ${w.memberUids.length} members`,
             icon: Layers,
             indicator: { of: w, seed: w.id },
-            href: routes.workspace(w.id),
-            keywords: `workspace group ${w.description ?? ''}`,
+            href: routes.owner(w.handle),
+            keywords: `org team ${w.handle} ${w.description ?? ''}`,
           })),
         );
       },

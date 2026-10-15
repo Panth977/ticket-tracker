@@ -107,11 +107,7 @@ export const COMMANDS = {
   artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
   boardArtifactList: artifacts.boardArtifactList,
   // workspaces (agents.html §AB): a person's own sidebar
-  workspaceCreate: workspaces.workspaceCreate,
-  workspaceUpdate: workspaces.workspaceUpdate,
-  workspaceDelete: workspaces.workspaceDelete,
   sidebarHide: workspaces.sidebarHide,
-  workspaceShare: workspaces.workspaceShare,
   // envs: key/value pairs on boards, artifacts, buckets, agents, orgs
   envGet: env.envGet,
   envSet: env.envSet,

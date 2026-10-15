@@ -25,6 +25,7 @@
   import { guardPending, guardRedirect } from '$lib/firebase/guard';
   import { shortcuts } from '$lib/keyboard/shortcuts';
   import Shell from '$lib/layout/Shell.svelte';
+  import CanonicalUrl from '$lib/orgs/CanonicalUrl.svelte';
   import { hasShell } from '$lib/layout/routes';
   import Toaster from '$lib/ui/Toaster.svelte';
   import TopProgress from '$lib/ui/TopProgress.svelte';
@@ -87,6 +88,7 @@
   </div>
 {:else if shell}
   <Shell>{@render children()}</Shell>
+  <CanonicalUrl />
 {:else}
   {@render children()}
 {/if}

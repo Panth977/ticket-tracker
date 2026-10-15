@@ -5,6 +5,7 @@
   zone, theme. Everything saves through profileUpdate.
 -->
 <script lang="ts">
+  import HandleField from '$lib/orgs/HandleField.svelte';
   import { verifyBeforeUpdateEmail } from 'firebase/auth';
   import { Monitor, Moon, Sun } from 'lucide-svelte';
   import { paths, THEMES, type Theme } from '@tm/shared';
@@ -113,6 +114,10 @@
   </div>
 {:else}
   <div class="flex flex-col gap-6">
+    <Panel title="Handle" description="The owner part of your URLs: /handle/b/KEY.">
+      <HandleField current={(profile as { handle?: string }).handle} />
+    </Panel>
+
     <Panel title="Profile picture">
       <AvatarEditor />
     </Panel>

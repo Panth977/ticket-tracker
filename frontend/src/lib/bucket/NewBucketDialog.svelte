@@ -3,6 +3,8 @@
   → bucketCreate → the (empty) bucket, ready for its first upload.
 -->
 <script lang="ts">
+  import OwnerSelect from '$lib/orgs/OwnerSelect.svelte';
+  import { ownerOf } from '$lib/orgs/store';
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -20,7 +22,8 @@
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
 
-  let { open = $bindable(false) }: { open: boolean } = $props();
+  let { open = $bindable(false), owner: initialOwner = '' }: { open: boolean; owner?: string } =
+    $props();
 
   let name = $state('');
   let description = $state('');
@@ -28,9 +31,11 @@
   let picked = $state<Indicator | null>(null);
   const indicator = $derived(picked ?? BUCKET_DEFAULT_INDICATOR);
   let busy = $state(false);
+  let owner = $state('');
 
   $effect(() => {
     if (open) {
+      owner = initialOwner;
       name = '';
       description = '';
       picked = null;
@@ -44,7 +49,12 @@
     try {
       const { bucketId } = await command(
         'bucketCreate',
-        { name: n, description: description.trim() || null, indicator },
+        {
+          name: n,
+          description: description.trim() || null,
+          indicator,
+          ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
+        },
         { toast: 'Could not create the bucket' },
       );
       open = false;
@@ -83,6 +93,7 @@
       rows={2}
       placeholder="What it is for (optional)"
     />
+    <OwnerSelect bind:value={owner} />
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium">Indicator</span>
       <IndicatorField

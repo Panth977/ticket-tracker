@@ -21,11 +21,10 @@
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { switcherFor } from '$lib/workspaces/switcherStore';
-  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import { switcherFor } from '$lib/orgs/switcherStore';
+  import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import Indicator from '$lib/ui/Indicator.svelte';
-  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
+  import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -37,7 +36,7 @@
   const role = $derived(roleIn(art, me));
   const sections = $derived(settingsSectionsFor(role));
   // The same title dropdown as on the artifact itself (agents.html §AB3).
-  const switchQ = $derived(switcherFor(me, { artifactId }, workspaceContext.id));
+  const switchQ = $derived(switcherFor(me, { artifactId }));
 
   // A viewer who typed the URL: there is nothing here for them.
   $effect(() => {
@@ -81,7 +80,7 @@
   </EmptyState>
 {:else if sections.length}
   <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-    {#if $switchQ.workspace}<WorkspaceCrumb workspace={$switchQ.workspace} />{/if}
+    {#if $switchQ.org}<OrgCrumb org={$switchQ.org} />{/if}
     <TitleSwitcher
       kind="artifact"
       items={$switchQ.items}

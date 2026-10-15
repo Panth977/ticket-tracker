@@ -10,7 +10,7 @@ import {
   type Artifact,
   type Bucket,
   type Stage,
-  type Workspace,
+  type Org,
 } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { toPublicBoard } from '../../src/platform/public.js';
@@ -221,31 +221,21 @@ describe('indicators — artifacts and buckets', () => {
   });
 });
 
-describe('indicators — workspaces', () => {
-  it('create / update with indicator + description; colour in step', async () => {
+describe('indicators — orgs', () => {
+  it('create / update with indicator + description', async () => {
     const alice = await createUser();
-    const { workspaceId } = await call(alice, 'workspaceCreate', {
+    const handle = `i-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const { orgId } = await call(alice, 'orgCreate', {
+      handle,
       name: 'Freelance',
       indicator: ICON,
       description: 'Client work',
     });
-    let w = await doc<Workspace>(paths.workspace(alice.uid, workspaceId));
-    expect(w).toMatchObject({ indicator: ICON, color: '#ef4444', description: 'Client work' });
-
-    await call(alice, 'workspaceUpdate', { workspaceId, indicator: EMOJI, description: null });
-    w = await doc<Workspace>(paths.workspace(alice.uid, workspaceId));
-    expect(w.indicator).toEqual(EMOJI);
-    expect(w.description).toBeUndefined();
-    expect(w.color).toBe('#ef4444');
-
-    const plain = await call(alice, 'workspaceCreate', { name: 'Home' });
-    const p = await doc<Workspace>(paths.workspace(alice.uid, plain.workspaceId));
-    expect(p.indicator).toEqual({ kind: 'color', color: p.color });
-
-    // An old client recolouring a colour workspace moves the indicator too.
-    await call(alice, 'workspaceUpdate', { workspaceId: plain.workspaceId, color: '#22c55e' });
-    expect((await doc<Workspace>(paths.workspace(alice.uid, plain.workspaceId))).indicator).toEqual(
-      { kind: 'color', color: '#22c55e' },
-    );
+    let o = await doc<Org>(paths.org(orgId));
+    expect(o).toMatchObject({ indicator: ICON, description: 'Client work' });
+    await call(alice, 'orgUpdate', { orgId, indicator: EMOJI, description: null });
+    o = await doc<Org>(paths.org(orgId));
+    expect(o.indicator).toEqual(EMOJI);
+    expect(o.description ?? null).toBeNull();
   });
 });
