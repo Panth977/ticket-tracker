@@ -3,7 +3,7 @@
  * its OLD shape: memories/ and their nodes and objects, memory keys in
  * tickets, boards, tokens and sidebars, workspaces — and no owners, handles
  * or orgs. After it: buckets/, the new keys, owners, handles, an org per
- * workspace with its owner's things in it. A second run plans nothing.
+ * workspace with its owner's things in it, no hide lists. A second run plans nothing.
  */
 import { describe, expect, it } from 'vitest';
 import { storageBucket } from '../../src/blob/index.js';
@@ -79,7 +79,7 @@ describe('restructure migration', () => {
       });
 
     const s = await migrateRestructure({ db: db(), bucket: storageBucket(), apply: true });
-    expect(s).toMatchObject({ bucketsMoved: 1, nodesMoved: 1, orgs: 1 });
+    expect(s).toMatchObject({ bucketsMoved: 1, nodesMoved: 1, orgs: 1, sidebarsRemoved: 1 });
 
     // ── 1: memory → bucket ──
     expect((await db().doc(`memories/${m}`).get()).exists).toBe(false);
@@ -97,8 +97,8 @@ describe('restructure migration', () => {
       path: `buckets/${m}/nodes/${n}`,
       bucket: { bucketId: m, nodeId: n },
     });
-    const side = (await db().doc(`users/${asha.uid}/ui/sidebar`).get()).data()!;
-    expect(side.hiddenBucketIds).toEqual([m]);
+    // 4: hiding is gone with it
+    expect((await db().doc(`users/${asha.uid}/ui/sidebar`).get()).exists).toBe(false);
 
     // ── 2 + 3: handles, owners, an org from the workspace holding her board and bucket ──
     const user = (await db().doc(`users/${asha.uid}`).get()).data()!;
@@ -128,6 +128,7 @@ describe('restructure migration', () => {
       owners: 0,
       movedIntoOrgs: 0,
       workspacesRemoved: 0,
+      sidebarsRemoved: 0,
     });
   });
 });

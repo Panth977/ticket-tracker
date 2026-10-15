@@ -64,13 +64,9 @@ export const COLLECTIONS = {
   artifacts: 'artifacts',
   builds: 'builds',
   viewers: 'viewers',
-  /** §AB: users/{uid}/workspaces/{id} — a person's own bundles of boards and artifacts. */
-  workspaces: 'workspaces',
   /** Bucket (bucket.html §A): buckets/{id} and buckets/{id}/nodes/{nodeId}. */
   buckets: 'buckets',
   nodes: 'nodes',
-  /** §AB: users/{uid}/ui/{doc} — the person's own UI state ('sidebar'). */
-  ui: 'ui',
   /** Command idempotency records: _idem/{uid}_{clientId}, 24h TTL. */
   idem: '_idem',
   /** Long-running job parameters (accountExport's queued job). Server-only. */
@@ -117,10 +113,6 @@ export const paths = {
   oauthGrants: (uid: string) => `${C.users}/${seg(uid)}/${C.oauthGrants}`,
   oauthGrant: (uid: string, grantId: string) =>
     `${C.users}/${seg(uid)}/${C.oauthGrants}/${seg(grantId)}`,
-  workspaces: (uid: string) => `${C.users}/${seg(uid)}/${C.workspaces}`,
-  workspace: (uid: string, workspaceId: string) =>
-    `${C.users}/${seg(uid)}/${C.workspaces}/${seg(workspaceId)}`,
-  sidebarPrefs: (uid: string) => `${C.users}/${seg(uid)}/${C.ui}/sidebar`,
   /** bucket.html §A */
   buckets: () => C.buckets,
   bucket: (bucketId: string) => `${C.buckets}/${seg(bucketId)}`,

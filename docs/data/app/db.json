@@ -1290,51 +1290,6 @@
       ]
     },
     {
-      "name": "workspaces",
-      "service": "firestore",
-      "location": "users/{uid}/workspaces/{workspaceId}",
-      "rules": [
-        "allow read:  auth.uid == uid",
-        "allow write: never   // workspaceCreate, workspaceUpdate, workspaceDelete",
-        "",
-        "// A PERSON'S OWN GROUPING (plan/agents.html §AB): boards and artifacts",
-        "// they already reach, gathered for the sidebar. It grants nothing and",
-        "// narrows nothing — the board is still the only boundary."
-      ],
-      "schema": [
-        "interface Workspace {",
-        "  name: string           // ≤ 60",
-        "  color: string          // LEGACY '#RRGGBB'; read through indicatorOf()",
-        "  indicator?: Indicator  // plan/indicators.html: the sidebar mark",
-        "  description?: string | null  // what the workspace is for (≤ 2000)",
-        "  boardIds: BoardId[]     // in the person's order, ≤ 200",
-        "  artifactIds: string[]",
-        "  position: number",
-        "  createdAt: Millis",
-        "  updatedAt: Millis",
-        "}"
-      ]
-    },
-    {
-      "name": "sidebarPrefs",
-      "service": "firestore",
-      "location": "users/{uid}/ui/sidebar",
-      "rules": [
-        "allow read:  auth.uid == uid",
-        "allow write: never   // sidebarHide",
-        "",
-        "// HIDDEN FROM THE ROOT LISTS only: a hidden board is not archived and",
-        "// still shows on the All pages and inside its workspaces."
-      ],
-      "schema": [
-        "interface SidebarPrefs {",
-        "  hiddenBoardIds: BoardId[]",
-        "  hiddenArtifactIds: string[]",
-        "  updatedAt: Millis",
-        "}"
-      ]
-    },
-    {
       "name": "buckets",
       "service": "firestore",
       "location": "buckets/{bucketId}",

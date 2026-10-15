@@ -51,6 +51,8 @@ export type UserNotify = z.infer<typeof UserNotifySchema>;
 export const UserSchema = z.object({
   /** Display name — shown everywhere, editable, not unique. */
   name: z.string().min(1).max(60),
+  /** agents.html §AC: their address, /{handle} (handles/{handle} holds it). Set on sign-up. */
+  handle: z.string().optional(),
   /** From Auth, verified — shown beside the name, changed only via Auth. Empty after accountDelete. */
   email: z.string().max(320),
   /** users/{uid}/avatar/{millis}.webp, 256px */

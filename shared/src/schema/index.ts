@@ -32,7 +32,6 @@ import {
 } from './ticket.js';
 import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
-import { SidebarPrefsSchema, WorkspaceSchema } from './workspace.js';
 import { AggStatsSchema } from './aggregates.js';
 import { BucketNodeSchema, BucketSchema } from '../bucket/schema.js';
 import {
@@ -54,7 +53,6 @@ export * from './agent.js';
 export * from './question.js';
 export * from './tasklist.js';
 export * from './agentStatus.js';
-export * from './workspace.js';
 
 /**
  * Every stored entity, keyed by its name in docs/data/{app,platform}/db.json
@@ -114,11 +112,6 @@ export const DOC_SCHEMAS = {
   artifactBuilds: ArtifactBuildSchema,
   /** artifacts/{id}/viewers/{uid}/kv/{key} — written by the host page as the viewer. */
   artifactKv: ArtifactKvSchema,
-  // workspaces (docs/plan/agents.html §AB) — a person's own sidebar
-  /** users/{uid}/workspaces/{workspaceId} */
-  workspaces: WorkspaceSchema,
-  /** users/{uid}/ui/sidebar */
-  sidebarPrefs: SidebarPrefsSchema,
   // bucket (docs/plan/bucket.html)
   /** buckets/{bucketId} */
   buckets: BucketSchema,

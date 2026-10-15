@@ -123,8 +123,6 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
     'Wipe an artifact’s data (Firestore, RTDB and files) — builds stay. Confirm first.',
   artifactBoardAccessSet:
     'Let an artifact’s page read (or read and write) a board’s tickets through BackendDriver.tickets, or take that away (access null). Viewers still only see what their own board role allows.',
-  sidebarHide:
-    'Hide a board, artifact or bucket from your sidebar’s root lists, or show it again. Nothing about it changes otherwise.',
   // Bucket (docs/plan/bucket.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
   bucketCreate:
     'Create a bucket: an online bucket of files and folders (notes, images, video, APKs …) you own.',
@@ -204,7 +202,7 @@ function inputShape(name: CommandName): Shape {
 /**
  * Does the command NEED a board, so a left-out boardId means "the one I am
  * on"? Only when its own schema requires one: an optional boardId (bucket_list,
- * bucket_grant_set, sidebar_hide …) means "no board" when left out.
+ * bucket_grant_set …) means "no board" when left out.
  */
 function boardRequired(name: CommandName): boolean {
   let s: z.ZodTypeAny = COMMANDS[name].req;
@@ -410,12 +408,11 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
   read(
     'list_orgs',
     ['board:read'],
-    'Your orgs (agents.html §AC): id, handle, name, your role, the base role every member gets, and the boards, artifacts and buckets each owns that you can open. Also what you hid from the sidebar.',
+    'Your orgs (agents.html §AC): id, handle, name, your role, the base role every member gets, and the boards, artifacts and buckets each owns that you can open.',
     {},
     async () => {
-      const [orgs, side, boards] = await Promise.all([
+      const [orgs, boards] = await Promise.all([
         docs(db().collection(paths.orgs()).where('memberUids', 'array-contains', ctx.actor)),
-        db().doc(paths.sidebarPrefs(ctx.actor)).get(),
         readableBoards(ctx, { includeArchived: false }),
       ]);
       return {
@@ -427,7 +424,6 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
             boards: boards.filter((b) => b.ownerKey === `org:${org.id}`).map((b) => b.key),
           };
         }),
-        hidden: side.exists ? scrub(side.data()) : { hiddenBoardIds: [], hiddenArtifactIds: [] },
       };
     },
     true,

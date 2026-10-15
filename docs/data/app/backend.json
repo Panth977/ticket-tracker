@@ -1493,23 +1493,6 @@
       ]
     },
     {
-      "name": "sidebarHide",
-      "trigger": "api",
-      "location": "POST /api/sidebarHide",
-      "middleware": "user",
-      "ioSchema": [
-        "interface Req { kind: 'board' | 'artifact', id, hidden: boolean }",
-        "interface Res {}"
-      ],
-      "implementation": [
-        "UI only: never archives, never changes access",
-        "an id I cannot reach is refused"
-      ],
-      "touches": [
-        "app/schema/sidebarPrefs"
-      ]
-    },
-    {
       "name": "artifactBoardAccessSet",
       "trigger": "api",
       "location": "POST /api/artifactBoardAccessSet",

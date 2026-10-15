@@ -495,16 +495,6 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     warnings: [],
   },
   artifactKv: { value: { theme: 'dark' }, updatedAt: T0 },
-  workspaces: {
-    name: 'Freelance',
-    color: '#6366F1',
-    boardIds: [BOARD_ID],
-    artifactIds: ['art_dash'],
-    position: 0,
-    createdAt: T0,
-    updatedAt: T0,
-  },
-  sidebarPrefs: { hiddenBoardIds: [BOARD_ID], hiddenArtifactIds: [], updatedAt: T0 },
   buckets: {
     name: 'Brand kit',
     description: 'Logos, screenshots and the style guide',
@@ -632,8 +622,6 @@ export const invalidFixtures: { [N in DocName]: unknown } = {
   artifacts: { ...fixtures.artifacts, access: { [UID_ASHA]: 'admin' } },
   artifactBuilds: { ...fixtures.artifactBuilds, files: -1 },
   artifactKv: { value: 1 },
-  workspaces: { ...fixtures.workspaces, color: 'indigo' },
-  sidebarPrefs: { hiddenBoardIds: 'board_eng', hiddenArtifactIds: [], updatedAt: T0 },
   buckets: { ...fixtures.buckets, boards: { [BOARD_ID]: 'admin' } },
   bucketNodes: { ...fixtures.bucketNodes, path: '/abs/path' },
 };
