@@ -7,7 +7,7 @@ import * as S from '@tm/shared';
 import {
   planArtifact,
   planBoard,
-  planMemory,
+  planBucket,
   planStages,
   planWorkspace,
 } from '../../scripts/lib/indicators.mjs';
@@ -116,7 +116,7 @@ describe('planStages', () => {
   });
 });
 
-describe('artifacts, memories, workspaces', () => {
+describe('artifacts, buckets, workspaces', () => {
   it('artifact: emoji icon kept; the ◆ glyph / none → a palette colour from the id', () => {
     expect(planArtifact(S, { id: 'a1', icon: '📊' })).toEqual({
       indicator: { kind: 'emoji', emoji: '📊' },
@@ -130,15 +130,15 @@ describe('artifacts, memories, workspaces', () => {
     expect(planArtifact(S, { id: 'a4', indicator: { kind: 'emoji', emoji: '📊' } })).toBeNull();
   });
 
-  it('memory: emoji icon kept; none → 🧠', () => {
-    expect(planMemory(S, { id: 'm1', icon: '📚' })).toEqual({
+  it('bucket: emoji icon kept; none → 🧠', () => {
+    expect(planBucket(S, { id: 'm1', icon: '📚' })).toEqual({
       indicator: { kind: 'emoji', emoji: '📚' },
     });
-    expect(planMemory(S, { id: 'm2', icon: null })).toEqual({
+    expect(planBucket(S, { id: 'm2', icon: null })).toEqual({
       indicator: { kind: 'emoji', emoji: '🧠' },
     });
     expect(
-      planMemory(S, { id: 'm3', icon: 'x', indicator: { kind: 'emoji', emoji: '🧠' } }),
+      planBucket(S, { id: 'm3', icon: 'x', indicator: { kind: 'emoji', emoji: '🧠' } }),
     ).toBeNull();
   });
 

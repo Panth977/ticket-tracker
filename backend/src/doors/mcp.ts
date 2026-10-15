@@ -456,7 +456,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       await postMessage(ctx, board, ticket, {
         markdown: a.markdown,
         fileIds: a.attachments,
-        memoryFiles: a.memory_files,
+        bucketFiles: a.bucket_files,
         replyTo: a.reply_to,
         run: a.run,
         agg: a.agg,
@@ -470,7 +470,7 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
       name: a.name,
       mime: a.mime,
       bytes: uploadBytes(a),
-      memoryId: a.memory_id,
+      bucketId: a.bucket_id,
       path: a.path,
     });
     const [members, signed] = await Promise.all([

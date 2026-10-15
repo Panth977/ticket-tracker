@@ -149,7 +149,7 @@ test('share a workspace: one go invites to its board and shares its artifact; th
   await dialog.getByLabel('Role').selectOption('viewer');
   await dialog.getByRole('button', { name: 'Share' }).click();
   await expect(dialog.locator(`[data-share-email="${ben.email}"]`)).toContainText(
-    '1 board, 1 artifact, 0 memories',
+    '1 board, 1 artifact, 0 buckets',
   );
   await dialog.getByRole('button', { name: 'Done' }).click();
 

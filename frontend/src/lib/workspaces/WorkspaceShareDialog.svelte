@@ -1,7 +1,7 @@
 <!--
   Share a workspace (one-shot, workspaceShare): the people typed here are
   invited to every board in it and given the role on every artifact and
-  memory you own, and get a copy of the workspace in their sidebar. Each item
+  bucket you own, and get a copy of the workspace in their sidebar. Each item
   is shared exactly as it would be on its own, so nothing new grants access;
   what you add to the workspace later is not shared. The result says what
   went out and what was skipped (a board you may not invite to, an item you
@@ -47,7 +47,7 @@
   let result = $state<CommandRes<'workspaceShare'> | null>(null);
 
   const items = $derived(
-    workspace.boardIds.length + workspace.artifactIds.length + (workspace.memoryIds?.length ?? 0),
+    workspace.boardIds.length + workspace.artifactIds.length + (workspace.bucketIds?.length ?? 0),
   );
 
   $effect(() => {
@@ -86,13 +86,13 @@
   }
 
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-  const kindName = { board: 'Board', artifact: 'Artifact', memory: 'Memory' } as const;
+  const kindName = { board: 'Board', artifact: 'Artifact', bucket: 'Bucket' } as const;
 </script>
 
 <Dialog
   bind:open
   title={`Share “${workspace.name}”`}
-  description="Invite people to everything in this workspace at once. Each board, artifact and memory is shared as it would be on its own; things you add later are not."
+  description="Invite people to everything in this workspace at once. Each board, artifact and bucket is shared as it would be on its own; things you add later are not."
 >
   {#if result}
     <div class="flex flex-col gap-3 text-sm" data-share-result>
@@ -102,9 +102,9 @@
             <span class="font-medium">{s.email}</span>
             <span class="text-muted">
               — {plural(s.boards, 'board')}, {plural(s.artifacts, 'artifact')}, {plural(
-                s.memories,
-                'memory',
-                'memories',
+                s.buckets,
+                'bucket',
+                'buckets',
               )}
               {#if s.workspace === 'pending'}· gets the workspace when they sign up{:else if s.workspace === 'full'}·
                 their sidebar is full (50 workspaces){/if}
@@ -113,7 +113,7 @@
         {/each}
       </ul>
       <p class="text-muted">
-        Board invitations wait for them to accept (they get an e-mail). Artifacts and memories are
+        Board invitations wait for them to accept (they get an e-mail). Artifacts and buckets are
         theirs to open now.
       </p>
       {#if result.skipped.length}
@@ -140,7 +140,7 @@
       />
       <Select label="Role" options={ROLES} bind:value={role} />
       <p class="text-sm text-muted">
-        {plural(items, 'item')} in this workspace. Admin applies to boards; on artifacts and memories
+        {plural(items, 'item')} in this workspace. Admin applies to boards; on artifacts and buckets
         it is Editor.
       </p>
     </form>

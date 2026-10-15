@@ -30,7 +30,7 @@ import {
   AgentIdSchema,
 } from '../types/index.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
-import { BoardAttachMemorySchema } from '../memory/attach.js';
+import { BoardAttachBucketSchema } from '../bucket/attach.js';
 import { AggCountersSchema, AggFieldDefSchema } from './aggregates.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 
@@ -152,12 +152,12 @@ export const BoardSchema = z.object({
   /** aggregates.html: lifetime { total, count } per field. `cost` is the legacy mirror of aggs.cost. */
   aggs: AggCountersSchema.optional(),
   /**
-   * memory.html §J: where a file put on one of this board's tickets goes by
-   * default — one of the memories granted `write` to the board, and a path
+   * bucket.html §J: where a file put on one of this board's tickets goes by
+   * default — one of the buckets granted `write` to the board, and a path
    * template. Absent / null = none set (the attach dialog asks). Set by
-   * boardAttachMemorySet; cleared when that memory's write grant goes.
+   * boardAttachBucketSet; cleared when that bucket's write grant goes.
    */
-  attachMemory: BoardAttachMemorySchema.nullable().optional(),
+  attachBucket: BoardAttachBucketSchema.nullable().optional(),
   /** boardArchive: read-only, hidden from the sidebar, restorable. */
   archivedAt: MillisSchema.nullable(),
   createdBy: UidSchema,

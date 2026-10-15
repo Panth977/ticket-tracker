@@ -1,6 +1,6 @@
 /** allocateKey + ticketCreate under the emulators. */
 import { describe, expect, it } from 'vitest';
-import { paths, type KeyIndex, type MemoryNode, type Ticket } from '@tm/shared';
+import { paths, type KeyIndex, type BucketNode, type Ticket } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { call, setupEmulators, uniq } from '../harness/index.js';
 import {
@@ -8,8 +8,8 @@ import {
   getDocData,
   listDocs,
   people,
-  putMemoryObject,
-  seedAttachMemory,
+  putBucketObject,
+  seedAttachBucket,
   seedBoard,
   spyPorts,
   STAGES,
@@ -158,15 +158,15 @@ describe('ticketCreate', () => {
     ).rejects.toMatchObject({ code: 'not_found' });
   });
 
-  it('description: mentions of members only, refs → referencedBy on the target, memoryUploads → files/', async () => {
+  it('description: mentions of members only, refs → referencedBy on the target, bucketUploads → files/', async () => {
     const s = spyPorts();
     const { asha, priya, out } = await people('asha', 'priya', 'out');
     const b = await seedBoard({ admin: asha, editors: [priya] });
     const target = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Target' });
-    const memoryId = await seedAttachMemory(b.id, asha);
+    const bucketId = await seedAttachBucket(b.id, asha);
 
     const ticketId = uniq('t');
-    const up = await putMemoryObject(s.files, memoryId, 'screen shot.png', new Uint8Array(1234));
+    const up = await putBucketObject(s.files, bucketId, 'screen shot.png', new Uint8Array(1234));
     const r = await call(asha, 'ticketCreate', {
       boardId: b.id,
       ticketId,
@@ -175,9 +175,9 @@ describe('ticketCreate', () => {
         ticketId: target.ticketId,
         key: target.key,
       }),
-      // memory.html §J: '<ticketId>' is the new ticket's key, filled by the server.
-      memoryUploads: [
-        { memoryId, path: 'tickets/<ticketId>/screen shot.png', storagePath: up.storagePath },
+      // bucket.html §J: '<ticketId>' is the new ticket's key, filled by the server.
+      bucketUploads: [
+        { bucketId, path: 'tickets/<ticketId>/screen shot.png', storagePath: up.storagePath },
       ],
     });
     expect(r.ticketId).toBe(ticketId);
@@ -194,21 +194,21 @@ describe('ticketCreate', () => {
         name: 'screen shot.png',
         size: 1234,
         mime: 'image/png',
-        source: 'memory',
+        source: 'bucket',
         messageId: null,
-        memory: { memoryId, nodeId: expect.any(String) },
+        bucket: { bucketId, nodeId: expect.any(String) },
       }),
     ]);
     const node = (
-      await db().doc(paths.memoryNode(memoryId, files[0]!.memory!.nodeId)).get()
-    ).data() as MemoryNode;
+      await db().doc(paths.bucketNode(bucketId, files[0]!.bucket!.nodeId)).get()
+    ).data() as BucketNode;
     expect(node).toMatchObject({
       kind: 'file',
       path: `tickets/${r.key}/screen shot.png`,
       file: { storagePath: up.storagePath, size: 1234 },
       createdBy: asha.uid,
     });
-    expect((await db().doc(paths.memory(memoryId)).get()).data()!.stats).toEqual({
+    expect((await db().doc(paths.bucket(bucketId)).get()).data()!.stats).toEqual({
       files: 1,
       folders: 2,
       bytes: 1234,
@@ -219,7 +219,7 @@ describe('ticketCreate', () => {
     await expect(
       call(asha, 'ticketCreate', { boardId: b.id, ticketId, title: 'Again' }),
     ).rejects.toMatchObject({ code: 'conflict' });
-    // memory.html §J: board attachments are retired
+    // bucket.html §J: board attachments are retired
     await expect(
       call(asha, 'ticketCreate', {
         boardId: b.id,
@@ -227,13 +227,13 @@ describe('ticketCreate', () => {
         attachments: [`boards/${b.id}/tickets/other/a/b.png`],
       }),
     ).rejects.toMatchObject({ code: 'invalid', details: { field: 'attachments' } });
-    // an upload must exist, in that memory's folder
+    // an upload must exist, in that bucket's folder
     await expect(
       call(asha, 'ticketCreate', {
         boardId: b.id,
         title: 'x',
-        memoryUploads: [
-          { memoryId, path: 'a.png', storagePath: `memories/${memoryId}/f_missing1/a.png` },
+        bucketUploads: [
+          { bucketId, path: 'a.png', storagePath: `buckets/${bucketId}/f_missing1/a.png` },
         ],
       }),
     ).rejects.toMatchObject({ code: 'invalid' });
@@ -241,25 +241,25 @@ describe('ticketCreate', () => {
       call(asha, 'ticketCreate', {
         boardId: b.id,
         title: 'x',
-        memoryUploads: [
-          { memoryId, path: 'a.png', storagePath: `memories/mem_other1/f_x00001/a.png` },
+        bucketUploads: [
+          { bucketId, path: 'a.png', storagePath: `buckets/mem_other1/f_x00001/a.png` },
         ],
       }),
     ).rejects.toMatchObject({ code: 'invalid' });
   });
 
-  it('a refused create keeps none of the files it brought (memory.html §J)', async () => {
+  it('a refused create keeps none of the files it brought (bucket.html §J)', async () => {
     const s = spyPorts();
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha });
-    const memoryId = await seedAttachMemory(b.id, asha);
-    const up = await putMemoryObject(s.files, memoryId, 'a.png');
+    const bucketId = await seedAttachBucket(b.id, asha);
+    const up = await putBucketObject(s.files, bucketId, 'a.png');
     await expect(
       call(asha, 'ticketCreate', {
         boardId: b.id,
         title: 'x',
         stageId: 'st_nope',
-        memoryUploads: [{ memoryId, path: 'a.png', storagePath: up.storagePath }],
+        bucketUploads: [{ bucketId, path: 'a.png', storagePath: up.storagePath }],
       }),
     ).rejects.toMatchObject({ code: 'invalid' });
     // refused before staging: the object is untouched (the app may retry)
@@ -268,11 +268,11 @@ describe('ticketCreate', () => {
     await call(asha, 'ticketCreate', {
       boardId: b.id,
       title: 'first',
-      memoryUploads: [
+      bucketUploads: [
         {
-          memoryId,
+          bucketId,
           path: 'docs',
-          storagePath: (await putMemoryObject(s.files, memoryId)).storagePath,
+          storagePath: (await putBucketObject(s.files, bucketId)).storagePath,
         },
       ],
     });
@@ -280,7 +280,7 @@ describe('ticketCreate', () => {
       call(asha, 'ticketCreate', {
         boardId: b.id,
         title: 'x',
-        memoryUploads: [{ memoryId, path: 'docs/a.png', storagePath: up.storagePath }],
+        bucketUploads: [{ bucketId, path: 'docs/a.png', storagePath: up.storagePath }],
       }),
     ).rejects.toMatchObject({ code: 'invalid' });
     expect(s.files.has(up.storagePath)).toBe(false);

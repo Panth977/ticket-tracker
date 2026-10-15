@@ -26,7 +26,7 @@
   // Renamed sections (lib/access): old links still land.
   const MOVED: Record<string, 'subscriptions'> = {
     boards: 'subscriptions',
-    memory: 'subscriptions',
+    bucket: 'subscriptions',
   };
   $effect(() => {
     const to = MOVED[section];

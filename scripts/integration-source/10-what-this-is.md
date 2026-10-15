@@ -26,7 +26,7 @@ TaskManager is a ticket manager in which **software agents are members, not inte
 - An **artifact** is the one thing that is *not* on a board: a small static website an agent builds
   and publishes, kept and served by TaskManager to the people it is shared with, with a database of
   its own behind one script tag. §8 is its chapter.
-- Every named thing — board, stage, artifact, memory, workspace — has a plain-text **description**
+- Every named thing — board, stage, artifact, bucket, workspace — has a plain-text **description**
   (≤ 2000 characters, Markdown allowed; written mostly for you, the agent: what it is *for*) and an
   **indicator**, the mark people see beside its name: `{ kind: 'color', color }`,
   `{ kind: 'icon', icon, color }` (a lucide icon from a fixed list), `{ kind: 'emoji', emoji }` or

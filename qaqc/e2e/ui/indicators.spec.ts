@@ -5,7 +5,7 @@
  *       sidebar row and the title switcher draw the icon
  *   I2  a stage gets an EMOJI (picked from the picker's search — never typed
  *       into a text box) and a description; the ticket's stage dropdown draws it
- *   I3  a memory is created with an UPLOADED image indicator; the sidebar
+ *   I3  a bucket is created with an UPLOADED image indicator; the sidebar
  *       shows the image
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -22,7 +22,7 @@ const PNG = Buffer.from(
 
 type Ind = { kind: string; icon?: string; emoji?: string; path?: string };
 
-test('I1–I3: board icon + description, stage emoji + description, memory image', async ({
+test('I1–I3: board icon + description, stage emoji + description, bucket image', async ({
   page,
 }) => {
   const ada = await newPerson('Ada');
@@ -97,10 +97,10 @@ test('I1–I3: board icon + description, stage emoji + description, memory image
   ).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // ── I3: a memory with an uploaded image indicator ─────────────────────────
-  await page.goto('/m');
-  await page.getByRole('button', { name: 'New memory' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New memory' });
+  // ── I3: a bucket with an uploaded image indicator ─────────────────────────
+  await page.goto('/bucket');
+  await page.getByRole('button', { name: 'New bucket' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New bucket' });
   await dialog.getByLabel('Name').fill('Launch photos');
   await dialog.getByTestId('indicator-field').click();
   await picker.getByTestId('indicator-tab-upload').click();
@@ -113,12 +113,12 @@ test('I1–I3: board icon + description, stage emoji + description, memory image
   await dialog.getByTestId('indicator-field').click();
   await dialog.getByRole('button', { name: 'Create' }).click();
   await page.waitForURL(/\/m\/[A-Za-z0-9_-]+$/);
-  const memoryId = new URL(page.url()).pathname.split('/')[2]!;
+  const bucketId = new URL(page.url()).pathname.split('/')[2]!;
 
-  const memory = await read<{ indicator?: Ind }>(`memories/${memoryId}`);
-  expect(memory?.indicator?.kind).toBe('image');
-  expect(memory?.indicator?.path).toMatch(new RegExp(`^indicators/${ada.uid}/`));
+  const bucket = await read<{ indicator?: Ind }>(`buckets/${bucketId}`);
+  expect(bucket?.indicator?.kind).toBe('image');
+  expect(bucket?.indicator?.path).toMatch(new RegExp(`^indicators/${ada.uid}/`));
   await expect(
-    sidebar(page).locator(`[data-memory="${memoryId}"] [data-indicator="image"] img`).first(),
+    sidebar(page).locator(`[data-bucket="${bucketId}"] [data-indicator="image"] img`).first(),
   ).toBeVisible();
 });

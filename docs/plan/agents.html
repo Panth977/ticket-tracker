@@ -885,7 +885,7 @@ Agents · Notifications · Tokens · Sign out</pre>
         30-second poll at 88% of all requests; this is the fix at the source.</li>
       <li><b>State is per workspace</b>, in the workspace folder, never in the project's tree — a project repo no longer carries an
         <code>orch/</code> directory at all. The agents still run with the project as their working directory, so their Claude
-        sessions, memory and CLAUDE.md are the project's.</li>
+        sessions, bucket and CLAUDE.md are the project's.</li>
       <li><b>The supervisor is the thing that runs.</b> <code>ws up</code> starts it detached; it starts one orch per enabled
         workspace, restarts a crashed one with a backoff, and <b>watches the workspace files</b>: a change to a
         <code>workspace.json</code>, <code>.env</code> or <code>brief.md</code> restarts that workspace's orch (SIGTERM, so a running
@@ -1065,8 +1065,8 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
         items each.</li>
       <li><b>Sharing a workspace</b> (<code>workspaceShare</code>, the Share button on <code>/w/{id}</code>) is one-shot and
         grants nothing by itself: each address is invited to every board in it (<code>inviteCreate</code>, where the owner may
-        invite) and given the role on every artifact and memory the owner owns (<code>artifactShare</code> /
-        <code>memoryShare</code>; <code>admin</code> is <code>editor</code> there). What the owner cannot share is skipped and
+        invite) and given the role on every artifact and bucket the owner owns (<code>artifactShare</code> /
+        <code>bucketShare</code>; <code>admin</code> is <code>editor</code> there). What the owner cannot share is skipped and
         listed. Each address gets a copy of the grouping in their own sidebar (now, or at sign-up via
         <code>_workspaceOffers</code>); sharing again refreshes that copy. Items added later are not shared.</li>
     </ul>

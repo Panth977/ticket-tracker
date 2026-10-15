@@ -20,7 +20,7 @@ class Stamp {
 }
 
 /** A tiny live document store: enough for get / set / list / listeners. */
-function memoryBackend() {
+function bucketBackend() {
   const tk = fakeTickets('u1');
   const docs = new Map<string, Record<string, unknown>>();
   const watchers = new Set<() => void>();
@@ -92,7 +92,7 @@ function memoryBackend() {
 
 function wire(role: 'owner' | 'viewer' = 'owner', readOnly = false) {
   const { host, frame } = framePair();
-  const mem = memoryBackend();
+  const mem = bucketBackend();
   const broker = createBroker({
     artifactId: ID,
     uid: 'u1',

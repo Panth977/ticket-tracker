@@ -43,53 +43,53 @@ keeps working. The SDK's own patch releases do not change the wire format.
   `tickets.aggregates(board, { field?, from?, to? })` and `tickets.onAggregates(…)` (one field's period
   buckets with per-ticket shares); boards gain `aggFields` and `aggs`, tickets gain `aggs`. Same fence
   as `tickets.get`: a granted board the viewer can read. The mock has a sample thread and buckets.
-- **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, memories
+- **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, buckets
   and workspaces each have an `indicator` — `{ kind: 'color', color }` | `{ kind: 'icon', icon,
   color }` (an icon from the app's list, tinted) | `{ kind: 'emoji', emoji }` | `{ kind: 'image',
   path }` (uploaded in the app) — and a plain-text `description` (≤ 2000, Markdown allowed). An
   unknown icon, a non-emoji or a foreign path is `400`.
 - **Reading**: `PublicBoard.indicator`; each of `PublicBoard.stages` has `description` (what the
   stage means — read it to decide where a ticket goes) and `indicator`; `PublicArtifact.indicator`;
-  memories (`memory_list`, `GET /v1/memories`) carry `indicator`; `list_workspaces` returns each
+  buckets (`bucket_list`, `GET /v1/buckets`) carry `indicator`; `list_workspaces` returns each
   workspace's `description` and `indicator`. A ticket's `stage` stays `{ id, name, category }`.
   `description_md` on a board is now plain text (old rich-text descriptions are flattened).
 - **Writing**: `POST /v1/boards` and SDK `tm.boards.create` take `indicator` and `description`;
   `POST|PATCH /v1/artifacts`, MCP `artifact_create`, SDK `tm.artifacts.create|update` take
   `indicator`; `boardUpdate` (patch `indicator`, `description`, and per stage `indicator` /
-  `description`), `memory_create` / `memory_update`, `workspace_create` / `workspace_update` take
+  `description`), `bucket_create` / `bucket_update`, `workspace_create` / `workspace_update` take
   both. The old `color` / `icon` fields still work and are kept in step; prefer `indicator`.
 
 ### 1.5.0 — 2026-10-05
 
-- **Ticket files live in a memory** (memory.html §J). A board takes no files of its own any more.
+- **Ticket files live in a bucket** (bucket.html §J). A board takes no files of its own any more.
   `POST /v1/tickets/{KEY}/files` and MCP `upload_file` store the bytes in the board's **attachment
-  memory** (board settings › Memory: a memory granted `write` to the board, with a path template —
+  bucket** (board settings › Bucket: a bucket granted `write` to the board, with a path template —
   by default `tickets/<ticketId>/<time>_<filename>`) and answer the same file shape as before, now
-  with `memory { memory_id, node_id }`. The file id still goes in `post_message` / `attachments`
-  unchanged. A board with no attachment memory answers `400`.
-- **`memory_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
-  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { memoryId, path })`. `<ticketId>` in
-  the path is the ticket's key. An upload never replaces a memory file: a taken path gets ` (2)`.
-- The file's `name` is the memory file's name, which follows the board's template (e.g.
+  with `bucket { bucket_id, node_id }`. The file id still goes in `post_message` / `attachments`
+  unchanged. A board with no attachment bucket answers `400`.
+- **`bucket_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
+  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { bucketId, path })`. `<ticketId>` in
+  the path is the ticket's key. An upload never replaces a bucket file: a taken path gets ` (2)`.
+- The file's `name` is the bucket file's name, which follows the board's template (e.g.
   `20261005-211946_plan.md` under the default one).
 
 ### 1.4.0 — 2026-10-05
 
-- **Memory** (docs/plan/memory.html). A memory is a bucket of files with its own people: folders,
-  Markdown, images, video, APKs, anything. Scopes `memory:read` / `memory:write`. Every operation
-  names a node by `path` (parents are created on write). MCP tools: `memory_list`, `memory_tree`,
-  `memory_file_read`, `memory_file_write`, `memory_folder_create`, `memory_move`,
-  `memory_node_delete`, plus `memory_create` / `memory_update` / `memory_delete` / `memory_share` /
-  `memory_grant_set` for people. REST: `GET /v1/memories`, `GET /v1/memories/{id}/tree`,
-  `GET|PUT|DELETE /v1/memories/{id}/files/{path}`.
-- **Agents reach a memory through a board.** A memory granted to a board `read` is readable by every
+- **Bucket** (docs/plan/bucket.html). A bucket is a bucket of files with its own people: folders,
+  Markdown, images, video, APKs, anything. Scopes `bucket:read` / `bucket:write`. Every operation
+  names a node by `path` (parents are created on write). MCP tools: `bucket_list`, `bucket_tree`,
+  `bucket_file_read`, `bucket_file_write`, `bucket_folder_create`, `bucket_move`,
+  `bucket_node_delete`, plus `bucket_create` / `bucket_update` / `bucket_delete` / `bucket_share` /
+  `bucket_grant_set` for people. REST: `GET /v1/buckets`, `GET /v1/buckets/{id}/tree`,
+  `GET|PUT|DELETE /v1/buckets/{id}/files/{path}`.
+- **Agents reach a bucket through a board.** A bucket granted to a board `read` is readable by every
   member of it, agents included; granted `write`, editors and admins may also change it.
-- **Memory files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
-  `memory_files: [{ memory_id, path | node_id }]` (SDK: `memoryFiles`). The file is not copied: the
-  ticket shows the memory file's current version, and `source: 'memory'` with `memory { memory_id,
+- **Bucket files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
+  `bucket_files: [{ bucket_id, path | node_id }]` (SDK: `bucketFiles`). The file is not copied: the
+  ticket shows the bucket file's current version, and `source: 'bucket'` with `bucket { bucket_id,
   node_id }` on the file. Once the file is deleted or the grant removed, reading it is a 404.
-- **`BackendDriver.memory`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
-  page, within the memory's grant to that artifact and the viewer's own access.
+- **`BackendDriver.bucket`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
+  page, within the bucket's grant to that artifact and the viewer's own access.
 
 ### 1.3.0 — 2026-09-30
 

@@ -1,6 +1,6 @@
 <!--
   A file's PREVIEW, chosen by its kind (agents.html §I) — the body of a ticket
-  FileCard and of a memory folder tile (memory.html §F):
+  FileCard and of a bucket folder tile (bucket.html §F):
     image     thumbnail            video   poster frame + duration
     markdown  rendered first lines html    live scaled-down page (sandboxed)
     pdf       first page           text / code / json / csv  first lines, highlighted
@@ -10,7 +10,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags -- highlightCode() escapes its input */
   import { Play } from 'lucide-svelte';
-  import { HTML_SANDBOX, parseMemoryRefPath } from '@tm/shared';
+  import { HTML_SANDBOX, parseBucketRefPath } from '@tm/shared';
   import { Markdown, highlightCode, markdownExcerpt } from '$lib/editor';
   import {
     CARD_HTML_BYTES,
@@ -31,11 +31,11 @@
     shown: boolean;
     disabled?: boolean;
     iconSize?: number;
-    /** Bound out: the file's URL (audio players, memory 'gone' checks). */
+    /** Bound out: the file's URL (audio players, bucket 'gone' checks). */
     url?: string | null;
     /** Bound out: the text read for the excerpt (a Markdown card's title). */
     text?: string | null;
-    /** Bound out: a memory reference that no longer resolves. */
+    /** Bound out: a bucket reference that no longer resolves. */
     gone?: boolean;
   }
   let {
@@ -55,11 +55,11 @@
   let failed = $state(false);
   let duration = $state<number | null>(null);
   /**
-   * memory.html §E: a memory file is a REFERENCE — the door resolves it to the
+   * bucket.html §E: a bucket file is a REFERENCE — the door resolves it to the
    * node's current version. When it no longer can (the file was deleted, or
-   * the memory is no longer shared with this board) the card says so.
+   * the bucket is no longer shared with this board) the card says so.
    */
-  const fromMemory = $derived(!!file.memory || !!parseMemoryRefPath(file.path));
+  const fromMemory = $derived(!!file.bucket || !!parseBucketRefPath(file.path));
 
   $effect(() => {
     if (!shown || disabled) return;
@@ -96,7 +96,7 @@
 {#if gone}
   <span
     class="grid size-full place-items-center px-3 text-center text-xs text-muted"
-    data-memory-gone
+    data-bucket-gone
   >
     No longer in memory
   </span>

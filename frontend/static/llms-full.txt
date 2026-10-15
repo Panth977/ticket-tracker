@@ -7,7 +7,7 @@
 version:           1.6.0
 api:               v1
 updated:           2026-10-05  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    0e86eeed57c94c63091d38aeaf3eb64c815ba7692c6c983dc8e7e941e2e96095
+content-sha256:    f8f72871fd1892378a796c54903fed082b21ed5a124217ddd65fc775f3277818
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -116,7 +116,7 @@ TaskManager is a ticket manager in which **software agents are members, not inte
 - An **artifact** is the one thing that is *not* on a board: a small static website an agent builds
   and publishes, kept and served by TaskManager to the people it is shared with, with a database of
   its own behind one script tag. §8 is its chapter.
-- Every named thing — board, stage, artifact, memory, workspace — has a plain-text **description**
+- Every named thing — board, stage, artifact, bucket, workspace — has a plain-text **description**
   (≤ 2000 characters, Markdown allowed; written mostly for you, the agent: what it is *for*) and an
   **indicator**, the mark people see beside its name: `{ kind: 'color', color }`,
   `{ kind: 'icon', icon, color }` (a lucide icon from a fixed list), `{ kind: 'emoji', emoji }` or
@@ -860,7 +860,7 @@ artifacts:read   Read artifacts and download their source — an account token, 
 artifacts:write  Create, publish and share artifacts — an account token, or an agent token for the artifacts that agent is on (§8)
 ```
 
-Every **agent token** carries exactly these 22, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`, `memory:read`, `memory:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
+Every **agent token** carries exactly these 22, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`, `bucket:read`, `bucket:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
 
 Presets offered by the token form (board tokens acting as a person, and account tokens):
 
@@ -871,7 +871,7 @@ Worker     board:read members:read tickets:read comments:read files:read events:
 
 Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
 
-Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write memory:read memory:write
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write bucket:read bucket:write
 ```
 
 ##### Event types (the inbox: `GET /v1/events`, MCP `get_events`)
@@ -1693,7 +1693,7 @@ attachments    string[]           (≤ 20 items)
 reply_to       string
 run            object | null
 agg            { at, entries }
-memory_files   object[]           (≤ 20 items)
+bucket_files   object[]           (≤ 20 items)
 ```
 
 → 201 Message
@@ -1759,7 +1759,7 @@ name            string  required  (≤ 255 chars)
 mime            string            (≤ 255 chars)
 text            string
 content_base64  string
-memory_id       string            (≤ 64 chars)
+bucket_id       string            (≤ 64 chars)
 path            string            (≤ 1024 chars)
 ```
 
@@ -1785,8 +1785,8 @@ width           integer | null
 height          integer | null
 url_expires_at  string
 message_id      string | null                       required
-source          "description" | "message" | "upload" | "memory"  required
-memory          { memory_id, node_id }
+source          "description" | "message" | "upload" | "bucket"  required
+bucket          { bucket_id, node_id }
 uploaded_by     { id, kind, name }                  required
 created_at      string                              required
 file_id         string                              required
@@ -1825,8 +1825,8 @@ width              integer | null
 height             integer | null
 url_expires_at     string
 message_id         string | null                       required
-source             "description" | "message" | "upload" | "memory"  required
-memory             { memory_id, node_id }
+source             "description" | "message" | "upload" | "bucket"  required
+bucket             { bucket_id, node_id }
 uploaded_by        { id, kind, name }                  required
 created_at         string                              required
 content            string
@@ -2468,11 +2468,11 @@ outcome  "granted" | "invited" | "removed"  required
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
-#### GET /v1/memories
+#### GET /v1/buckets
 
-The memories this credential can reach (?board= narrows to one board’s).
+The buckets this credential can reach (?board= narrows to one board’s).
 
-Scopes: `memory:read` or `memory:write`
+Scopes: `bucket:read` or `bucket:write`
 
 Query:
 ```text
@@ -2480,18 +2480,18 @@ board             string
 include_archived  "1" | "true" | "0" | "false" | boolean
 ```
 
-→ 200 MemoryList
+→ 200 BucketList
 ```text
-memories  object[]  required
+buckets  object[]  required
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
-#### GET /v1/memories/{id}/tree
+#### GET /v1/buckets/{id}/tree
 
-The files and folders of a memory (?path= under a folder, ?shallow=1 one level).
+The files and folders of a bucket (?path= under a folder, ?shallow=1 one level).
 
-Scopes: `memory:read` or `memory:write`
+Scopes: `bucket:read` or `bucket:write`
 
 Path:
 ```text
@@ -2504,7 +2504,7 @@ path     string
 shallow  "1" | "true" | "0" | "false" | boolean
 ```
 
-→ 200 MemoryTree
+→ 200 BucketTree
 ```text
 nodes      object[]  required
 truncated  boolean   required
@@ -2512,11 +2512,11 @@ truncated  boolean   required
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
-#### GET /v1/memories/{id}/files/{path}
+#### GET /v1/buckets/{id}/files/{path}
 
-One memory file: its node, its text (text files) and a short-lived download URL.
+One bucket file: its node, its text (text files) and a short-lived download URL.
 
-Scopes: `memory:read` or `memory:write`
+Scopes: `bucket:read` or `bucket:write`
 
 Path:
 ```text
@@ -2529,7 +2529,7 @@ Query:
 text  "1" | "true" | "0" | "false" | boolean
 ```
 
-→ 200 MemoryFile
+→ 200 BucketFile
 ```text
 node       { id, kind, parentId, name, path, file, updatedAt }  required
 text       string | null                       required
@@ -2541,11 +2541,11 @@ expiresAt  integer                             required
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
-#### PUT /v1/memories/{id}/files/{path}
+#### PUT /v1/buckets/{id}/files/{path}
 
-Create or replace a memory file: the raw body is the file (missing folders are created).
+Create or replace a bucket file: the raw body is the file (missing folders are created).
 
-Scopes: `memory:write`
+Scopes: `bucket:write`
 
 Path:
 ```text
@@ -2558,7 +2558,7 @@ Body (*/*, required):
 (value)  string
 ```
 
-→ 201 MemoryFileWritten
+→ 201 BucketFileWritten
 ```text
 nodeId  string  required
 fileId  string  required
@@ -2567,11 +2567,11 @@ path    string  required
 
 → 400, 401, 403, 404, 409, 413, 429 `application/problem+json` (see Errors)
 
-#### DELETE /v1/memories/{id}/files/{path}
+#### DELETE /v1/buckets/{id}/files/{path}
 
-Delete a memory file, or a folder with everything in it.
+Delete a bucket file, or a folder with everything in it.
 
-Scopes: `memory:write`
+Scopes: `bucket:write`
 
 Path:
 ```text
@@ -2579,7 +2579,7 @@ id    string  required
 path  string  required
 ```
 
-→ 200 MemoryDeleted
+→ 200 BucketDeleted
 ```text
 deleted  integer  required  (0…)
 ```
@@ -3131,9 +3131,9 @@ create_ticket        tickets:create                      Create a ticket.
 update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
-post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
 get_aggregates       board:read                          One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.
-upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
+upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.
 read_file            files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         tickets:update                      Link two tickets: blocks, relates or duplicates.
 get_events           events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
@@ -3299,7 +3299,7 @@ remove  string[]            A member: 'me', an id, an email, or an agent's name
 
 #### post_message
 
-Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
 
 Writes · scopes: `comments:write`
 
@@ -3307,7 +3307,7 @@ Writes · scopes: `comments:write`
 key           string                              required  Ticket key, e.g. 'ENG-42'
 markdown      string                              required  GitHub-flavoured Markdown. May be empty when attachments are given.
 attachments   string[]                                      File ids from upload_file, already on this ticket
-memory_files  object[]                                      Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).
+bucket_files  object[]                                      Bucket files to attach by reference (no upload): [{ bucket_id, path }] or [{ bucket_id, node_id }]. The bucket must be granted to this board (bucket_list board=…).
 reply_to      string                                        Message id to quote
 run           { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Its cost_usd lands on the board's Cost aggregate field.
 agg           { at, entries }                               Entries for the board's aggregate fields (get_board → agg_fields): { at?, entries: [{ field_id | field (label), value }] }. A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time"). BACKFILLING a past day's log? Set `at` to that day ('2026-10-04') so it lands in that day's bucket — otherwise it counts for today.
@@ -3328,7 +3328,7 @@ to     string    Last bucket key, inclusive
 
 #### upload_file
 
-Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
+Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.
 
 Writes · scopes: `files:write`
 
@@ -3338,8 +3338,8 @@ name            string  required  File name with extension, e.g. 'plan.md', 'rep
 mime            string            Default: from the extension
 text            string            Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.
 content_base64  string            Binary content, base64. ≤ 25 MB decoded.
-memory_id       string            The memory the file goes into (granted write to this board). Default: the board's attachment memory.
-path            string            Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.
+bucket_id       string            The bucket the file goes into (granted write to this board). Default: the board's attachment bucket.
+path            string            Path in that bucket. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.
 ```
 
 #### read_file
@@ -3736,8 +3736,8 @@ declare function createClientBase(options: ClientOptions): {
         /**
          * Put a file on a ticket. `text` makes .md / .html documents trivial;
          * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
-         * are stored in the board's attachment memory (or `memoryId`) and the
-         * ticket references that memory file.
+         * are stored in the board's attachment bucket (or `bucketId`) and the
+         * ticket references that bucket file.
          */
         upload: (key: string, input: UploadInput, o?: RequestOptions) => Promise<UploadedFile>;
         /** A file's metadata and a signed download URL (valid 15 minutes). */
@@ -4145,14 +4145,14 @@ board answers `404` from then on, and the others carry on.
   `plan.md` becomes `text/markdown` — and both then render natively in the app.
 - A file is put on a ticket. Upload first, then attach the returned `file_id` to a message; up to
   20 attachments per message.
-- **The bytes live in a memory** (since 1.5.0). A board takes no files of its own: an upload goes
-  into the board's **attachment memory** (set by a board admin in board settings › Memory — a
-  memory granted `write` to the board), at the board's path template, by default
-  `tickets/<ticketId>/<time>_<filename>`. The ticket holds a reference to that memory file
-  (`memory { memory_id, node_id }` on the file). Name another memory granted `write` to the board
-  with `memory_id`, and the place in it with `path` (`<ticketId>` is filled in). A path that is
+- **The bytes live in a bucket** (since 1.5.0). A board takes no files of its own: an upload goes
+  into the board's **attachment bucket** (set by a board admin in board settings › Bucket — a
+  bucket granted `write` to the board), at the board's path template, by default
+  `tickets/<ticketId>/<time>_<filename>`. The ticket holds a reference to that bucket file
+  (`bucket { bucket_id, node_id }` on the file). Name another bucket granted `write` to the board
+  with `bucket_id`, and the place in it with `path` (`<ticketId>` is filled in). A path that is
   taken is never overwritten: the new file becomes `name (2).ext`. A board with no attachment
-  memory answers `400` — ask a board admin to set one.
+  bucket answers `400` — ask a board admin to set one.
 - Reading back: `GET /v1/files/{fileId}` gives metadata and a signed URL valid for **15 minutes**
   (fetch it, do not store it). `?content=1` returns the text directly for Markdown, HTML, text, CSV,
   JSON and code.
@@ -4898,24 +4898,24 @@ defaulting to 30 days / 12 weeks / 12 months back — as `{ field, from, to, tot
 buckets: [{ key, total, count, tickets: { 'ENG-42': { total, count } } }] }`, oldest first, empty buckets
 left out. Outside TaskManager the mock's DEMO board has a sample thread and a month of buckets.
 
-**Memory files (`db.memory`).** A *memory* is a bucket of files — Markdown notes, images, video,
+**Bucket files (`db.bucket`).** A *bucket* is a bucket of files — Markdown notes, images, video,
 anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's
-**owner** grants it one of their memories in Settings › Memory (`memoryGrantSet`, or the MCP tool
-`memory_grant_set`), as **read** or **read & write**. Again a ceiling: the page reaches a memory only
+**owner** grants it one of their buckets in Settings › Bucket (`bucketGrantSet`, or the MCP tool
+`bucket_grant_set`), as **read** or **read & write**. Again a ceiling: the page reaches a bucket only
 as far as the person looking can reach it themselves, and writes need both a write grant and the
-viewer's own write access. Paths are relative to the memory (`docs/brand/logo.svg`); writing one
+viewer's own write access. Paths are relative to the bucket (`docs/brand/logo.svg`); writing one
 creates its missing folders.
 
 ```js
-const [brand] = await db.memory.list();                 // { id, name, access: 'read' | 'write', files, bytes }
-const nodes = await db.memory.tree(brand.id, 'docs');   // every folder and file under docs/
-const md = await db.memory.read(brand.id, 'docs/README.md');
-img.src = await db.memory.url(brand.id, 'logos/logo.png');
-await db.memory.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
-await db.memory.remove(brand.id, 'notes');                       // a folder goes with everything in it
+const [brand] = await db.bucket.list();                 // { id, name, access: 'read' | 'write', files, bytes }
+const nodes = await db.bucket.tree(brand.id, 'docs');   // every folder and file under docs/
+const md = await db.bucket.read(brand.id, 'docs/README.md');
+img.src = await db.bucket.url(brand.id, 'logos/logo.png');
+await db.bucket.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
+await db.bucket.remove(brand.id, 'notes');                       // a folder goes with everything in it
 ```
 
-The mock has one memory, `demo-memory`, with a `docs/README.md`.
+The mock has one bucket, `demo-bucket`, with a `docs/README.md`.
 
 The whole API:
 
@@ -5305,13 +5305,13 @@ export interface TicketsApi {
   ): Unsubscribe;
 }
 
-// ─── memory (memory.html §H) ─────────────────────────────────────────────────
+// ─── bucket (bucket.html §H) ─────────────────────────────────────────────────
 
 /**
- * A memory the artifact's owner granted it, that THIS viewer can reach.
+ * A bucket the artifact's owner granted it, that THIS viewer can reach.
  * `access` is what the page may do with it: the grant, bounded by the viewer.
  */
-export interface Memory {
+export interface Bucket {
   id: string;
   name: string;
   description: string | null;
@@ -5321,8 +5321,8 @@ export interface Memory {
   bytes: number;
 }
 
-/** One folder or file. Paths are relative to the memory ('docs/a.md'). */
-export interface MemoryNode {
+/** One folder or file. Paths are relative to the bucket ('docs/a.md'). */
+export interface BucketNode {
   id: string;
   kind: 'folder' | 'file';
   path: string;
@@ -5334,31 +5334,31 @@ export interface MemoryNode {
 }
 
 /**
- * Memories (buckets of files) the artifact's OWNER granted it (Settings ›
- * Memory). Everything happens as the person looking: a memory they cannot
+ * Buckets (buckets of files) the artifact's OWNER granted it (Settings ›
+ * Bucket). Everything happens as the person looking: a bucket they cannot
  * reach themselves is not listed, and a write needs both a 'write' grant and
- * their own write access. `memory` is a memory id; paths are relative to it.
+ * their own write access. `bucket` is a bucket id; paths are relative to it.
  */
-export interface MemoryApi {
-  /** The granted memories this viewer reaches. */
-  list(): Promise<Memory[]>;
-  /** Every node under `path` (default: the whole memory), sorted by path. */
-  tree(memory: string, path?: string): Promise<MemoryNode[]>;
+export interface BucketApi {
+  /** The granted buckets this viewer reaches. */
+  list(): Promise<Bucket[]>;
+  /** Every node under `path` (default: the whole bucket), sorted by path. */
+  tree(bucket: string, path?: string): Promise<BucketNode[]>;
   /** A text file's content (at most 1 MB). */
-  read(memory: string, path: string): Promise<string>;
+  read(bucket: string, path: string): Promise<string>;
   /** A short-lived URL for <img>, <video>, <audio> or fetch(). */
-  url(memory: string, path: string): Promise<string>;
+  url(bucket: string, path: string): Promise<string>;
   /** Create or replace a file (≤ 10 MB); missing folders are created. */
   write(
-    memory: string,
+    bucket: string,
     path: string,
     content: string | Blob,
     options?: { contentType?: string },
   ): Promise<void>;
   /** Create a folder (and its parents). */
-  mkdir(memory: string, path: string): Promise<void>;
+  mkdir(bucket: string, path: string): Promise<void>;
   /** Delete a file, or a folder with everything in it. */
-  remove(memory: string, path: string): Promise<void>;
+  remove(bucket: string, path: string): Promise<void>;
 }
 
 export interface SignalMap {
@@ -5386,8 +5386,8 @@ export interface BackendDriver {
   readonly kv: KvApi;
   /** Boards' tickets, where the owner allowed it (§K). */
   readonly tickets: TicketsApi;
-  /** Memories (buckets of files), where the owner allowed it (memory.html §H). */
-  readonly memory: MemoryApi;
+  /** Buckets (buckets of files), where the owner allowed it (bucket.html §H). */
+  readonly bucket: BucketApi;
   on<K extends keyof SignalMap>(name: K, callback: (value: SignalMap[K]) => void): Unsubscribe;
 }
 
@@ -6089,53 +6089,53 @@ keeps working. The SDK's own patch releases do not change the wire format.
   `tickets.aggregates(board, { field?, from?, to? })` and `tickets.onAggregates(…)` (one field's period
   buckets with per-ticket shares); boards gain `aggFields` and `aggs`, tickets gain `aggs`. Same fence
   as `tickets.get`: a granted board the viewer can read. The mock has a sample thread and buckets.
-- **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, memories
+- **Indicators and descriptions** (docs/plan/indicators.html). Boards, stages, artifacts, buckets
   and workspaces each have an `indicator` — `{ kind: 'color', color }` | `{ kind: 'icon', icon,
   color }` (an icon from the app's list, tinted) | `{ kind: 'emoji', emoji }` | `{ kind: 'image',
   path }` (uploaded in the app) — and a plain-text `description` (≤ 2000, Markdown allowed). An
   unknown icon, a non-emoji or a foreign path is `400`.
 - **Reading**: `PublicBoard.indicator`; each of `PublicBoard.stages` has `description` (what the
   stage means — read it to decide where a ticket goes) and `indicator`; `PublicArtifact.indicator`;
-  memories (`memory_list`, `GET /v1/memories`) carry `indicator`; `list_workspaces` returns each
+  buckets (`bucket_list`, `GET /v1/buckets`) carry `indicator`; `list_workspaces` returns each
   workspace's `description` and `indicator`. A ticket's `stage` stays `{ id, name, category }`.
   `description_md` on a board is now plain text (old rich-text descriptions are flattened).
 - **Writing**: `POST /v1/boards` and SDK `tm.boards.create` take `indicator` and `description`;
   `POST|PATCH /v1/artifacts`, MCP `artifact_create`, SDK `tm.artifacts.create|update` take
   `indicator`; `boardUpdate` (patch `indicator`, `description`, and per stage `indicator` /
-  `description`), `memory_create` / `memory_update`, `workspace_create` / `workspace_update` take
+  `description`), `bucket_create` / `bucket_update`, `workspace_create` / `workspace_update` take
   both. The old `color` / `icon` fields still work and are kept in step; prefer `indicator`.
 
 ### 1.5.0 — 2026-10-05
 
-- **Ticket files live in a memory** (memory.html §J). A board takes no files of its own any more.
+- **Ticket files live in a bucket** (bucket.html §J). A board takes no files of its own any more.
   `POST /v1/tickets/{KEY}/files` and MCP `upload_file` store the bytes in the board's **attachment
-  memory** (board settings › Memory: a memory granted `write` to the board, with a path template —
+  bucket** (board settings › Bucket: a bucket granted `write` to the board, with a path template —
   by default `tickets/<ticketId>/<time>_<filename>`) and answer the same file shape as before, now
-  with `memory { memory_id, node_id }`. The file id still goes in `post_message` / `attachments`
-  unchanged. A board with no attachment memory answers `400`.
-- **`memory_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
-  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { memoryId, path })`. `<ticketId>` in
-  the path is the ticket's key. An upload never replaces a memory file: a taken path gets ` (2)`.
-- The file's `name` is the memory file's name, which follows the board's template (e.g.
+  with `bucket { bucket_id, node_id }`. The file id still goes in `post_message` / `attachments`
+  unchanged. A board with no attachment bucket answers `400`.
+- **`bucket_id` and `path`** (optional) on `POST /v1/tickets/{KEY}/files` (JSON body or multipart
+  fields) and MCP `upload_file`; SDK `tm.files.upload(key, { bucketId, path })`. `<ticketId>` in
+  the path is the ticket's key. An upload never replaces a bucket file: a taken path gets ` (2)`.
+- The file's `name` is the bucket file's name, which follows the board's template (e.g.
   `20261005-211946_plan.md` under the default one).
 
 ### 1.4.0 — 2026-10-05
 
-- **Memory** (docs/plan/memory.html). A memory is a bucket of files with its own people: folders,
-  Markdown, images, video, APKs, anything. Scopes `memory:read` / `memory:write`. Every operation
-  names a node by `path` (parents are created on write). MCP tools: `memory_list`, `memory_tree`,
-  `memory_file_read`, `memory_file_write`, `memory_folder_create`, `memory_move`,
-  `memory_node_delete`, plus `memory_create` / `memory_update` / `memory_delete` / `memory_share` /
-  `memory_grant_set` for people. REST: `GET /v1/memories`, `GET /v1/memories/{id}/tree`,
-  `GET|PUT|DELETE /v1/memories/{id}/files/{path}`.
-- **Agents reach a memory through a board.** A memory granted to a board `read` is readable by every
+- **Bucket** (docs/plan/bucket.html). A bucket is a bucket of files with its own people: folders,
+  Markdown, images, video, APKs, anything. Scopes `bucket:read` / `bucket:write`. Every operation
+  names a node by `path` (parents are created on write). MCP tools: `bucket_list`, `bucket_tree`,
+  `bucket_file_read`, `bucket_file_write`, `bucket_folder_create`, `bucket_move`,
+  `bucket_node_delete`, plus `bucket_create` / `bucket_update` / `bucket_delete` / `bucket_share` /
+  `bucket_grant_set` for people. REST: `GET /v1/buckets`, `GET /v1/buckets/{id}/tree`,
+  `GET|PUT|DELETE /v1/buckets/{id}/files/{path}`.
+- **Agents reach a bucket through a board.** A bucket granted to a board `read` is readable by every
   member of it, agents included; granted `write`, editors and admins may also change it.
-- **Memory files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
-  `memory_files: [{ memory_id, path | node_id }]` (SDK: `memoryFiles`). The file is not copied: the
-  ticket shows the memory file's current version, and `source: 'memory'` with `memory { memory_id,
+- **Bucket files on tickets, by reference.** `post_message` / `POST /v1/tickets/{KEY}/messages` take
+  `bucket_files: [{ bucket_id, path | node_id }]` (SDK: `bucketFiles`). The file is not copied: the
+  ticket shows the bucket file's current version, and `source: 'bucket'` with `bucket { bucket_id,
   node_id }` on the file. Once the file is deleted or the grant removed, reading it is a 404.
-- **`BackendDriver.memory`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
-  page, within the memory's grant to that artifact and the viewer's own access.
+- **`BackendDriver.bucket`** — `list / tree / read / url / write / mkdir / remove` for an artifact's
+  page, within the bucket's grant to that artifact and the viewer's own access.
 
 ### 1.3.0 — 2026-09-30
 

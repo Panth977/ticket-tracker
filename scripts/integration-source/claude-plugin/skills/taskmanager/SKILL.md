@@ -103,7 +103,7 @@ post_message            the result, with files attached if it is long
 move_ticket             into the stage that means done on THAT board (stages differ per board)
 ```
 
-## Memory
+## Bucket
 
 Used as long-term memory, a board is a filing cabinet, not a search engine: it remembers exactly what was
 written down, under a key that outlives the conversation.

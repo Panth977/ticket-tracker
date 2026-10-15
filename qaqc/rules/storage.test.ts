@@ -70,7 +70,7 @@ describe('ticket attachments', () => {
     await assertFails(getMetadata(ref(storageOf(STRANGER), EXISTING)));
     await assertFails(getMetadata(ref(storageOf(null), EXISTING)));
   });
-  it('retired for new files (memory.html §J): no role uploads, none overwrites or deletes', async () => {
+  it('retired for new files (bucket.html §J): no role uploads, none overwrites or deletes', async () => {
     for (const uid of [ADMIN, EDITOR, COMMENTER, VIEWER, STRANGER])
       await assertFails(upload(uid, paths.attachment(BOARD, TICKET, `att_${uid}`, 'a.png')));
     await assertFails(upload(null, paths.attachment(BOARD, TICKET, 'att_n', 'a.png')));

@@ -7,8 +7,8 @@ import {
   doc,
   getDocData,
   people,
-  putMemoryObject,
-  seedAttachMemory,
+  putBucketObject,
+  seedAttachBucket,
   seedBoard,
   spyPorts,
   STAGES,
@@ -222,17 +222,17 @@ describe('ticketDelete', () => {
     const other = await call(asha, 'ticketCreate', { boardId: b.id, title: 'other' });
     const path = (id: string) => `boards/${b.id}/tickets/${id}/a1/f.txt`;
     const victimId = 'victim' + Date.now();
-    // An object from before memory.html §J under the ticket's prefix: it goes with the ticket.
+    // An object from before bucket.html §J under the ticket's prefix: it goes with the ticket.
     s.files.put(path(victimId), 5, 'text/plain');
-    // A file put on it now lives in a memory: it stays when the ticket goes.
-    const memoryId = await seedAttachMemory(b.id, asha);
-    const up = await putMemoryObject(s.files, memoryId, 'f.txt');
+    // A file put on it now lives in a bucket: it stays when the ticket goes.
+    const bucketId = await seedAttachBucket(b.id, asha);
+    const up = await putBucketObject(s.files, bucketId, 'f.txt');
     const victim = await call(asha, 'ticketCreate', {
       boardId: b.id,
       ticketId: victimId,
       title: 'victim',
       description: doc('see ', { ticketId: target.ticketId, key: target.key }),
-      memoryUploads: [{ memoryId, path: 'f.txt', storagePath: up.storagePath }],
+      bucketUploads: [{ bucketId, path: 'f.txt', storagePath: up.storagePath }],
     });
     await call(asha, 'ticketUpdate', {
       boardId: b.id,

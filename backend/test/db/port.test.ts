@@ -9,15 +9,15 @@ import { Store } from '../../src/db/sqlite/store.js';
 import type { DbAdapter } from '../../src/db/types.js';
 import { portSuite } from './suite.js';
 
-const memory = new SqliteDb(new Store(':memory:'));
-portSuite('sqlite (memory)', (): DbAdapter => ({ ...sqliteAdapter, db: () => memory }));
+const bucket = new SqliteDb(new Store(':memory:'));
+portSuite('sqlite (bucket)', (): DbAdapter => ({ ...sqliteAdapter, db: () => bucket }));
 
 const dir = mkdtempSync(join(tmpdir(), 'tm-db-'));
 const disk = new SqliteDb(new Store(dir));
 portSuite('sqlite (files)', (): DbAdapter => ({ ...sqliteAdapter, db: () => disk }));
 
 afterAll(() => {
-  memory.store.close();
+  bucket.store.close();
   disk.store.close();
   rmSync(dir, { recursive: true, force: true });
 });

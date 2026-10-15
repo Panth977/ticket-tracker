@@ -1,7 +1,7 @@
 <!--
   Formatting bar for a RichEditor: B I S </> Link • 1. ☐ ❝ (📎 when onattach,
-  ❓ when onask — the composer's 'Ask a question', §N1; 🧠 when onmemory —
-  'Attach from memory', memory.html §E).
+  ❓ when onask — the composer's 'Ask a question', §N1; 🧠 when onbucket —
+  'Attach from bucket', bucket.html §E).
   <EditorToolbar {editor} onattach={() => fileInput.click()} onask={() => (askOpen = true)} />
 -->
 <script lang="ts">
@@ -30,8 +30,8 @@
     onattach?: () => void;
     /** Phase 5 (§N1): 'Ask a question' — shown to anyone who may comment. */
     onask?: () => void;
-    /** memory.html §E: attach files from a memory granted to this board. */
-    onmemory?: () => void;
+    /** bucket.html §E: attach files from a bucket granted to this board. */
+    onbucket?: () => void;
     /** aggregates.html: 'Add to a total' — shown when the board has active aggregate fields. */
     onagg?: () => void;
     disabled?: boolean;
@@ -41,7 +41,7 @@
     editor,
     onattach,
     onask,
-    onmemory,
+    onbucket,
     onagg,
     disabled = false,
     class: cls = '',
@@ -166,14 +166,14 @@
     {#if t.id === 'link' || t.id === 'code'}<span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"
       ></span>{/if}
   {/each}
-  {#if onattach || onask || onmemory || onagg}
+  {#if onattach || onask || onbucket || onagg}
     <span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"></span>
   {/if}
   {#if onattach}
     <IconButton icon={Paperclip} label="Attach files" size="sm" {disabled} onclick={onattach} />
   {/if}
-  {#if onmemory}
-    <IconButton icon={Brain} label="Attach from memory" size="sm" {disabled} onclick={onmemory} />
+  {#if onbucket}
+    <IconButton icon={Brain} label="Attach from bucket" size="sm" {disabled} onclick={onbucket} />
   {/if}
   {#if onask}
     <IconButton icon={CircleHelp} label="Ask a question" size="sm" {disabled} onclick={onask} />

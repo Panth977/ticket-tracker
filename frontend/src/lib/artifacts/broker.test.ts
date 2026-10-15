@@ -155,11 +155,11 @@ function fakeBackend() {
       },
     },
     tickets: tk.backend,
-    // memory.html §H: one memory granted read (./brokerMemory.test covers the ops).
-    memory: {
+    // bucket.html §H: one bucket granted read (./brokerBucket.test covers the ops).
+    bucket: {
       list: async () => [
         {
-          memory: {
+          bucket: {
             id: 'mem01',
             name: 'Brand',
             description: null,
@@ -646,7 +646,7 @@ describe('read-only viewer', () => {
       const a = op.startsWith('tk.')
         ? tkArgs
         : op.startsWith('mem.')
-          ? { memory: 'mem01', path: 'a.md', text: 'x' }
+          ? { bucket: 'mem01', path: 'a.md', text: 'x' }
           : op === 'fs.add' || op === 'fs.list' || op === 'fs.onList'
             ? { ...args, path: '/a' }
             : args;

@@ -96,7 +96,7 @@ export interface RegionPrices {
     writePer100k: number;
     deletePer100k: number;
   };
-  /** Cloud Run (a 2nd-gen function): CPU, memory and requests. */
+  /** Cloud Run (a 2nd-gen function): CPU, bucket and requests. */
   run: {
     vcpuSecond: number;
     gibSecond: number;

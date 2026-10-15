@@ -1,6 +1,6 @@
 <!--
   /w/{id} — one of my workspaces (agents.html §AB): its boards, artifacts and
-  memories as cards, on one page. Being here enters the workspace, so one
+  buckets as cards, on one page. Being here enters the workspace, so one
   opened from it keeps "Workspace › Name" and the workspace-only switcher.
   Share it (everything in it, one-shot: WorkspaceShareDialog),
   edit (name, colour, what is in it), remove one item, or delete the
@@ -13,7 +13,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Pencil, Share2, Trash2 } from 'lucide-svelte';
-  import { MEMORY_DEFAULT_INDICATOR, paths, type Workspace } from '@tm/shared';
+  import { BUCKET_DEFAULT_INDICATOR, paths, type Workspace } from '@tm/shared';
   import { command } from '$lib/api';
   import BoardTile from '$lib/account/BoardTile.svelte';
   import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
@@ -21,7 +21,7 @@
   import ItemTile from '$lib/layout/ItemTile.svelte';
   import Indicator from '$lib/ui/Indicator.svelte';
   import { routes } from '$lib/layout/routes';
-  import { myMemories, splitMemories } from '$lib/memory/store';
+  import { myBuckets, splitBuckets } from '$lib/bucket/store';
   import { docStore, myBoards } from '$lib/stores';
   import { Button, EmptyState, Skeleton } from '$lib/ui';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
@@ -35,7 +35,7 @@
 
   const boardsQ = $derived(myBoards(uid));
   const artifactsQ = $derived(myArtifacts(uid));
-  const memoriesQ = $derived(myMemories(uid));
+  const bucketsQ = $derived(myBuckets(uid));
 
   // In its order; ones I can no longer open (or archived) simply are not shown.
   const boards = $derived.by(() => {
@@ -46,9 +46,9 @@
     const byId = new Map(splitArtifacts($artifactsQ.data).active.map((a) => [a.id, a]));
     return (ws?.artifactIds ?? []).flatMap((x) => byId.get(x) ?? []);
   });
-  const memories = $derived.by(() => {
-    const byId = new Map(splitMemories($memoriesQ.data).active.map((m) => [m.id, m]));
-    return (ws?.memoryIds ?? []).flatMap((x) => byId.get(x) ?? []);
+  const buckets = $derived.by(() => {
+    const byId = new Map(splitBuckets($bucketsQ.data).active.map((m) => [m.id, m]));
+    return (ws?.bucketIds ?? []).flatMap((x) => byId.get(x) ?? []);
   });
 
   $effect(() => {
@@ -61,7 +61,7 @@
   let busy = $state(false);
 
   async function remove(
-    item: { boardIds: string[] } | { artifactIds: string[] } | { memoryIds: string[] },
+    item: { boardIds: string[] } | { artifactIds: string[] } | { bucketIds: string[] },
   ) {
     if (!ws) return;
     try {
@@ -129,14 +129,14 @@
     </header>
     {#if confirmDelete}
       <p class="-mt-4 text-sm text-muted">
-        Only the grouping goes. Its boards, artifacts and memories stay exactly as they are.
+        Only the grouping goes. Its boards, artifacts and buckets stay exactly as they are.
       </p>
     {/if}
 
-    {#if !boards.length && !artifacts.length && !memories.length}
+    {#if !boards.length && !artifacts.length && !buckets.length}
       <EmptyState
         title="Nothing here yet"
-        description="Add boards, artifacts and memories you already have. They stay where they are too; this just keeps them together."
+        description="Add boards, artifacts and buckets you already have. They stay where they are too; this just keeps them together."
       >
         {#snippet action()}
           <Button variant="primary" onclick={() => (editing = true)}>Add to this workspace</Button>
@@ -180,20 +180,20 @@
       </section>
     {/if}
 
-    {#if memories.length}
-      <section aria-label="Memory" class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold tracking-wide text-subtle uppercase">Memory</h2>
+    {#if buckets.length}
+      <section aria-label="Bucket" class="flex flex-col gap-3">
+        <h2 class="text-sm font-semibold tracking-wide text-subtle uppercase">Bucket</h2>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
-          {#each memories as m (m.id)}
+          {#each buckets as m (m.id)}
             <ItemTile
-              dataKind="memory"
+              dataKind="bucket"
               id={m.id}
-              href={routes.memory(m.id)}
+              href={routes.bucket(m.id)}
               name={m.name}
               of={m}
-              fallback={MEMORY_DEFAULT_INDICATOR}
+              fallback={BUCKET_DEFAULT_INDICATOR}
               description={m.description}
-              onremove={() => remove({ memoryIds: [m.id] })}
+              onremove={() => remove({ bucketIds: [m.id] })}
               onopen={() => workspaceContext.enter(ws.id)}
             >
               {#snippet meta()}
@@ -213,7 +213,7 @@
     bind:open={sharing}
     workspace={ws}
     names={Object.fromEntries(
-      [...boards, ...artifacts, ...memories].map((x) => [x.id, x.name] as [string, string]),
+      [...boards, ...artifacts, ...buckets].map((x) => [x.id, x.name] as [string, string]),
     )}
   />
 {/if}

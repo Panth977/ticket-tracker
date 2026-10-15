@@ -1,12 +1,12 @@
 /**
  * The title dropdown's data, wired once (./switcher): my boards, artifacts,
- * memories and workspaces → { workspace, items } for whatever is open. The
- * board bar, the artifact header (and its settings) and the memory header all
+ * buckets and workspaces → { workspace, items } for whatever is open. The
+ * board bar, the artifact header (and its settings) and the bucket header all
  * read it, so they show the same list in the same order.
  */
 import { derived, type Readable } from 'svelte/store';
 import { splitArtifacts, myArtifacts } from '$lib/artifacts/store';
-import { myMemories, splitMemories } from '$lib/memory/store';
+import { myBuckets, splitBuckets } from '$lib/bucket/store';
 import { myBoards, type WithId } from '$lib/stores';
 import type { MenuItem } from '$lib/ui/types';
 import type { Workspace } from '@tm/shared';
@@ -29,7 +29,7 @@ export function switcherFor(
   contextId: string | null,
 ): Readable<SwitcherState> {
   return derived(
-    [myBoards(uid), myArtifacts(uid), myMemories(uid), myWorkspaces(uid)],
+    [myBoards(uid), myArtifacts(uid), myBuckets(uid), myWorkspaces(uid)],
     ([b, a, m, w]) => {
       const workspace = activeWorkspace(w.data, contextId, current);
       return {
@@ -37,7 +37,7 @@ export function switcherFor(
         items: switcherItems({
           boards: b.data,
           artifacts: splitArtifacts(a.data).active,
-          memories: splitMemories(m.data).active,
+          buckets: splitBuckets(m.data).active,
           workspace,
           current,
           leave: () => workspaceContext.leave(),

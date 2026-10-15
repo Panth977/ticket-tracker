@@ -64,8 +64,8 @@ const COVERED = new Set<CommandName>([
   'artifactSourceUrl', // artifact_source
 ]);
 /** Plumbing for the app itself, not something a person does. */
-// memoryFilePut follows a browser upload to Storage; a token writes with memory_file_write.
-const PLUMBING = new Set<string>(['ping', 'searchKey', 'memoryFilePut']);
+// bucketFilePut follows a browser upload to Storage; a token writes with bucket_file_write.
+const PLUMBING = new Set<string>(['ping', 'searchKey', 'bucketFilePut']);
 
 /** What each command does, in a line; the spec's `permission` says who may. */
 const SUMMARY: Partial<Record<CommandName, string>> = {
@@ -129,33 +129,33 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
     'Rename a workspace, change its description or indicator, or attach and detach boards and artifacts (add / remove, or whole lists).',
   workspaceDelete: 'Delete a workspace. Its boards and artifacts are untouched.',
   sidebarHide:
-    'Hide a board, artifact or memory from your sidebar’s root lists, or show it again. Nothing about it changes otherwise.',
-  // Memory (docs/plan/memory.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
-  memoryCreate:
-    'Create a memory: an online bucket of files and folders (notes, images, video, APKs …) you own.',
-  memoryUpdate:
-    'Rename a memory, change its description or indicator (its mark), archive or restore it.',
-  memoryDelete:
-    'Delete a memory with every file in it — confirm first. Tickets that pointed at its files show them as gone.',
-  memoryShare:
-    'Give a person a role on a memory by email (editor / viewer), or take it away (null).',
-  memoryGrantSet:
-    'Let a board (its members, and its agents) or an artifact’s page use a memory: read, or read and write; null removes. Each person still only gets what their own board role allows.',
-  memoryList:
-    'The memories you can reach — yours, and those granted to boards you are on (or to one board / artifact).',
-  memoryTree:
-    'List the files and folders in a memory (all of it, or under a path; shallow = one level).',
-  memoryFileRead:
-    'Read a memory file: its text (text files, up to 1 MB) and a short-lived download URL (any file).',
-  memoryFileWrite:
-    'Create or replace a memory file at a path, from text or base64 (≤ 10 MB). Missing folders are created; expectedFileId guards against overwriting a newer version.',
-  memoryFilePut:
-    'Register a file already uploaded to Storage at memories/{memoryId}/{fileId}/{name} (the web app’s upload path) — over MCP, use memory_file_write.',
-  memoryFolderCreate: 'Create a folder (and any missing parents) in a memory.',
-  memoryMove:
-    'Rename or move a file or folder in a memory to a new full path (a folder takes everything inside).',
-  memoryNodeDelete:
-    'Delete files or folders in a memory (a folder with everything inside) — confirm first.',
+    'Hide a board, artifact or bucket from your sidebar’s root lists, or show it again. Nothing about it changes otherwise.',
+  // Bucket (docs/plan/bucket.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
+  bucketCreate:
+    'Create a bucket: an online bucket of files and folders (notes, images, video, APKs …) you own.',
+  bucketUpdate:
+    'Rename a bucket, change its description or indicator (its mark), archive or restore it.',
+  bucketDelete:
+    'Delete a bucket with every file in it — confirm first. Tickets that pointed at its files show them as gone.',
+  bucketShare:
+    'Give a person a role on a bucket by email (editor / viewer), or take it away (null).',
+  bucketGrantSet:
+    'Let a board (its members, and its agents) or an artifact’s page use a bucket: read, or read and write; null removes. Each person still only gets what their own board role allows.',
+  bucketList:
+    'The buckets you can reach — yours, and those granted to boards you are on (or to one board / artifact).',
+  bucketTree:
+    'List the files and folders in a bucket (all of it, or under a path; shallow = one level).',
+  bucketFileRead:
+    'Read a bucket file: its text (text files, up to 1 MB) and a short-lived download URL (any file).',
+  bucketFileWrite:
+    'Create or replace a bucket file at a path, from text or base64 (≤ 10 MB). Missing folders are created; expectedFileId guards against overwriting a newer version.',
+  bucketFilePut:
+    'Register a file already uploaded to Storage at buckets/{bucketId}/{fileId}/{name} (the web app’s upload path) — over MCP, use bucket_file_write.',
+  bucketFolderCreate: 'Create a folder (and any missing parents) in a bucket.',
+  bucketMove:
+    'Rename or move a file or folder in a bucket to a new full path (a folder takes everything inside).',
+  bucketNodeDelete:
+    'Delete files or folders in a bucket (a folder with everything inside) — confirm first.',
 };
 
 /** board_create, view_save, artifact_file_url … */
@@ -208,8 +208,8 @@ function inputShape(name: CommandName): Shape {
 
 /**
  * Does the command NEED a board, so a left-out boardId means "the one I am
- * on"? Only when its own schema requires one: an optional boardId (memory_list,
- * memory_grant_set, sidebar_hide …) means "no board" when left out.
+ * on"? Only when its own schema requires one: an optional boardId (bucket_list,
+ * bucket_grant_set, sidebar_hide …) means "no board" when left out.
  */
 function boardRequired(name: CommandName): boolean {
   let s: z.ZodTypeAny = COMMANDS[name].req;
@@ -301,7 +301,7 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
           readOnlyHint:
             name === 'userList' ||
             /^artifact(Open|File(List|Url))$/.test(name) ||
-            /^memory(List|Tree|FileRead)$/.test(name),
+            /^bucket(List|Tree|FileRead)$/.test(name),
           destructiveHint: DESTRUCTIVE.test(name) || name === 'boardArchive',
         },
       },

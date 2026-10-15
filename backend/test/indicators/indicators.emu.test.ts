@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DESCRIPTION_MAX,
-  MEMORY_DEFAULT_INDICATOR,
+  BUCKET_DEFAULT_INDICATOR,
   paths,
   type Artifact,
-  type Memory,
+  type Bucket,
   type Stage,
   type Workspace,
 } from '@tm/shared';
@@ -156,7 +156,7 @@ describe('indicators — boards', () => {
   });
 });
 
-describe('indicators — artifacts and memories', () => {
+describe('indicators — artifacts and buckets', () => {
   it('artifact: create / update with indicator + description; legacy icon kept in step', async () => {
     const alice = await createUser();
     const { artifactId } = await call(alice, 'artifactCreate', {
@@ -189,32 +189,32 @@ describe('indicators — artifacts and memories', () => {
     ).rejects.toMatchObject({ code: 'invalid' });
   });
 
-  it('memory: create / update; default 🧠; memoryList answers the indicator', async () => {
+  it('bucket: create / update; default 🧠; bucketList answers the indicator', async () => {
     const alice = await createUser();
-    const plain = await call(alice, 'memoryCreate', { name: 'Notes' });
-    expect((await doc<Memory>(paths.memory(plain.memoryId))).indicator).toEqual(
-      MEMORY_DEFAULT_INDICATOR,
+    const plain = await call(alice, 'bucketCreate', { name: 'Notes' });
+    expect((await doc<Bucket>(paths.bucket(plain.bucketId))).indicator).toEqual(
+      BUCKET_DEFAULT_INDICATOR,
     );
-    const { memoryId } = await call(alice, 'memoryCreate', {
+    const { bucketId } = await call(alice, 'bucketCreate', {
       name: 'Brand',
       description: 'Logos and fonts',
       indicator: IMAGE,
     });
-    let m = await doc<Memory>(paths.memory(memoryId));
+    let m = await doc<Bucket>(paths.bucket(bucketId));
     expect(m).toMatchObject({ indicator: IMAGE, icon: null, description: 'Logos and fonts' });
-    await call(alice, 'memoryUpdate', { memoryId, indicator: ICON, description: 'Brand kit' });
-    m = await doc<Memory>(paths.memory(memoryId));
+    await call(alice, 'bucketUpdate', { bucketId, indicator: ICON, description: 'Brand kit' });
+    m = await doc<Bucket>(paths.bucket(bucketId));
     expect(m).toMatchObject({ indicator: ICON, description: 'Brand kit' });
 
-    const { memories } = await call(alice, 'memoryList', {});
-    const out = memories.find((x) => x.id === memoryId)!;
+    const { buckets } = await call(alice, 'bucketList', {});
+    const out = buckets.find((x) => x.id === bucketId)!;
     expect(out.indicator).toEqual(ICON);
-    expect(memories.find((x) => x.id === plain.memoryId)!.indicator).toEqual(
-      MEMORY_DEFAULT_INDICATOR,
+    expect(buckets.find((x) => x.id === plain.bucketId)!.indicator).toEqual(
+      BUCKET_DEFAULT_INDICATOR,
     );
     await expect(
-      call(alice, 'memoryUpdate', {
-        memoryId,
+      call(alice, 'bucketUpdate', {
+        bucketId,
         indicator: { kind: 'image', path: '../x' },
       } as never),
     ).rejects.toMatchObject({ code: 'invalid' });

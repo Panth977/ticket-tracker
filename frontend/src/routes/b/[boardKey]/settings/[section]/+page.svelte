@@ -29,7 +29,7 @@
   const section = $derived(page.params.section ?? 'general');
   const known = $derived(BOARD_SETTINGS_SECTIONS.some((x) => x.id === section));
   // Renamed sections (lib/access): old links still land.
-  const MOVED: Record<string, 'subscriptions'> = { memory: 'subscriptions' };
+  const MOVED: Record<string, 'subscriptions'> = { bucket: 'subscriptions' };
   $effect(() => {
     const to = MOVED[section];
     if (to) void goto(routes.boardSettings(s.board.key, to), { replaceState: true });

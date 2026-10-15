@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ATTACH_TEMPLATE, type MemoryOut } from '@tm/shared';
+import { DEFAULT_ATTACH_TEMPLATE, type BucketOut } from '@tm/shared';
 import {
   attachPathProblems,
-  defaultMemoryId,
+  defaultBucketId,
   examplePath,
   isWriteGranted,
   prefillPath,
   attachLabel,
   resolveAttachPath,
   templateFor,
-  toMemoryUploads,
-  writeMemories,
-  type BoardMemoryOut,
+  toBucketUploads,
+  writeBuckets,
+  type BoardBucketOut,
 } from './attach';
 
-const mem = (id: string, over: Partial<BoardMemoryOut> = {}): BoardMemoryOut => ({
+const mem = (id: string, over: Partial<BoardBucketOut> = {}): BoardBucketOut => ({
   id,
   name: id,
   description: null,
@@ -30,7 +30,7 @@ const mem = (id: string, over: Partial<BoardMemoryOut> = {}): BoardMemoryOut => 
 // 2026-10-05 21:19:46 UTC
 const AT = Date.UTC(2026, 9, 5, 21, 19, 46);
 
-describe('which memories a ticket file may go into', () => {
+describe('which buckets a ticket file may go into', () => {
   it('trusts the board grant when the server sends it', () => {
     expect(isWriteGranted(mem('a', { boardGrant: 'write' }), null)).toBe(true);
     expect(isWriteGranted(mem('a', { boardGrant: 'read', reach: 'manage' }), null)).toBe(false);
@@ -38,29 +38,29 @@ describe('which memories a ticket file may go into', () => {
   it('otherwise: write reach, or the board default (always write-granted)', () => {
     expect(isWriteGranted(mem('a', { reach: 'write' }), null)).toBe(true);
     expect(isWriteGranted(mem('a'), null)).toBe(false);
-    expect(isWriteGranted(mem('a'), { memoryId: 'a', template: 'x' })).toBe(true);
+    expect(isWriteGranted(mem('a'), { bucketId: 'a', template: 'x' })).toBe(true);
   });
-  it('never an archived memory', () => {
+  it('never an archived bucket', () => {
     expect(isWriteGranted(mem('a', { boardGrant: 'write', archived: true }), null)).toBe(false);
   });
   it('filters a list', () => {
     const list = [mem('a', { boardGrant: 'read' }), mem('b', { boardGrant: 'write' })];
-    expect(writeMemories(list, null).map((m) => m.id)).toEqual(['b']);
+    expect(writeBuckets(list, null).map((m) => m.id)).toEqual(['b']);
   });
 });
 
 describe('the dialog starts on…', () => {
-  const list = [mem('a'), mem('b')] as MemoryOut[];
-  it("the board's default memory when it is still there", () => {
-    expect(defaultMemoryId(list, { memoryId: 'b', template: 'x' })).toBe('b');
+  const list = [mem('a'), mem('b')] as BucketOut[];
+  it("the board's default bucket when it is still there", () => {
+    expect(defaultBucketId(list, { bucketId: 'b', template: 'x' })).toBe('b');
   });
-  it('the first memory otherwise', () => {
-    expect(defaultMemoryId(list, { memoryId: 'gone', template: 'x' })).toBe('a');
-    expect(defaultMemoryId(list, null)).toBe('a');
-    expect(defaultMemoryId([], null)).toBeNull();
+  it('the first bucket otherwise', () => {
+    expect(defaultBucketId(list, { bucketId: 'gone', template: 'x' })).toBe('a');
+    expect(defaultBucketId(list, null)).toBe('a');
+    expect(defaultBucketId([], null)).toBeNull();
   });
-  it("uses the board's template only for its default memory", () => {
-    const am = { memoryId: 'b', template: 'files/<filename>' };
+  it("uses the board's template only for its default bucket", () => {
+    const am = { bucketId: 'b', template: 'files/<filename>' };
     expect(templateFor('b', am)).toBe('files/<filename>');
     expect(templateFor('a', am)).toBe(DEFAULT_ATTACH_TEMPLATE);
     expect(templateFor('a', null)).toBe(DEFAULT_ATTACH_TEMPLATE);
@@ -123,19 +123,19 @@ describe('board settings example', () => {
   });
 });
 
-describe('memoryUploads', () => {
-  it('sends every upload headed for a memory, and nothing else', () => {
+describe('bucketUploads', () => {
+  it('sends every upload headed for a bucket, and nothing else', () => {
     expect(
-      toMemoryUploads([
+      toBucketUploads([
         {
-          path: 'memories/m1/f1/a.png',
-          memoryId: 'm1',
-          memoryPath: 'tickets/ENG-1/a.png',
+          path: 'buckets/m1/f1/a.png',
+          bucketId: 'm1',
+          bucketPath: 'tickets/ENG-1/a.png',
         },
         { path: 'boards/b/tickets/t/x/old.png' },
       ]),
     ).toEqual([
-      { memoryId: 'm1', path: 'tickets/ENG-1/a.png', storagePath: 'memories/m1/f1/a.png' },
+      { bucketId: 'm1', path: 'tickets/ENG-1/a.png', storagePath: 'buckets/m1/f1/a.png' },
     ]);
   });
 });

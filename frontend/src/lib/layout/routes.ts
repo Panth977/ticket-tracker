@@ -42,7 +42,7 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'grants', label: 'Stage grants' },
   { id: 'intake', label: 'Intake' },
   { id: 'integrations', label: 'Integrations' },
-  /** lib/access: what this board uses (memories, memory.html §D). */
+  /** lib/access: what this board uses (buckets, bucket.html §D). */
   { id: 'subscriptions', label: 'Subscriptions' },
   /** lib/access: what uses this board (artifacts §K, agents §AA2). */
   { id: 'subscribers', label: 'Subscribers' },
@@ -106,12 +106,12 @@ export const routes = {
   artifact: (artifactId: string) => `/x/${artifactId}`,
   /** §AB: one of my workspaces — its boards and artifacts on one page. */
   workspace: (workspaceId: string) => `/w/${workspaceId}`,
-  /** Memory (docs/plan/memory.html §F): the list, one memory (?path= a file or folder), its settings. */
-  memories: () => '/m',
-  memory: (memoryId: string, path?: string | null) =>
-    `/m/${memoryId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  memorySettings: (memoryId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
-    `/m/${memoryId}/settings/${section}`,
+  /** Bucket (docs/plan/bucket.html §F): the list, one bucket (?path= a file or folder), its settings. */
+  buckets: () => '/bucket',
+  bucket: (bucketId: string, path?: string | null) =>
+    `/bucket/${bucketId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
+  bucketSettings: (bucketId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
+    `/bucket/${bucketId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
     section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data',

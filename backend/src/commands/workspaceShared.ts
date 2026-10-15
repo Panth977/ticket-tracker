@@ -14,7 +14,7 @@ import {
 } from '@tm/shared';
 import { db } from '../db/index.js';
 import { artifactRef, roleFor } from '../artifacts/shared.js';
-import { memoryRef, reachFor } from '../memory/shared.js';
+import { bucketRef, reachFor } from '../bucket/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGetAll, type Tx } from '../runtime/tx.js';
@@ -30,8 +30,8 @@ export async function assertReachable(
   ids: {
     boardIds?: readonly string[];
     artifactIds?: readonly string[];
-    /** memory.html §F */
-    memoryIds?: readonly string[];
+    /** bucket.html §F */
+    bucketIds?: readonly string[];
   },
 ): Promise<void> {
   const boardIds = [...new Set(ids.boardIds ?? [])];
@@ -53,17 +53,17 @@ export async function assertReachable(
     const a = artifacts[i];
     return !a || !roleFor({ ...ctx, scopes: undefined }, a);
   });
-  const memoryIds = [...new Set(ids.memoryIds ?? [])];
-  const memories = memoryIds.length ? await txGetAll(tx, memoryIds.map(memoryRef)) : [];
+  const bucketIds = [...new Set(ids.bucketIds ?? [])];
+  const buckets = bucketIds.length ? await txGetAll(tx, bucketIds.map(bucketRef)) : [];
   const reaches = await Promise.all(
-    memories.map((m) => reachFor({ ...ctx, scopes: undefined }, m, tx)),
+    buckets.map((m) => reachFor({ ...ctx, scopes: undefined }, m, tx)),
   );
-  const badMemories = memoryIds.filter((_, i) => !reaches[i]);
-  if (badBoards.length || badArtifacts.length || badMemories.length)
+  const badBuckets = bucketIds.filter((_, i) => !reaches[i]);
+  if (badBoards.length || badArtifacts.length || badBuckets.length)
     throw errors.invalid('You cannot open some of these', {
       ...(badBoards.length ? { boardIds: badBoards } : {}),
       ...(badArtifacts.length ? { artifactIds: badArtifacts } : {}),
-      ...(badMemories.length ? { memoryIds: badMemories } : {}),
+      ...(badBuckets.length ? { bucketIds: badBuckets } : {}),
     });
 }
 
@@ -75,7 +75,7 @@ export const uniq = (xs: readonly string[]): string[] => [...new Set(xs)];
 /** What a recipient's copy carries over — the grouping, never any access. */
 export type WorkspaceCopy = Pick<
   Workspace,
-  'name' | 'color' | 'indicator' | 'description' | 'boardIds' | 'artifactIds' | 'memoryIds'
+  'name' | 'color' | 'indicator' | 'description' | 'boardIds' | 'artifactIds' | 'bucketIds'
 >;
 
 /**

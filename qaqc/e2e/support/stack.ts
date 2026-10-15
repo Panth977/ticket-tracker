@@ -115,16 +115,16 @@ export async function messagesOf(boardId: string, ticketId: string): Promise<Row
 }
 
 /**
- * memory.html §J: a board takes no files of its own — give it an attachment
- * memory (granted write, set as the default) so uploads to its tickets work.
+ * bucket.html §J: a board takes no files of its own — give it an attachment
+ * bucket (granted write, set as the default) so uploads to its tickets work.
  */
-export async function giveAttachMemory(
+export async function giveAttachBucket(
   who: Parameters<typeof call>[0],
   boardId: string,
   template = 'tickets/<ticketId>/<time>_<filename>',
 ): Promise<string> {
-  const { memoryId } = await call(who, 'memoryCreate', { name: 'Attachments' });
-  await call(who, 'memoryGrantSet', { memoryId, boardId, access: 'write' });
-  await call(who, 'boardAttachMemorySet', { boardId, attachMemory: { memoryId, template } });
-  return memoryId;
+  const { bucketId } = await call(who, 'bucketCreate', { name: 'Attachments' });
+  await call(who, 'bucketGrantSet', { bucketId, boardId, access: 'write' });
+  await call(who, 'boardAttachBucketSet', { boardId, attachBucket: { bucketId, template } });
+  return bucketId;
 }

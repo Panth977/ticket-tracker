@@ -9,7 +9,7 @@
 -->
 <script lang="ts">
   import { Download, Loader2 } from 'lucide-svelte';
-  import { formatBytes, parseMemoryRefPath } from '@tm/shared';
+  import { formatBytes, parseBucketRefPath } from '@tm/shared';
   import { Button } from '$lib/ui';
   import { KIND_ICON, KIND_LABEL, VIEWER_TEXT_BYTES, infoOf, prettyJson } from './kinds';
   import { downloadFile, fileText, fileUrl, type FileTextResult } from './source';
@@ -36,10 +36,10 @@
   let error = $state<string | null>(null);
   let zoom = $state<ImageZoom | null>(null);
   let jsonPretty = $state(true);
-  /** memory.html §E: a memory reference that no longer resolves says why. */
+  /** bucket.html §E: a bucket reference that no longer resolves says why. */
   const failMsg = $derived(
-    file.memory || parseMemoryRefPath(file.path)
-      ? 'No longer in memory — the file was deleted, or the memory is no longer shared here.'
+    file.bucket || parseBucketRefPath(file.path)
+      ? 'No longer in memory — the file was deleted, or the bucket is no longer shared here.'
       : 'Could not load this file.',
   );
 

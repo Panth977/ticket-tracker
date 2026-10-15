@@ -13,7 +13,7 @@
   /* eslint-disable svelte/no-navigation-without-resolve -- file URLs are external */
   import type { Snippet } from 'svelte';
   import { Download, ExternalLink } from 'lucide-svelte';
-  import { formatBytes, parseMemoryRefPath } from '@tm/shared';
+  import { formatBytes, parseBucketRefPath } from '@tm/shared';
   import { markdownTitle } from '$lib/editor';
   import { toast } from '$lib/ui';
   import { KIND_LABEL, infoOf } from './kinds';
@@ -42,9 +42,9 @@
   let shown = $state(false);
   let url = $state<string | null>(null);
   let text = $state<string | null>(null);
-  /** memory.html §E: a memory reference that no longer resolves (FilePreview finds out). */
+  /** bucket.html §E: a bucket reference that no longer resolves (FilePreview finds out). */
   let gone = $state(false);
-  const fromMemory = $derived(!!file.memory || !!parseMemoryRefPath(file.path));
+  const fromMemory = $derived(!!file.bucket || !!parseBucketRefPath(file.path));
   const mdTitle = $derived(kind === 'markdown' && text ? markdownTitle(text) : null);
 
   function open() {
@@ -68,8 +68,8 @@
     {#if fromMemory}
       <span
         class="pointer-events-none absolute bottom-1.5 left-1.5 z-[1] rounded bg-surface/90 px-1.5 py-0.5 text-[10px] font-medium text-text shadow-pop"
-        title="From memory: always its current version"
-        data-memory-badge>🧠 Memory</span
+        title="From bucket: always its current version"
+        data-bucket-badge>🧠 Bucket</span
       >
     {/if}
     <button

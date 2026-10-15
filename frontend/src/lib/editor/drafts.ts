@@ -3,19 +3,19 @@
  * text: "Drafts are saved per ticket in IndexedDB"). A draft survives a reload,
  * closing the drawer, and going offline; it is cleared when the message sends.
  *
- * Falls back to memory when IndexedDB is unavailable (private mode, tests).
+ * Falls back to bucket when IndexedDB is unavailable (private mode, tests).
  */
 import { RichTextDocSchema, type RichTextDoc } from '@tm/shared';
 
 export interface DraftAttachment {
-  /** Storage path (already uploaded), or a memory reference's virtual path. */
+  /** Storage path (already uploaded), or a bucket reference's virtual path. */
   path: string;
   name: string;
   size: number;
   mime: string;
-  /** memory.html §J: uploaded INTO this memory, to become a file at memoryPath. */
-  memoryId?: string;
-  memoryPath?: string;
+  /** bucket.html §J: uploaded INTO this bucket, to become a file at bucketPath. */
+  bucketId?: string;
+  bucketPath?: string;
 }
 
 export interface Draft {
@@ -67,7 +67,7 @@ export function parseDraft(raw: unknown, now = Date.now()): Draft | null {
   };
 }
 
-export function memoryDraftStore(): DraftStore {
+export function bucketDraftStore(): DraftStore {
   const m = new Map<string, Draft>();
   return {
     async get(k) {
@@ -123,11 +123,11 @@ function idbDraftStore(): DraftStore {
   };
 }
 
-/** The app's draft store: IndexedDB when it works, memory otherwise. */
+/** The app's draft store: IndexedDB when it works, bucket otherwise. */
 function createDraftStore(): DraftStore {
-  if (typeof indexedDB === 'undefined') return memoryDraftStore();
+  if (typeof indexedDB === 'undefined') return bucketDraftStore();
   const idb = idbDraftStore();
-  const mem = memoryDraftStore();
+  const mem = bucketDraftStore();
   let broken = false;
   const guard =
     <A extends unknown[], R>(f: (...a: A) => Promise<R>, g: (...a: A) => Promise<R>) =>

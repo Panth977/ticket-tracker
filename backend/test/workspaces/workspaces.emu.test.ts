@@ -166,17 +166,17 @@ describe('artifact board access (§K)', () => {
 });
 
 describe('workspaceShare (one-shot)', () => {
-  it('invites to every board, shares every owned artifact and memory, copies the grouping', async () => {
+  it('invites to every board, shares every owned artifact and bucket, copies the grouping', async () => {
     const { asha, bob, priya } = await people('asha', 'bob', 'priya');
     const mine = await seedBoard({ admin: asha });
     const theirs = await seedBoard({ admin: priya, viewers: [asha] });
     const { artifactId } = await call(asha, 'artifactCreate', { name: 'Dash' });
-    const { memoryId } = await call(asha, 'memoryCreate', { name: 'Notes' });
+    const { bucketId } = await call(asha, 'bucketCreate', { name: 'Notes' });
     const { workspaceId } = await call(asha, 'workspaceCreate', {
       name: 'Client X',
       boardIds: [mine.id, theirs.id],
       artifactIds: [artifactId],
-      memoryIds: [memoryId],
+      bucketIds: [bucketId],
     });
     const stranger = `new.${Date.now()}@example.test`;
 
@@ -192,7 +192,7 @@ describe('workspaceShare (one-shot)', () => {
       email: bob.email,
       boards: 1,
       artifacts: 1,
-      memories: 1,
+      buckets: 1,
       workspace: 'copied',
     });
     expect(r.shared.find((s) => s.email === stranger)).toMatchObject({
@@ -213,7 +213,7 @@ describe('workspaceShare (one-shot)', () => {
       ].sort(),
     );
     expect((await artifactRef(artifactId).get()).data()!.access[bob.uid]).toBe('editor');
-    expect((await db().doc(paths.memory(memoryId)).get()).data()!.access[bob.uid]).toBe('editor');
+    expect((await db().doc(paths.bucket(bucketId)).get()).data()!.access[bob.uid]).toBe('editor');
     // Nothing was granted on the board yet: bob must accept the invitation.
     expect((await db().doc(paths.board(mine.id)).get()).data()!.access[bob.uid]).toBeUndefined();
 

@@ -1,6 +1,6 @@
 <!--
   @component
-  indicators.html — an entity's mark: a board, a stage, an artifact, a memory,
+  indicators.html — an entity's mark: a board, a stage, an artifact, a bucket,
   a workspace. Pass the entity (`of`, legacy fields read through indicatorOf)
   or an explicit `indicator`.
 
@@ -39,7 +39,7 @@
     of?: { indicator?: Indicator | null; color?: string | null; icon?: string | null } | null;
     /** Picks the default colour when the entity has none (its id or name). */
     seed?: string;
-    /** Drawn when the entity has no mark at all (memories: MEMORY_DEFAULT_INDICATOR). */
+    /** Drawn when the entity has no mark at all (buckets: BUCKET_DEFAULT_INDICATOR). */
     fallback?: Indicator;
     size?: IndicatorSize;
     /** Accessible name; decorative (aria-hidden) when absent. */

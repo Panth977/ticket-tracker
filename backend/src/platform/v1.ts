@@ -35,7 +35,7 @@ import {
   type PublicEvent,
   type PublicFile,
   type PublicMessage,
-  type PublicMemoryFileRef,
+  type PublicBucketFileRef,
   type PublicRunReceipt,
   type PublicAggBuckets,
   type PublicAggInput,
@@ -81,7 +81,7 @@ import {
 } from './public.js';
 import { decodeCursor, encodeCursor, markdownIn, peopleUids, readableBoards } from './resolve.js';
 import { requireFileRead } from './fileAccess.js';
-import { memoryRefsIn } from '../memory/refs.js';
+import { bucketRefsIn } from '../bucket/refs.js';
 import type { DocumentSnapshot, QueryDocumentSnapshot } from '../db/index.js';
 
 /** The API key behind a ctx, when one authenticated the request (middleware/apiKey.ts). */
@@ -363,8 +363,8 @@ export async function postMessage(
     run?: PublicRunReceipt | null | undefined;
     /** aggregates.html: entries naming their field by id or label. */
     agg?: PublicAggInput | undefined;
-    /** memory.html §E: memory files by reference. */
-    memoryFiles?: PublicMemoryFileRef[] | undefined;
+    /** bucket.html §E: bucket files by reference. */
+    bucketFiles?: PublicBucketFileRef[] | undefined;
   },
   key?: string,
 ): Promise<PublicMessage> {
@@ -378,7 +378,7 @@ export async function postMessage(
       body,
       ...(md.trim() ? { markdown: md } : {}),
       ...(m.fileIds?.length ? { fileIds: [...new Set(m.fileIds)] } : {}),
-      ...(m.memoryFiles?.length ? { memoryRefs: await memoryRefsIn(m.memoryFiles) } : {}),
+      ...(m.bucketFiles?.length ? { bucketRefs: await bucketRefsIn(m.bucketFiles) } : {}),
       ...(m.replyTo ? { replyTo: m.replyTo } : {}),
       ...(m.run ? { run: runIn(m.run) } : {}),
       ...(m.agg ? { agg: aggIn(board, m.agg) } : {}),
@@ -540,9 +540,9 @@ export async function readFile(
   withContent: boolean | 'auto',
 ): Promise<RestFileRes> {
   const { board, ticket, file } = await findFile(ctx, fileId);
-  // memory.html §E: a memory reference is the node's CURRENT version, and only
-  // while the memory is still granted (the file door decides both).
-  const path = file.memory ? await requireFileRead(ctx, file.path) : file.path;
+  // bucket.html §E: a bucket reference is the node's CURRENT version, and only
+  // while the bucket is still granted (the file door decides both).
+  const path = file.bucket ? await requireFileRead(ctx, file.path) : file.path;
   const [members, signed] = await Promise.all([boardMembers(board.id), signedUrl(path, ctx.now)]);
   const pub = toPublicFile(ticket.key, file, members, signed);
   if (!withContent) return pub;

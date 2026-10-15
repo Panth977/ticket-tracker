@@ -18,8 +18,8 @@ export default defineCommand('workspaceCreate', async (ctx, input) => {
       throw errors.conflict(`You can have at most ${WORKSPACES_MAX} workspaces`);
     const boardIds = uniq(input.boardIds ?? []);
     const artifactIds = uniq(input.artifactIds ?? []);
-    const memoryIds = uniq(input.memoryIds ?? []);
-    await assertReachable(tx, ctx, { boardIds, artifactIds, memoryIds });
+    const bucketIds = uniq(input.bucketIds ?? []);
+    await assertReachable(tx, ctx, { boardIds, artifactIds, bucketIds });
     const last = Math.max(-1, ...mine.docs.map((d) => d.data().position));
     // indicators.html: the mark (default: the next workspace colour), legacy colour in step.
     const indicator = input.indicator ?? {
@@ -38,7 +38,7 @@ export default defineCommand('workspaceCreate', async (ctx, input) => {
       ...(description ? { description } : {}),
       boardIds,
       artifactIds,
-      memoryIds,
+      bucketIds,
       position: last + 1,
       createdAt: ctx.now,
       updatedAt: ctx.now,

@@ -48,7 +48,7 @@ import {
   type AggStats,
   type BoardMember,
   type BoardWithId,
-  type Memory,
+  type Bucket,
   type TicketDataPage,
   type TicketWithId,
 } from '@tm/shared';
@@ -241,45 +241,45 @@ export function firebaseBackend(artifactId: string): BrokerBackend {
         return a ? { url: a.url, expiresAt: a.expiresAt } : null;
       },
     },
-    // memory.html §H: every op is a memory command in the viewer's name. The
-    // grant to THIS artifact is read off the memory document when the viewer
-    // may read it; null otherwise (./brokerMemory treats that as 'read').
-    memory: {
+    // bucket.html §H: every op is a bucket command in the viewer's name. The
+    // grant to THIS artifact is read off the bucket document when the viewer
+    // may read it; null otherwise (./brokerBucket treats that as 'read').
+    bucket: {
       async list() {
-        const { memories } = await command('memoryList', { artifactId }, { toast: false });
+        const { buckets } = await command('bucketList', { artifactId }, { toast: false });
         return Promise.all(
-          memories.map(async (memory) => {
+          buckets.map(async (bucket) => {
             try {
-              const snap = await getDoc(doc(getDb(), paths.memory(memory.id)));
+              const snap = await getDoc(doc(getDb(), paths.bucket(bucket.id)));
               const grant = snap.exists()
-                ? ((snap.data() as Memory).artifacts?.[artifactId] ?? null)
+                ? ((snap.data() as Bucket).artifacts?.[artifactId] ?? null)
                 : null;
-              return { memory, grant };
+              return { bucket, grant };
             } catch {
-              return { memory, grant: null };
+              return { bucket, grant: null };
             }
           }),
         );
       },
-      tree: async (memoryId, path) =>
-        (await command('memoryTree', { memoryId, ...(path ? { path } : {}) }, { toast: false }))
+      tree: async (bucketId, path) =>
+        (await command('bucketTree', { bucketId, ...(path ? { path } : {}) }, { toast: false }))
           .nodes,
-      async read(memoryId, path, asText) {
-        const r = await command('memoryFileRead', { memoryId, path, asText }, { toast: false });
+      async read(bucketId, path, asText) {
+        const r = await command('bucketFileRead', { bucketId, path, asText }, { toast: false });
         return { text: r.text, truncated: r.truncated, url: r.url, expiresAt: r.expiresAt };
       },
-      async write(memoryId, path, content, mime) {
+      async write(bucketId, path, content, mime) {
         await command(
-          'memoryFileWrite',
-          { memoryId, path, ...content, ...(mime ? { mime } : {}) },
+          'bucketFileWrite',
+          { bucketId, path, ...content, ...(mime ? { mime } : {}) },
           { toast: false },
         );
       },
-      async mkdir(memoryId, path) {
-        await command('memoryFolderCreate', { memoryId, path }, { toast: false });
+      async mkdir(bucketId, path) {
+        await command('bucketFolderCreate', { bucketId, path }, { toast: false });
       },
-      async remove(memoryId, path) {
-        await command('memoryNodeDelete', { memoryId, paths: [path] }, { toast: false });
+      async remove(bucketId, path) {
+        await command('bucketNodeDelete', { bucketId, paths: [path] }, { toast: false });
       },
     },
   };

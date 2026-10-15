@@ -1,13 +1,13 @@
 /**
  * workspaceShare — share a workspace in one go (one-shot): every board in it
- * is an invitation, every artifact and memory a share, each made by the very
- * command that makes it alone (inviteCreate, artifactShare, memoryShare) —
+ * is an invitation, every artifact and bucket a share, each made by the very
+ * command that makes it alone (inviteCreate, artifactShare, bucketShare) —
  * same permissions, same limits, same e-mails. The workspace grants nothing
  * itself; items added to it later are not shared.
  *
- * The role is a board role; artifacts and memories know only editor / viewer,
+ * The role is a board role; artifacts and buckets know only editor / viewer,
  * so 'admin' is 'editor' there. What the owner cannot share (a board where
- * they may not invite, an artifact or memory they do not own) is skipped and
+ * they may not invite, an artifact or bucket they do not own) is skipped and
  * listed once.
  *
  * Each address also gets a copy of the grouping in their sidebar — now, or
@@ -16,7 +16,7 @@
 import { COMMANDS, errors, isAppError, paths, type CommandName, type Workspace } from '@tm/shared';
 import { artifactRef } from '../artifacts/shared.js';
 import { db } from '../db/index.js';
-import { memoryRef } from '../memory/shared.js';
+import { bucketRef } from '../bucket/shared.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
 import { defineCommand, getRegisteredCommand } from './_registry.js';
@@ -53,8 +53,8 @@ export default defineCommand('workspaceShare', async (ctx, input) => {
   const emails = [...new Set(input.emails.map((e) => e.toLowerCase()))].filter((e) => e !== me);
   if (!emails.length) throw errors.invalid('Give at least one address other than your own');
 
-  const counts = new Map(emails.map((e) => [e, { boards: 0, artifacts: 0, memories: 0 }]));
-  const skipped: { kind: 'board' | 'artifact' | 'memory'; id: string; reason: string }[] = [];
+  const counts = new Map(emails.map((e) => [e, { boards: 0, artifacts: 0, buckets: 0 }]));
+  const skipped: { kind: 'board' | 'artifact' | 'bucket'; id: string; reason: string }[] = [];
   const sideRole = input.role === 'admin' ? 'editor' : input.role;
 
   // Boards: one invitation call per board, every address at once.
@@ -74,9 +74,9 @@ export default defineCommand('workspaceShare', async (ctx, input) => {
     }
   }
 
-  // Artifacts and memories: only their owner shares them.
-  const own = async (kind: 'artifact' | 'memory', id: string): Promise<boolean> => {
-    const snap = await (kind === 'artifact' ? artifactRef(id) : memoryRef(id)).get();
+  // Artifacts and buckets: only their owner shares them.
+  const own = async (kind: 'artifact' | 'bucket', id: string): Promise<boolean> => {
+    const snap = await (kind === 'artifact' ? artifactRef(id) : bucketRef(id)).get();
     const owner = (snap.data() as { ownerUid?: string } | undefined)?.ownerUid;
     if (owner === ctx.actor) return true;
     skipped.push({ kind, id, reason: snap.exists ? 'Only its owner can share it' : 'Not found' });
@@ -92,12 +92,12 @@ export default defineCommand('workspaceShare', async (ctx, input) => {
         reasonOf(e); // a per-address refusal (e.g. already the owner): not counted
       }
   }
-  for (const memoryId of ws.memoryIds ?? []) {
-    if (!(await own('memory', memoryId))) continue;
+  for (const bucketId of ws.bucketIds ?? []) {
+    if (!(await own('bucket', bucketId))) continue;
     for (const email of emails)
       try {
-        await run(ctx, 'memoryShare', { memoryId, email, role: sideRole });
-        counts.get(email)!.memories++;
+        await run(ctx, 'bucketShare', { bucketId, email, role: sideRole });
+        counts.get(email)!.buckets++;
       } catch (e) {
         reasonOf(e);
       }
@@ -111,7 +111,7 @@ export default defineCommand('workspaceShare', async (ctx, input) => {
     description: ws.description,
     boardIds: ws.boardIds,
     artifactIds: ws.artifactIds,
-    memoryIds: ws.memoryIds ?? [],
+    bucketIds: ws.bucketIds ?? [],
   });
   const copyId = copyIdFor(ctx.actor, input.workspaceId);
   const shared = [];

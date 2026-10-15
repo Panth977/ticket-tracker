@@ -41,7 +41,7 @@ const CHANNELS = ['v1', 'latest'];
 const FILES = ['driver.js', 'driver.mjs', 'driver.d.ts'];
 /**
  * "A few kilobytes of postMessage plumbing" — the mock is most of it. Shout if it balloons.
- * 24 KB → 28 KB with memory.html §H (db.memory and the mock's demo memory, ~2 KB).
+ * 24 KB → 28 KB with bucket.html §H (db.bucket and the mock's demo bucket, ~2 KB).
  * 28 KB → 34 KB with §K reads (tickets.thread / aggregates and the mock's
  * sample thread and buckets, ~5.5 KB).
  */

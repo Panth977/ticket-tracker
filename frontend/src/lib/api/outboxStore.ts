@@ -2,7 +2,7 @@
  * Where persisted outbox entries live between visits: IndexedDB
  * ('tm-outbox' › 'entries', keyed `${uid}:${id}`, so two accounts on one
  * browser never see each other's), falling back to localStorage
- * ('tm.outbox.{uid}') and then memory when neither works (private mode, tests).
+ * ('tm.outbox.{uid}') and then bucket when neither works (private mode, tests).
  */
 import type { OutboxEntry, OutboxStorage } from './outbox.svelte';
 
@@ -25,7 +25,7 @@ export function parseEntries(raw: unknown[], uid: string, now = Date.now()): Out
   );
 }
 
-export function memoryOutboxStorage(): OutboxStorage {
+export function bucketOutboxStorage(): OutboxStorage {
   const m = new Map<string, OutboxEntry>();
   return {
     async load(uid) {
@@ -106,7 +106,7 @@ function idbOutboxStorage(): OutboxStorage {
   };
 }
 
-/** IndexedDB → localStorage → memory: the first that works; a failing one is abandoned for the next. */
+/** IndexedDB → localStorage → bucket: the first that works; a failing one is abandoned for the next. */
 export function createOutboxStorage(): OutboxStorage {
   const chain: OutboxStorage[] = [];
   if (typeof indexedDB !== 'undefined') chain.push(idbOutboxStorage());
@@ -115,7 +115,7 @@ export function createOutboxStorage(): OutboxStorage {
   } catch {
     /* blocked */
   }
-  chain.push(memoryOutboxStorage());
+  chain.push(bucketOutboxStorage());
   let i = 0;
   const guard =
     <A extends unknown[], R>(pick: (s: OutboxStorage) => (...a: A) => Promise<R>) =>

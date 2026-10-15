@@ -14,7 +14,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { SCOPE_PRESETS } from '@tm/shared';
-import { API_URL, call, newBoard, newPerson, giveAttachMemory } from '../support/stack.js';
+import { API_URL, call, newBoard, newPerson, giveAttachBucket } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 import { VM } from '../../seed/vm.js';
 
@@ -31,7 +31,7 @@ test('an agent uploads four kinds of file; the app previews, opens, and download
 }) => {
   const ada = await newPerson('Ada', 'Lovelace');
   const b = await newBoard(ada, { name: 'File access' });
-  await giveAttachMemory(ada, b.id);
+  await giveAttachBucket(ada, b.id);
   const { agentId } = await call(ada, 'agentCreate', {
     name: 'Filer',
     description: 'Uploads things',

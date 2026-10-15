@@ -4,20 +4,20 @@
  *
  * The app uploads straight to Storage and then names the object in a command.
  * A token has no Storage access, so here the DOOR does the upload, into the
- * very same place the app would (memory.html §J — a board takes no files of
+ * very same place the app would (bucket.html §J — a board takes no files of
  * its own):
  *
- *   memories/{m}/{fileId}/{fileName}     the bytes, in the board's attachMemory
- *                                        (or the memory_id the caller names,
+ *   buckets/{m}/{fileId}/{fileName}     the bytes, in the board's attachBucket
+ *                                        (or the bucket_id the caller names,
  *                                        granted `write` to the board), at the
  *                                        board's path template (or `path`)
- *   memories/{m}/nodes/{n}               a NEW node (a taken path gets ' (2)')
+ *   buckets/{m}/nodes/{n}               a NEW node (a taken path gets ' (2)')
  *   ticket.files[]                       TicketFile { source: 'upload', messageId: null,
- *                                        path: memoryRefPath, memory }
+ *                                        path: bucketRefPath, bucket }
  *
  * The file is then on the ticket (Files tab, counts.files, GET /v1/files/{id})
  * and a later messagePost { fileIds } attaches it to a message (source →
- * 'message'). It is also a file of the memory, like any other.
+ * 'message'). It is also a file of the bucket, like any other.
  *
  * IDEMPOTENT: with an Idempotency-Key the file id is derived from it, so a
  * retried upload overwrites the same file instead of adding a second one.
@@ -30,7 +30,7 @@ import {
   type TicketWithId,
 } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
-import { nodeRef } from '../memory/shared.js';
+import { nodeRef } from '../bucket/shared.js';
 import { requireActive, requireCan } from '../tickets/access.js';
 import { storeUploadedFile } from '../tickets/files.js';
 import { getFile } from '../tickets/read.js';
@@ -41,8 +41,8 @@ export interface UploadInput {
   /** Absent / generic: from the extension (fileInfo). */
   mime?: string | undefined;
   bytes: Uint8Array;
-  /** memory.html §J: which memory (default: the board's attachMemory). */
-  memoryId?: string | undefined;
+  /** bucket.html §J: which bucket (default: the board's attachBucket). */
+  bucketId?: string | undefined;
   /** …and the path in it (default: the board's template). */
   path?: string | undefined;
 }
@@ -102,7 +102,7 @@ export async function storeTicketUpload(
     mime: input.mime ?? null,
     data: input.bytes,
     fileId,
-    memoryId: input.memoryId,
+    bucketId: input.bucketId,
     path: input.path,
   });
   return {
@@ -116,18 +116,18 @@ export async function storeTicketUpload(
     messageId: null,
     createdAt: up.createdAt,
     deletedAt: null,
-    memory: up.memory,
+    bucket: up.bucket,
     objectPath: up.objectPath,
   };
 }
 
 /**
  * The object behind a ticket file row, for a signed URL: the row's own path,
- * or — for a memory reference — the node's current version ('' when the node
+ * or — for a bucket reference — the node's current version ('' when the node
  * is gone).
  */
 export async function fileObjectPath(f: TicketFile): Promise<string> {
-  if (!f.memory) return f.path;
-  const node = (await nodeRef(f.memory.memoryId, f.memory.nodeId).get()).data();
+  if (!f.bucket) return f.path;
+  const node = (await nodeRef(f.bucket.bucketId, f.bucket.nodeId).get()).data();
   return node?.file?.storagePath ?? '';
 }

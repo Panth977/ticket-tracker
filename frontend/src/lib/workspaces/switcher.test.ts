@@ -59,19 +59,19 @@ describe('the title switcher (§AB3)', () => {
       expect.stringContaining('Health Dash'),
     ]);
   });
-  it('memories: in a workspace they follow its artifacts; outside it, every memory', () => {
+  it('buckets: in a workspace they follow its artifacts; outside it, every bucket', () => {
     const mem = (id: string, name: string) =>
-      ({ ...fixtures.memories, id, name, archivedAt: null }) as never;
-    const memories = [mem('m1', 'Brand'), mem('m2', 'Notes')];
-    const ws2 = { ...ws, memoryIds: ['m1'] };
-    const w = activeWorkspace([ws2], 'w1', { memoryId: 'm1' });
+      ({ ...fixtures.buckets, id, name, archivedAt: null }) as never;
+    const buckets = [mem('m1', 'Brand'), mem('m2', 'Notes')];
+    const ws2 = { ...ws, bucketIds: ['m1'] };
+    const w = activeWorkspace([ws2], 'w1', { bucketId: 'm1' });
     expect(w?.id).toBe('w1');
     const inWs = switcherItems({
       boards,
       artifacts,
-      memories,
+      buckets,
       workspace: w,
-      current: { memoryId: 'm1' },
+      current: { bucketId: 'm1' },
       leave,
     });
     expect(inWs.map((i) => i.label)).toEqual([
@@ -79,22 +79,22 @@ describe('the title switcher (§AB3)', () => {
       'FR · Review',
       expect.stringContaining('FL Dash'),
       expect.stringContaining('Brand'),
-      'Show all memory',
+      'Show all bucket',
     ]);
     expect(inWs[3]).toMatchObject({ disabled: true });
     const all = switcherItems({
       boards,
       artifacts,
-      memories,
+      buckets,
       workspace: null,
-      current: { memoryId: 'm2' },
+      current: { bucketId: 'm2' },
       leave,
     });
     expect(all.map((i) => i.label)).toEqual([
       expect.stringContaining('Brand'),
       expect.stringContaining('Notes'),
     ]);
-    expect(activeWorkspace([ws], 'w1', { memoryId: 'm1' })).toBeNull();
+    expect(activeWorkspace([ws], 'w1', { bucketId: 'm1' })).toBeNull();
   });
   it('every entity row carries its indicator (indicators.html)', () => {
     const items = switcherItems({

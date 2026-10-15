@@ -10,9 +10,9 @@
   // hrefs are built by lib/layout/routes; the SPA has no base path, so resolve() would be the identity.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { ChevronRight, Plus } from 'lucide-svelte';
-  import type { Artifact, Board, BoardPref, Memory } from '@tm/shared';
+  import type { Artifact, Board, BoardPref, Bucket } from '@tm/shared';
   import Indicator from '$lib/ui/Indicator.svelte';
-  import { MEMORY_DEFAULT_INDICATOR } from '@tm/shared';
+  import { BUCKET_DEFAULT_INDICATOR } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import type { WithId } from '$lib/stores';
   import { workspaceContext } from '$lib/workspaces/context.svelte';
@@ -24,30 +24,30 @@
   interface Props {
     boards: readonly WithId<Board>[];
     artifacts: readonly WithId<Artifact>[];
-    memories: readonly WithId<Memory>[];
+    buckets: readonly WithId<Bucket>[];
     prefs: ReadonlyMap<string, BoardPref | null>;
     unread: ReadonlyMap<string, number>;
     path: string;
     currentKey: string | null;
     currentArtifact: string | null;
-    currentMemory: string | null;
+    currentBucket: string | null;
   }
   let {
     boards,
     artifacts,
-    memories,
+    buckets,
     prefs,
     unread,
     path,
     currentKey,
     currentArtifact,
-    currentMemory,
+    currentBucket,
   }: Props = $props();
 
   const wsQ = $derived(myWorkspaces(auth.uid));
   const boardById = $derived(new Map(boards.map((b) => [b.id, b])));
   const artifactById = $derived(new Map(artifacts.map((a) => [a.id, a])));
-  const memoryById = $derived(new Map(memories.map((m) => [m.id, m])));
+  const bucketById = $derived(new Map(buckets.map((m) => [m.id, m])));
 
   // Which are unfolded: remembered per browser; the one I am in is always open.
   const OPEN_KEY = 'tm.workspaces.open';
@@ -147,26 +147,26 @@
           </a>
         {/if}
       {/each}
-      {#each w.memoryIds ?? [] as id (id)}
-        {@const m = memoryById.get(id)}
+      {#each w.bucketIds ?? [] as id (id)}
+        {@const m = bucketById.get(id)}
         {#if m}
-          {@const current = workspaceContext.id === w.id && m.id === currentMemory}
+          {@const current = workspaceContext.id === w.id && m.id === currentBucket}
           <a
-            href={routes.memory(m.id)}
+            href={routes.bucket(m.id)}
             onclick={() => workspaceContext.enter(w.id)}
             aria-current={current ? 'page' : undefined}
-            data-memory={m.id}
+            data-bucket={m.id}
             class="flex h-7 min-w-0 items-center gap-2 rounded-md pr-2 pl-7 text-sm
               {current
               ? 'bg-surface-3 font-medium text-text'
               : 'text-muted hover:bg-surface-2 hover:text-text'}"
           >
-            <Indicator of={m} seed={m.id} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
+            <Indicator of={m} seed={m.id} fallback={BUCKET_DEFAULT_INDICATOR} size="sm" />
             <span class="flex-1 truncate">{m.name}</span>
           </a>
         {/if}
       {/each}
-      {#if !w.boardIds.some( (id) => boardById.has(id) ) && !w.artifactIds.some( (id) => artifactById.has(id) ) && !(w.memoryIds ?? []).some( (id) => memoryById.has(id) )}
+      {#if !w.boardIds.some( (id) => boardById.has(id) ) && !w.artifactIds.some( (id) => artifactById.has(id) ) && !(w.bucketIds ?? []).some( (id) => bucketById.has(id) )}
         <a
           href={routes.workspace(w.id)}
           class="flex h-7 items-center pl-7 text-xs text-subtle hover:text-text"

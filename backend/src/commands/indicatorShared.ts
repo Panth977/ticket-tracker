@@ -1,6 +1,6 @@
 /**
  * indicators.html — the entity's mark on create / update, for the entities
- * whose LEGACY field is a typed emoji `icon` (artifacts, memories).
+ * whose LEGACY field is a typed emoji `icon` (artifacts, buckets).
  *
  * `indicator` wins. An old client that still sends only `icon` gets an emoji
  * indicator from it. Whatever is written, `icon` is kept in step (the emoji,

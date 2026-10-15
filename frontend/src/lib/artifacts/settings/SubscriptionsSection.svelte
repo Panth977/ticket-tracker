@@ -3,23 +3,23 @@
   artifact's page uses —
     boards    through BackendDriver.tickets (artifacts.html §K): Read / Write;
               write only where I am an editor or admin
-    memories  through BackendDriver.memory (memory.html §D, §H): Read / Write;
-              memories I own
+    buckets  through BackendDriver.bucket (bucket.html §D, §H): Read / Write;
+              buckets I own
   Each grant is a ceiling, never a key: the page works as whoever is looking.
 -->
 <script lang="ts">
-  import { roleOf, type ArtifactBoardAccess, type MemoryGrant } from '@tm/shared';
+  import { roleOf, type ArtifactBoardAccess, type BucketGrant } from '@tm/shared';
   import { command } from '$lib/api';
   import {
     boardView,
     hiddenView,
-    memoryView,
+    bucketView,
     type Candidate,
     type SubscriptionRow,
   } from '$lib/access/entities';
   import {
     ARTIFACT_BOARD,
-    ARTIFACT_MEMORY,
+    ARTIFACT_BUCKET,
     can,
     type Perms,
     type PermLocks,
@@ -27,7 +27,7 @@
   import SubscriptionList from '$lib/access/SubscriptionList.svelte';
   import Section from '$lib/board/settings/Section.svelte';
   import { auth } from '$lib/firebase/auth.svelte';
-  import { grantOf, ownedMemories } from '$lib/memoryRefs/owned';
+  import { grantOf, ownedBuckets } from '$lib/bucketRefs/owned';
   import { myBoards, type WithId } from '$lib/stores';
   import type { Board } from '@tm/shared';
   import { useArtifactSettings } from './context.svelte';
@@ -39,7 +39,7 @@
 
   const boardsQ = $derived(myBoards(auth.uid));
   const boardById = $derived(new Map($boardsQ.data.map((b) => [b.id, b])));
-  const memoriesQ = $derived(ownedMemories(auth.uid));
+  const bucketsQ = $derived(ownedBuckets(auth.uid));
 
   const myRole = (b: WithId<Board> | undefined) => (b && auth.uid ? roleOf(b, auth.uid) : null);
   /** Write needs me to be able to edit there (the command refuses otherwise). */
@@ -67,21 +67,21 @@
         }),
       };
     });
-    const memories = $memoriesQ.data
+    const buckets = $bucketsQ.data
       .map((m) => ({ m, grant: grantOf(m, target) }))
       .filter((x) => x.grant)
       .map(({ m, grant }): SubscriptionRow => ({
-        entity: memoryView(m),
-        relation: ARTIFACT_MEMORY,
-        perms: ARTIFACT_MEMORY.toPerms(grant),
+        entity: bucketView(m),
+        relation: ARTIFACT_BUCKET,
+        perms: ARTIFACT_BUCKET.toPerms(grant),
         edit: archived
           ? 'Restore the artifact to change this'
-          : can.grantMemoryToArtifact({ ownsMemory: true, ownsArtifact: s.isOwner }),
-        remove: can.revokeMemoryFromArtifact({ ownsMemory: true, ownsArtifact: s.isOwner }),
+          : can.grantBucketToArtifact({ ownsBucket: true, ownsArtifact: s.isOwner }),
+        remove: can.revokeBucketFromArtifact({ ownsBucket: true, ownsArtifact: s.isOwner }),
       }));
     const byName = (x: SubscriptionRow, y: SubscriptionRow) =>
       (x.entity.name ?? '￿').localeCompare(y.entity.name ?? '￿');
-    return [...boards.sort(byName), ...memories.sort(byName)];
+    return [...boards.sort(byName), ...buckets.sort(byName)];
   });
 
   const candidates = $derived<Candidate[]>([
@@ -89,9 +89,9 @@
       .filter((b) => b.archivedAt == null && !(b.id in (a.boards ?? {})))
       .sort((x, y) => x.name.localeCompare(y.name))
       .map((b) => ({ entity: boardView(b), relation: ARTIFACT_BOARD, locks: locksFor(b) })),
-    ...$memoriesQ.data
+    ...$bucketsQ.data
       .filter((m) => m.archivedAt == null && !grantOf(m, target))
-      .map((m) => ({ entity: memoryView(m), relation: ARTIFACT_MEMORY })),
+      .map((m) => ({ entity: bucketView(m), relation: ARTIFACT_BUCKET })),
   ]);
   const canAdd = $derived(
     !s.isOwner
@@ -113,9 +113,9 @@
       return false; // toasted; the list shows the live document
     }
   }
-  async function setMemory(memoryId: string, access: MemoryGrant | null, headline: string) {
+  async function setBucket(bucketId: string, access: BucketGrant | null, headline: string) {
     try {
-      await command('memoryGrantSet', { memoryId, artifactId: a.id, access }, { toast: headline });
+      await command('bucketGrantSet', { bucketId, artifactId: a.id, access }, { toast: headline });
       return true;
     } catch {
       return false;
@@ -124,16 +124,16 @@
   const onsave = (c: Candidate, p: Perms) =>
     c.entity.kind === 'board'
       ? setBoard(c.entity.id, ARTIFACT_BOARD.fromPerms(p), 'Could not change board access')
-      : setMemory(c.entity.id, ARTIFACT_MEMORY.fromPerms(p), 'Could not change memory access');
+      : setBucket(c.entity.id, ARTIFACT_BUCKET.fromPerms(p), 'Could not change bucket access');
   const onremove = (r: SubscriptionRow) =>
     r.entity.kind === 'board'
       ? setBoard(r.entity.id, null, 'Could not remove the board')
-      : setMemory(r.entity.id, null, 'Could not remove the memory');
+      : setBucket(r.entity.id, null, 'Could not remove the bucket');
 </script>
 
 <Section
   title="Subscriptions"
-  description="What this artifact's page may use: the tickets of boards you are on (BackendDriver.tickets) and files in memories you own (BackendDriver.memory) — read, or also write. Anyone you share it with still sees and changes only what they already can there."
+  description="What this artifact's page may use: the tickets of boards you are on (BackendDriver.tickets) and files in buckets you own (BackendDriver.bucket) — read, or also write. Anyone you share it with still sees and changes only what they already can there."
 >
   <SubscriptionList
     name="artifact"
@@ -141,10 +141,10 @@
     {candidates}
     {canAdd}
     showKind
-    loading={$boardsQ.loading || $memoriesQ.loading}
-    addTitle="Add a board or memory"
-    empty="It uses nothing yet: BackendDriver.tickets and BackendDriver.memory see nothing."
-    nothingToAdd="Every board you are on and every memory you own is already here."
+    loading={$boardsQ.loading || $bucketsQ.loading}
+    addTitle="Add a board or bucket"
+    empty="It uses nothing yet: BackendDriver.tickets and BackendDriver.bucket see nothing."
+    nothingToAdd="Every board you are on and every bucket you own is already here."
     removeMessage={() => 'The page stops reaching it at once. You can add it again.'}
     {onsave}
     {onremove}

@@ -37,9 +37,9 @@ import {
   RestArtifactDataWriteResSchema,
   RestArtifactFileListResSchema,
   RestArtifactFilesQuerySchema,
-  RestMemoryFileQuerySchema,
-  RestMemoryListQuerySchema,
-  RestMemoryTreeQuerySchema,
+  RestBucketFileQuerySchema,
+  RestBucketListQuerySchema,
+  RestBucketTreeQuerySchema,
   COMMANDS,
   RestArtifactFileUploadResSchema,
   RestArtifactFileUrlResSchema,
@@ -119,12 +119,12 @@ const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 
 const COMPONENTS: Record<string, z.ZodTypeAny> = {
   Problem: ProblemSchema,
-  // memory (memory.html §G): the commands' own answers
-  MemoryList: COMMANDS.memoryList.res,
-  MemoryTree: COMMANDS.memoryTree.res,
-  MemoryFile: COMMANDS.memoryFileRead.res,
-  MemoryFileWritten: COMMANDS.memoryFileWrite.res,
-  MemoryDeleted: COMMANDS.memoryNodeDelete.res,
+  // bucket (bucket.html §G): the commands' own answers
+  BucketList: COMMANDS.bucketList.res,
+  BucketTree: COMMANDS.bucketTree.res,
+  BucketFile: COMMANDS.bucketFileRead.res,
+  BucketFileWritten: COMMANDS.bucketFileWrite.res,
+  BucketDeleted: COMMANDS.bucketNodeDelete.res,
   Me: RestMeResSchema,
   Board: RestBoardResSchema,
   BoardList: RestBoardListResSchema,
@@ -558,33 +558,33 @@ const IO: Record<string, RouteIO> = {
     res: 'Ok',
     notes: `${DATA_WRITE} Deleting a file that is not there is fine.`,
   },
-  'GET /v1/memories': {
-    query: RestMemoryListQuerySchema,
-    res: 'MemoryList',
-    notes: 'Each memory says what YOU may do there: reach manage | write | read.',
+  'GET /v1/buckets': {
+    query: RestBucketListQuerySchema,
+    res: 'BucketList',
+    notes: 'Each bucket says what YOU may do there: reach manage | write | read.',
   },
-  'GET /v1/memories/{id}/tree': {
-    query: RestMemoryTreeQuerySchema,
-    res: 'MemoryTree',
+  'GET /v1/buckets/{id}/tree': {
+    query: RestBucketTreeQuerySchema,
+    res: 'BucketTree',
     notes:
-      'Every node under ?path= (default: the whole memory), sorted by path; ?shallow=1 for one level.',
+      'Every node under ?path= (default: the whole bucket), sorted by path; ?shallow=1 for one level.',
   },
-  'GET /v1/memories/{id}/files/{path}': {
-    query: RestMemoryFileQuerySchema,
-    res: 'MemoryFile',
+  'GET /v1/buckets/{id}/files/{path}': {
+    query: RestBucketFileQuerySchema,
+    res: 'BucketFile',
     notes:
       '`text` for text files (at most 1 MB; `truncated` says if there was more); `url` and `bytesUrl` are short-lived and need no Authorization header.',
   },
-  'PUT /v1/memories/{id}/files/{path}': {
+  'PUT /v1/buckets/{id}/files/{path}': {
     binary: true,
     large: true,
-    res: 'MemoryFileWritten',
+    res: 'BucketFileWritten',
     status: 201,
     notes:
       'The raw body is the file (≤ 25 MB here; bigger files are uploaded in the app). Content-Type is kept as its type. Missing folders are created; an existing file gets a new version.',
   },
-  'DELETE /v1/memories/{id}/files/{path}': {
-    res: 'MemoryDeleted',
+  'DELETE /v1/buckets/{id}/files/{path}': {
+    res: 'BucketDeleted',
     notes: 'A folder goes with everything inside it.',
   },
   'GET /v1/search': { query: RestSearchQuerySchema, res: 'SearchResults' },

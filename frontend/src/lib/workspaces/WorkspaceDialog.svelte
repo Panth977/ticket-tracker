@@ -1,7 +1,7 @@
 <!--
   New workspace / Edit workspace (agents.html §AB): a name, a description, an
   indicator (indicators.html), and
-  which of my boards, artifacts and memories (memory.html §F) are in it —
+  which of my boards, artifacts and buckets (bucket.html §F) are in it —
   picked with the same list and Add dialog as every Subscriptions (lib/access). Boards and artifacts are still
   created where they always were; this only gathers them. Archived ones are
   not offered (they live on the All pages).
@@ -23,13 +23,13 @@
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { myArtifacts } from '$lib/artifacts/store';
-  import { myMemories } from '$lib/memory/store';
+  import { myBuckets } from '$lib/bucket/store';
   import { myBoards, type WithId } from '$lib/stores';
   import {
     artifactView,
     boardView,
     hiddenView,
-    memoryView,
+    bucketView,
     type Candidate,
     type EntityView,
     type SubscriptionRow,
@@ -49,14 +49,14 @@
 
   const boardsQ = $derived(myBoards(auth.uid));
   const artifactsQ = $derived(myArtifacts(auth.uid));
-  const memoriesQ = $derived(myMemories(auth.uid));
+  const bucketsQ = $derived(myBuckets(auth.uid));
 
   let name = $state('');
   let description = $state('');
   let indicator = $state<IndicatorT>({ kind: 'color', color: WORKSPACE_COLORS[0] });
   let boardIds = $state<string[]>([]);
   let artifactIds = $state<string[]>([]);
-  let memoryIds = $state<string[]>([]);
+  let bucketIds = $state<string[]>([]);
   let busy = $state(false);
 
   // A fresh form each time it opens: empty, or the workspace being edited.
@@ -69,28 +69,28 @@
       : { kind: 'color', color: WORKSPACE_COLORS[0] };
     boardIds = [...(workspace?.boardIds ?? [])];
     artifactIds = [...(workspace?.artifactIds ?? [])];
-    memoryIds = [...(workspace?.memoryIds ?? [])];
+    bucketIds = [...(workspace?.bucketIds ?? [])];
   });
 
   // ── what it includes: the same list + Add dialog as every Subscriptions (lib/access) ──
-  type Kind = 'board' | 'artifact' | 'memory';
+  type Kind = 'board' | 'artifact' | 'bucket';
   const views = $derived({
     board: new Map($boardsQ.data.map((b) => [b.id, boardView(b)])),
     artifact: new Map($artifactsQ.data.map((a) => [a.id, artifactView(a)])),
-    memory: new Map($memoriesQ.data.map((m) => [m.id, memoryView(m)])),
+    bucket: new Map($bucketsQ.data.map((m) => [m.id, bucketView(m)])),
   });
-  const ids = (k: Kind) => (k === 'board' ? boardIds : k === 'artifact' ? artifactIds : memoryIds);
+  const ids = (k: Kind) => (k === 'board' ? boardIds : k === 'artifact' ? artifactIds : bucketIds);
   function add(kind: string, id: string) {
     if (kind === 'board') boardIds = [...new Set([...boardIds, id])];
     else if (kind === 'artifact') artifactIds = [...new Set([...artifactIds, id])];
-    else if (kind === 'memory') memoryIds = [...new Set([...memoryIds, id])];
+    else if (kind === 'bucket') bucketIds = [...new Set([...bucketIds, id])];
   }
   function drop(kind: string, id: string) {
     if (kind === 'board') boardIds = boardIds.filter((x) => x !== id);
     else if (kind === 'artifact') artifactIds = artifactIds.filter((x) => x !== id);
-    else if (kind === 'memory') memoryIds = memoryIds.filter((x) => x !== id);
+    else if (kind === 'bucket') bucketIds = bucketIds.filter((x) => x !== id);
   }
-  const KINDS: Kind[] = ['board', 'artifact', 'memory'];
+  const KINDS: Kind[] = ['board', 'artifact', 'bucket'];
   const rows = $derived(
     KINDS.flatMap((k) =>
       ids(k).map((id): SubscriptionRow => ({
@@ -132,7 +132,7 @@
             indicator,
             boardIds,
             artifactIds,
-            memoryIds,
+            bucketIds,
           },
           { toast: 'Could not save the workspace' },
         );
@@ -140,7 +140,7 @@
       } else {
         const { workspaceId } = await command(
           'workspaceCreate',
-          { name: n, description: desc, color, indicator, boardIds, artifactIds, memoryIds },
+          { name: n, description: desc, color, indicator, boardIds, artifactIds, bucketIds },
           { toast: 'Could not create the workspace' },
         );
         open = false;
@@ -158,7 +158,7 @@
   bind:open
   title={workspace ? 'Edit workspace' : 'New workspace'}
   size="lg"
-  description="Group boards, artifacts and memories you already have. Nothing moves and nobody gains access; it is only how your sidebar shows them."
+  description="Group boards, artifacts and buckets you already have. Nothing moves and nobody gains access; it is only how your sidebar shows them."
 >
   <form
     id="workspace-form"
@@ -200,7 +200,7 @@
       canAdd={true}
       showKind
       addTitle="Add to the workspace"
-      empty="Nothing yet: add boards, artifacts and memories you already have."
+      empty="Nothing yet: add boards, artifacts and buckets you already have."
       nothingToAdd="Everything you have is already in it."
       removeMessage={null}
       onsave={async (c) => (add(c.entity.kind, c.entity.id), true)}

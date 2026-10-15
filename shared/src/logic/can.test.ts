@@ -247,8 +247,8 @@ describe('can — scopes narrow, never widen', () => {
     // Artifacts (artifacts.html §C4): not about a board, so no board action.
     'artifacts:read': ['read'],
     'artifacts:write': ['read'],
-    'memory:read': ['read'],
-    'memory:write': ['read'],
+    'bucket:read': ['read'],
+    'bucket:write': ['read'],
   };
   it('the table covers every scope', () => {
     expect(Object.keys(ONLY).sort()).toEqual([...SCOPES].sort());

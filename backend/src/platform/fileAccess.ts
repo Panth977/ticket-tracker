@@ -39,7 +39,7 @@ import {
   FILE_ACCESS_ROUTE,
   FILE_BYTES_ROUTE,
   parseAgentAvatarPath,
-  parseMemoryRefPath,
+  parseBucketRefPath,
   parseMemoryStoragePath,
   SIGNED_URL_TTL_MS,
   type FileAccessRes,
@@ -52,7 +52,7 @@ import { door, MOUNTS } from '../http/mounts.js';
 import { userAuth } from '../middleware/user.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { loadBoard } from '../tickets/access.js';
-import { memoryRef, nodeRef, reachFor } from '../memory/shared.js';
+import { bucketRef, nodeRef, reachFor } from '../bucket/shared.js';
 import { safeEqual, serverMac } from './crypto.js';
 
 /** boards/{boardId}/tickets/{ticketId}/{fileId}/{fileName} — the thumbnail too. */
@@ -74,12 +74,12 @@ const blobSig = (path: string, exp: number): string => serverMac('file-blob', `$
  * signed-in person, matching storage.rules. Anything else (exports, stray
  * paths) is refused outright.
  *
- * MEMORY (memory.html §E). `memories/{m}/nodes/{n}` is a ticket's REFERENCE:
+ * BUCKET (bucket.html §E). `buckets/{m}/nodes/{n}` is a ticket's REFERENCE:
  * no object lives there; it resolves to the node's CURRENT version, so every
- * ticket pointing at a node sees the latest bytes. `memories/{m}/{fileId}/{name}`
- * is a version itself. Both need memoryReach ≠ null — which a member of a
- * board the memory is granted to has (the ticket case), as does anyone with a
- * role on the memory. A deleted node, a removed grant or a deleted memory is
+ * ticket pointing at a node sees the latest bytes. `buckets/{m}/{fileId}/{name}`
+ * is a version itself. Both need bucketReach ≠ null — which a member of a
+ * board the bucket is granted to has (the ticket case), as does anyone with a
+ * role on the bucket. A deleted node, a removed grant or a deleted bucket is
  * a 404 ('No longer in memory').
  */
 export async function requireFileRead(ctx: ServerCtx, path: string): Promise<string> {
@@ -90,18 +90,18 @@ export async function requireFileRead(ctx: ServerCtx, path: string): Promise<str
     await loadBoard(ctx, att[1]!);
     return path;
   }
-  const ref = parseMemoryRefPath(path);
+  const ref = parseBucketRefPath(path);
   if (ref) {
-    const memory = (await memoryRef(ref.memoryId).get()).data();
-    if (!(await reachFor(ctx, memory))) throw errors.not_found('No longer in memory');
-    const node = (await nodeRef(ref.memoryId, ref.nodeId).get()).data();
+    const bucket = (await bucketRef(ref.bucketId).get()).data();
+    if (!(await reachFor(ctx, bucket))) throw errors.not_found('No longer in memory');
+    const node = (await nodeRef(ref.bucketId, ref.nodeId).get()).data();
     if (!node?.file) throw errors.not_found('No longer in memory');
     return node.file.storagePath;
   }
   const obj = parseMemoryStoragePath(path);
   if (obj) {
-    const memory = (await memoryRef(obj.memoryId).get()).data();
-    if (!(await reachFor(ctx, memory))) throw errors.not_found('File not found');
+    const bucket = (await bucketRef(obj.bucketId).get()).data();
+    if (!(await reachFor(ctx, bucket))) throw errors.not_found('File not found');
     return path;
   }
   // indicators.html: an uploaded indicator image — readable by any signed-in
@@ -120,7 +120,7 @@ export async function fileAccess(ctx: ServerCtx, asked: string): Promise<FileAcc
 
 /**
  * The URLs for one object the caller was ALREADY allowed (requireFileRead,
- * or a memory command that checked reach itself). 404 when it is not there.
+ * or a bucket command that checked reach itself). 404 when it is not there.
  */
 export async function signedAccess(
   ctx: Pick<ServerCtx, 'now'>,

@@ -101,7 +101,7 @@ export function viewerReadOnly(
 export const ARTIFACT_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General', owner: true },
   { id: 'people', label: 'People', owner: true },
-  /** lib/access: boards (§K) and memories (memory.html §D) the page uses. */
+  /** lib/access: boards (§K) and buckets (bucket.html §D) the page uses. */
   { id: 'subscriptions', label: 'Subscriptions', owner: true },
   /** lib/access: agents that may build or use its data (agents.html §AA3). */
   { id: 'subscribers', label: 'Subscribers', owner: true },

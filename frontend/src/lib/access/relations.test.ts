@@ -3,7 +3,7 @@ import {
   AGENT_ARTIFACT,
   AGENT_BOARD,
   ARTIFACT_BOARD,
-  BOARD_MEMORY,
+  BOARD_BUCKET,
   can,
   normalize,
   toggle,
@@ -12,7 +12,7 @@ import {
 
 describe('read / write relations', () => {
   it('maps boxes to the stored grant and back', () => {
-    for (const r of [BOARD_MEMORY, ARTIFACT_BOARD]) {
+    for (const r of [BOARD_BUCKET, ARTIFACT_BOARD]) {
       expect(r.fromPerms({ checks: [] })).toBeNull();
       expect(r.fromPerms({ checks: ['read'] })).toBe('read');
       expect(r.fromPerms({ checks: ['read', 'write'] })).toBe('write');
@@ -25,7 +25,7 @@ describe('read / write relations', () => {
     }
   });
   it('write ticks read; unticking read unticks write', () => {
-    const p = BOARD_MEMORY.perms;
+    const p = BOARD_BUCKET.perms;
     expect(toggle(p, [], 'write', true)).toEqual(['read', 'write']);
     expect(toggle(p, ['read', 'write'], 'read', false)).toEqual([]);
     expect(toggle(p, ['read', 'write'], 'write', false)).toEqual(['read']);
@@ -90,9 +90,9 @@ describe('workspace and the rule mirror', () => {
     expect(WORKSPACE.fromPerms({ checks: [] })).toBe(true);
   });
   it('either side may remove; only the owning side grants', () => {
-    expect(can.revokeMemoryFromBoard({ ownsMemory: false, boardAdmin: true })).toBe(true);
-    expect(can.revokeMemoryFromBoard({ ownsMemory: false, boardAdmin: false })).toMatch(/owner/);
-    expect(can.grantMemoryToBoard({ ownsMemory: false, boardAdmin: true })).toMatch(/owner/);
+    expect(can.revokeBucketFromBoard({ ownsBucket: false, boardAdmin: true })).toBe(true);
+    expect(can.revokeBucketFromBoard({ ownsBucket: false, boardAdmin: false })).toMatch(/owner/);
+    expect(can.grantBucketToBoard({ ownsBucket: false, boardAdmin: true })).toMatch(/owner/);
     expect(can.revokeBoardFromArtifact({ ownsArtifact: false, boardAdmin: true })).toBe(true);
     expect(can.addAgentToBoard({ ownsAgent: true, boardAdmin: false })).toBe(
       'You are not an admin there',

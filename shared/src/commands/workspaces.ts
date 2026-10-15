@@ -36,8 +36,8 @@ export const workspaceCreate = defineCommand({
     description: DescriptionSchema.optional(),
     boardIds: Ids(BoardIdSchema).optional(),
     artifactIds: Ids(ArtifactRefIdSchema).optional(),
-    /** memory.html §F: memories bundled too. */
-    memoryIds: Ids(ArtifactRefIdSchema).optional(),
+    /** bucket.html §F: buckets bundled too. */
+    bucketIds: Ids(ArtifactRefIdSchema).optional(),
   }),
   res: z.object({ workspaceId: WorkspaceIdSchema }),
 });
@@ -61,13 +61,13 @@ export const workspaceUpdate = defineCommand({
     /** Replace the whole list (its order is the sidebar's) … */
     boardIds: Ids(BoardIdSchema).optional(),
     artifactIds: Ids(ArtifactRefIdSchema).optional(),
-    memoryIds: Ids(ArtifactRefIdSchema).optional(),
+    bucketIds: Ids(ArtifactRefIdSchema).optional(),
     /** … or attach / detach a few (applied after a replacement, if both are given). */
     add: z
       .object({
         boardIds: Ids(BoardIdSchema).optional(),
         artifactIds: Ids(ArtifactRefIdSchema).optional(),
-        memoryIds: Ids(ArtifactRefIdSchema).optional(),
+        bucketIds: Ids(ArtifactRefIdSchema).optional(),
       })
       .strict()
       .optional(),
@@ -75,7 +75,7 @@ export const workspaceUpdate = defineCommand({
       .object({
         boardIds: Ids(BoardIdSchema).optional(),
         artifactIds: Ids(ArtifactRefIdSchema).optional(),
-        memoryIds: Ids(ArtifactRefIdSchema).optional(),
+        bucketIds: Ids(ArtifactRefIdSchema).optional(),
       })
       .strict()
       .optional(),
@@ -104,28 +104,28 @@ export const sidebarHide = defineCommand({
   req: req({
     boardId: BoardIdSchema.optional(),
     artifactId: ArtifactRefIdSchema.optional(),
-    /** memory.html §F */
-    memoryId: ArtifactRefIdSchema.optional(),
+    /** bucket.html §F */
+    bucketId: ArtifactRefIdSchema.optional(),
     hidden: z.boolean(),
   }).refine(
-    (r) => [r.boardId, r.artifactId, r.memoryId].filter((x) => x !== undefined).length === 1,
-    'Give exactly one of boardId, artifactId or memoryId',
+    (r) => [r.boardId, r.artifactId, r.bucketId].filter((x) => x !== undefined).length === 1,
+    'Give exactly one of boardId, artifactId or bucketId',
   ),
   res: OkResSchema,
 });
 
-/** The one role a workspace share hands out (a board role; 'admin' is 'editor' on artifacts and memories). */
+/** The one role a workspace share hands out (a board role; 'admin' is 'editor' on artifacts and buckets). */
 export const WORKSPACE_SHARE_ROLES = ['viewer', 'editor', 'admin'] as const;
 export type WorkspaceShareRole = (typeof WORKSPACE_SHARE_ROLES)[number];
 /** Addresses per workspaceShare call. */
 export const WORKSPACE_SHARE_MAX_EMAILS = 20;
 
-const ShareItemKind = z.enum(['board', 'artifact', 'memory']);
+const ShareItemKind = z.enum(['board', 'artifact', 'bucket']);
 
 /**
  * Share a workspace (one-shot): invite people to everything in it at once.
  * Nothing new is granted by the workspace itself — each item is shared the way
- * it always is (a board invite, an artifact / memory share), so the board is
+ * it always is (a board invite, an artifact / bucket share), so the board is
  * still the only boundary. Items added to the workspace later are not shared.
  */
 export const workspaceShare = defineCommand({
@@ -133,7 +133,7 @@ export const workspaceShare = defineCommand({
   source: 'extra',
   scopes: [...SCOPES, 'invites:write'],
   permission:
-    "The workspace's owner, a person (never an agent). Each address is invited to every board in it that the owner may invite to (admin, or editor where editors can invite; editors cannot hand out admin), and given the role on every artifact and memory the owner owns ('admin' → 'editor' there). What the owner cannot share is skipped and listed. Each address also gets a copy of the workspace in their sidebar — when they first sign up, if they have no account yet. The board invite limit (50 a day) applies.",
+    "The workspace's owner, a person (never an agent). Each address is invited to every board in it that the owner may invite to (admin, or editor where editors can invite; editors cannot hand out admin), and given the role on every artifact and bucket the owner owns ('admin' → 'editor' there). What the owner cannot share is skipped and listed. Each address also gets a copy of the workspace in their sidebar — when they first sign up, if they have no account yet. The board invite limit (50 a day) applies.",
   errors: ['forbidden', 'not_found', 'invalid'],
   req: req({
     workspaceId: WorkspaceIdSchema,
@@ -149,7 +149,7 @@ export const workspaceShare = defineCommand({
         /** Boards invited to (or already a member of). */
         boards: z.number().int(),
         artifacts: z.number().int(),
-        memories: z.number().int(),
+        buckets: z.number().int(),
         /** Their sidebar copy: made now, made when they sign up, or not (50 workspaces already). */
         workspace: z.enum(['copied', 'pending', 'full']),
       }),

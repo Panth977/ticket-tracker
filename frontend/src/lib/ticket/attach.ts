@@ -1,10 +1,10 @@
 /**
- * TICKET ATTACHMENTS GO INTO A MEMORY (docs/plan/memory.html §J). The pure
- * half of the attach dialog and of board settings › Memory › Ticket
- * attachments: which memories a file may go into, the path each file is
+ * TICKET ATTACHMENTS GO INTO A BUCKET (docs/plan/bucket.html §J). The pure
+ * half of the attach dialog and of board settings › Bucket › Ticket
+ * attachments: which buckets a file may go into, the path each file is
  * offered, what is wrong with a typed path, and what messagePost is sent.
  *
- * Paths are SHOWN with a leading '/', as everywhere in the Memory app; the
+ * Paths are SHOWN with a leading '/', as everywhere in the Bucket app; the
  * commands take them without it.
  */
 import {
@@ -12,56 +12,56 @@ import {
   attachTemplateProblem,
   DEFAULT_ATTACH_TEMPLATE,
   fillAttachTemplate,
-  normalizeMemoryPath,
-  type BoardAttachMemory,
-  type MemoryGrant,
-  type MemoryOut,
-  type MemoryUpload,
+  normalizeBucketPath,
+  type BoardAttachBucket,
+  type BucketGrant,
+  type BucketOut,
+  type BucketUpload,
 } from '@tm/shared';
 
 /**
- * memoryList({ boardId }) answers the memories granted to the board. When the
+ * bucketList({ boardId }) answers the buckets granted to the board. When the
  * server says what the grant IS (`boardGrant`), that decides; until then the
- * caller's own reach stands in for it — write reach on a memory granted to the
+ * caller's own reach stands in for it — write reach on a bucket granted to the
  * board, or the board's attachment default (the server clears that default
- * when the memory's write grant goes, so it is always write-granted).
+ * when the bucket's write grant goes, so it is always write-granted).
  */
-export type BoardMemoryOut = Omit<MemoryOut, 'boardGrant'> & { boardGrant?: MemoryGrant | null };
+export type BoardBucketOut = Omit<BucketOut, 'boardGrant'> & { boardGrant?: BucketGrant | null };
 
 export function isWriteGranted(
-  m: BoardMemoryOut,
-  attachMemory: BoardAttachMemory | null | undefined,
+  m: BoardBucketOut,
+  attachBucket: BoardAttachBucket | null | undefined,
 ): boolean {
   if (m.archived) return false;
   if (m.boardGrant !== undefined) return m.boardGrant === 'write';
-  return m.id === attachMemory?.memoryId || m.reach === 'write' || m.reach === 'manage';
+  return m.id === attachBucket?.bucketId || m.reach === 'write' || m.reach === 'manage';
 }
 
-/** The memories this board's tickets may put files into. */
-export function writeMemories(
-  list: readonly BoardMemoryOut[],
-  attachMemory: BoardAttachMemory | null | undefined,
-): BoardMemoryOut[] {
-  return list.filter((m) => isWriteGranted(m, attachMemory));
+/** The buckets this board's tickets may put files into. */
+export function writeBuckets(
+  list: readonly BoardBucketOut[],
+  attachBucket: BoardAttachBucket | null | undefined,
+): BoardBucketOut[] {
+  return list.filter((m) => isWriteGranted(m, attachBucket));
 }
 
-/** The memory the attach dialog starts on: the board's default if still there, else the first. */
-export function defaultMemoryId(
+/** The bucket the attach dialog starts on: the board's default if still there, else the first. */
+export function defaultBucketId(
   list: readonly { id: string }[],
-  attachMemory: BoardAttachMemory | null | undefined,
+  attachBucket: BoardAttachBucket | null | undefined,
 ): string | null {
-  if (attachMemory && list.some((m) => m.id === attachMemory.memoryId))
-    return attachMemory.memoryId;
+  if (attachBucket && list.some((m) => m.id === attachBucket.bucketId))
+    return attachBucket.bucketId;
   return list[0]?.id ?? null;
 }
 
-/** The template for files going into `memoryId`: the board's own for its default memory. */
+/** The template for files going into `bucketId`: the board's own for its default bucket. */
 export function templateFor(
-  memoryId: string | null,
-  attachMemory: BoardAttachMemory | null | undefined,
+  bucketId: string | null,
+  attachBucket: BoardAttachBucket | null | undefined,
 ): string {
-  return attachMemory && attachMemory.memoryId === memoryId
-    ? attachMemory.template
+  return attachBucket && attachBucket.bucketId === bucketId
+    ? attachBucket.template
     : DEFAULT_ATTACH_TEMPLATE;
 }
 
@@ -110,11 +110,11 @@ export function attachLabel(pre: Prefill, value: string): string {
   return attachFileName(base);
 }
 
-/** A typed path → the memory path (no leading '/'), or null when it can't be one. */
+/** A typed path → the bucket path (no leading '/'), or null when it can't be one. */
 export function resolveAttachPath(value: string): string | null {
   const t = value.trim();
   if (!t || t === '/') return null;
-  return normalizeMemoryPath(t);
+  return normalizeBucketPath(t);
 }
 
 /** Per typed path: why it can't be used, or null. Two files may not share a path. */
@@ -153,20 +153,20 @@ export function examplePath(
   return f ? '/' + f.path : null;
 }
 
-/** An upload headed for a memory: the bytes' Storage path plus where the file goes. */
-export interface MemoryBound {
-  /** Storage path of the uploaded bytes (memories/{memoryId}/{fileId}/{name}). */
+/** An upload headed for a bucket: the bytes' Storage path plus where the file goes. */
+export interface BucketBound {
+  /** Storage path of the uploaded bytes (buckets/{bucketId}/{fileId}/{name}). */
   path: string;
-  memoryId?: string;
-  /** The new file's path in the memory. */
-  memoryPath?: string;
+  bucketId?: string;
+  /** The new file's path in the bucket. */
+  bucketPath?: string;
 }
 
-/** messagePost / ticketCreate `memoryUploads`. Anything not headed for a memory is dropped. */
-export function toMemoryUploads(items: readonly MemoryBound[]): MemoryUpload[] {
+/** messagePost / ticketCreate `bucketUploads`. Anything not headed for a bucket is dropped. */
+export function toBucketUploads(items: readonly BucketBound[]): BucketUpload[] {
   return items.flatMap((a) =>
-    a.memoryId && a.memoryPath
-      ? [{ memoryId: a.memoryId, path: a.memoryPath, storagePath: a.path }]
+    a.bucketId && a.bucketPath
+      ? [{ bucketId: a.bucketId, path: a.bucketPath, storagePath: a.path }]
       : [],
   );
 }

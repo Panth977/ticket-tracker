@@ -9,7 +9,7 @@
  *   boards/{b}.stages[]         indicator ||= indicatorOf(stage, stage.id); description stays absent
  *   artifacts/{a}               indicator ||= emoji icon, else defaultIndicator(a)
  *                               (the old '◆' glyph is not an emoji)
- *   memories/{m}                indicator ||= emoji icon, else 🧠 (the old default)
+ *   buckets/{m}                indicator ||= emoji icon, else 🧠 (the old default)
  *   users/{u}/workspaces/{w}    indicator ||= indicatorOf(workspace, w) (its colour)
  *
  * Nothing legacy is deleted (color / icon stay; indicatorOf prefers
@@ -55,9 +55,9 @@ export function planArtifact(S, a) {
   return { indicator: emojiIcon(S, a.icon) ?? S.defaultIndicator(a.id ?? '') };
 }
 
-export function planMemory(S, m) {
+export function planBucket(S, m) {
   if (m.indicator) return null;
-  return { indicator: emojiIcon(S, m.icon) ?? { ...S.MEMORY_DEFAULT_INDICATOR } };
+  return { indicator: emojiIcon(S, m.icon) ?? { ...S.BUCKET_DEFAULT_INDICATOR } };
 }
 
 export function planWorkspace(S, w) {
@@ -65,10 +65,10 @@ export function planWorkspace(S, w) {
   return { indicator: S.indicatorOf(w, w.id ?? '') };
 }
 
-const KINDS = ['boards', 'artifacts', 'memories', 'workspaces'];
+const KINDS = ['boards', 'artifacts', 'buckets', 'workspaces'];
 
 /**
- * Walk every board, artifact, memory and workspace; plan, and with
+ * Walk every board, artifact, bucket and workspace; plan, and with
  * `apply` write each patch in a transaction that re-plans from the fresh doc.
  */
 export async function migrateIndicators(deps, opts) {
@@ -117,8 +117,8 @@ export async function migrateIndicators(deps, opts) {
   await each('boards', boards.docs, planBoard, (s) => s.get('key') ?? s.id);
   const artifacts = await db.collection(C.artifacts).get();
   await each('artifacts', artifacts.docs, planArtifact, (s) => s.id);
-  const memories = await db.collection(C.memories).get();
-  await each('memories', memories.docs, planMemory, (s) => s.id);
+  const buckets = await db.collection(C.buckets).get();
+  await each('buckets', buckets.docs, planBucket, (s) => s.id);
   // users/{uid}/workspaces/{id} — only that collection of that name.
   const ws = await db.collectionGroup(C.workspaces).get();
   await each(

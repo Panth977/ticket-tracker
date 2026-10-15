@@ -13,7 +13,7 @@ import { assertReachable, personOnly } from './workspaceShared.js';
 
 export default defineCommand(
   'sidebarHide',
-  async (ctx, { boardId, artifactId, memoryId, hidden }) => {
+  async (ctx, { boardId, artifactId, bucketId, hidden }) => {
     personOnly(ctx);
     await runTx(async (tx) => {
       const ref = typedDoc('sidebarPrefs', paths.sidebarPrefs(ctx.actor));
@@ -25,14 +25,14 @@ export default defineCommand(
         await assertReachable(tx, ctx, {
           ...(boardId ? { boardIds: [boardId] } : {}),
           ...(artifactId ? { artifactIds: [artifactId] } : {}),
-          ...(memoryId ? { memoryIds: [memoryId] } : {}),
+          ...(bucketId ? { bucketIds: [bucketId] } : {}),
         });
       const flip = (list: string[], id: string | undefined) =>
         !id ? list : hidden ? [...new Set([...list, id])] : list.filter((x) => x !== id);
       tx.set(ref, {
         hiddenBoardIds: flip(cur.hiddenBoardIds, boardId),
         hiddenArtifactIds: flip(cur.hiddenArtifactIds, artifactId),
-        hiddenMemoryIds: flip(cur.hiddenMemoryIds ?? [], memoryId),
+        hiddenBucketIds: flip(cur.hiddenBucketIds ?? [], bucketId),
         updatedAt: ctx.now,
       });
     });

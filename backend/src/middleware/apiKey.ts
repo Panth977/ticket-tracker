@@ -118,7 +118,7 @@ type StoredKey = Partial<ApiKey> &
  * call.
  *
  * If anything has moved (the row is gone, the hash no longer matches, the key
- * now points at another board), the memory is dropped and the full lookup
+ * now points at another board), the bucket is dropped and the full lookup
  * runs again.
  */
 interface KeyPlace {

@@ -25,7 +25,7 @@ import { defineCommand } from './_registry.js';
 import { applyAccess } from './boardAccessSet.js';
 import { adminCount, afterBoardDeleted, deleteBoardTx, loadBoard } from './boardShared.js';
 import { newUserDoc, userRef } from './profileShared.js';
-import { memoriesCol, memoryRef, withMembers } from '../memory/shared.js';
+import { bucketsCol, bucketRef, withMembers } from '../bucket/shared.js';
 
 export default defineCommand('accountDelete', async (ctx) => {
   const uid = ctx.actor;
@@ -57,13 +57,13 @@ export default defineCommand('accountDelete', async (ctx) => {
     }
   }
 
-  // memory.html: the memories they OWN go (queued, like memoryDelete); their
-  // role on anyone else's memory is taken away.
-  const mine = await memoriesCol().where('memberUids', 'array-contains', uid).get();
+  // bucket.html: the buckets they OWN go (queued, like bucketDelete); their
+  // role on anyone else's bucket is taken away.
+  const mine = await bucketsCol().where('memberUids', 'array-contains', uid).get();
   for (const d of mine.docs) {
     const m = d.data();
     if (m.ownerUid === uid) {
-      await memoryRef(d.id).update({
+      await bucketRef(d.id).update({
         access: {},
         memberUids: [],
         boards: {},
@@ -73,14 +73,14 @@ export default defineCommand('accountDelete', async (ctx) => {
         updatedAt: ctx.now,
       });
       await ports().queue.enqueue(
-        'memoryDelete',
-        { memoryId: d.id, actor: uid },
-        { name: `memoryDelete-${d.id}` },
+        'bucketDelete',
+        { bucketId: d.id, actor: uid },
+        { name: `bucketDelete-${d.id}` },
       );
     } else {
       const access = { ...m.access };
       delete access[uid];
-      await memoryRef(d.id).update({ ...withMembers(access), updatedAt: ctx.now });
+      await bucketRef(d.id).update({ ...withMembers(access), updatedAt: ctx.now });
     }
   }
 

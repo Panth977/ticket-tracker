@@ -4,8 +4,8 @@
  * Edit; Remove) and "Subscribers" (who uses it — Remove), and either side may
  * end a grant.
  *
- *   board ⇄ memory     the board's admin adds a memory (Read + Write), edits
- *                      it to Read only; the memory's Subscribers lists the
+ *   board ⇄ bucket     the board's admin adds a bucket (Read + Write), edits
+ *                      it to Read only; the bucket's Subscribers lists the
  *                      board, and its owner removes it there
  *   artifact → board   the artifact's owner adds a board; the board's
  *                      Subscribers lists the artifact, and that board's admin
@@ -25,17 +25,17 @@ import {
 } from '../support/stack.js';
 import { setPerms, signIn, subscribe, subscribeDialog } from '../support/ui.js';
 
-test('board Subscriptions adds a memory; the memory’s Subscribers removes it', async ({ page }) => {
+test('board Subscriptions adds a bucket; the bucket’s Subscribers removes it', async ({ page }) => {
   const ada = await newPerson('Ada');
   const eng = await newBoard(ada, { name: 'Engineering' });
-  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Design notes' });
+  const { bucketId } = await call(ada, 'bucketCreate', { name: 'Design notes' });
   const grant = async () =>
-    (await read<{ boards?: Record<string, string> }>(`memories/${memoryId}`))?.boards?.[eng.id] ??
+    (await read<{ boards?: Record<string, string> }>(`buckets/${bucketId}`))?.boards?.[eng.id] ??
     null;
 
   await signIn(page, ada.email, `/b/${eng.key}/settings/subscriptions`);
-  await subscribe(page, 'board', `memory:${memoryId}`, ['read', 'write']);
-  const row = page.locator(`[data-subscription="memory:${memoryId}"]`);
+  await subscribe(page, 'board', `bucket:${bucketId}`, ['read', 'write']);
+  const row = page.locator(`[data-subscription="bucket:${bucketId}"]`);
   await expect(row.locator('[data-chips]')).toHaveText(/Read\s*Write/);
   await eventually('write stored', async () => ((await grant()) === 'write' ? true : null));
 
@@ -48,8 +48,8 @@ test('board Subscriptions adds a memory; the memory’s Subscribers removes it',
   await expect(row.locator('[data-chips]')).toHaveText('Read');
   await eventually('read stored', async () => ((await grant()) === 'read' ? true : null));
 
-  // The memory's side: Subscribers lists the board; its owner removes it.
-  await page.goto(`/m/${memoryId}/settings/subscribers`);
+  // The bucket's side: Subscribers lists the board; its owner removes it.
+  await page.goto(`/bucket/${bucketId}/settings/subscribers`);
   const sub = page.locator(`[data-subscriber="board:${eng.id}"]`);
   await expect(sub).toContainText('Engineering');
   await expect(sub.locator('[data-chips]')).toHaveText('Read');
@@ -62,8 +62,8 @@ test('board Subscriptions adds a memory; the memory’s Subscribers removes it',
   await eventually('grant gone', async () => ((await grant()) === null ? true : null));
 
   // The old address still lands.
-  await page.goto(`/m/${memoryId}/settings/access`);
-  await page.waitForURL(`**/m/${memoryId}/settings/subscribers`);
+  await page.goto(`/bucket/${bucketId}/settings/access`);
+  await page.waitForURL(`**/bucket/${bucketId}/settings/subscribers`);
 });
 
 test('artifact Subscriptions adds a board; that board’s admin removes it from Subscribers', async ({

@@ -67,7 +67,7 @@ export async function setPerms(page: Page, keys: string[]): Promise<void> {
 }
 
 /**
- * Subscriptions › Add: pick `candidate` ('memory:<id>', 'board:<id>'…) and, when
+ * Subscriptions › Add: pick `candidate` ('bucket:<id>', 'board:<id>'…) and, when
  * the relation has permissions, tick `perms` and press Add. `list` is the
  * data-subscriptions name ('board', 'artifact', 'agent', 'workspace').
  */

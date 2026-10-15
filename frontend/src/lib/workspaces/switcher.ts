@@ -1,36 +1,36 @@
 /**
  * The title dropdown on a board (BoardBar), an artifact (ArtifactHost) and a
- * memory (memory.html §F): one list, built here so the three never drift
+ * bucket (bucket.html §F): one list, built here so the three never drift
  * (agents.html §AB3).
  *
  *   in a workspace that holds the open item → its boards, then its artifacts,
- *                                              then its memories, then
+ *                                              then its buckets, then
  *                                              "Show all …" (leaves it)
  *   otherwise                               → every board (on a board), every
  *                                              artifact (on an artifact) or
- *                                              every memory (on a memory)
+ *                                              every bucket (on a bucket)
  *
  * Archived ones are left out; the open one is marked (disabled). Every row
  * carries its entity's indicator (indicators.html), drawn by Menu.
  */
 import {
-  MEMORY_DEFAULT_INDICATOR,
+  BUCKET_DEFAULT_INDICATOR,
   type Artifact,
   type Board,
-  type Memory,
+  type Bucket,
   type Workspace,
 } from '@tm/shared';
 import { routes } from '$lib/layout/routes';
 import type { WithId } from '$lib/stores';
 import type { MenuItem } from '$lib/ui/types';
 
-export type Current = { boardId: string } | { artifactId: string } | { memoryId: string };
+export type Current = { boardId: string } | { artifactId: string } | { bucketId: string };
 
 /** Does this workspace hold the open item? */
 export function workspaceHolds(w: Workspace, current: Current): boolean {
   if ('boardId' in current) return w.boardIds.includes(current.boardId);
   if ('artifactId' in current) return w.artifactIds.includes(current.artifactId);
-  return (w.memoryIds ?? []).includes(current.memoryId);
+  return (w.bucketIds ?? []).includes(current.bucketId);
 }
 
 /** The workspace I am in, when it holds what is open — else null. */
@@ -45,14 +45,14 @@ export function activeWorkspace(
 export function switcherItems(o: {
   boards: readonly WithId<Board>[];
   artifacts: readonly WithId<Artifact>[];
-  memories?: readonly WithId<Memory>[];
+  buckets?: readonly WithId<Bucket>[];
   workspace: WithId<Workspace> | null;
   current: Current;
   leave: () => void;
 }): MenuItem[] {
   const boards = o.boards.filter((b) => b.archivedAt == null);
   const artifacts = o.artifacts.filter((a) => a.archivedAt == null);
-  const memories = (o.memories ?? []).filter((m) => m.archivedAt == null);
+  const buckets = (o.buckets ?? []).filter((m) => m.archivedAt == null);
   const boardItem = (b: WithId<Board>, separator = false): MenuItem => ({
     label: `${b.key} · ${b.name}`,
     indicator: { of: b, seed: b.id },
@@ -67,11 +67,11 @@ export function switcherItems(o: {
     disabled: 'artifactId' in o.current && a.id === o.current.artifactId,
     separator,
   });
-  const memoryItem = (m: WithId<Memory>, separator = false): MenuItem => ({
+  const bucketItem = (m: WithId<Bucket>, separator = false): MenuItem => ({
     label: m.name,
-    indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
-    href: routes.memory(m.id),
-    disabled: 'memoryId' in o.current && m.id === o.current.memoryId,
+    indicator: { of: m, seed: m.id, fallback: BUCKET_DEFAULT_INDICATOR },
+    href: routes.bucket(m.id),
+    disabled: 'bucketId' in o.current && m.id === o.current.bucketId,
     separator,
   });
   const byName = <T extends { name: string }>(xs: readonly T[]) =>
@@ -80,26 +80,26 @@ export function switcherItems(o: {
   if (!o.workspace) {
     if ('boardId' in o.current) return byName(boards).map((b) => boardItem(b));
     if ('artifactId' in o.current) return byName(artifacts).map((a) => artifactItem(a));
-    return byName(memories).map((m) => memoryItem(m));
+    return byName(buckets).map((m) => bucketItem(m));
   }
 
   const b = new Map(boards.map((x) => [x.id, x]));
   const a = new Map(artifacts.map((x) => [x.id, x]));
-  const m = new Map(memories.map((x) => [x.id, x]));
+  const m = new Map(buckets.map((x) => [x.id, x]));
   const inBoards = o.workspace.boardIds.flatMap((id) => b.get(id) ?? []);
   const inArtifacts = o.workspace.artifactIds.flatMap((id) => a.get(id) ?? []);
-  const inMemories = (o.workspace.memoryIds ?? []).flatMap((id) => m.get(id) ?? []);
+  const inBuckets = (o.workspace.bucketIds ?? []).flatMap((id) => m.get(id) ?? []);
   return [
     ...inBoards.map((x) => boardItem(x)),
     ...inArtifacts.map((x, i) => artifactItem(x, i === 0 && inBoards.length > 0)),
-    ...inMemories.map((x, i) => memoryItem(x, i === 0 && inBoards.length + inArtifacts.length > 0)),
+    ...inBuckets.map((x, i) => bucketItem(x, i === 0 && inBoards.length + inArtifacts.length > 0)),
     {
       label:
         'boardId' in o.current
           ? 'Show all boards'
           : 'artifactId' in o.current
             ? 'Show all artifacts'
-            : 'Show all memory',
+            : 'Show all bucket',
       onSelect: o.leave,
       separator: true,
     },

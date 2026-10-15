@@ -25,24 +25,24 @@ export default defineCommand('workspaceUpdate', async (ctx, input) => {
     const dropA = new Set(input.remove?.artifactIds ?? []);
     boardIds = boardIds.filter((id) => !dropB.has(id));
     artifactIds = artifactIds.filter((id) => !dropA.has(id));
-    // memory.html §F: memories are bundled the same way.
-    let memoryIds = input.memoryIds ? uniq(input.memoryIds) : (ws.memoryIds ?? []);
-    memoryIds = uniq([...memoryIds, ...(input.add?.memoryIds ?? [])]);
-    const dropM = new Set(input.remove?.memoryIds ?? []);
-    memoryIds = memoryIds.filter((id) => !dropM.has(id));
-    if (boardIds.length + artifactIds.length + memoryIds.length > WORKSPACE_ITEMS_MAX)
+    // bucket.html §F: buckets are bundled the same way.
+    let bucketIds = input.bucketIds ? uniq(input.bucketIds) : (ws.bucketIds ?? []);
+    bucketIds = uniq([...bucketIds, ...(input.add?.bucketIds ?? [])]);
+    const dropM = new Set(input.remove?.bucketIds ?? []);
+    bucketIds = bucketIds.filter((id) => !dropM.has(id));
+    if (boardIds.length + artifactIds.length + bucketIds.length > WORKSPACE_ITEMS_MAX)
       throw errors.invalid(
-        `A workspace holds at most ${WORKSPACE_ITEMS_MAX} boards, artifacts and memories`,
+        `A workspace holds at most ${WORKSPACE_ITEMS_MAX} boards, artifacts and buckets`,
       );
     const had = {
       b: new Set(ws.boardIds),
       a: new Set(ws.artifactIds),
-      m: new Set(ws.memoryIds ?? []),
+      m: new Set(ws.bucketIds ?? []),
     };
     await assertReachable(tx, ctx, {
       boardIds: boardIds.filter((id) => !had.b.has(id)),
       artifactIds: artifactIds.filter((id) => !had.a.has(id)),
-      memoryIds: memoryIds.filter((id) => !had.m.has(id)),
+      bucketIds: bucketIds.filter((id) => !had.m.has(id)),
     });
     const next: Workspace = {
       ...ws,
@@ -51,7 +51,7 @@ export default defineCommand('workspaceUpdate', async (ctx, input) => {
       ...(input.position !== undefined ? { position: input.position } : {}),
       boardIds,
       artifactIds,
-      memoryIds,
+      bucketIds,
       updatedAt: ctx.now,
     };
     // indicators.html: the mark, with the legacy colour kept in step.

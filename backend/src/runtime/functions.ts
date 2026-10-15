@@ -43,7 +43,7 @@ export const QUEUE_FUNCTIONS: Record<QueueName, string> = {
   webhooks: 'queueWebhooks',
   boardDelete: 'queueBoardDelete',
   artifactDelete: 'queueArtifactDelete',
-  memoryDelete: 'queueMemoryDelete',
+  bucketDelete: 'queueBucketDelete',
   export: 'queueExport',
   email: 'queueEmail',
 };
@@ -77,8 +77,8 @@ export const QUEUE_POLICY: Record<QueueName, QueuePolicy> = {
   boardDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
   // Artifacts (artifacts.html §G): the same shape of job — a recursive delete of unknown size.
   artifactDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
-  // Memory (memory.html §G): the same shape again.
-  memoryDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
+  // Bucket (bucket.html §G): the same shape again.
+  bucketDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
   export: { maxAttempts: 3, minBackoffSeconds: 60 },
   email: { maxAttempts: 5, minBackoffSeconds: 30, maxDispatchesPerSecond: 50 },
 };

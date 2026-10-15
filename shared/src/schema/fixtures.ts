@@ -505,7 +505,7 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     updatedAt: T0,
   },
   sidebarPrefs: { hiddenBoardIds: [BOARD_ID], hiddenArtifactIds: [], updatedAt: T0 },
-  memories: {
+  buckets: {
     name: 'Brand kit',
     description: 'Logos, screenshots and the style guide',
     icon: null,
@@ -520,14 +520,14 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     createdAt: T0,
     updatedAt: T0,
   },
-  memoryNodes: {
+  bucketNodes: {
     kind: 'file',
     parentId: 'node_folder1',
     name: 'logo.svg',
     path: 'logos/logo.svg',
     file: {
       fileId: 'file_abc123',
-      storagePath: 'memories/memory_brand1/file_abc123/logo.svg',
+      storagePath: 'buckets/bucket_brand1/file_abc123/logo.svg',
       mime: 'image/svg+xml',
       size: 2048,
     },
@@ -634,6 +634,6 @@ export const invalidFixtures: { [N in DocName]: unknown } = {
   artifactKv: { value: 1 },
   workspaces: { ...fixtures.workspaces, color: 'indigo' },
   sidebarPrefs: { hiddenBoardIds: 'board_eng', hiddenArtifactIds: [], updatedAt: T0 },
-  memories: { ...fixtures.memories, boards: { [BOARD_ID]: 'admin' } },
-  memoryNodes: { ...fixtures.memoryNodes, path: '/abs/path' },
+  buckets: { ...fixtures.buckets, boards: { [BOARD_ID]: 'admin' } },
+  bucketNodes: { ...fixtures.bucketNodes, path: '/abs/path' },
 };

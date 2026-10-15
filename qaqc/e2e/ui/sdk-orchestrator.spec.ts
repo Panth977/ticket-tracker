@@ -33,7 +33,7 @@ import {
   newPerson,
   stage,
   text,
-  giveAttachMemory,
+  giveAttachBucket,
 } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
@@ -131,7 +131,7 @@ test.describe('§M · the hosted SDK', () => {
   test('an orchestrator written on the SDK drives a ticket end to end', async ({ page }) => {
     const ada = await newPerson('Ada', 'Lovelace');
     const b = await newBoard(ada, { name: 'SDK orchestrator' });
-    await giveAttachMemory(ada, b.id);
+    await giveAttachBucket(ada, b.id);
 
     // ── the orchestrator's credentials: an agent, on the board, with a token ──
     const { agentId } = await call(ada, 'agentCreate', {

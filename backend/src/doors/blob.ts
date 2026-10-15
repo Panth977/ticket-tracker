@@ -32,7 +32,7 @@ import { storageAllows, type RulesAuth } from '../rules/firestore.js';
 import { safeEqual } from '../platform/crypto.js';
 import { parseRange } from '../platform/fileAccess.js';
 
-/** Largest body one PUT may carry (an artifact build zip is ≤ 26 MB; memory files ≤ 100 MB). */
+/** Largest body one PUT may carry (an artifact build zip is ≤ 26 MB; bucket files ≤ 100 MB). */
 const MAX_PUT_BYTES = 128 * 1024 * 1024;
 
 const blob = door('blob');

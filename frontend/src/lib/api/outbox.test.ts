@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '@tm/shared';
 import { _resetOverlays, applyOverlays, patchDoc } from '$lib/stores/overlay';
 import { Outbox, MAX_RETRIES, type OutboxDeps, type OutboxEntry } from './outbox.svelte';
-import { localOutboxStorage, memoryOutboxStorage, parseEntries } from './outboxStore';
+import { localOutboxStorage, bucketOutboxStorage, parseEntries } from './outboxStore';
 
 let online = true;
 let n = 0;
@@ -11,7 +11,7 @@ function make(over: Partial<OutboxDeps> = {}) {
   const deps = {
     send: vi.fn(async (): Promise<unknown> => ({ ok: true })),
     isOnline: () => online,
-    storage: memoryOutboxStorage(),
+    storage: bucketOutboxStorage(),
     applyOptimistic: (spec: unknown) => {
       if (!spec) return () => {};
       if (typeof spec === 'function') return (spec as () => () => void)();
@@ -205,7 +205,7 @@ describe('outbox', () => {
 
   it('persists entries with a draft and resends them for the same user on the next visit', async () => {
     online = false;
-    const storage = memoryOutboxStorage();
+    const storage = bucketOutboxStorage();
     const first = make({ storage }).ob;
     first.queue(
       'profileUpdate',
