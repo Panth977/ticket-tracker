@@ -16,6 +16,8 @@ import * as users from './users.js';
 import * as workspaces from './workspaces.js';
 import * as artifacts from '../artifacts/commands.js';
 import * as bucket from '../bucket/commands.js';
+import * as env from '../env/index.js';
+import * as org from '../org/index.js';
 
 export * from './define.js';
 export * from './boards.js';
@@ -110,6 +112,18 @@ export const COMMANDS = {
   workspaceDelete: workspaces.workspaceDelete,
   sidebarHide: workspaces.sidebarHide,
   workspaceShare: workspaces.workspaceShare,
+  // envs: key/value pairs on boards, artifacts, buckets, agents, orgs
+  envGet: env.envGet,
+  envSet: env.envSet,
+  // owners and orgs (agents.html §AC)
+  orgCreate: org.orgCreate,
+  orgUpdate: org.orgUpdate,
+  orgDelete: org.orgDelete,
+  orgInvite: org.orgInvite,
+  orgMemberSet: org.orgMemberSet,
+  ownerTransfer: org.ownerTransfer,
+  handleSet: org.handleSet,
+  pathResolve: org.pathResolve,
   // bucket (docs/plan/bucket.html)
   bucketCreate: bucket.bucketCreate,
   bucketUpdate: bucket.bucketUpdate,

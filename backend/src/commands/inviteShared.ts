@@ -101,9 +101,11 @@ export async function sendInviteEmail(
   const by = inviterEmail ? `${inv.invitedByName} (${inviterEmail})` : inv.invitedByName;
   const artifact = isArtifactInvite(inv);
   const lines = [
-    artifact
-      ? `${by} shared the artifact “${inv.boardName}” with you as ${ROLE_WORDS[inv.role]}.`
-      : `${by} invited you to the board “${inv.boardName}” (${inv.boardKey}) as ${ROLE_WORDS[inv.role]}.`,
+    inv.orgId
+      ? `${by} invited you to the org “${inv.boardName}” as ${inv.orgRole === 'member' ? 'a member' : `an ${inv.orgRole}`}.`
+      : artifact
+        ? `${by} shared the artifact “${inv.boardName}” with you as ${ROLE_WORDS[inv.role]}.`
+        : `${by} invited you to the board “${inv.boardName}” (${inv.boardKey}) as ${ROLE_WORDS[inv.role]}.`,
     ...(inv.message ? ['', `“${inv.message}”`] : []),
     '',
     `${artifact ? 'Open' : 'Join'}: ${link}`,

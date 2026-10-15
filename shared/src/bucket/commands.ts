@@ -10,6 +10,7 @@
  * node is the target. Writing a path creates its missing parent folders.
  */
 import { z } from 'zod';
+import { OwnerRefSchema } from '../org/owner.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
 import { defineCommand, OkResSchema, req } from '../commands/define.js';
 import { EmailInputSchema } from '../config.js';
@@ -97,6 +98,8 @@ export const bucketCreate = defineCommand({
     icon: Icon.nullable().optional(),
     /** indicators.html: the bucket's mark (colour, icon, emoji or uploaded image). */
     indicator: IndicatorSchema.optional(),
+    /** §AC: who owns it — you (default) or an org you belong to. */
+    owner: OwnerRefSchema.optional(),
   }),
   res: z.object({ bucketId: BucketIdSchema }),
 });

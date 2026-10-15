@@ -8,8 +8,12 @@
  */
 import { purgeArtifact, purgeArtifactData } from '../artifacts/purge.js';
 import { defineTask } from '../runtime/functions.js';
+import { dropEnv } from '../env/shared.js';
 
 defineTask('artifactDelete', async ({ artifactId, dataOnly }) => {
   if (dataOnly) await purgeArtifactData(artifactId);
-  else await purgeArtifact(artifactId);
+  else {
+    await purgeArtifact(artifactId);
+    await dropEnv('artifact', artifactId);
+  }
 });

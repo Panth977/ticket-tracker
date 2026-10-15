@@ -942,6 +942,14 @@ export const REST_ROUTES = [
   },
   {
     method: 'GET',
+    path: '/v1/env',
+    scopes: ['board:read'],
+    board: true,
+    summary:
+      "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment",
+  },
+  {
+    method: 'GET',
     path: '/v1/board/aggregates',
     scopes: ['board:read'],
     board: true,

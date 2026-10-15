@@ -12,6 +12,8 @@
   import SubscribersSection from '$lib/artifacts/settings/SubscribersSection.svelte';
   import SubscriptionsSection from '$lib/artifacts/settings/SubscriptionsSection.svelte';
   import { useArtifactSettings } from '$lib/artifacts/settings/context.svelte';
+  import Section from '$lib/board/settings/Section.svelte';
+  import EnvEditor from '$lib/env/EnvEditor.svelte';
   import { firstSettingsSection, settingsSectionsFor } from '$lib/artifacts/store';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -61,5 +63,12 @@
     <BuildsSection />
   {:else if section === 'data'}
     <DataSection />
+  {:else if section === 'env'}
+    <Section
+      title="Env"
+      description="Key/value pairs for this artifact, mostly for orchestrators and its agents. Its org's pairs come first; one here with the same name wins."
+    >
+      <EnvEditor kind="artifact" id={s.artifact.id} canEdit={s.isOwner} />
+    </Section>
   {/if}
 {/key}

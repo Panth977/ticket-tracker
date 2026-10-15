@@ -14,6 +14,7 @@
  * An artifact is NOT a board: its people are its own (§B), and being on a
  * board gives nothing here.
  */
+import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import {
@@ -171,6 +172,9 @@ export const ArtifactSchema = z.object({
   /** indicators.html: what the sidebar, dropdowns and cards draw. */
   indicator: IndicatorSchema.optional(),
   ownerUid: UidSchema,
+  ...OwnedFieldsShape,
+  /** §AC: its name in URLs (/{handle}/…/{slug}), unique per owner. */
+  slug: z.string().optional(),
   /** Every PERSON with a role, the owner included. Rules read this. */
   access: z.record(UidSchema, ArtifactRoleSchema),
   /**

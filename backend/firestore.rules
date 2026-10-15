@@ -191,8 +191,23 @@ service cloud.firestore {
             && request.auth.token.email_verified == true
             && resource.data.email == request.auth.token.email.lower())
           || boardRole(resource.data.boardId) == 'admin'
-          || artifactRole(resource.data.artifactId) == 'owner');
+          || artifactRole(resource.data.artifactId) == 'owner'
+          || orgRole(resource.data.orgId) in ['owner', 'admin']);
       allow write: if false;
+    }
+
+    // §AC — orgs: their members read them (the sidebar lists mine by memberUids).
+    // Every change goes through the org commands (fan-out to its things).
+    match /orgs/{orgId} {
+      allow get: if signedIn() && resource.data.members.get(request.auth.uid, null) != null;
+      allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow write: if false;
+    }
+
+    // §AC — handles/{handle}: 'is this name free?' and whose it is. Reveals only ids.
+    match /handles/{handle} {
+      allow get: if signedIn();
+      allow list, write: if false;
     }
 
     // 'Is ENG free?' while typing a new board's key.
@@ -280,6 +295,11 @@ service cloud.firestore {
 
     // 'owner' | 'editor' | 'viewer' | null. A missing artifact is an error,
     // and an error denies.
+    // §AC: an org's role for the caller ('owner' | 'admin' | 'member'), or null.
+    function orgRole(o) {
+      return signedIn() ? get(/databases/$(database)/documents/orgs/$(o)).data.members.get(request.auth.uid, null) : null;
+    }
+
     function artifactRole(a) {
       return signedIn() ? artifact(a).access.get(request.auth.uid, null) : null;
     }

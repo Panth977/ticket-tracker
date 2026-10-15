@@ -49,6 +49,8 @@ export const BOARD_SETTINGS_SECTIONS = [
   /** aggregates.html: the numbers the board adds up (Cost, Time…). */
   { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
+  /** shared/src/env: key/value pairs, mostly for orchestrators. */
+  { id: 'env', label: 'Env' },
   { id: 'danger', label: 'Danger zone' },
 ] as const;
 export type BoardSettingsSection = (typeof BOARD_SETTINGS_SECTIONS)[number]['id'];
@@ -110,11 +112,13 @@ export const routes = {
   buckets: () => '/bucket',
   bucket: (bucketId: string, path?: string | null) =>
     `/bucket/${bucketId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  bucketSettings: (bucketId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
-    `/bucket/${bucketId}/settings/${section}`,
+  bucketSettings: (
+    bucketId: string,
+    section: 'general' | 'people' | 'subscribers' | 'env' = 'general',
+  ) => `/bucket/${bucketId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
-    section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data',
+    section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'env',
   ) => `/x/${artifactId}/settings/${section}`,
   /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
   integrate: () => '/integrate',

@@ -32,6 +32,7 @@ import {
   withMembers,
 } from '../artifacts/shared.js';
 import { typedDoc } from '../runtime/converters.js';
+import { freeSlug, ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
 import { markOnCreate } from './indicatorShared.js';
 
@@ -46,12 +47,16 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
       'A board token cannot create artifacts — use an account token (Account › Tokens)',
     );
 
+  const own = await ownerForCreate(ownerUid, input.owner);
+  const slug = await freeSlug('artifact', own.fields.owner, input.name);
   const artifactId = ctx.ids.id();
   const artifact: Artifact = {
     name: input.name,
     description: input.description || null,
     ...markOnCreate(input, defaultIndicator(input.name)),
     ownerUid,
+    ...own.fields,
+    slug,
     ...withMembers({ [ownerUid]: 'owner' }),
     // Always the OBJECT form from §AA3 on (never the old literal 'editor').
     agents: agentId ? { [agentId]: { ...ARTIFACT_AGENT_FULL } } : {},
@@ -63,6 +68,7 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
   };
   await artifactRef(artifactId).create(artifact);
   await syncArtifactMirror(artifactId, artifact);
+  if (own.org) await syncThing('artifact', artifactId, own.org);
   if (agentId) {
     // In-app only, and never allowed to fail the create (as in artifactPublish).
     const name = (await agentRef(agentId).get()).data()?.name ?? 'An agent';

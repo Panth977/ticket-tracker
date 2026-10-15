@@ -10,6 +10,10 @@
 
 export const COLLECTIONS = {
   users: 'users',
+  /** §AC: handles/{handle} — users and orgs share one namespace. */
+  handles: 'handles',
+  /** §AC: orgs/{orgId}. */
+  orgs: 'orgs',
   devices: 'devices',
   inbox: 'inbox',
   reads: 'reads',
@@ -96,6 +100,10 @@ function seg(id: string): string {
 export const paths = {
   // users/{uid} and below
   users: () => C.users,
+  handles: () => C.handles,
+  handle: (handle: string) => `${C.handles}/${seg(handle)}`,
+  orgs: () => C.orgs,
+  org: (orgId: string) => `${C.orgs}/${seg(orgId)}`,
   user: (uid: string) => `${C.users}/${seg(uid)}`,
   devices: (uid: string) => `${C.users}/${seg(uid)}/${C.devices}`,
   device: (uid: string, deviceId: string) => `${C.users}/${seg(uid)}/${C.devices}/${seg(deviceId)}`,

@@ -18,9 +18,11 @@ import { db } from '../runtime/firebase.js';
 import { realtimeDb } from '../rtdb/index.js';
 import { clearBoardLive } from '../platform/rtdbPaths.js';
 import { defineTask } from '../runtime/functions.js';
+import { dropEnv } from '../env/shared.js';
 import { allDocs, inBatches } from './boardShared.js';
 
 export async function purgeBoard(boardId: string): Promise<void> {
+  await dropEnv('board', boardId);
   const tickets = await allDocs(db().collection(paths.tickets(boardId)));
   const search = ports().search;
   for (const t of tickets) await search.delete(t.id).catch(() => {});

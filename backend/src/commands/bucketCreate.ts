@@ -11,6 +11,7 @@ import {
   type Bucket,
 } from '@tm/shared';
 import { isBoardTokenAsPerson, bucketsCol, bucketRef, withMembers } from '../bucket/shared.js';
+import { freeSlug, ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
 import { markOnCreate } from './indicatorShared.js';
 
@@ -27,12 +28,16 @@ export default defineCommand('bucketCreate', async (ctx, input) => {
   if (owned.data().count >= BUCKETS_OWNED_MAX)
     throw errors.conflict(`You can own at most ${BUCKETS_OWNED_MAX} buckets`);
 
+  const own = await ownerForCreate(ctx.actor, input.owner);
+  const slug = await freeSlug('bucket', own.fields.owner, input.name);
   const bucketId = ctx.ids.id();
   const bucket: Bucket = {
     name: input.name,
     description: input.description || null,
     ...markOnCreate(input, BUCKET_DEFAULT_INDICATOR),
     ownerUid: ctx.actor,
+    ...own.fields,
+    slug,
     ...withMembers({ [ctx.actor]: 'owner' }),
     boards: {},
     artifacts: {},
@@ -43,5 +48,6 @@ export default defineCommand('bucketCreate', async (ctx, input) => {
     updatedAt: ctx.now,
   };
   await bucketRef(bucketId).create(bucket);
+  if (own.org) await syncThing('bucket', bucketId, own.org);
   return { bucketId };
 });

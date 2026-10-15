@@ -9,6 +9,7 @@
  * reach it only through a GRANT stored here (§D), and bucketReach() is the one
  * answer to "what may this principal do".
  */
+import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
@@ -89,6 +90,9 @@ export const BucketSchema = z.object({
   /** indicators.html: what the sidebar, dropdowns and cards draw. */
   indicator: IndicatorSchema.optional(),
   ownerUid: UidSchema,
+  ...OwnedFieldsShape,
+  /** §AC: its name in URLs (/{handle}/…/{slug}), unique per owner. */
+  slug: z.string().optional(),
   /** Every PERSON with a role, the owner included. Rules read this. */
   access: z.record(UidSchema, BucketRoleSchema),
   /** The keys of `access`, derived (a list query needs array-contains). */

@@ -18,6 +18,7 @@
  * the cross-service rule lookup cannot be relied on (storage.rules header).
  */
 import { z } from 'zod';
+import { OwnerRefSchema } from '../org/owner.js';
 import { defineCommand, OkResSchema, req } from '../commands/define.js';
 import { EmailInputSchema } from '../config.js';
 import { AgentIdSchema, BoardIdSchema, MillisSchema } from '../types/index.js';
@@ -59,6 +60,8 @@ export const artifactCreate = defineCommand({
     icon: z.string().max(16).nullable().optional(),
     /** indicators.html: the artifact's mark. Default: a palette colour from the name. */
     indicator: IndicatorSchema.optional(),
+    /** §AC: who owns it — you (default) or an org you belong to. */
+    owner: OwnerRefSchema.optional(),
   }),
   res: z.object({ artifactId: ArtifactIdSchema }),
 });

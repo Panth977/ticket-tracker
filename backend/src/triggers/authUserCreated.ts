@@ -26,6 +26,7 @@ import { isAgentId, MAX_AVATAR_BYTES, storage } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { attachInvitesToInbox } from '../commands/inviteShared.js';
 import { claimWorkspaceOffers } from '../commands/workspaceShared.js';
+import { ensureUserHandle } from '../org/shared.js';
 import { newUserDoc, userRef } from '../commands/profileShared.js';
 import { allowVerdict } from '../platform/allow.js';
 import { defineTrigger } from '../runtime/functions.js';
@@ -94,6 +95,8 @@ export async function handleUserCreated(user: UserRecord, fetchImpl: Fetch = fet
           .catch(() => {});
     }
   }
+  // §AC: every person has a handle (their /{handle}/… URLs).
+  await ensureUserHandle(user.uid).catch((e) => console.warn('[onUserCreated] handle', e));
   if (email && user.emailVerified) {
     await attachInvitesToInbox(user.uid, email, now);
     // A workspace someone shared with this address before it had an account.

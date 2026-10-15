@@ -9,6 +9,8 @@
   import PeopleSection from '$lib/bucket/settings/PeopleSection.svelte';
   import SubscribersSection from '$lib/bucket/settings/SubscribersSection.svelte';
   import { useBucketSettings } from '$lib/bucket/settings/context.svelte';
+  import Section from '$lib/board/settings/Section.svelte';
+  import EnvEditor from '$lib/env/EnvEditor.svelte';
   import { bucketSettingsFor } from '$lib/bucket/store';
   import { routes } from '$lib/layout/routes';
   import { Button, EmptyState } from '$lib/ui';
@@ -43,5 +45,12 @@
     <PeopleSection />
   {:else if section === 'subscribers'}
     <SubscribersSection />
+  {:else if section === 'env'}
+    <Section
+      title="Env"
+      description="Key/value pairs for this bucket, mostly for orchestrators. Its org's pairs come first; one here with the same name wins."
+    >
+      <EnvEditor kind="bucket" id={s.bucket.id} canEdit={s.isOwner} />
+    </Section>
   {/if}
 {/key}

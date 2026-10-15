@@ -47,6 +47,8 @@ import {
   sha256,
   syncReaders,
 } from './boardShared.js';
+import { ORG_INVITE_BOARD_ID, ORG_INVITE_BOARD_KEY, type Org } from '@tm/shared';
+import { orgMembers, orgRef, syncOrg } from '../org/shared.js';
 import { inviteInboxRef, inviteRef, isLive, maskEmail } from './inviteShared.js';
 
 const RANK: Record<BoardRole, number> = { viewer: 0, commenter: 1, editor: 2, admin: 3 };
@@ -73,6 +75,27 @@ export default defineCommand('inviteAccept', async (ctx, { inviteId, token, acce
       throw errors.forbidden(`This invite is for ${maskEmail(inv.email)} — switch account`, {
         invitedEmail: maskEmail(inv.email),
       });
+
+    // ── an org invite (§AC) ──
+    if (inv.orgId) {
+      const orgId = inv.orgId;
+      const org = (await tx.get(orgRef(orgId))).data() as Org | undefined;
+      if (!org) throw errors.gone('This org no longer exists');
+      const inbox = inviteInboxRef(ctx.actor, inviteId);
+      const row = await txGet(tx, inbox);
+      if (row) tx.update(inbox, { readAt: ctx.now, archivedAt: ctx.now });
+      if (!accept) {
+        tx.update(inviteRef(inviteId), { status: 'declined' });
+        return { kind: 'org' as const, inv, orgId, org, joined: false };
+      }
+      const wanted = inv.orgRole ?? 'member';
+      const cur = org.members[ctx.actor];
+      const rank = { member: 0, admin: 1, owner: 2 } as const;
+      const role = cur && rank[cur] >= rank[wanted] ? cur : wanted;
+      tx.update(orgRef(orgId), { ...orgMembers({ ...org.members, [ctx.actor]: role }), updatedAt: ctx.now });
+      tx.update(inviteRef(inviteId), { status: 'accepted' });
+      return { kind: 'org' as const, inv, orgId, org, joined: true };
+    }
 
     // ── an artifact invite ──
     if (inv.artifactId) {
@@ -128,6 +151,16 @@ export default defineCommand('inviteAccept', async (ctx, { inviteId, token, acce
     tx.update(inviteRef(inviteId), { status: 'accepted' });
     return { kind: 'board' as const, inv, board, joined: true, readerUids: derived.readerUids };
   });
+
+  if (res.kind === 'org') {
+    if (res.joined) await syncOrg(res.orgId);
+    return {
+      boardId: ORG_INVITE_BOARD_ID,
+      boardKey: ORG_INVITE_BOARD_KEY,
+      orgId: res.orgId,
+      orgHandle: res.org.handle,
+    };
+  }
 
   if (res.kind === 'artifact') {
     if (res.joined) await syncArtifactMirror(res.artifactId, res.artifact);

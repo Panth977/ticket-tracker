@@ -27,6 +27,7 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import {
+  isAgentId,
   errors,
   MAX_API_UPLOAD_BYTES,
   paths,
@@ -110,6 +111,7 @@ import {
   updateTaskItem,
 } from '../platform/phase3.js';
 import { boardMembers, toPublicBoard, toPublicFile } from '../platform/public.js';
+import { envOf, envTarget } from '../env/shared.js';
 import { boardByKey, readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
 import { bucketRawPut } from '../bucket/files.js';
 import { storeTicketUpload, uploadBytes } from '../platform/uploads.js';
@@ -251,6 +253,21 @@ function ticketInput(b: Partial<z.output<typeof RestPatchTicketBodySchema>>): Ti
 // ─── me, board ───────────────────────────────────────────────────────────────
 
 v1.get('/me', async (c) => c.json(await whoami(gate(c, 'GET', '/v1/me'))));
+
+v1.get('/env', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/env');
+  const q = query(c, RestBoardQuerySchema);
+  const b = await requestBoard(ctx, q.board);
+  const board = await envOf('board', await envTarget(ctx, 'board', b.id, 'read'));
+  const agent = isAgentId(ctx.actor)
+    ? await envOf('agent', await envTarget(ctx, 'agent', ctx.actor, 'read'))
+    : null;
+  return c.json({
+    board: board.effective,
+    agent: agent?.effective ?? null,
+    env: { ...board.effective, ...(agent?.effective ?? {}) },
+  });
+});
 
 v1.get('/board', async (c) => {
   const ctx = gate(c, 'GET', '/v1/board');
