@@ -25,6 +25,7 @@
   import { guardPending, guardRedirect } from '$lib/firebase/guard';
   import { shortcuts } from '$lib/keyboard/shortcuts';
   import Shell from '$lib/layout/Shell.svelte';
+  import CanonicalUrl from '$lib/orgs/CanonicalUrl.svelte';
   import { hasShell } from '$lib/layout/routes';
   import Toaster from '$lib/ui/Toaster.svelte';
   import TopProgress from '$lib/ui/TopProgress.svelte';
@@ -45,7 +46,7 @@
   });
   const pending = $derived(guardPending(guardState, page.url));
   const shell = $derived(auth.presumedSignedIn && hasShell(page.url.pathname));
-  // §T — a boot painted from memory is live but not yet confirmed. The top bar
+  // §T — a boot painted from bucket is live but not yet confirmed. The top bar
   // (§K) is the ONE signal that the refresh is still in flight: no spinner over
   // content that is already on screen, and nothing moves when the server lands.
   const refreshing = $derived(pending || auth.status === 'loading');
@@ -87,6 +88,7 @@
   </div>
 {:else if shell}
   <Shell>{@render children()}</Shell>
+  <CanonicalUrl />
 {:else}
   {@render children()}
 {/if}

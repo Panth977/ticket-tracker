@@ -61,10 +61,10 @@ export type Scope =
   // the ones that agent was added to.
   | 'artifacts:read'
   | 'artifacts:write'
-  // Memory (docs/plan/memory.html §G): an account token reaches the memories
+  // Bucket (docs/plan/bucket.html §G): an account token reaches the buckets
   // its person reaches; an agent token only those granted to its boards.
-  | 'memory:read'
-  | 'memory:write';
+  | 'bucket:read'
+  | 'bucket:write';
 
 /** A person (a Firebase uid) or an agent (`ag_` + 16 chars). */
 export type PrincipalKind = 'user' | 'agent';
@@ -126,7 +126,7 @@ export interface Member extends Principal {
 
 /**
  * indicators.html — an entity's mark (a board, a stage, an artifact, a
- * memory, a workspace): a solid colour, an icon from the app's list tinted in
+ * bucket, a workspace): a solid colour, an icon from the app's list tinted in
  * a colour, one emoji, or an image the person uploaded in the app.
  * Colours are '#RRGGBB'. Icons are lucide names ('rocket', 'bug', 'kanban'…;
  * the app's list — an unknown one is a 400).
@@ -423,9 +423,9 @@ export interface TmFile extends Attachment {
   url_expires_at?: Iso | undefined;
   /** The message it hangs off; null when only uploaded, or on the description. */
   message_id: string | null;
-  source: 'description' | 'message' | 'upload' | 'memory';
-  /** A reference to a memory file (memory.html §E): its bytes are the node's current version. */
-  memory?: { memory_id: string; node_id: string } | undefined;
+  source: 'description' | 'message' | 'upload' | 'bucket';
+  /** A reference to a bucket file (bucket.html §E): its bytes are the node's current version. */
+  bucket?: { bucket_id: string; node_id: string } | undefined;
   uploaded_by: Actor;
   created_at: Iso;
 }

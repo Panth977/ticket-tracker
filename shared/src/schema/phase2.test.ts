@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNT_SCOPES,
   ARTIFACT_SCOPES,
-  MEMORY_SCOPES,
+  BUCKET_SCOPES,
   ADMIN_SCOPES,
   AGENT_TOKEN_SCOPES,
   AgentIdSchema,
@@ -190,12 +190,12 @@ describe('API keys v2', () => {
       ApiKeySchema.safeParse({ ...fixtures.apiKeys, defaultBoardId: 'board_eng' }).success,
     ).toBe(false);
   });
-  it('§AA1 AGENT_TOKEN_SCOPES = every board scope + the 2 admin + the 2 artifact + the 2 memory scopes, no account scope', () => {
+  it('§AA1 AGENT_TOKEN_SCOPES = every board scope + the 2 admin + the 2 artifact + the 2 bucket scopes, no account scope', () => {
     expect([...AGENT_TOKEN_SCOPES]).toEqual([
       ...TOKEN_SCOPES,
       ...ADMIN_SCOPES,
       ...ARTIFACT_SCOPES,
-      ...MEMORY_SCOPES,
+      ...BUCKET_SCOPES,
     ]);
     expect(AGENT_TOKEN_SCOPES.some(isAccountScope)).toBe(false);
     expect(isAgentTokenScopes([...AGENT_TOKEN_SCOPES])).toBe(true);
@@ -219,7 +219,7 @@ describe('API keys v2', () => {
 });
 
 describe('scope vocabulary', () => {
-  it('16 token scopes in form order + 2 admin + 4 account + 2 artifact + 2 memory (13 phase 2, 3 phase 3, 4 phase 10)', () => {
+  it('16 token scopes in form order + 2 admin + 4 account + 2 artifact + 2 bucket (13 phase 2, 3 phase 3, 4 phase 10)', () => {
     expect(TOKEN_SCOPES).toHaveLength(16);
     expect(ADMIN_SCOPES).toHaveLength(2);
     // §R1 added the account scopes; they live at the END so the form's
@@ -239,7 +239,7 @@ describe('scope vocabulary', () => {
       ...TOKEN_SCOPES,
       ...ACCOUNT_SCOPES,
       ...ARTIFACT_SCOPES,
-      ...MEMORY_SCOPES,
+      ...BUCKET_SCOPES,
     ]);
     for (const s of ACCOUNT_SCOPES) expect(isAccountScope(s)).toBe(true);
     for (const s of TOKEN_SCOPES) expect(isAccountScope(s)).toBe(false);

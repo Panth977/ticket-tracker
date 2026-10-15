@@ -24,12 +24,13 @@
   import SubscriptionsSection from '$lib/board/settings/SubscriptionsSection.svelte';
   import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
+  import EnvEditor from '$lib/env/EnvEditor.svelte';
 
   const s = useSettings();
   const section = $derived(page.params.section ?? 'general');
   const known = $derived(BOARD_SETTINGS_SECTIONS.some((x) => x.id === section));
   // Renamed sections (lib/access): old links still land.
-  const MOVED: Record<string, 'subscriptions'> = { memory: 'subscriptions' };
+  const MOVED: Record<string, 'subscriptions'> = { bucket: 'subscriptions' };
   $effect(() => {
     const to = MOVED[section];
     if (to) void goto(routes.boardSettings(s.board.key, to), { replaceState: true });
@@ -70,6 +71,13 @@
     <AggregatesSection />
   {:else if section === 'analytics'}
     <AnalyticsSection />
+  {:else if section === 'env'}
+    <Section
+      title="Env"
+      description="Key/value pairs for this board, mostly for orchestrators: the workspaces orch puts them in its agents' environment. Its org's pairs come first; a pair here with the same name wins."
+    >
+      <EnvEditor kind="board" id={s.board.id} canEdit={s.isAdmin} />
+    </Section>
   {:else if section === 'danger'}
     <DangerSection />
   {:else if !known && !(section in MOVED)}

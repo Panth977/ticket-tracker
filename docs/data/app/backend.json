@@ -588,8 +588,8 @@
         "  priorityId?, tagIds?, assigneeUids?,",
         "  startAt?, dueAt?, dueAllDay?, estimate?,",
         "  fields?: Record<string, FieldValue>",
-        "  attachments?: string[]    // RETIRED (memory.html §J): a non-empty list is a 400",
-        "  memoryUploads?: { memoryId, path, storagePath }[]  // §J: new files in a memory granted write; '<ticketId>' = the new key",
+        "  attachments?: string[]    // RETIRED (bucket.html §J): a non-empty list is a 400",
+        "  bucketUploads?: { bucketId, path, storagePath }[]  // §J: new files in a bucket granted write; '<ticketId>' = the new key",
         "  clientId?: string         // idempotency — a retried create is one ticket",
         "}",
         "interface Res { ticketId: TicketId, key: TicketKey }"
@@ -611,7 +611,7 @@
         "  notify('created'), notify('assigned', assignees),",
         "  notify('mentioned', description.mentions)",
         "  emit webhook 'ticket.created'",
-        "memoryRefs (plan/memory.html §E): memory files by reference — the memory must be granted to this board; rows source 'memory', path memories/{m}/nodes/{n}"
+        "bucketRefs (plan/bucket.html §E): bucket files by reference — the bucket must be granted to this board; rows source 'bucket', path buckets/{m}/nodes/{n}"
       ],
       "touches": [
         "app/schema/tickets",
@@ -751,8 +751,8 @@
         "  body: RichText['doc']",
         "  markdown?: string           // phase 2: the Markdown source (REST / MCP doors); stored as Message.markdown",
         "  replyTo?: string",
-        "  attachments?: string[]      // RETIRED (memory.html §J): a non-empty list is a 400",
-        "  memoryUploads?: { memoryId, path, storagePath }[]  // §J: new files in a memory granted write to the board",
+        "  attachments?: string[]      // RETIRED (bucket.html §J): a non-empty list is a 400",
+        "  bucketUploads?: { bucketId, path, storagePath }[]  // §J: new files in a bucket granted write to the board",
         "  fileIds?: string[]          // phase 2: files ALREADY on this ticket (uploaded by a token)",
         "  clientId: string            // idempotency; the optimistic bubble's id",
         "}",
@@ -761,7 +761,7 @@
       "implementation": [
         "can(comment); state == 'active' (closed tickets have closed threads)",
         "body = parseRichText(body)",
-        "memoryUploads: object exists in that memory's folder, ≤ 1 GB; memory granted write, not archived; a NEW node per upload (a taken path gets ' (2)'), in the same transaction (memory.html §J)",
+        "bucketUploads: object exists in that bucket's folder, ≤ 1 GB; bucket granted write, not archived; a NEW node per upload (a taken path gets ' (2)'), in the same transaction (bucket.html §J)",
         "fileIds: files/{id} on THIS ticket, not deleted; source 'upload' → 'message', messageId set",
         "body or files, at least one — a message can be files only",
         "authorUid = ctx.actor (a person or an agent); viaToken = ctx.keyName",
@@ -777,7 +777,7 @@
         "  notify('comment') minus those mentioned // no double ping",
         "  for each NEW #ref: target.referencedBy += this ticket, and a system line\n  on THAT ticket: 'referenced from ENG-40'",
         "  webhook 'message.created'",
-        "memoryRefs (plan/memory.html §E): memory files by reference — the memory must be granted to this board; rows source 'memory', path memories/{m}/nodes/{n}"
+        "bucketRefs (plan/bucket.html §E): bucket files by reference — the bucket must be granted to this board; rows source 'bucket', path buckets/{m}/nodes/{n}"
       ],
       "touches": [
         "app/schema/messages",
@@ -1493,57 +1493,6 @@
       ]
     },
     {
-      "name": "workspaceCreate",
-      "trigger": "api",
-      "location": "POST /api/workspaceCreate",
-      "middleware": "user",
-      "ioSchema": [
-        "interface Req { name, color?, boardIds?, artifactIds? }",
-        "interface Res { workspaceId }"
-      ],
-      "implementation": [
-        "≤ 50 workspaces per person",
-        "every boardId: I am a member (archived allowed); every artifactId: I have a role",
-        "duplicates dropped, order kept"
-      ],
-      "touches": [
-        "app/schema/workspaces"
-      ]
-    },
-    {
-      "name": "workspaceUpdate",
-      "trigger": "api",
-      "location": "POST /api/workspaceUpdate",
-      "middleware": "user",
-      "ioSchema": [
-        "interface Req { workspaceId, name?, color?, boardIds?, artifactIds?, position? }",
-        "interface Res {}"
-      ],
-      "implementation": [
-        "my own workspace only",
-        "the same reachability check as workspaceCreate for any new id"
-      ],
-      "touches": [
-        "app/schema/workspaces"
-      ]
-    },
-    {
-      "name": "workspaceDelete",
-      "trigger": "api",
-      "location": "POST /api/workspaceDelete",
-      "middleware": "user",
-      "ioSchema": [
-        "interface Req { workspaceId }",
-        "interface Res {}"
-      ],
-      "implementation": [
-        "my own workspace only; its boards and artifacts are untouched"
-      ],
-      "touches": [
-        "app/schema/workspaces"
-      ]
-    },
-    {
       "name": "sidebarHide",
       "trigger": "api",
       "location": "POST /api/sidebarHide",
@@ -1579,63 +1528,63 @@
       ]
     },
     {
-      "name": "memoryCreate",
+      "name": "bucketCreate",
       "trigger": "api",
-      "location": "POST /api/memoryCreate",
+      "location": "POST /api/bucketCreate",
       "middleware": "user",
       "ioSchema": [
         "interface Req { name, description?, icon? }",
-        "interface Res { memoryId }"
+        "interface Res { bucketId }"
       ],
       "implementation": [
         "any allowed person (never an agent or a board token); ≤ 100 owned",
         "they become its owner"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "memoryUpdate",
+      "name": "bucketUpdate",
       "trigger": "api",
-      "location": "POST /api/memoryUpdate",
+      "location": "POST /api/bucketUpdate",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, name?, description?, icon?, archived? }",
+        "interface Req { bucketId, name?, description?, icon?, archived? }",
         "interface Res {}"
       ],
       "implementation": [
         "owner only; archived = read-only for everyone until restored"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "memoryDelete",
+      "name": "bucketDelete",
       "trigger": "api",
-      "location": "POST /api/memoryDelete",
+      "location": "POST /api/bucketDelete",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId }",
+        "interface Req { bucketId }",
         "interface Res {}"
       ],
       "implementation": [
         "owner only",
         "ONE write empties access and grants and stamps deletingAt (unreachable at once)",
-        "queue memoryDelete: Storage prefix, nodes, the document last"
+        "queue bucketDelete: Storage prefix, nodes, the document last"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "memoryShare",
+      "name": "bucketShare",
       "trigger": "api",
-      "location": "POST /api/memoryShare",
+      "location": "POST /api/bucketShare",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, email, role: 'editor' | 'viewer' | null }",
+        "interface Req { bucketId, email, role: 'editor' | 'viewer' | null }",
         "interface Res { invited: false }"
       ],
       "implementation": [
@@ -1643,101 +1592,101 @@
         "the person must already have an account (409 noAccount otherwise)"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "boardAttachMemorySet",
+      "name": "boardAttachBucketSet",
       "trigger": "api",
-      "location": "POST /api/boardAttachMemorySet",
+      "location": "POST /api/boardAttachBucketSet",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { boardId, attachMemory: { memoryId, template } | null }",
+        "interface Req { boardId, attachBucket: { bucketId, template } | null }",
         "interface Res {}"
       ],
       "implementation": [
-        "board admin; the memory must be granted write to the board",
-        "template variables: <ticketId> <time> <random6> <filename> <exe> (memory.html §J)"
+        "board admin; the bucket must be granted write to the board",
+        "template variables: <ticketId> <time> <random6> <filename> <exe> (bucket.html §J)"
       ],
       "touches": [
         "app/schema/boards"
       ]
     },
     {
-      "name": "memoryGrantSet",
+      "name": "bucketGrantSet",
       "trigger": "api",
-      "location": "POST /api/memoryGrantSet",
+      "location": "POST /api/bucketGrantSet",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, boardId? | artifactId?, access: 'read' | 'write' | null }",
+        "interface Req { bucketId, boardId? | artifactId?, access: 'read' | 'write' | null }",
         "interface Res {}"
       ],
       "implementation": [
-        "memory owner AND board admin (or artifact owner)",
+        "bucket owner AND board admin (or artifact owner)",
         "null removes; ≤ 20 boards and 20 artifacts"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "memoryList",
+      "name": "bucketList",
       "trigger": "api",
-      "location": "POST /api/memoryList",
+      "location": "POST /api/bucketList",
       "middleware": "user",
       "ioSchema": [
         "interface Req { boardId?, artifactId?, includeArchived? }",
-        "interface Res { memories: { id, name, reach, stats, … }[] }"
+        "interface Res { buckets: { id, name, reach, stats, … }[] }"
       ],
       "implementation": [
-        "own memories ∪ those granted to boards the caller is on",
+        "own buckets ∪ those granted to boards the caller is on",
         "each with the caller's reach"
       ],
       "touches": [
-        "app/schema/memories"
+        "app/schema/buckets"
       ]
     },
     {
-      "name": "memoryTree",
+      "name": "bucketTree",
       "trigger": "api",
-      "location": "POST /api/memoryTree",
+      "location": "POST /api/bucketTree",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path?, shallow? }",
+        "interface Req { bucketId, path?, shallow? }",
         "interface Res { nodes, truncated }"
       ],
       "implementation": [
         "read reach; nodes under path, sorted"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryFileRead",
+      "name": "bucketFileRead",
       "trigger": "api",
-      "location": "POST /api/memoryFileRead",
+      "location": "POST /api/bucketFileRead",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path | nodeId, asText? }",
+        "interface Req { bucketId, path | nodeId, asText? }",
         "interface Res { node, text, truncated, url, bytesUrl, expiresAt }"
       ],
       "implementation": [
         "read reach; text ≤ 1 MB for text files; the file door's signed URLs"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryFileWrite",
+      "name": "bucketFileWrite",
       "trigger": "api",
-      "location": "POST /api/memoryFileWrite",
+      "location": "POST /api/bucketFileWrite",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path | nodeId, text | content_base64, mime?, expectedFileId? }",
+        "interface Req { bucketId, path | nodeId, text | content_base64, mime?, expectedFileId? }",
         "interface Res { nodeId, fileId, path }"
       ],
       "implementation": [
@@ -1746,52 +1695,52 @@
         "expectedFileId ≠ current → 409 stale"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryFilePut",
+      "name": "bucketFilePut",
       "trigger": "api",
-      "location": "POST /api/memoryFilePut",
+      "location": "POST /api/bucketFilePut",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path | nodeId, storagePath, expectedFileId? }",
+        "interface Req { bucketId, path | nodeId, storagePath, expectedFileId? }",
         "interface Res { nodeId, fileId, path }"
       ],
       "implementation": [
-        "write reach; the object the app uploaded under memories/{m}/{fileId}/{name}",
+        "write reach; the object the app uploaded under buckets/{m}/{fileId}/{name}",
         "size and type from the object; one object never backs two nodes"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryFolderCreate",
+      "name": "bucketFolderCreate",
       "trigger": "api",
-      "location": "POST /api/memoryFolderCreate",
+      "location": "POST /api/bucketFolderCreate",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path }",
+        "interface Req { bucketId, path }",
         "interface Res { nodeId, path }"
       ],
       "implementation": [
         "write reach; mkdir -p; an existing folder is fine, a file in the way is 409"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryMove",
+      "name": "bucketMove",
       "trigger": "api",
-      "location": "POST /api/memoryMove",
+      "location": "POST /api/bucketMove",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, path | nodeId, toPath }",
+        "interface Req { bucketId, path | nodeId, toPath }",
         "interface Res { nodeId, path }"
       ],
       "implementation": [
@@ -1799,25 +1748,25 @@
         "409 onto something, or a folder into itself"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     },
     {
-      "name": "memoryNodeDelete",
+      "name": "bucketNodeDelete",
       "trigger": "api",
-      "location": "POST /api/memoryNodeDelete",
+      "location": "POST /api/bucketNodeDelete",
       "middleware": "user",
       "ioSchema": [
-        "interface Req { memoryId, paths? , nodeIds? }",
+        "interface Req { bucketId, paths? , nodeIds? }",
         "interface Res { deleted }"
       ],
       "implementation": [
         "write reach; recursive; counters follow; objects deleted after"
       ],
       "touches": [
-        "app/schema/memories",
-        "app/schema/memoryNodes"
+        "app/schema/buckets",
+        "app/schema/bucketNodes"
       ]
     }
   ]

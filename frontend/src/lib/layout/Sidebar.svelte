@@ -2,14 +2,14 @@
   THE ONE NAVIGATION (app.json › Sidebar; agents.html §Q1). A flat list — no
   accordions, nothing two levels deep:
     (picture) Name ▾ · ⌘K Search · Inbox n · My work · Invitations n (only while pending)
-    — Workspaces: ▸ ● Name          ← its page; ▸ unfolds its boards + artifacts (agents.html §AB)
+    — Orgs: ▸ ● Name                ← /{handle}; ▸ unfolds what it owns (agents.html §AC)
     — Boards: ● KEY Name •n        ← one click = that board's default view (minus hidden ones)
         ↳ Analytics                ← under the OPEN board only (agents.html §Y3)
       All boards & archived · + New board
     — Artifacts: ◆ Name            ← one click = that artifact (artifacts.html §F)
       All artifacts · + New artifact
-    — Memory: 🧠 Name             ← one click = that memory (memory.html §F)
-      All memory · + New memory
+    — Bucket: 🧠 Name             ← one click = that bucket (bucket.html §F)
+      All bucket · + New bucket
     — You: Agents · Notifications · Tokens · Sign out   (Agents: agents.html §B)
   Views, People and Settings are NOT here: they are on the board page, behind
   the view tabs and ⚙ Settings (§Q2).
@@ -53,12 +53,13 @@
   import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
   import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
   import Indicator from '$lib/ui/Indicator.svelte';
-  import { MEMORY_DEFAULT_INDICATOR } from '@tm/shared';
-  import NewMemoryDialog from '$lib/memory/NewMemoryDialog.svelte';
-  import { myMemories, splitMemories } from '$lib/memory/store';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems, myWorkspaces } from '$lib/workspaces/store';
-  import SidebarWorkspaces from './SidebarWorkspaces.svelte';
+  import { BUCKET_DEFAULT_INDICATOR } from '@tm/shared';
+  import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
+  import { myBuckets, splitBuckets } from '$lib/bucket/store';
+  import { hiddenItems } from '$lib/layout/hidden';
+  import { inOrgs, myOrgs } from '$lib/orgs/store';
+  import { parseThingPath } from '$lib/orgs/path';
+  import SidebarOrgs from './SidebarOrgs.svelte';
 
   const uid = $derived(auth.uid);
   const boardsQ = $derived(myBoards(uid));
@@ -95,32 +96,30 @@
   const artifactsQ = $derived(myArtifacts(uid));
   const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
   let newArtifact = $state(false);
-  // Memories I have a role on (memory.html §F); archived ones on All memory only.
-  const memoriesQ = $derived(myMemories(uid));
-  const memories = $derived(splitMemories($memoriesQ.data).active);
-  let newMemory = $state(false);
+  // Buckets I have a role on (bucket.html §F); archived ones on All bucket only.
+  const bucketsQ = $derived(myBuckets(uid));
+  const buckets = $derived(splitBuckets($bucketsQ.data).active);
+  let newBucket = $state(false);
 
   const path: string = $derived(page.url.pathname);
-  const currentArtifact = $derived(path.startsWith('/x/') ? (path.split('/')[2] ?? null) : null);
-  const currentKey = $derived(path.startsWith('/b/') ? (path.split('/')[2] ?? null) : null);
-  const currentMemory = $derived(path.startsWith('/m/') ? (path.split('/')[2] ?? null) : null);
+  // /b/KEY or /{handle}/b/KEY (§AC); an artifact / bucket by id or by slug.
+  const at = $derived(parseThingPath(path));
+  const currentArtifact = $derived(at?.kind === 'artifact' ? at.ref : null);
+  const currentKey = $derived(at?.kind === 'board' ? at.ref.toUpperCase() : null);
+  const currentBucket = $derived(at?.kind === 'bucket' ? at.ref : null);
 
-  // §AB: the root lists leave out what I hid (the All pages and workspaces still show it).
+  // The root lists leave out what I hid, and what an org of mine owns (it is under the org, §AC).
   const hiddenQ = $derived(hiddenItems(uid));
-  const rootBoards = $derived(sorted.filter((b) => !$hiddenQ.boards.has(b.id)));
-  const rootArtifacts = $derived(artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id)));
-  const rootMemories = $derived(memories.filter((m) => !$hiddenQ.memories.has(m.id)));
-  // Highlighted once: under the workspace I came through, when it holds the open item.
-  const wsQ = $derived(myWorkspaces(uid));
-  const inWs = $derived($wsQ.data.find((w) => w.id === workspaceContext.id) ?? null);
-  const currentBoardId = $derived(active.find((b) => b.key === currentKey)?.id ?? null);
-  const shownInWs = $derived(
-    !!inWs &&
-      ((!!currentBoardId && inWs.boardIds.includes(currentBoardId)) ||
-        (!!currentArtifact && inWs.artifactIds.includes(currentArtifact)) ||
-        (!!currentMemory && (inWs.memoryIds ?? []).includes(currentMemory))),
+  const orgsQ = $derived(myOrgs(uid));
+  const rootBoards = $derived(
+    sorted.filter((b) => !$hiddenQ.boards.has(b.id) && !inOrgs(b, $orgsQ.data)),
   );
-  const leave = () => workspaceContext.leave();
+  const rootArtifacts = $derived(
+    artifacts.filter((a) => !$hiddenQ.artifacts.has(a.id) && !inOrgs(a, $orgsQ.data)),
+  );
+  const rootBuckets = $derived(
+    buckets.filter((m) => !$hiddenQ.buckets.has(m.id) && !inOrgs(m, $orgsQ.data)),
+  );
 
   async function signOut() {
     await auth.signOut();
@@ -147,16 +146,16 @@
     {/if}
   </div>
 
-  <SidebarWorkspaces
+  <SidebarOrgs
     boards={active}
     {artifacts}
-    {memories}
+    {buckets}
     prefs={$prefsQ}
     unread={unreadByBoard}
     {path}
     {currentKey}
     {currentArtifact}
-    {currentMemory}
+    {currentBucket}
   />
 
   <div class="flex flex-col gap-px">
@@ -173,13 +172,12 @@
           board={b}
           starred={$prefsQ.get(b.id)?.starred ?? false}
           unread={unreadByBoard.get(b.id) ?? 0}
-          current={b.key === currentKey && !shownInWs}
+          current={b.key === currentKey}
           lastViewId={$prefsQ.get(b.id)?.lastViewId ?? null}
-          onclick={leave}
         />
       {/each}
     {/if}
-    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'} onclick={leave}
+    <NavItem href={routes.home()} icon={LayoutGrid} active={path === '/'}
       >All boards & archived</NavItem
     >
     <NavItem href={routes.newBoard()} icon={Plus}>New board</NavItem>
@@ -195,10 +193,9 @@
       <p class="px-2 text-xs text-danger">Couldn't load artifacts.</p>
     {:else}
       {#each rootArtifacts as a (a.id)}
-        {@const current = a.id === currentArtifact && !shownInWs}
+        {@const current = a.id === currentArtifact || a.slug === currentArtifact}
         <a
           href={routes.artifact(a.id)}
-          onclick={leave}
           aria-current={current ? 'page' : undefined}
           data-artifact={a.id}
           class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
@@ -211,40 +208,37 @@
         </a>
       {/each}
     {/if}
-    <NavItem href={routes.artifacts()} icon={AppWindow} active={path === '/x'} onclick={leave}
+    <NavItem href={routes.artifacts()} icon={AppWindow} active={path === '/x'}
       >All artifacts</NavItem
     >
     <NavItem icon={Plus} onclick={() => (newArtifact = true)}>New artifact</NavItem>
   </div>
 
   <div class="flex flex-col gap-px">
-    <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">Memory</h2>
-    {#if $memoriesQ.loading}
+    <h2 class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">Bucket</h2>
+    {#if $bucketsQ.loading}
       <div class="px-2 py-1"><Skeleton width="60%" /></div>
-    {:else if $memoriesQ.error}
-      <p class="px-2 text-xs text-danger">Couldn't load memory.</p>
+    {:else if $bucketsQ.error}
+      <p class="px-2 text-xs text-danger">Couldn't load bucket.</p>
     {:else}
-      {#each rootMemories as m (m.id)}
-        {@const current = m.id === currentMemory && !shownInWs}
+      {#each rootBuckets as m (m.id)}
+        {@const current = m.id === currentBucket || m.slug === currentBucket}
         <a
-          href={routes.memory(m.id)}
-          onclick={leave}
+          href={routes.bucket(m.id)}
           aria-current={current ? 'page' : undefined}
-          data-memory={m.id}
+          data-bucket={m.id}
           class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm
             {current
             ? 'bg-surface-3 font-medium text-text'
             : 'text-muted hover:bg-surface-2 hover:text-text'}"
         >
-          <Indicator of={m} seed={m.id} fallback={MEMORY_DEFAULT_INDICATOR} size="sm" />
+          <Indicator of={m} seed={m.id} fallback={BUCKET_DEFAULT_INDICATOR} size="sm" />
           <span class="flex-1 truncate">{m.name}</span>
         </a>
       {/each}
     {/if}
-    <NavItem href={routes.memories()} icon={Brain} active={path === '/m'} onclick={leave}
-      >All memory</NavItem
-    >
-    <NavItem icon={Plus} onclick={() => (newMemory = true)}>New memory</NavItem>
+    <NavItem href={routes.buckets()} icon={Brain} active={path === '/bucket'}>All bucket</NavItem>
+    <NavItem icon={Plus} onclick={() => (newBucket = true)}>New bucket</NavItem>
   </div>
 
   <div class="mt-auto flex flex-col gap-px border-t border-line pt-3">
@@ -271,4 +265,4 @@
 </nav>
 
 <NewArtifactDialog bind:open={newArtifact} />
-<NewMemoryDialog bind:open={newMemory} />
+<NewBucketDialog bind:open={newBucket} />

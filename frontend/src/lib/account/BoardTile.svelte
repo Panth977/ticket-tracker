@@ -14,7 +14,7 @@
   import { routes } from '$lib/layout/routes';
   import { boardPref, type WithId } from '$lib/stores';
   import { aggCountersOf, cardChips } from '$lib/aggregates/fields';
-  import { setHidden, type Hidden } from '$lib/workspaces/store';
+  import { setHidden, type Hidden } from '$lib/layout/hidden';
 
   interface Props {
     board: WithId<Board>;

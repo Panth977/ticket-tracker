@@ -27,6 +27,7 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import {
+  isAgentId,
   errors,
   MAX_API_UPLOAD_BYTES,
   paths,
@@ -44,9 +45,9 @@ import {
   RestArtifactDataBatchBodySchema,
   RestArtifactDataListQuerySchema,
   RestArtifactFilesQuerySchema,
-  RestMemoryFileQuerySchema,
-  RestMemoryListQuerySchema,
-  RestMemoryTreeQuerySchema,
+  RestBucketFileQuerySchema,
+  RestBucketListQuerySchema,
+  RestBucketTreeQuerySchema,
   RestArtifactSourceQuerySchema,
   RestCreateArtifactBodySchema,
   RestPatchArtifactBodySchema,
@@ -110,8 +111,9 @@ import {
   updateTaskItem,
 } from '../platform/phase3.js';
 import { boardMembers, toPublicBoard, toPublicFile } from '../platform/public.js';
+import { envOf, envTarget } from '../env/shared.js';
 import { boardByKey, readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
-import { memoryRawPut } from '../memory/files.js';
+import { bucketRawPut } from '../bucket/files.js';
 import { storeTicketUpload, uploadBytes } from '../platform/uploads.js';
 import {
   ackEvents,
@@ -251,6 +253,21 @@ function ticketInput(b: Partial<z.output<typeof RestPatchTicketBodySchema>>): Ti
 // ─── me, board ───────────────────────────────────────────────────────────────
 
 v1.get('/me', async (c) => c.json(await whoami(gate(c, 'GET', '/v1/me'))));
+
+v1.get('/env', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/env');
+  const q = query(c, RestBoardQuerySchema);
+  const b = await requestBoard(ctx, q.board);
+  const board = await envOf('board', await envTarget(ctx, 'board', b.id, 'read'));
+  const agent = isAgentId(ctx.actor)
+    ? await envOf('agent', await envTarget(ctx, 'agent', ctx.actor, 'read'))
+    : null;
+  return c.json({
+    board: board.effective,
+    agent: agent?.effective ?? null,
+    env: { ...board.effective, ...(agent?.effective ?? {}) },
+  });
+});
 
 v1.get('/board', async (c) => {
   const ctx = gate(c, 'GET', '/v1/board');
@@ -434,7 +451,7 @@ v1.post('/tickets/:key/messages', async (c) => {
       replyTo: b.reply_to,
       run: b.run,
       agg: b.agg,
-      memoryFiles: b.memory_files,
+      bucketFiles: b.bucket_files,
     },
     idem(c),
   );
@@ -460,7 +477,7 @@ v1.post('/tickets/:key/files', async (c) => {
     name: string;
     mime?: string | undefined;
     bytes: Uint8Array;
-    memoryId?: string | undefined;
+    bucketId?: string | undefined;
     path?: string | undefined;
   };
   if (type.startsWith('multipart/form-data')) {
@@ -480,13 +497,13 @@ v1.post('/tickets/:key/files', async (c) => {
       });
     const name = (form.get('name') as string | null)?.trim() || part.name || 'file';
     const mime = (form.get('mime') as string | null)?.trim() || part.type || undefined;
-    // memory.html §J: optional memory_id / path fields, like the JSON body.
+    // bucket.html §J: optional bucket_id / path fields, like the JSON body.
     const field = (k: string) => (form.get(k) as string | null)?.trim() || undefined;
     input = {
       name,
       mime,
       bytes: new Uint8Array(await part.arrayBuffer()),
-      memoryId: field('memory_id'),
+      bucketId: field('bucket_id'),
       path: field('path'),
     };
   } else {
@@ -495,7 +512,7 @@ v1.post('/tickets/:key/files', async (c) => {
       name: b.name,
       mime: b.mime,
       bytes: uploadBytes(b),
-      memoryId: b.memory_id,
+      bucketId: b.bucket_id,
       path: b.path,
     };
   }
@@ -1024,12 +1041,12 @@ v1.delete('/artifacts/:id/data/files/*', async (c) => {
   return c.json(await fileDelete(ctx, aid(c), dataPath(c)));
 });
 
-// ─── memory (memory.html §G) ─────────────────────────────────────────────────
+// ─── bucket (bucket.html §G) ─────────────────────────────────────────────────
 
-const MEM_FILES = '/v1/memories/{id}/files/{path}';
-const MEM_PATH = /\/memories\/[^/]+\/files\/(.+)$/;
-/** The `{path}` of a memory file route, decoded. */
-function memoryFilePath(c: C): string {
+const MEM_FILES = '/v1/buckets/{id}/files/{path}';
+const MEM_PATH = /\/buckets\/[^/]+\/files\/(.+)$/;
+/** The `{path}` of a bucket file route, decoded. */
+function bucketFilePath(c: C): string {
   const raw = MEM_PATH.exec(c.req.path)?.[1] ?? '';
   try {
     return decodeURIComponent(raw);
@@ -1038,29 +1055,29 @@ function memoryFilePath(c: C): string {
   }
 }
 
-v1.get('/memories', async (c) => {
-  const ctx = gate(c, 'GET', '/v1/memories');
-  const q = query(c, RestMemoryListQuerySchema);
+v1.get('/buckets', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/buckets');
+  const q = query(c, RestBucketListQuerySchema);
   const boardId = q.board ? (await requestBoard(ctx, q.board)).id : undefined;
   c.header('cache-control', 'no-store');
   return c.json(
     await invoke(
-      'memoryList',
+      'bucketList',
       { ...(boardId ? { boardId } : {}), ...(q.include_archived ? { includeArchived: true } : {}) },
       ctx,
     ),
   );
 });
 
-v1.get('/memories/:id/tree', async (c) => {
-  const ctx = gate(c, 'GET', '/v1/memories/{id}/tree');
-  const q = query(c, RestMemoryTreeQuerySchema);
+v1.get('/buckets/:id/tree', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/buckets/{id}/tree');
+  const q = query(c, RestBucketTreeQuerySchema);
   c.header('cache-control', 'no-store');
   return c.json(
     await invoke(
-      'memoryTree',
+      'bucketTree',
       {
-        memoryId: c.req.param('id'),
+        bucketId: c.req.param('id'),
         ...(q.path ? { path: q.path } : {}),
         ...(q.shallow ? { shallow: true } : {}),
       },
@@ -1069,16 +1086,16 @@ v1.get('/memories/:id/tree', async (c) => {
   );
 });
 
-v1.get('/memories/:id/files/*', async (c) => {
+v1.get('/buckets/:id/files/*', async (c) => {
   const ctx = gate(c, 'GET', MEM_FILES);
-  const q = query(c, RestMemoryFileQuerySchema);
+  const q = query(c, RestBucketFileQuerySchema);
   c.header('cache-control', 'no-store');
   return c.json(
     await invoke(
-      'memoryFileRead',
+      'bucketFileRead',
       {
-        memoryId: c.req.param('id'),
-        path: memoryFilePath(c),
+        bucketId: c.req.param('id'),
+        path: bucketFilePath(c),
         ...(q.text ? { asText: true } : {}),
       },
       ctx,
@@ -1087,19 +1104,19 @@ v1.get('/memories/:id/files/*', async (c) => {
 });
 
 /** The raw body IS the file; Content-Type is kept as its type. A new version replaces the old. */
-v1.put('/memories/:id/files/*', async (c) => {
+v1.put('/buckets/:id/files/*', async (c) => {
   const ctx = gate(c, 'PUT', MEM_FILES);
   const len = Number(c.req.header('content-length') ?? 0);
   if (len > MAX_FILE_BODY_BYTES)
     throw errors.too_large(
       `A file is at most ${MAX_FILE_BODY_BYTES / 1024 / 1024} MB through the API`,
     );
-  const memoryId = c.req.param('id');
-  const path = memoryFilePath(c);
+  const bucketId = c.req.param('id');
+  const path = bucketFilePath(c);
   return c.json(
-    await memoryRawPut(
+    await bucketRawPut(
       ctx,
-      memoryId,
+      bucketId,
       path,
       new Uint8Array(await c.req.arrayBuffer()),
       c.req.header('content-type'),
@@ -1109,12 +1126,12 @@ v1.put('/memories/:id/files/*', async (c) => {
   );
 });
 
-v1.delete('/memories/:id/files/*', async (c) => {
+v1.delete('/buckets/:id/files/*', async (c) => {
   const ctx = gate(c, 'DELETE', MEM_FILES);
   return c.json(
     await invoke(
-      'memoryNodeDelete',
-      { memoryId: c.req.param('id'), paths: [memoryFilePath(c)] },
+      'bucketNodeDelete',
+      { bucketId: c.req.param('id'), paths: [bucketFilePath(c)] },
       ctx,
     ),
   );

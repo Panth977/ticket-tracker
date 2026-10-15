@@ -9,14 +9,14 @@ import type {
   DriverBoard,
   DriverPerson,
   DriverTicket,
-  DriverMemory,
+  DriverBucket,
   DriverMessage,
   DriverAggregates,
   DriverAggField,
   DriverAggCounter,
   ThreadQuery as WireThreadQuery,
   AggregateQuery as WireAggregateQuery,
-  DriverMemoryNode,
+  DriverBucketNode,
   TicketInput as WireTicketInput,
   TicketQuery as WireTicketQuery,
   DriverDoc,
@@ -58,8 +58,8 @@ same<Api.Aggregates, DriverAggregates>(true);
 same<Api.Aggregates, DriverResult<'tk.aggregates'>>(true);
 same<Api.AggField, DriverAggField>(true);
 same<Api.AggCounter, DriverAggCounter>(true);
-// memory.html §H
-same<Api.Memory, DriverMemory>(true);
-same<Api.MemoryNode, DriverMemoryNode>(true);
-same<Api.Memory[], DriverResult<'mem.list'>>(true);
-same<Api.MemoryNode[], DriverResult<'mem.tree'>>(true);
+// bucket.html §H
+same<Api.Bucket, DriverBucket>(true);
+same<Api.BucketNode, DriverBucketNode>(true);
+same<Api.Bucket[], DriverResult<'mem.list'>>(true);
+same<Api.BucketNode[], DriverResult<'mem.tree'>>(true);

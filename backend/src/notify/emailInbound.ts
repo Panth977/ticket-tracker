@@ -10,9 +10,9 @@
  *        intakes where email == to, enabled;
  *        ticketCreate(ctx{ actor: 'intake-bot', via: 'email' }) with the
  *        intake's defaults, subject → title, body → description
- *   attachments → the board's attachment memory (memory.html §J), passed as
- *        memoryUploads (the command fills '<ticketId>' and makes them nodes);
- *        a board with no attachment memory keeps the mail, not its files, and
+ *   attachments → the board's attachment bucket (bucket.html §J), passed as
+ *        bucketUploads (the command fills '<ticketId>' and makes them nodes);
+ *        a board with no attachment bucket keeps the mail, not its files, and
  *        the body says so
  *   anything else → dropped, logged (still 200: a provider must not retry it)
  *
@@ -26,7 +26,7 @@ import {
   type Board,
   type EmailThread,
   type Intake,
-  type MemoryUpload,
+  type BucketUpload,
 } from '@tm/shared';
 import { docFromText, markdownToDoc } from '@tm/shared/logic/richtext/index';
 import { ports } from '../adapters/index.js';
@@ -42,7 +42,7 @@ import {
   stripQuoted,
 } from './inbound.js';
 import { parseReplyAddress } from './tokens.js';
-import { discardUnplaced, storeBoardFile, unsavedNote } from '../memory/attach.js';
+import { discardUnplaced, storeBoardFile, unsavedNote } from '../bucket/attach.js';
 
 /** The actor ticketCreate sees for intake-created tickets (the shared contract). */
 export { INTAKE_ACTOR };
@@ -176,7 +176,7 @@ async function reply(
         boardId: thread.boardId,
         ticketId: thread.ticketId,
         body,
-        ...(uploads.length ? { memoryUploads: uploads } : {}),
+        ...(uploads.length ? { bucketUploads: uploads } : {}),
         clientId: clientIdFrom('em', mail.messageId ?? `${token}:${text}`),
       },
       { actor: thread.uid, via: 'email', email: user.email, emailVerified: true, now },
@@ -224,7 +224,7 @@ async function intake(
         ...(d.priorityId ? { priorityId: d.priorityId } : {}),
         ...(d.tagIds?.length ? { tagIds: d.tagIds } : {}),
         ...(d.assigneeUids?.length ? { assigneeUids: d.assigneeUids } : {}),
-        ...(uploads.length ? { memoryUploads: uploads } : {}),
+        ...(uploads.length ? { bucketUploads: uploads } : {}),
         reporter: {
           email: sender.email,
           ...(sender.name ? { name: sender.name.slice(0, 120) } : {}),
@@ -264,24 +264,24 @@ async function boardEmails(boardId: string): Promise<Map<string, string>> {
 }
 
 /**
- * memory.html §J: the mail's files go into the board's attachment memory, at
+ * bucket.html §J: the mail's files go into the board's attachment bucket, at
  * its path template with '<ticketId>' left for the command to fill. Not
- * registered yet (the command does that). No attachment memory — or one that
+ * registered yet (the command does that). No attachment bucket — or one that
  * stopped taking this board's files — keeps the mail, not its files.
  */
 async function storeAttachments(
   board: Board & { id: string },
   mail: InboundEmail,
   now: number,
-): Promise<{ uploads: MemoryUpload[]; unsaved: number }> {
-  const uploads: MemoryUpload[] = [];
+): Promise<{ uploads: BucketUpload[]; unsaved: number }> {
+  const uploads: BucketUpload[] = [];
   let unsaved = 0;
   let total = 0;
   for (const a of mail.attachments.slice(0, MAX_INBOUND_ATTACHMENTS)) {
     const bytes = Buffer.from(a.content, 'base64');
     total += bytes.length;
     if (total > MAX_INBOUND_BYTES) break;
-    if (!board.attachMemory) {
+    if (!board.attachBucket) {
       unsaved++;
       continue;
     }

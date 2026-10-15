@@ -191,22 +191,22 @@ export function createDriver(win: WindowLike | undefined): Api.BackendDriver {
       onAggregates: (board, query, callback, onError) =>
         subscribe('tk.onAggregates', { board, ...(query ? { query } : {}) }, callback, onError),
     },
-    memory: {
+    bucket: {
       list: () => call('mem.list', {}),
-      tree: (memory, path) => call('mem.tree', { memory, ...(path ? { path } : {}) }),
-      read: (memory, path) => call('mem.read', { memory, path }).then((r) => r.text),
-      url: (memory, path) => call('mem.url', { memory, path }).then((r) => r.url),
-      write: (memory, path, content, options) =>
+      tree: (bucket, path) => call('mem.tree', { bucket, ...(path ? { path } : {}) }),
+      read: (bucket, path) => call('mem.read', { bucket, path }).then((r) => r.text),
+      url: (bucket, path) => call('mem.url', { bucket, path }).then((r) => r.url),
+      write: (bucket, path, content, options) =>
         done(
           call('mem.write', {
-            memory,
+            bucket,
             path,
             ...(typeof content === 'string' ? { text: content } : { blob: content }),
             ...(options?.contentType ? { contentType: options.contentType } : {}),
           }),
         ),
-      mkdir: (memory, path) => done(call('mem.mkdir', { memory, path })),
-      remove: (memory, path) => done(call('mem.remove', { memory, path })),
+      mkdir: (bucket, path) => done(call('mem.mkdir', { bucket, path })),
+      remove: (bucket, path) => done(call('mem.remove', { bucket, path })),
     },
     on(name, callback) {
       const set = handlers[name];

@@ -12,7 +12,7 @@
 
   interface Props {
     entity: EntityView;
-    /** Show the kind ("Board", "Memory"…) as a small label. */
+    /** Show the kind ("Board", "Bucket"…) as a small label. */
     showKind?: boolean;
     /** Make the name a link (rows) — the dialog's list is buttons instead. */
     link?: boolean;

@@ -6,8 +6,8 @@ import {
   doc,
   getDocData,
   people,
-  putMemoryObject,
-  seedAttachMemory,
+  putBucketObject,
+  seedAttachBucket,
   seedBoard,
   spyPorts,
 } from './helpers.js';
@@ -53,11 +53,11 @@ describe('messagePost', () => {
     const b = await seedBoard({ admin: asha, editors: [priya], commenters: [cora] });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
     const clientId = uniq('c');
-    // memory.html §J: the file goes into the board's memory (cora has no role on it).
-    const memoryId = await seedAttachMemory(b.id, asha);
-    const up = await putMemoryObject(
+    // bucket.html §J: the file goes into the board's bucket (cora has no role on it).
+    const bucketId = await seedAttachBucket(b.id, asha);
+    const up = await putBucketObject(
       s.files,
-      memoryId,
+      bucketId,
       'log.txt',
       new Uint8Array(42),
       'text/plain',
@@ -69,8 +69,8 @@ describe('messagePost', () => {
       ticketId,
       clientId,
       body: doc('hey ', { uid: priya.uid }, ' and ', { uid: out.uid }),
-      memoryUploads: [
-        { memoryId, path: 'tickets/<ticketId>/log.txt', storagePath: up.storagePath },
+      bucketUploads: [
+        { bucketId, path: 'tickets/<ticketId>/log.txt', storagePath: up.storagePath },
       ],
     });
     expect(r.messageId).toBe(clientId); // the optimistic bubble's id
@@ -87,10 +87,10 @@ describe('messagePost', () => {
     expect(m.body.mentions).toEqual([priya.uid]);
     expect(m.attachments).toEqual([
       expect.objectContaining({
-        path: expect.stringMatching(new RegExp(`^memories/${memoryId}/nodes/`)),
+        path: expect.stringMatching(new RegExp(`^buckets/${bucketId}/nodes/`)),
         name: 'log.txt',
         size: 42,
-        memory: { memoryId, nodeId: expect.any(String) },
+        bucket: { bucketId, nodeId: expect.any(String) },
       }),
     ]);
     const t = await T(b.id, ticketId);
@@ -105,9 +105,9 @@ describe('messagePost', () => {
     expect(await filesOf(b.id, ticketId)).toEqual([
       expect.objectContaining({
         id: m.attachments[0]!.id,
-        source: 'memory',
+        source: 'bucket',
         messageId: clientId,
-        memory: m.attachments[0]!.memory,
+        bucket: m.attachments[0]!.bucket,
       }),
     ]);
 
@@ -231,14 +231,14 @@ describe('messageEdit / messagePin / messageReact', () => {
     const { asha, priya, cora } = await people('asha', 'priya', 'cora');
     const b = await seedBoard({ admin: asha, editors: [priya], commenters: [cora] });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'x' });
-    const memoryId = await seedAttachMemory(b.id, asha);
-    const up = await putMemoryObject(s.files, memoryId, 'a.png');
+    const bucketId = await seedAttachBucket(b.id, asha);
+    const up = await putBucketObject(s.files, bucketId, 'a.png');
     const { messageId } = await call(cora, 'messagePost', {
       boardId: b.id,
       ticketId,
       clientId: uniq('c'),
       body: doc('hi ', { uid: priya.uid }),
-      memoryUploads: [{ memoryId, path: 'a.png', storagePath: up.storagePath }],
+      bucketUploads: [{ bucketId, path: 'a.png', storagePath: up.storagePath }],
     });
 
     s.notified.length = 0;
@@ -278,7 +278,7 @@ describe('messageEdit / messagePin / messageReact', () => {
       body: { text: '', mentions: [] },
     });
     expect((await filesOf(b.id, ticketId))[0]!.deletedAt).toEqual(expect.any(Number));
-    // memory.html §J: the file is the memory's — deleting the message keeps it.
+    // bucket.html §J: the file is the bucket's — deleting the message keeps it.
     expect(s.files.has(up.storagePath)).toBe(true);
     const t = await T(b.id, ticketId);
     expect(t.counts).toMatchObject({ files: 0, pinned: 0 });

@@ -5,7 +5,7 @@ description: How to build, run locally, publish and share a TaskManager artifact
 
 # TaskManager artifacts
 
-Version 1.6.0 · updated 2026-10-05 · this deployment: https://taskmanager-example.web.app
+Version 2.0.0 · updated 2026-10-15 · this deployment: https://taskmanager-example.web.app
 
 An **artifact** is a static website kept and served by TaskManager: you write the frontend, publish the
 folder, share it. It has its own people and its own data, and it is **not** on a board. People open it at
@@ -92,12 +92,12 @@ db.tickets    .boards()                        → granted boards: { key, name, 
               .update('ENG-42', patch)   .comment('ENG-42', markdown)
               Only boards the OWNER granted (Settings › Board access, read or read & write); always as the viewer.
 
-db.memory     .list()                          → granted memories: { id, name, description, icon, access: 'read'|'write', files, bytes }
-              .tree(memory, path?)             → [{ id, kind: 'folder'|'file', path, name, mime, size, updatedAt }]
-              .read(memory, 'docs/a.md')       → text (≤ 1 MB)      .url(memory, 'img/logo.png') → short-lived URL
-              .write(memory, path, text | Blob, { contentType? })   (≤ 10 MB, parents created)
-              .mkdir(memory, path)   .remove(memory, path)          (a folder goes with everything in it)
-              Only memories the OWNER granted (Settings › Memory, read or read & write); always as the viewer.
+db.bucket     .list()                          → granted buckets: { id, name, description, icon, access: 'read'|'write', files, bytes }
+              .tree(bucket, path?)             → [{ id, kind: 'folder'|'file', path, name, mime, size, updatedAt }]
+              .read(bucket, 'docs/a.md')       → text (≤ 1 MB)      .url(bucket, 'img/logo.png') → short-lived URL
+              .write(bucket, path, text | Blob, { contentType? })   (≤ 10 MB, parents created)
+              .mkdir(bucket, path)   .remove(bucket, path)          (a folder goes with everything in it)
+              Only buckets the OWNER granted (Settings › Bucket, read or read & write); always as the viewer.
 
 db.on('readonly' | 'revoked' | 'build', cb)    → unsubscribe()
 ```

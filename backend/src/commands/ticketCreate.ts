@@ -2,11 +2,11 @@
  * ticketCreate (app/backend.json services.ticketCreate).
  *
  *   can(create) → validate stage / priority / tags / fields / assignees
- *   → parseRichText(description) → memoryUploads' objects exist (memory.html §J;
+ *   → parseRichText(description) → bucketUploads' objects exist (bucket.html §J;
  *     `attachments` is retired and refused)
  *   transaction: allocateKey, ticket (rank = end of its column, watchers =
  *     actor + assignees), activity 'create', files/ rows, referencedBy on refs,
- *     and the memoryUploads' new memory nodes ('<ticketId>' = the new key)
+ *     and the bucketUploads' new bucket nodes ('<ticketId>' = the new key)
  *   after commit: notify created / assigned / mentioned; webhook ticket.created
  *
  * A retried create is one ticket: the runner replays by clientId, and a
@@ -26,8 +26,8 @@ import {
   withTicketId,
 } from '../tickets/access.js';
 import { refuseBoardAttachments } from '../tickets/attachments.js';
-import { resolveMemoryRefs } from '../memory/refs.js';
-import { planMemoryUploads, stageMemoryUploads, withUploads } from '../memory/attach.js';
+import { resolveBucketRefs } from '../bucket/refs.js';
+import { planBucketUploads, stageBucketUploads, withUploads } from '../bucket/attach.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
 import { allocateKey } from '../tickets/keys.js';
 import { toPublicTicket } from '../platform/public.js';
@@ -59,7 +59,7 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
   if (input.reporter && !intake)
     throw errors.invalid('reporter is set by the intake doors only', { field: 'reporter' });
   requireWritableBoard(board);
-  // memory.html §J: a board takes no files of its own any more.
+  // bucket.html §J: a board takes no files of its own any more.
   refuseBoardAttachments(input.attachments);
 
   // §Q3: no stage named → the board's FIRST stage by position (the leftmost
@@ -87,17 +87,17 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
     input.description && !isEmptyDoc(input.description)
       ? await parseBody(input.description, board, ctx, ticketId)
       : null;
-  // memory.html §E: memory files by reference (the memory must be granted to this board).
-  const memoryFiles = await resolveMemoryRefs(ctx, input.memoryRefs, board.id);
+  // bucket.html §E: bucket files by reference (the bucket must be granted to this board).
+  const bucketFiles = await resolveBucketRefs(ctx, input.bucketRefs, board.id);
   const byName = intake
     ? input.reporter?.name || input.reporter?.email || 'Intake'
     : await actorName(ctx, board.id);
-  // memory.html §J: files just uploaded INTO a memory. Their paths may hold
+  // bucket.html §J: files just uploaded INTO a bucket. Their paths may hold
   // '<ticketId>', and the key is only known inside the transaction (the
   // board's counter) — so they are planned THERE, from the key the counter
   // will give, and written in the same commit as the ticket. Staged last,
   // after every cheap refusal; a failure from here on removes them again.
-  const staged = await stageMemoryUploads(input.memoryUploads);
+  const staged = await stageBucketUploads(input.bucketUploads);
 
   const { ticket } = await withUploads(staged, () =>
     runTx(async (tx) => {
@@ -110,13 +110,13 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
       const targets = parsed ? await readRefTargets(tx, parsed.rich.refs, parsed.refAt) : [];
       // The key allocateKey will issue below (same counter, same transaction).
       const upcoming = ticketKey(fresh.key, fresh.nextNumber);
-      const plan = await planMemoryUploads(tx, ctx, staged, board.id, upcoming);
+      const plan = await planBucketUploads(tx, ctx, staged, board.id, upcoming);
 
       // ── writes ──
       const { key, number } = allocateKey(tx, boardRef(board.id), fresh, board.id, ticketId);
       if (key !== upcoming) throw new Error('allocateKey disagreed with the planned key');
       plan.write(tx);
-      const memoryRows = [...plan.attachments, ...memoryFiles];
+      const bucketRows = [...plan.attachments, ...bucketFiles];
       const fields0: Ticket = {
         key,
         number,
@@ -144,7 +144,7 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
         refs: targets.map((t) => t.id),
         referencedBy: [],
         links: [],
-        counts: { messages: 0, files: memoryRows.length, pinned: 0 },
+        counts: { messages: 0, files: bucketRows.length, pinned: 0 },
         lastMessageAt: null,
         lastActivityAt: ctx.now,
         dueNotified: {},
@@ -158,7 +158,7 @@ export default defineCommand('ticketCreate', async (ctx, input) => {
       // arrived with the description go inside the document being created.
       const doc = withInline(fields0, {
         activity: [{ ...activityDoc(ctx, 'create', {}), id: ctx.ids.id() }],
-        files: fileRows(memoryRows, 'memory', null, ctx.now),
+        files: fileRows(bucketRows, 'bucket', null, ctx.now),
       });
       tx.create(ticketRef(board.id, ticketId), doc);
       writeReferences(tx, ctx, { id: ticketId, key, boardId: board.id }, targets);

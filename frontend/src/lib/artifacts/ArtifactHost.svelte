@@ -42,10 +42,9 @@
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { switcherFor } from '$lib/workspaces/switcherStore';
-  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
-  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
+  import { switcherFor } from '$lib/orgs/switcherStore';
+  import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
+  import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import { createBroker, type Broker } from './broker';
   import { firebaseBackend } from './firebaseBackend';
   import {
@@ -60,10 +59,10 @@
   let { artifactId }: { artifactId: string } = $props();
 
   // The name is also a switcher, as a board's is (agents.html §AB3): every
-  // artifact — or, in a workspace that holds this one, that workspace's
-  // boards and artifacts — with "Workspace ›" before it.
-  const switchQ = $derived(switcherFor(auth.uid, { artifactId }, workspaceContext.id));
-  const workspace = $derived($switchQ.workspace);
+  // artifact — or, when an org of mine owns this one, that org's
+  // boards, artifacts and buckets — with "Org ›" before it.
+  const switchQ = $derived(switcherFor(auth.uid, { artifactId }));
+  const org = $derived($switchQ.org);
   const switchItems = $derived($switchQ.items);
 
   type Opened = CommandRes<'artifactOpen'>;
@@ -306,7 +305,7 @@
   >
     {#if !full}
       <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-        {#if workspace}<WorkspaceCrumb {workspace} />{/if}
+        {#if org}<OrgCrumb {org} />{/if}
         <TitleSwitcher
           kind="artifact"
           items={switchItems}

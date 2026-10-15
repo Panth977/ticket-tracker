@@ -1,14 +1,14 @@
 <!--
-  WHERE DO THESE FILES GO (memory.html §J). A board takes no files of its own:
-  a file put on a ticket goes INTO one of the memories granted `write` to the
+  WHERE DO THESE FILES GO (bucket.html §J). A board takes no files of its own:
+  a file put on a ticket goes INTO one of the buckets granted `write` to the
   board, at a path, and the ticket points at it. This dialog opens for every
   file added to the composer (📎, paste, drop) with:
-    · the memory — the board's attachment default when it has one;
+    · the bucket — the board's attachment default when it has one;
     · one path per file, filled from the board's template
       ('tickets/<ticketId>/<time>_<filename>') with the file's own name
       SELECTED, so typing renames it. Enter attaches.
   A path that is already taken is not an error: the server numbers the new
-  file ('name (2).png'). No memory to write to → it says so, and points an
+  file ('name (2).png'). No bucket to write to → it says so, and points an
   admin at Settings › Subscriptions.
 -->
 <script lang="ts">
@@ -17,10 +17,10 @@
   import { tick, untrack } from 'svelte';
   import { Brain, Loader2, Settings, X } from 'lucide-svelte';
   import {
-    MEMORY_DEFAULT_INDICATOR,
+    BUCKET_DEFAULT_INDICATOR,
     formatBytes,
     random6,
-    type BoardAttachMemory,
+    type BoardAttachBucket,
   } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { KIND_ICON, kindOf } from '$lib/files/kinds';
@@ -31,16 +31,16 @@
   import Select from '$lib/ui/Select.svelte';
   import {
     attachPathProblems,
-    defaultMemoryId,
+    defaultBucketId,
     prefillPath,
     attachLabel,
     type Prefill,
     resolveAttachPath,
     templateFor,
-    writeMemories,
-    type BoardMemoryOut,
+    writeBuckets,
+    type BoardBucketOut,
   } from './attach';
-  import { loadBoardMemories } from './boardMemories';
+  import { loadBoardBuckets } from './boardBuckets';
 
   interface Props {
     open: boolean;
@@ -48,13 +48,13 @@
     boardKey: string;
     /** The ticket's key (ENG-42): fills <ticketId>. */
     ticketKey: string;
-    attachMemory: BoardAttachMemory | null | undefined;
+    attachBucket: BoardAttachBucket | null | undefined;
     /** Board admins get a way to Settings › Subscriptions when there is nowhere to write. */
     isAdmin: boolean;
     files: File[];
     onattach: (a: {
-      memoryId: string;
-      memoryName: string;
+      bucketId: string;
+      bucketName: string;
       list: { file: File; path: string; label: string }[];
     }) => void;
   }
@@ -63,15 +63,15 @@
     boardId,
     boardKey,
     ticketKey,
-    attachMemory,
+    attachBucket,
     isAdmin,
     files,
     onattach,
   }: Props = $props();
 
-  let memories = $state<BoardMemoryOut[] | null>(null);
+  let buckets = $state<BoardBucketOut[] | null>(null);
   let failed = $state(false);
-  let memoryId = $state<string | null>(null);
+  let bucketId = $state<string | null>(null);
   let rows = $state<{ file: File; value: string; pre: Prefill }[]>([]);
   let first: HTMLInputElement | null = $state(null);
 
@@ -79,29 +79,29 @@
   $effect(() => {
     if (!open) return;
     untrack(() => {
-      memories = null;
+      buckets = null;
       failed = false;
-      memoryId = null;
+      bucketId = null;
       rows = [];
     });
-    loadBoardMemories(boardId, auth.uid)
+    loadBoardBuckets(boardId, auth.uid)
       .then((all) => {
-        const list = writeMemories(all, attachMemory);
-        memories = list;
-        memoryId = defaultMemoryId(list, attachMemory);
+        const list = writeBuckets(all, attachBucket);
+        buckets = list;
+        bucketId = defaultBucketId(list, attachBucket);
       })
       .catch(() => (failed = true));
   });
 
-  // Paths are (re)filled whenever the memory changes: its template applies.
+  // Paths are (re)filled whenever the bucket changes: its template applies.
   $effect(() => {
-    const id = memoryId;
+    const id = bucketId;
     if (!id) return;
     untrack(() => void fill(id));
   });
 
   async function fill(id: string) {
-    const template = templateFor(id, attachMemory);
+    const template = templateFor(id, attachBucket);
     const at = Date.now();
     const filled = files.map((file) => ({
       file,
@@ -118,7 +118,7 @@
   }
 
   const problems = $derived(attachPathProblems(rows.map((r) => r.value)));
-  const current = $derived(memories?.find((m) => m.id === memoryId) ?? null);
+  const current = $derived(buckets?.find((m) => m.id === bucketId) ?? null);
   const blocked = $derived(!current || !rows.length || problems.some((p) => p));
 
   function drop(i: number) {
@@ -134,7 +134,7 @@
       label: attachLabel(r.pre, r.value),
     }));
     open = false;
-    onattach({ memoryId: current.id, memoryName: current.name, list });
+    onattach({ bucketId: current.id, bucketName: current.name, list });
   }
 </script>
 
@@ -142,27 +142,27 @@
   bind:open
   title={files.length === 1 ? 'Attach a file' : `Attach ${files.length} files`}
   size="md"
-  description="Files on a ticket live in a memory; the ticket points at them. Edit a path to rename a file or put it elsewhere — folders are created, and a taken path gets a number."
+  description="Files on a ticket live in a bucket; the ticket points at them. Edit a path to rename a file or put it elsewhere — folders are created, and a taken path gets a number."
 >
   <div class="flex flex-col gap-4" data-attach-dialog>
-    {#if failed && !memories}
-      <p class="text-sm text-danger">Could not load this board's memories.</p>
-    {:else if memories === null}
+    {#if failed && !buckets}
+      <p class="text-sm text-danger">Could not load this board's buckets.</p>
+    {:else if buckets === null}
       <p class="flex items-center gap-2 text-sm text-muted">
         <Loader2 size={14} class="animate-spin" /> Loading…
       </p>
-    {:else if !memories.length}
+    {:else if !buckets.length}
       <div class="flex flex-col items-start gap-3 text-sm" data-attach-none>
         <p class="flex items-start gap-2">
           <Brain size={16} class="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
           <span>
-            Files put on a ticket go into a memory, and no memory is shared with this board for
+            Files put on a ticket go into a bucket, and no bucket is shared with this board for
             writing yet.
           </span>
         </p>
         {#if isAdmin}
           <p class="text-muted">
-            Add one of your memories to this board with <b>Write</b>, and pick it for ticket
+            Add one of your buckets to this board with <b>Write</b>, and pick it for ticket
             attachments.
           </p>
           <a
@@ -175,12 +175,12 @@
           </a>
         {:else}
           <p class="text-muted">
-            Ask a board admin to share a memory with this board for writing (Settings ›
+            Ask a board admin to share a bucket with this board for writing (Settings ›
             Subscriptions).
           </p>
         {/if}
         <p class="text-xs text-subtle">
-          “Attach from memory” still attaches files that are already in a memory.
+          “Attach from bucket” still attaches files that are already in a bucket.
         </p>
       </div>
     {:else}
@@ -190,14 +190,14 @@
         onsubmit={(e) => (e.preventDefault(), submit())}
       >
         <Select
-          label="Memory"
-          bind:value={memoryId}
-          options={memories.map((m) => ({
+          label="Bucket"
+          bind:value={bucketId}
+          options={buckets.map((m) => ({
             value: m.id,
-            label: `${m.name}${m.id === attachMemory?.memoryId ? ' (default)' : ''}`,
-            indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
+            label: `${m.name}${m.id === attachBucket?.bucketId ? ' (default)' : ''}`,
+            indicator: { of: m, seed: m.id, fallback: BUCKET_DEFAULT_INDICATOR },
           }))}
-          data-attach-memory
+          data-attach-bucket
         />
         <ul class="flex max-h-[50vh] flex-col gap-3 overflow-y-auto pr-1">
           {#each rows as r, i (r.file)}
@@ -244,7 +244,7 @@
   </div>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    {#if memories?.length}
+    {#if buckets?.length}
       <Button variant="primary" type="submit" form="ticket-attach" disabled={blocked}
         >Attach{rows.length > 1 ? ` ${rows.length}` : ''}</Button
       >

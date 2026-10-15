@@ -3,13 +3,13 @@
  * one ROW per document.
  *
  *   <dir>/root.sqlite                users, agents, invites, keys, the board
- *                                    and memory DOCUMENTS themselves, …
+ *                                    and bucket DOCUMENTS themselves, …
  *   <dir>/boards/<boardId>.sqlite    everything BELOW boards/<boardId>
  *                                    (tickets, messages, members, views, …)
- *   <dir>/memories/<memoryId>.sqlite everything below memories/<memoryId>
+ *   <dir>/buckets/<bucketId>.sqlite everything below buckets/<bucketId>
  *   <dir>/artifacts/<artifactId>.sqlite  everything below artifacts/<artifactId>
  *
- * So a board, a memory or an artifact (dashboard) is one file: deleting it
+ * So a board, a bucket or an artifact (dashboard) is one file: deleting it
  * is unlinking the file, backing one up is copying it.
  *
  * A table:  c_<collectionId> (parent, id, doc, v, ct, ut)
@@ -56,7 +56,7 @@ function sqlite(): DatabaseSyncCtor {
 }
 
 /** The shard kinds: a document of one of these collections owns a file for its subtree. */
-export const SHARD_KINDS = ['boards', 'memories', 'artifacts'] as const;
+export const SHARD_KINDS = ['boards', 'buckets', 'artifacts'] as const;
 export const ROOT = 'root';
 
 /** 'root' or '<kind>/<id>' for a document or collection path. */
@@ -262,7 +262,7 @@ export class Store {
     return existsSync(this.file(key)) ? this.shard(key) : undefined;
   }
 
-  /** Every shard that exists: root first, then each board / memory / artifact file. */
+  /** Every shard that exists: root first, then each board / bucket / artifact file. */
   all(): Shard[] {
     const keys = new Set<string>([ROOT, ...this.shards.keys()]);
     if (!this.memory) {
@@ -280,7 +280,7 @@ export class Store {
     return [...keys].map((k) => this.shard(k));
   }
 
-  /** Drop a whole shard (a board / memory / artifact subtree). */
+  /** Drop a whole shard (a board / bucket / artifact subtree). */
   drop(key: string): void {
     if (key === ROOT) throw new Error('The root shard is never dropped');
     const s = this.shards.get(key);

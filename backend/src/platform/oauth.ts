@@ -18,7 +18,7 @@
  */
 import {
   errors,
-  MEMORY_SCOPES,
+  BUCKET_SCOPES,
   OAUTH_TTL_MS,
   paths,
   SCOPES,
@@ -58,14 +58,14 @@ const IGNORED_SCOPES = new Set(['openid', 'profile', 'email', 'offline_access'])
 
 /**
  * Scopes added after people had already connected apps with "everything"
- * (memory.html §G). A grant counts as EVERYTHING when it says so (allScopes,
+ * (bucket.html §G). A grant counts as EVERYTHING when it says so (allScopes,
  * written from now on) or when it holds every scope except these — what
  * "everything" meant before they existed. Such a grant widens to the current
  * SCOPES at the next refresh, so a connected Claude app gets new tools
  * without being connected again. A grant that left anything out stays exactly
  * as narrow as it was.
  */
-const LATER_SCOPES: readonly Scope[] = [...MEMORY_SCOPES];
+const LATER_SCOPES: readonly Scope[] = [...BUCKET_SCOPES];
 export function grantIsEverything(grant: { allScopes?: unknown; scopes?: unknown }): boolean {
   if (grant.allScopes === true) return true;
   const had = new Set(normalizeScopes((grant.scopes ?? []) as readonly string[]).scopes);

@@ -264,24 +264,24 @@ defaulting to 30 days / 12 weeks / 12 months back — as `{ field, from, to, tot
 buckets: [{ key, total, count, tickets: { 'ENG-42': { total, count } } }] }`, oldest first, empty buckets
 left out. Outside TaskManager the mock's DEMO board has a sample thread and a month of buckets.
 
-**Memory files (`db.memory`).** A *memory* is a bucket of files — Markdown notes, images, video,
+**Bucket files (`db.bucket`).** A *bucket* is a bucket of files — Markdown notes, images, video,
 anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's
-**owner** grants it one of their memories in Settings › Memory (`memoryGrantSet`, or the MCP tool
-`memory_grant_set`), as **read** or **read & write**. Again a ceiling: the page reaches a memory only
+**owner** grants it one of their buckets in Settings › Bucket (`bucketGrantSet`, or the MCP tool
+`bucket_grant_set`), as **read** or **read & write**. Again a ceiling: the page reaches a bucket only
 as far as the person looking can reach it themselves, and writes need both a write grant and the
-viewer's own write access. Paths are relative to the memory (`docs/brand/logo.svg`); writing one
+viewer's own write access. Paths are relative to the bucket (`docs/brand/logo.svg`); writing one
 creates its missing folders.
 
 ```js
-const [brand] = await db.memory.list();                 // { id, name, access: 'read' | 'write', files, bytes }
-const nodes = await db.memory.tree(brand.id, 'docs');   // every folder and file under docs/
-const md = await db.memory.read(brand.id, 'docs/README.md');
-img.src = await db.memory.url(brand.id, 'logos/logo.png');
-await db.memory.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
-await db.memory.remove(brand.id, 'notes');                       // a folder goes with everything in it
+const [brand] = await db.bucket.list();                 // { id, name, access: 'read' | 'write', files, bytes }
+const nodes = await db.bucket.tree(brand.id, 'docs');   // every folder and file under docs/
+const md = await db.bucket.read(brand.id, 'docs/README.md');
+img.src = await db.bucket.url(brand.id, 'logos/logo.png');
+await db.bucket.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
+await db.bucket.remove(brand.id, 'notes');                       // a folder goes with everything in it
 ```
 
-The mock has one memory, `demo-memory`, with a `docs/README.md`.
+The mock has one bucket, `demo-bucket`, with a `docs/README.md`.
 
 The whole API:
 

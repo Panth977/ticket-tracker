@@ -13,12 +13,12 @@ import type {
 import type { CommandReq } from '@tm/shared';
 import {
   DEFAULT_ATTACH_TEMPLATE,
-  memoryStoragePath,
+  bucketStoragePath,
   paths,
   type Board,
   type BoardMember,
   type BoardRole,
-  type Memory,
+  type Bucket,
   type StageGrant,
 } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
@@ -29,13 +29,13 @@ export type RichTextDocInput = CommandReq<'ticketCreate'>['description'] & objec
 
 // ─── Storage ────────────────────────────────────────────────────────────────
 
-export interface MemoryFiles extends StorageFiles {
+export interface BucketFiles extends StorageFiles {
   put(path: string, size?: number, contentType?: string): void;
   has(path: string): boolean;
   paths(): string[];
 }
 
-export function memoryFiles(): MemoryFiles {
+export function bucketFiles(): BucketFiles {
   const objs = new Map<string, StoredObject>();
   return {
     put(path, size = 10, contentType = 'image/png') {
@@ -80,12 +80,12 @@ export function memoryFiles(): MemoryFiles {
 export interface Spies {
   notified: { event: NotifyEvent; ticketId: string | null; extra?: NotifyExtra }[];
   emitted: { boardId: string; event: WebhookEvent; data: unknown }[];
-  files: MemoryFiles;
+  files: BucketFiles;
 }
 
 /** Swap notify / emitWebhook / files for recorders (reset by setupEmulators' afterEach). */
 export function spyPorts(): Spies {
-  const s: Spies = { notified: [], emitted: [], files: memoryFiles() };
+  const s: Spies = { notified: [], emitted: [], files: bucketFiles() };
   setPorts({
     files: s.files,
     notify: async (event, ticket, _ctx, extra) => {
@@ -282,28 +282,28 @@ export function doc(
   };
 }
 
-// ─── memory.html §J: ticket attachments live in a memory ────────────────────
+// ─── bucket.html §J: ticket attachments live in a bucket ────────────────────
 
-export interface AttachMemoryOptions {
+export interface AttachBucketOptions {
   /** The grant to the board (default 'write'). */
   access?: 'read' | 'write';
-  /** Make it the board's attachMemory (default: when the grant is 'write'). */
+  /** Make it the board's attachBucket (default: when the grant is 'write'). */
   setDefault?: boolean;
   template?: string;
 }
 
 /**
- * A memory owned by `owner`, granted to the board, and (by default) set as the
- * board's attachment memory — seeded straight into Firestore, like seedBoard.
+ * A bucket owned by `owner`, granted to the board, and (by default) set as the
+ * board's attachment bucket — seeded straight into Firestore, like seedBoard.
  */
-export async function seedAttachMemory(
+export async function seedAttachBucket(
   boardId: string,
   owner: TestUser,
-  o: AttachMemoryOptions = {},
+  o: AttachBucketOptions = {},
 ): Promise<string> {
-  const memoryId = uniq('mem_');
+  const bucketId = uniq('mem_');
   const access = o.access ?? 'write';
-  const memory: Memory = {
+  const bucket: Bucket = {
     name: 'Attachments',
     description: '',
     icon: null,
@@ -318,26 +318,26 @@ export async function seedAttachMemory(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  await db().doc(paths.memory(memoryId)).set(memory);
+  await db().doc(paths.bucket(bucketId)).set(bucket);
   if (o.setDefault ?? access === 'write')
     await db()
       .doc(paths.board(boardId))
       .update({
-        attachMemory: { memoryId, template: o.template ?? DEFAULT_ATTACH_TEMPLATE },
+        attachBucket: { bucketId, template: o.template ?? DEFAULT_ATTACH_TEMPLATE },
       });
-  return memoryId;
+  return bucketId;
 }
 
-/** Bytes the app uploaded into a memory (the in-memory Storage port, or the real one). */
-export async function putMemoryObject(
+/** Bytes the app uploaded into a bucket (the in-memory Storage port, or the real one). */
+export async function putBucketObject(
   files: Pick<StorageFiles, 'write'>,
-  memoryId: string,
+  bucketId: string,
   name = 'shot.png',
   bytes: Uint8Array = new Uint8Array([1, 2, 3, 4]),
   contentType = 'image/png',
 ): Promise<{ storagePath: string; fileId: string }> {
   const fileId = uniq('f_');
-  const storagePath = memoryStoragePath(memoryId, fileId, name);
+  const storagePath = bucketStoragePath(bucketId, fileId, name);
   await files.write(storagePath, bytes, contentType);
   return { storagePath, fileId };
 }

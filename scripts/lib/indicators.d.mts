@@ -10,7 +10,7 @@ export interface KindCount {
 export interface Summary {
   boards: KindCount;
   artifacts: KindCount;
-  memories: KindCount;
+  buckets: KindCount;
   workspaces: KindCount;
   /** Board descriptions flattened from rich text. */
   descriptions: number;
@@ -19,7 +19,7 @@ export interface Summary {
   applied: {
     boards: number;
     artifacts: number;
-    memories: number;
+    buckets: number;
     workspaces: number;
     failed: { at: string; error: string }[];
   };
@@ -28,7 +28,7 @@ export interface Summary {
 export function planStages(S: Shared, stages: Doc[] | undefined | null): Doc[] | null;
 export function planBoard(S: Shared, board: Doc): Doc | null;
 export function planArtifact(S: Shared, artifact: Doc): Doc | null;
-export function planMemory(S: Shared, memory: Doc): Doc | null;
+export function planBucket(S: Shared, bucket: Doc): Doc | null;
 export function planWorkspace(S: Shared, workspace: Doc): Doc | null;
 export function migrateIndicators(
   deps: { S: Shared; db: any },

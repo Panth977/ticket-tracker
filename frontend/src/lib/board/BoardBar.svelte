@@ -38,10 +38,9 @@
   import type { Board, BoardPref, View, ViewInput, ViewType } from '@tm/shared';
   import { VIEW_TYPES } from '@tm/shared';
   import type { WithId } from '$lib/stores';
-  import { switcherFor } from '$lib/workspaces/switcherStore';
-  import WorkspaceCrumb from '$lib/workspaces/WorkspaceCrumb.svelte';
-  import TitleSwitcher from '$lib/workspaces/TitleSwitcher.svelte';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
+  import { switcherFor } from '$lib/orgs/switcherStore';
+  import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
+  import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import { auth } from '$lib/firebase/auth.svelte';
   import { aggCountersOf, cardChips } from '$lib/aggregates/fields';
   import Popover from '$lib/ui/Popover.svelte';
@@ -168,10 +167,10 @@
   });
 
   // The title is also the board switcher: every board I am on, this one marked —
-  // or, when I came here through a workspace that holds this board (§AB3),
-  // only that workspace's boards and artifacts.
-  const switchQ = $derived(switcherFor(auth.uid, { boardId: board.id }, workspaceContext.id));
-  const workspace = $derived($switchQ.workspace);
+  // or, when an org of mine owns this board (§AC), only that org's boards,
+  // artifacts and buckets.
+  const switchQ = $derived(switcherFor(auth.uid, { boardId: board.id }));
+  const org = $derived($switchQ.org);
   const boardItems = $derived($switchQ.items);
 </script>
 
@@ -180,9 +179,9 @@
 >
   <!-- The board IS the page title. -->
   <div class="flex min-w-0 items-center gap-2">
-    {#if workspace}
-      <!-- §AB3: where I came from; one click back to the workspace page. -->
-      <WorkspaceCrumb {workspace} />
+    {#if org}
+      <!-- §AC: who owns it; one click to the org's page. -->
+      <OrgCrumb {org} />
     {/if}
     <TitleSwitcher
       kind="board"

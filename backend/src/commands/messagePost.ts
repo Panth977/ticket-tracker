@@ -2,9 +2,9 @@
  * messagePost (app/backend.json services.messagePost).
  *
  *   can(comment); ticket state 'active' (closed tickets have closed threads → 409)
- *   body = parseRichText(body); `attachments` is retired (memory.html §J) and
- *   refused; memoryUploads become NEW files in a memory granted `write` to the
- *   board, in the same transaction as the message (memory/attach.ts)
+ *   body = parseRichText(body); `attachments` is retired (bucket.html §J) and
+ *   refused; bucketUploads become NEW files in a bucket granted `write` to the
+ *   board, in the same transaction as the message (bucket/attach.ts)
  *   ONE write on the ticket document (§W): recentMessages += the message
  *     (spilling the oldest chunk into data/{NNN} if that pushes it over the
  *     cut); files += rows (source 'message'); counts.messages++ /
@@ -82,8 +82,8 @@ import {
   requireWritableBoard,
   withTicketId,
 } from '../tickets/access.js';
-import { resolveMemoryRefs } from '../memory/refs.js';
-import { planMemoryUploads, stageMemoryUploads, withUploads } from '../memory/attach.js';
+import { resolveBucketRefs } from '../bucket/refs.js';
+import { planBucketUploads, stageBucketUploads, withUploads } from '../bucket/attach.js';
 import { refuseBoardAttachments } from '../tickets/attachments.js';
 import { attachUploadedFiles, readUploadedFiles } from '../tickets/files.js';
 import { openTicket } from '../tickets/doc.js';
@@ -148,7 +148,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
   requireCan(ctx, board, 'comment');
   requireWritableBoard(board);
 
-  // memory.html §J: a board takes no files of its own any more.
+  // bucket.html §J: a board takes no files of its own any more.
   refuseBoardAttachments(input.attachments);
 
   const receipt = input.run ?? null;
@@ -167,8 +167,8 @@ export default defineCommand('messagePost', async (ctx, input) => {
     empty &&
     !isAgg &&
     !input.fileIds?.length &&
-    !input.memoryRefs?.length &&
-    !input.memoryUploads?.length
+    !input.bucketRefs?.length &&
+    !input.bucketUploads?.length
   )
     throw errors.invalid('Write something or attach a file', { field: 'body' });
   // An entry with nothing said gets words of its own (notifications and email need text).
@@ -178,14 +178,14 @@ export default defineCommand('messagePost', async (ctx, input) => {
     : empty
       ? { rich: EMPTY_RICH, refAt: new Map() }
       : await parseBody(input.body, board, ctx, ticketId);
-  // memory.html §E: memory files by reference (the memory must be granted to this board).
-  const memoryFiles = await resolveMemoryRefs(ctx, input.memoryRefs, boardId);
+  // bucket.html §E: bucket files by reference (the bucket must be granted to this board).
+  const bucketFiles = await resolveBucketRefs(ctx, input.bucketRefs, boardId);
   const fileIds = [...new Set(input.fileIds ?? [])];
   const byName = await actorName(ctx, boardId);
-  // memory.html §J: files just uploaded INTO a memory become new nodes there —
+  // bucket.html §J: files just uploaded INTO a bucket become new nodes there —
   // planned and written in the transaction below, with the message. Staged
   // last, after every cheap refusal; a failure from here on removes them again.
-  const staged = await stageMemoryUploads(input.memoryUploads);
+  const staged = await stageBucketUploads(input.bucketUploads);
 
   const res = await withUploads(staged, () =>
     runTx(async (tx) => {
@@ -204,8 +204,8 @@ export default defineCommand('messagePost', async (ctx, input) => {
       if (input.replyTo && !(await w.locate(input.replyTo)))
         throw errors.invalid('The quoted message does not exist', { field: 'replyTo' });
       const posted = readUploadedFiles(w, fileIds);
-      const plan = await planMemoryUploads(tx, ctx, staged, boardId, ticket.key);
-      const attachments = [...plan.attachments, ...posted.map((f) => f.attachment), ...memoryFiles];
+      const plan = await planBucketUploads(tx, ctx, staged, boardId, ticket.key);
+      const attachments = [...plan.attachments, ...posted.map((f) => f.attachment), ...bucketFiles];
       const newRefs = parsed.rich.refs.filter((r) => !ticket.refs.includes(r));
       const targets = await readRefTargets(tx, newRefs, parsed.refAt);
       // aggregates.html: entries move the board's counters and the period
@@ -258,8 +258,8 @@ export default defineCommand('messagePost', async (ctx, input) => {
       };
       w.addMessage(messageId, message);
       plan.write(tx);
-      const refRows = [...plan.attachments, ...memoryFiles];
-      if (refRows.length) w.addFiles(fileRows(refRows, 'memory', messageId, ctx.now));
+      const refRows = [...plan.attachments, ...bucketFiles];
+      if (refRows.length) w.addFiles(fileRows(refRows, 'bucket', messageId, ctx.now));
       attachUploadedFiles(w, posted, messageId);
       w.set({ watcherUids: [...new Set([...ticket.watcherUids, ctx.actor])] });
       if (targets.length)

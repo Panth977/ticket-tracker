@@ -75,7 +75,7 @@ The run book with every environment variable, the Firebase console steps and the
 
 ### Or on your own VM, with Docker
 
-The same app runs as one container on one port, with no Firebase project. Every Firebase service has a local adapter, picked by `TM_PLATFORM=vm`: SQLite files for the documents (one per board, memory and artifact, plus a root file), a JSON tree for the realtime data, the disk for files, the server's own sign-in (email links, passwords, Google and Microsoft), and in-process task queues and schedules. The same `firestore.rules`, `storage.rules` and `database.rules.json` guard it.
+The same app runs as one container on one port, with no Firebase project. Every Firebase service has a local adapter, picked by `TM_PLATFORM=vm`: SQLite files for the documents (one per board, bucket and artifact, plus a root file), a JSON tree for the realtime data, the disk for files, the server's own sign-in (email links, passwords, Google and Microsoft), and in-process task queues and schedules. The same `firestore.rules`, `storage.rules` and `database.rules.json` guard it.
 
 ```bash
 cp .env.vm.example .env.vm      # set APP_URL; add SMTP_URL to send mail

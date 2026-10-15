@@ -7,7 +7,7 @@
  *     icon; rich-text description → plain text (Markdown); every stage gets an
  *     indicator from its colour (stage descriptions stay absent);
  *   · every artifact: its emoji icon, else a palette colour;
- *   · every memory: its emoji icon, else 🧠 (the old default);
+ *   · every bucket: its emoji icon, else 🧠 (the old default);
  *   · every person's workspace (users/{uid}/workspaces): its colour.
  *
  * The logic is scripts/lib/indicators.mjs (unit + emulator tested). Nothing

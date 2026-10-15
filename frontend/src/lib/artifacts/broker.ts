@@ -52,7 +52,7 @@ import {
   type WhereOp,
 } from '@tm/shared';
 import { createTicketOps, isTicketOp, type TicketBackend } from './brokerTickets';
-import { createMemoryOps, isMemoryOp, type MemoryBackend } from './brokerMemory';
+import { createBucketOps, isBucketOp, type BucketBackend } from './brokerBucket';
 import { fromStored, isPlainObject, toStored, toStoredObject, type WriteCodec } from './convert';
 
 export const LIST_LIMIT_DEFAULT = 100;
@@ -129,8 +129,8 @@ export interface BrokerBackend {
   };
   /** §K: boards' tickets, as the viewer (./brokerTickets). */
   tickets: TicketBackend;
-  /** memory.html §H: granted memories, as the viewer (./brokerMemory). None = no memories. */
-  memory?: MemoryBackend;
+  /** bucket.html §H: granted buckets, as the viewer (./brokerBucket). None = no buckets. */
+  bucket?: BucketBackend;
 }
 
 /** Anything with postMessage — the iframe's contentWindow. */
@@ -436,10 +436,10 @@ export function createBroker(o: BrokerOptions): Broker {
     },
   });
 
-  const memory = backend.memory
-    ? createMemoryOps({
+  const bucket = backend.bucket
+    ? createBucketOps({
         artifactId: id,
-        backend: backend.memory,
+        backend: backend.bucket,
         fail: (code, message) => {
           throw new BrokerError(code, message);
         },
@@ -449,12 +449,12 @@ export function createBroker(o: BrokerOptions): Broker {
 
   async function run(op: DriverOp, reqId: string, a: Record<string, unknown>): Promise<unknown> {
     if (isTicketOp(op)) return tickets.run(op, reqId, a);
-    if (isMemoryOp(op)) {
-      if (!memory) {
+    if (isBucketOp(op)) {
+      if (!bucket) {
         if (op === 'mem.list') return [];
-        throw new BrokerError('permission-denied', 'This artifact has no access to memory');
+        throw new BrokerError('permission-denied', 'This artifact has no access to bucket');
       }
-      return memory.run(op, a);
+      return bucket.run(op, a);
     }
     const { fs, rtdb } = backend;
     switch (op) {

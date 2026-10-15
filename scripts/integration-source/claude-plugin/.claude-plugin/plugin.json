@@ -9,7 +9,7 @@
   "homepage": "{{url:claudeUrl}}",
   "repository": "{{url:pluginDirUrl}}",
   "license": "UNLICENSED",
-  "keywords": ["taskmanager", "tickets", "boards", "issues", "mcp", "memory"],
+  "keywords": ["taskmanager", "tickets", "boards", "issues", "mcp", "bucket"],
   "mcpServers": {
     "taskmanager": {
       "type": "http",

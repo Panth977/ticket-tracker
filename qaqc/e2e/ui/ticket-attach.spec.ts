@@ -1,12 +1,12 @@
 /**
- * TICKET ATTACHMENTS LIVE IN A MEMORY, end to end (docs/plan/memory.html §J).
+ * TICKET ATTACHMENTS LIVE IN A BUCKET, end to end (docs/plan/bucket.html §J).
  *
- *   · an admin grants a memory `write` to a board and, in Settings › Subscriptions ›
+ *   · an admin grants a bucket `write` to a board and, in Settings › Subscriptions ›
  *     Ticket attachments, makes it the default with a path template
  *   · a COMMENTER adds a file in a ticket thread → the attach dialog starts on
- *     that memory with the path filled in and the file's name selected; typing
- *     renames it; Send uploads it INTO the memory and the message points at it
- *   · a board with no memory to write to says so (and admins get a way there)
+ *     that bucket with the path filled in and the file's name selected; typing
+ *     renames it; Send uploads it INTO the bucket and the message points at it
+ *   · a board with no bucket to write to says so (and admins get a way there)
  */
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -21,16 +21,16 @@ import {
 } from '../support/stack.js';
 import { signIn, subscribe } from '../support/ui.js';
 
-async function nodeByPath(memoryId: string, path: string) {
+async function nodeByPath(bucketId: string, path: string) {
   const q = await admin()
-    .db.collection(`memories/${memoryId}/nodes`)
+    .db.collection(`buckets/${bucketId}/nodes`)
     .where('path', '==', path)
     .get();
   return q.docs[0]?.data() ?? null;
 }
 
-async function memoryFiles(memoryId: string): Promise<string[]> {
-  const q = await admin().db.collection(`memories/${memoryId}/nodes`).get();
+async function bucketFiles(bucketId: string): Promise<string[]> {
+  const q = await admin().db.collection(`buckets/${bucketId}/nodes`).get();
   return q.docs
     .map((d) => d.data() as { path: string; kind: string })
     .flatMap((n) => (n.kind === 'file' ? [n.path] : []));
@@ -44,7 +44,7 @@ async function attachWithClip(page: Page, name: string, text: string) {
   await (await chooser).setFiles({ name, mimeType: 'text/plain', buffer: Buffer.from(text) });
 }
 
-test('§J: the board default memory + template; a commenter attaches into it', async ({
+test('§J: the board default bucket + template; a commenter attaches into it', async ({
   page,
   browser,
 }) => {
@@ -53,15 +53,15 @@ test('§J: the board default memory + template; a commenter attaches into it', a
   const eng = await newBoard(ada, { name: 'Engineering' });
   await inviteAndAccept(ada, eng.id, grace, 'commenter');
   const { ticketId, key } = await call(ada, 'ticketCreate', { boardId: eng.id, title: 'Notes' });
-  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Ticket files' });
+  const { bucketId } = await call(ada, 'bucketCreate', { name: 'Ticket files' });
 
   // ── the admin: grant write, then make it the attachment default ──────────
   await signIn(page, ada.email, `/b/${eng.key}/settings/subscriptions`);
-  await subscribe(page, 'board', `memory:${memoryId}`, ['read', 'write']);
-  await expect(page.locator(`[data-subscription="memory:${memoryId}"]`)).toContainText('Write');
+  await subscribe(page, 'board', `bucket:${bucketId}`, ['read', 'write']);
+  await expect(page.locator(`[data-subscription="bucket:${bucketId}"]`)).toContainText('Write');
   const box = page.locator('[data-attach-settings]');
-  const select = box.locator('select[data-attach-memory-select]');
-  await expect(select).toHaveValue(memoryId);
+  const select = box.locator('select[data-attach-bucket-select]');
+  await expect(select).toHaveValue(bucketId);
   // Build the template with the chips (they insert at the cursor).
   const template = box.getByLabel('Path');
   await template.fill('tickets/');
@@ -82,15 +82,15 @@ test('§J: the board default memory + template; a commenter attaches into it', a
   await template.fill('tickets/<ticketId>/<time>_<filename>');
   await box.getByRole('button', { name: 'Save' }).click();
   await eventually('the board default is stored', async () => {
-    const b = await read<{ attachMemory?: { memoryId: string; template: string } | null }>(
+    const b = await read<{ attachBucket?: { bucketId: string; template: string } | null }>(
       `boards/${eng.id}`,
     );
-    return b?.attachMemory?.memoryId === memoryId &&
-      b.attachMemory.template === 'tickets/<ticketId>/<time>_<filename>'
+    return b?.attachBucket?.bucketId === bucketId &&
+      b.attachBucket.template === 'tickets/<ticketId>/<time>_<filename>'
       ? true
       : null;
   });
-  await expect(page.locator(`[data-subscription="memory:${memoryId}"]`)).toContainText(
+  await expect(page.locator(`[data-subscription="bucket:${bucketId}"]`)).toContainText(
     'ticket attachments go here',
   );
 
@@ -100,7 +100,7 @@ test('§J: the board default memory + template; a commenter attaches into it', a
   await signIn(gp, grace.email, `/t/${key}`);
   await attachWithClip(gp, 'notes.txt', 'meeting notes');
   const dlg = gp.getByRole('dialog', { name: 'Attach a file' });
-  await expect(dlg.locator('select[data-attach-memory]')).toHaveValue(memoryId);
+  await expect(dlg.locator('select[data-attach-bucket]')).toHaveValue(bucketId);
   const path = dlg.getByLabel('Path for notes.txt');
   await expect(path).toHaveValue(new RegExp(`^/tickets/${key}/\\d{8}-\\d{6}_notes\\.txt$`));
   await expect(path).toBeFocused();
@@ -119,40 +119,40 @@ test('§J: the board default memory + template; a commenter attaches into it', a
   await expect(reply.getByRole('list', { name: 'Attachments' })).toContainText('meeting-notes.txt');
   await reply.getByRole('button', { name: 'Send' }).click();
 
-  // In the memory at that path, and on the message as a memory file.
+  // In the bucket at that path, and on the message as a bucket file.
   const memPath = typed.slice(1);
-  await eventually('the file is in the memory', () => nodeByPath(memoryId, memPath), 30_000);
+  await eventually('the file is in the bucket', () => nodeByPath(bucketId, memPath), 30_000);
   const msg = await eventually('the message with its file', async () =>
     (await messagesOf(eng.id, ticketId)).find((m) => m.attachments?.length),
   );
-  // The ticket shows the name as typed; the memory keeps the templated one.
-  expect(msg.attachments[0]).toMatchObject({ name: 'meeting-notes.txt', memory: { memoryId } });
+  // The ticket shows the name as typed; the bucket keeps the templated one.
+  expect(msg.attachments[0]).toMatchObject({ name: 'meeting-notes.txt', bucket: { bucketId } });
   await expect(
     gp.locator('[data-kind]').filter({ hasText: 'meeting-notes.txt' }).last(),
   ).toBeVisible();
   // Nothing went under the board.
-  expect(await memoryFiles(memoryId)).toEqual([memPath]);
+  expect(await bucketFiles(bucketId)).toEqual([memPath]);
   await ctx.close();
 });
 
-test('§J: a board with no memory to write to says so', async ({ page, browser }) => {
+test('§J: a board with no bucket to write to says so', async ({ page, browser }) => {
   const ada = await newPerson('Ada');
   const grace = await newPerson('Grace');
   const eng = await newBoard(ada, { name: 'Engineering' });
   await inviteAndAccept(ada, eng.id, grace, 'commenter');
   const { key } = await call(ada, 'ticketCreate', { boardId: eng.id, title: 'Nowhere' });
   // Granted READ only: still nowhere to put files.
-  const { memoryId } = await call(ada, 'memoryCreate', { name: 'Read only' });
-  await call(ada, 'memoryGrantSet', { memoryId, boardId: eng.id, access: 'read' });
+  const { bucketId } = await call(ada, 'bucketCreate', { name: 'Read only' });
+  await call(ada, 'bucketGrantSet', { bucketId, boardId: eng.id, access: 'read' });
 
   // An admin is pointed at Settings › Subscriptions.
   await signIn(page, ada.email, `/t/${key}`);
   await attachWithClip(page, 'a.txt', 'a');
   const dlg = page.getByRole('dialog', { name: 'Attach a file' });
-  await expect(dlg.locator('[data-attach-none]')).toContainText('no memory is shared');
+  await expect(dlg.locator('[data-attach-none]')).toContainText('no bucket is shared');
   await dlg.locator('[data-attach-settings]').click();
   await page.waitForURL(new RegExp(`/b/${eng.key}/settings/subscriptions$`));
-  await expect(page.locator('[data-attach-empty]')).toContainText('Add a memory above with Write');
+  await expect(page.locator('[data-attach-empty]')).toContainText('Add a bucket above with Write');
 
   // Anyone else is told to ask an admin.
   const ctx = await browser.newContext();

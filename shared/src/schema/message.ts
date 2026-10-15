@@ -175,7 +175,7 @@ export const TicketFileSchema = AttachmentSchema.extend({
    * MCP upload_file) and not (yet) posted in a message; messagePost's fileIds
    * then attaches it (source → 'message', messageId set).
    */
-  source: z.enum(['description', 'message', 'upload', 'memory']),
+  source: z.enum(['description', 'message', 'upload', 'bucket']),
   /** Jump to where it was posted. */
   messageId: z.string().nullable(),
   createdAt: MillisSchema,

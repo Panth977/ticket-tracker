@@ -2,6 +2,7 @@
  * Board, invite, view and tag commands (app/backend.json services).
  */
 import { z } from 'zod';
+import { OwnerRefSchema } from '../org/owner.js';
 import { BoardPrefSchema, BoardSettingsSchema, ViewSchema } from '../schema/board.js';
 import {
   BoardIdSchema,
@@ -71,6 +72,9 @@ export const inviteAccept = defineCommand({
      * ARTIFACT_INVITE_BOARD_ID / _KEY and name no board.
      */
     artifactId: ArtifactIdSchema.optional(),
+    /** Set when the invite was to an ORG (§AC): go to /{handle}. */
+    orgId: z.string().optional(),
+    orgHandle: z.string().optional(),
   }),
 });
 
@@ -115,6 +119,8 @@ export const boardCreate = defineCommand({
     indicator: IndicatorSchema.optional(),
     /** indicators.html: plain text — what this board is for (agents read it). */
     description: DescriptionSchema.optional(),
+    /** §AC: who owns it — you (default) or an org you belong to. */
+    owner: OwnerRefSchema.optional(),
   }),
   res: z.object({ boardId: BoardIdSchema }),
 });

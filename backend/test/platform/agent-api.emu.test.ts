@@ -17,14 +17,14 @@ import {
   paths,
   SCOPE_PRESETS,
   type ApiKey,
-  type MemoryNode,
+  type BucketNode,
   type Message,
   type TicketFile,
 } from '@tm/shared';
 import { createApp } from '../../src/http/app.js';
 import { db } from '../../src/runtime/firebase.js';
 import { request, setupEmulators } from '../harness/index.js';
-import { memoryFiles, people, seedAttachMemory, seedBoard, STAGES } from '../tickets/helpers.js';
+import { bucketFiles, people, seedAttachBucket, seedBoard, STAGES } from '../tickets/helpers.js';
 import { fileOf, msgsOf } from '../tickets/store.js';
 import { setPorts } from '../harness/index.js';
 import {
@@ -47,7 +47,7 @@ const messagePostTakesFileIds = readFileSync(
 
 /** In-memory Storage that really keeps bytes (the upload → read round trip). */
 function bytesFiles() {
-  const base = memoryFiles();
+  const base = bucketFiles();
   const blobs = new Map<string, Uint8Array>();
   const files = {
     ...base,
@@ -243,11 +243,11 @@ describe('REST /v1 with an agent token', () => {
       key: string;
       id: string;
     };
-    // memory.html §J: the board has no attachment memory yet → 400, nothing stored.
+    // bucket.html §J: the board has no attachment bucket yet → 400, nothing stored.
     const none = await rest(key, 'POST', `/v1/tickets/${t.key}/files`, { name: 'a.md', text: 'a' });
     expect(none.status).toBe(400);
     expect(JSON.stringify(none.body)).toContain('board settings');
-    const memoryId = await seedAttachMemory(b.id, owner, {
+    const bucketId = await seedAttachBucket(b.id, owner, {
       template: 'tickets/<ticketId>/<filename>',
     });
 
@@ -318,18 +318,18 @@ describe('REST /v1 with an agent token', () => {
       source: 'upload',
       messageId: null,
       uploadedBy: agentId,
-      memory: { memoryId, nodeId: expect.any(String) },
+      bucket: { bucketId, nodeId: expect.any(String) },
     });
-    // It is a file of the memory, at the board's template.
+    // It is a file of the bucket, at the board's template.
     const node = (
-      await db().doc(paths.memoryNode(memoryId, row.memory!.nodeId)).get()
-    ).data() as MemoryNode;
+      await db().doc(paths.bucketNode(bucketId, row.bucket!.nodeId)).get()
+    ).data() as BucketNode;
     expect(node.path).toBe(`tickets/${t.key}/plan.md`);
-    // memory_id / path in the body (and as multipart fields).
+    // bucket_id / path in the body (and as multipart fields).
     const placed = await rest(key, 'POST', `/v1/tickets/${t.key}/files`, {
       name: 'notes.md',
       text: 'n',
-      memory_id: memoryId,
+      bucket_id: bucketId,
       path: 'agent-notes/<ticketId>/notes.md',
     });
     expect(placed.status).toBe(201);
@@ -343,8 +343,8 @@ describe('REST /v1 with an agent token', () => {
     });
     expect(placed2.status).toBe(201);
     const paths2 = (
-      await db().collection(paths.memoryNodes(memoryId)).where('kind', '==', 'file').get()
-    ).docs.map((d) => (d.data() as MemoryNode).path);
+      await db().collection(paths.bucketNodes(bucketId)).where('kind', '==', 'file').get()
+    ).docs.map((d) => (d.data() as BucketNode).path);
     expect(paths2).toEqual(
       expect.arrayContaining([`agent-notes/${t.key}/notes.md`, 'agent-notes/m.md']),
     );
@@ -526,7 +526,7 @@ describe('MCP with an agent token', () => {
   it('whoami → list_my_tickets → upload .md and .html → post_message → get_events / ack_events', async () => {
     bytesFiles();
     const { owner, b, agentId, agent } = await agentBoard();
-    const memoryId = await seedAttachMemory(b.id, owner); // memory.html §J
+    const bucketId = await seedAttachBucket(b.id, owner); // bucket.html §J
     const { key: ownerKey } = await apiKeyFor(owner, [...SCOPE_PRESETS.everything], b.id);
     const t = (
       await rest(ownerKey, 'POST', '/v1/tickets', { title: 'Design doc', assignees: [agentId] })
@@ -591,19 +591,19 @@ describe('MCP with an agent token', () => {
       }),
     );
     expect([md.kind, html.kind]).toEqual(['markdown', 'html']);
-    const placed = parsed<{ fileId: string; memory: { memory_id: string } }>(
+    const placed = parsed<{ fileId: string; bucket: { bucket_id: string } }>(
       await client.callTool({
         name: 'upload_file',
         arguments: {
           key: t.key,
           name: 'n.md',
           text: 'n',
-          memory_id: memoryId,
+          bucket_id: bucketId,
           path: 'mcp/<ticketId>/n.md',
         },
       }),
     );
-    expect(placed.memory.memory_id).toBe(memoryId);
+    expect(placed.bucket.bucket_id).toBe(bucketId);
     const bad = await client.callTool({
       name: 'upload_file',
       arguments: { key: t.key, name: 'x.md' },
@@ -693,6 +693,10 @@ describe('MCP with an agent token', () => {
         'list_views',
         // ticketWatch's spec scope is tickets:read: watching is the reader's own subscription.
         'ticket_watch',
+        // agents.html §AC: env, orgs and owner paths are reads.
+        'env_get',
+        'list_orgs',
+        'path_resolve',
       ]).toContain(n);
     expect(names).not.toContain('post_message');
     await client.close();

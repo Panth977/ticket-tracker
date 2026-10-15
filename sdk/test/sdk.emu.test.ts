@@ -18,7 +18,7 @@ import {
   seedAgent,
   seedAgentEvent,
 } from '../../backend/test/platform/helpers.js';
-import { people, seedAttachMemory, seedBoard } from '../../backend/test/tickets/helpers.js';
+import { people, seedAttachBucket, seedBoard } from '../../backend/test/tickets/helpers.js';
 import { createClient, type TmClient } from '../src/client.js';
 import { mcpTools, registerTools } from '../src/mcp.js';
 import { TmError } from '../src/errors.js';
@@ -46,14 +46,14 @@ interface Scene {
 }
 
 let scene: Scene;
-let attachMemoryId = '';
+let attachBucketId = '';
 
 beforeAll(async () => {
   const f = await appFetch();
   const { owner, priya } = await people('owner', 'priya');
   const board = await seedBoard({ admin: owner, editors: [priya] });
-  // memory.html §J: uploads go into the board's attachment memory.
-  attachMemoryId = await seedAttachMemory(board.id, owner);
+  // bucket.html §J: uploads go into the board's attachment bucket.
+  attachBucketId = await seedAttachBucket(board.id, owner);
   const { id: agentId } = await seedAgent(owner, {
     name: `Builder ${Date.now()}`,
     boardId: board.id,
@@ -188,15 +188,15 @@ describe('messages and files', () => {
     expect(file.size).toBe(bytes.length);
   });
 
-  it('uploads into a named memory at a path (1.5.0)', async () => {
+  it('uploads into a named bucket at a path (1.5.0)', async () => {
     const file = await scene.tm.files.upload(scene.ticketKey, {
       name: 'notes.md',
       text: '# n',
-      memoryId: attachMemoryId,
+      bucketId: attachBucketId,
       path: 'sdk/<ticketId>/notes.md',
     });
     expect(file.source).toBe('upload');
-    expect(file.memory?.memory_id).toBe(attachMemoryId);
+    expect(file.bucket?.bucket_id).toBe(attachBucketId);
   });
 
   it('is idempotent: the same key posts one message', async () => {

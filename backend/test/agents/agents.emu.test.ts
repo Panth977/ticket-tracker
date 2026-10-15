@@ -16,7 +16,7 @@ import {
 } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { call, setPorts, setupEmulators } from '../harness/index.js';
-import { getDocData, memoryFiles, people, seedBoard, STAGES } from '../tickets/helpers.js';
+import { getDocData, bucketFiles, people, seedBoard, STAGES } from '../tickets/helpers.js';
 import { msgOf } from '../tickets/store.js';
 import { apiKeyOf, asAgent, makeAgent, seedAgentToken } from './helpers.js';
 
@@ -51,7 +51,7 @@ describe('agentCreate', () => {
   });
 
   it('takes a client-chosen id (409 when taken) and an avatar uploaded under it', async () => {
-    const files = memoryFiles();
+    const files = bucketFiles();
     setPorts({ files });
     const { asha } = await people('asha');
     const agentId = 'ag_' + Math.random().toString(36).slice(2, 10).padEnd(8, 'x') + 'AbCd1234';
@@ -74,7 +74,7 @@ describe('agentCreate', () => {
   });
 
   it('refuses avatars outside the agent prefix, missing, or not images', async () => {
-    const files = memoryFiles();
+    const files = bucketFiles();
     setPorts({ files });
     const { asha, vic } = await people('asha', 'vic');
     const agentId = 'ag_' + 'Qz' + Math.random().toString(36).slice(2, 12).padEnd(10, 'y') + 'Zz12';
@@ -273,7 +273,7 @@ describe('boardAgentSet', () => {
 
 describe('agentUpdate', () => {
   it('copies name / picture / description to every board, deletes the old picture', async () => {
-    const files = memoryFiles();
+    const files = bucketFiles();
     setPorts({ files });
     const { asha } = await people('asha');
     const b1 = await seedBoard({ admin: asha });
@@ -309,7 +309,7 @@ describe('agentUpdate', () => {
   });
 
   it('icon: set, copied to every board, cleared with null; the picture stays', async () => {
-    const files = memoryFiles();
+    const files = bucketFiles();
     setPorts({ files });
     const { asha } = await people('asha');
     const b1 = await seedBoard({ admin: asha });

@@ -16,7 +16,7 @@ export interface ScopeGroup {
     | 'boards'
     | 'agents'
     | 'artifacts'
-    | 'memory';
+    | 'bucket';
   label: string;
   hint: string;
   scopes: Scope[];
@@ -79,10 +79,10 @@ export const SCOPE_GROUPS: ScopeGroup[] = [
     scopes: ['artifacts:read', 'artifacts:write'],
   },
   {
-    id: 'memory',
-    label: 'Can read and change your memory',
-    hint: 'Browse memory files; create memories, upload, edit, move and delete files',
-    scopes: ['memory:read', 'memory:write'],
+    id: 'bucket',
+    label: 'Can read and change your bucket',
+    hint: 'Browse bucket files; create buckets, upload, edit, move and delete files',
+    scopes: ['bucket:read', 'bucket:write'],
   },
 ];
 

@@ -2,9 +2,9 @@
  * Attachment uploads: "upload direct, attach through a command" (storage.rules).
  * The browser writes the file straight to the Storage path it is given, with
  * progress; a command later names the path and the server checks the object.
- * A ticket's files go INTO a memory (memory.html §J): the path is
- *   memories/{memoryId}/{fileId}/{fileName}   with metadata { boardId }
- * and messagePost's memoryUploads makes it a file in the memory. An upload
+ * A ticket's files go INTO a bucket (bucket.html §J): the path is
+ *   buckets/{bucketId}/{fileId}/{fileName}   with metadata { boardId }
+ * and messagePost's bucketUploads makes it a file in the bucket. An upload
  * never attached is swept, so cancelling one needs no cleanup here.
  */
 import { ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
@@ -23,9 +23,9 @@ export interface UploadItem {
   status: UploadStatus;
   /** Storage path of the bytes. */
   path: string;
-  /** memory.html §J: the memory the file goes into, and its path there. */
-  memoryId?: string;
-  memoryPath?: string;
+  /** bucket.html §J: the bucket the file goes into, and its path there. */
+  bucketId?: string;
+  bucketPath?: string;
   error?: string;
   /** Object URL for an image preview (revoked when removed). */
   preview?: string;
@@ -39,8 +39,8 @@ export interface UploadTarget {
   metadata?: Record<string, string>;
   /** The name shown for it (default: the file's, made Storage-safe). */
   name?: string;
-  memoryId?: string;
-  memoryPath?: string;
+  bucketId?: string;
+  bucketPath?: string;
 }
 
 /**
@@ -103,8 +103,8 @@ export function startUpload(
     progress: 0,
     status: 'uploading',
     path,
-    ...(target.memoryId ? { memoryId: target.memoryId } : {}),
-    ...(target.memoryPath ? { memoryPath: target.memoryPath } : {}),
+    ...(target.bucketId ? { bucketId: target.bucketId } : {}),
+    ...(target.bucketPath ? { bucketPath: target.bucketPath } : {}),
     preview:
       file.type.startsWith('image/') && typeof URL !== 'undefined'
         ? URL.createObjectURL(file)

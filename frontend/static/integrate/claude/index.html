@@ -101,9 +101,9 @@
         <a href="/integrate#2-how-an-agent-gets-in">token model</a> the rest of the API does.
       </p>
       <div class="stamp">
-        <span>version 1.6.0</span>
+        <span>version 2.0.0</span>
         <span>api v1</span>
-        <span>updated 2026-10-05</span>
+        <span>updated 2026-10-15</span>
         <span><a href="/integrate">integrate</a></span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="https://taskmanager-example.web.app/lib/claude-plugin.zip">claude-plugin.zip</a></span>
@@ -218,9 +218,9 @@ create_ticket        write  Create a ticket.
 update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
-post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
 get_aggregates       read   One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.
-upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
+upload_file          write  Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.
 read_file            read   Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         write  Link two tickets: blocks, relates or duplicates.
 get_events           read   Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.

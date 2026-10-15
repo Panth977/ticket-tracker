@@ -25,7 +25,7 @@ import {
   isAppError,
   paths,
   rateBuckets,
-  type MemoryUpload,
+  type BucketUpload,
   type Board,
   type BoardWithId,
   type FieldDef,
@@ -40,7 +40,7 @@ import { makeCtx, type ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
 import { invalidFromZod } from '../runtime/runner.js';
 import { withBoardId } from '../tickets/access.js';
-import { discardUnplaced, storeBoardFile, unsavedNote } from '../memory/attach.js';
+import { discardUnplaced, storeBoardFile, unsavedNote } from '../bucket/attach.js';
 import { safeEqual, sha256hex } from './crypto.js';
 import { idemKey, invoke } from './ops.js';
 import { markdownIn, safeFileName } from './resolve.js';
@@ -165,11 +165,11 @@ export async function submitIntake(
   }
 
   const ticketId = ctx.ids.id();
-  // memory.html §J: files go into the board's attachment memory; ticketCreate
+  // bucket.html §J: files go into the board's attachment bucket; ticketCreate
   // makes them nodes and fills '<ticketId>' in their paths with the new key.
-  // No memory (or one that stopped taking files): the report still lands,
+  // No bucket (or one that stopped taking files): the report still lands,
   // with a note that its files were not kept.
-  const memoryUploads: MemoryUpload[] = [];
+  const bucketUploads: BucketUpload[] = [];
   let unsaved = 0;
   let total = 0;
   for (const a of req.attachments ?? []) {
@@ -179,12 +179,12 @@ export async function submitIntake(
       throw errors.too_large('Attachments are limited to 5 MB in total');
   }
   for (const a of req.attachments ?? []) {
-    if (!board.attachMemory) {
+    if (!board.attachBucket) {
       unsaved++;
       continue;
     }
     try {
-      memoryUploads.push(
+      bucketUploads.push(
         await storeBoardFile(ctx, board, null, {
           name: safeFileName(a.name),
           bytes: new Uint8Array(Buffer.from(a.contentBase64, 'base64')),
@@ -216,7 +216,7 @@ export async function submitIntake(
           ? { assigneeUids: d.assigneeUids.filter((u) => board.access[u]) }
           : {}),
         ...(Object.keys(fields).length ? { fields } : {}),
-        ...(memoryUploads.length ? { memoryUploads } : {}),
+        ...(bucketUploads.length ? { bucketUploads } : {}),
         ...(req.reporter
           ? {
               reporter: {
@@ -231,7 +231,7 @@ export async function submitIntake(
     );
   // A refused create keeps none of the files it brought.
   const res = await create().catch(async (e: unknown) => {
-    await discardUnplaced(memoryUploads);
+    await discardUnplaced(bucketUploads);
     throw e;
   });
 

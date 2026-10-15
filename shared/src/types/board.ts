@@ -225,12 +225,12 @@ export const AttachmentSchema = z.object({
   /** A principal: a person or an agent (via its token). */
   uploadedBy: PrincipalIdSchema,
   /**
-   * memory.html §E: a REFERENCE to a memory file, not a copy. `path` is then
-   * the virtual memoryRefPath(memoryId, nodeId), which the file door resolves
-   * to the node's current version. (Ids are checked by MemoryRefSchema where
-   * they enter; plain strings here keep types/ free of memory/.)
+   * bucket.html §E: a REFERENCE to a bucket file, not a copy. `path` is then
+   * the virtual bucketRefPath(bucketId, nodeId), which the file door resolves
+   * to the node's current version. (Ids are checked by BucketRefSchema where
+   * they enter; plain strings here keep types/ free of bucket/.)
    */
-  memory: z.object({ memoryId: z.string(), nodeId: z.string() }).optional(),
+  bucket: z.object({ bucketId: z.string(), nodeId: z.string() }).optional(),
 });
 export type Attachment = z.infer<typeof AttachmentSchema>;
 

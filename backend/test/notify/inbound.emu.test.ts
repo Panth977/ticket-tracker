@@ -57,11 +57,11 @@ const post = (path: string, body: unknown, headers: Record<string, string> = {})
 const outcome = (r: { body: unknown }) =>
   (r.body as { outcome: { kind: string; reason?: string } }).outcome;
 
-/** memory.html §J: a memory granted write to the board, set as its attachment memory. */
-async function giveAttachMemory(boardId: string, ownerUid: string): Promise<string> {
-  const memoryId = uniq('mem_');
-  await typedDoc('memories', paths.memory(memoryId)).set({
-    ...fixtures.memories,
+/** bucket.html §J: a bucket granted write to the board, set as its attachment bucket. */
+async function giveAttachBucket(boardId: string, ownerUid: string): Promise<string> {
+  const bucketId = uniq('mem_');
+  await typedDoc('buckets', paths.bucket(bucketId)).set({
+    ...fixtures.buckets,
     ownerUid,
     access: { [ownerUid]: 'owner' },
     memberUids: [ownerUid],
@@ -70,9 +70,9 @@ async function giveAttachMemory(boardId: string, ownerUid: string): Promise<stri
     stats: { files: 0, folders: 0, bytes: 0 },
   });
   await typedDoc('boards', paths.board(boardId)).update({
-    attachMemory: { memoryId, template: DEFAULT_ATTACH_TEMPLATE },
+    attachBucket: { bucketId, template: DEFAULT_ATTACH_TEMPLATE },
   });
-  return memoryId;
+  return bucketId;
 }
 
 async function thread(over: { emailReplies?: boolean; expiresAt?: number } = {}) {
@@ -108,7 +108,7 @@ async function thread(over: { emailReplies?: boolean; expiresAt?: number } = {})
 describe('/hooks/email — replies', () => {
   it('posts the reply (quote and signature stripped, @email resolved, attachments stored) as the thread owner via email', async () => {
     const { f, u, other, board, t, to } = await thread();
-    const memoryId = await giveAttachMemory(board.id, u.uid);
+    const bucketId = await giveAttachBucket(board.id, u.uid);
     observeCommands();
     const r = await post('/hooks/email', {
       type: 'email.received',
@@ -138,18 +138,18 @@ describe('/hooks/email — replies', () => {
     expect(bodyJson).toContain('Sounds good');
     expect(bodyJson).not.toContain('old stuff');
     expect(bodyJson).toContain(`"uid":"${other.uid}"`); // the @email became a mention
-    // memory.html §J: into the board's attachment memory; messagePost fills <ticketId>.
+    // bucket.html §J: into the board's attachment bucket; messagePost fills <ticketId>.
     expect(c.input.attachments).toBeUndefined();
-    const [up] = c.input.memoryUploads as { memoryId: string; path: string; storagePath: string }[];
+    const [up] = c.input.bucketUploads as { bucketId: string; path: string; storagePath: string }[];
     expect(up).toMatchObject({
-      memoryId,
+      bucketId,
       path: `tickets/<ticketId>/${attachTime(T)}_evil name_.txt`,
-      storagePath: expect.stringMatching(new RegExp(`^memories/${memoryId}/[^/]+/[^/]+$`)),
+      storagePath: expect.stringMatching(new RegExp(`^buckets/${bucketId}/[^/]+/[^/]+$`)),
     });
     expect(f.files.get(up!.storagePath)).toBe('text/plain');
   });
 
-  it('a board with no attachment memory keeps the reply, not its files, and says so', async () => {
+  it('a board with no attachment bucket keeps the reply, not its files, and says so', async () => {
     const { u, to } = await thread();
     observeCommands();
     const r = await post('/hooks/email', {
@@ -167,7 +167,7 @@ describe('/hooks/email — replies', () => {
     });
     expect(outcome(r)).toMatchObject({ kind: 'reply' });
     const c = calls[0]!;
-    expect(c.input.memoryUploads).toBeUndefined();
+    expect(c.input.bucketUploads).toBeUndefined();
     expect(c.input.attachments).toBeUndefined();
     const bodyJson = JSON.stringify(c.input.body);
     expect(bodyJson).toContain('Here you go');

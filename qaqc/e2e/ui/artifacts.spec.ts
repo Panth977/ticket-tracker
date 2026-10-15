@@ -13,7 +13,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { call, newPerson, WEB_URL } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, thingIdAt } from '../support/ui.js';
 
 const INDEX = `<!doctype html>
 <meta charset="utf-8">
@@ -185,7 +185,7 @@ test('the app: create from the sidebar, the list page, settings for the owner on
   await page.getByRole('button', { name: /new artifact/i }).click();
   await page.getByLabel('Name').fill('Wall dashboard');
   await page.getByRole('button', { name: /^create/i }).click();
-  await page.waitForURL(/\/x\/[A-Za-z0-9_-]+$/);
+  const id = await thingIdAt(page, owner, 'artifact');
   // nothing published yet → the empty state, not a broken frame
   await expect(page.getByText(/nothing published|no build|publish/i).first()).toBeVisible();
   await expect(
@@ -195,7 +195,6 @@ test('the app: create from the sidebar, the list page, settings for the owner on
       .getByText('Wall dashboard'),
   ).toBeVisible();
 
-  const id = page.url().split('/x/')[1]!;
   await page.goto(`/x/${id}/settings/builds`);
   await expect(page.getByRole('heading', { name: /builds/i })).toBeVisible();
   await page.goto('/x');

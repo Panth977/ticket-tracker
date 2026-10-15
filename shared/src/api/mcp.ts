@@ -23,7 +23,7 @@ import type { Scope } from '../types/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
 import {
   PublicAggInputSchema,
-  PublicMemoryFileRefSchema,
+  PublicBucketFileRefSchema,
   PublicQuestionFieldSchema,
   PublicRunReceiptSchema,
 } from './public.js';
@@ -160,12 +160,12 @@ export const McpToolShapes = {
       .max(100_000)
       .describe('GitHub-flavoured Markdown. May be empty when attachments are given.'),
     attachments: FileIds.optional(),
-    memory_files: z
-      .array(PublicMemoryFileRefSchema)
+    bucket_files: z
+      .array(PublicBucketFileRefSchema)
       .max(20)
       .optional()
       .describe(
-        'Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).',
+        'Bucket files to attach by reference (no upload): [{ bucket_id, path }] or [{ bucket_id, node_id }]. The bucket must be granted to this board (bucket_list board=…).',
       ),
     reply_to: z.string().min(1).optional().describe('Message id to quote'),
     run: PublicRunReceiptSchema.nullable()
@@ -212,13 +212,13 @@ export const McpToolShapes = {
       .optional()
       .describe('Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.'),
     content_base64: z.string().optional().describe('Binary content, base64. ≤ 25 MB decoded.'),
-    memory_id: z
+    bucket_id: z
       .string()
       .min(1)
       .max(64)
       .optional()
       .describe(
-        "The memory the file goes into (granted write to this board). Default: the board's attachment memory.",
+        "The bucket the file goes into (granted write to this board). Default: the board's attachment bucket.",
       ),
     path: z
       .string()
@@ -226,7 +226,7 @@ export const McpToolShapes = {
       .max(1024)
       .optional()
       .describe(
-        "Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
+        "Path in that bucket. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
       ),
   },
   read_file: { fileId: z.string().min(1) },
@@ -518,7 +518,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
     readOnly: false,
     scopes: ['comments:write'],
   },
@@ -530,7 +530,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   },
   upload_file: {
     description:
-      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
+      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.",
     readOnly: false,
     scopes: ['files:write'],
   },
@@ -692,11 +692,11 @@ const REFINES: Partial<Record<McpToolName, (v: Record<string, unknown>) => strin
   post_message: (v) =>
     String(v.markdown ?? '').trim().length > 0 ||
     ((v.attachments as unknown[] | undefined)?.length ?? 0) > 0 ||
-    ((v.memory_files as unknown[] | undefined)?.length ?? 0) > 0 ||
+    ((v.bucket_files as unknown[] | undefined)?.length ?? 0) > 0 ||
     // aggregates.html: an agg message may be entries only (the server writes the words).
     ((v.agg as { entries?: unknown[] } | undefined)?.entries?.length ?? 0) > 0
       ? null
-      : 'A message needs markdown, attachments, memory_files or agg',
+      : 'A message needs markdown, attachments, bucket_files or agg',
 };
 
 /** Full validators: z.object(shape).strict() plus the cross-field rules. */

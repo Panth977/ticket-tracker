@@ -4,6 +4,7 @@
   confirm), and leave the board (anyone — but the last admin can't).
 -->
 <script lang="ts">
+  import MoveOwner from '$lib/orgs/MoveOwner.svelte';
   // goto() targets come from lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -84,6 +85,7 @@
   <div
     class="flex max-w-2xl flex-col divide-y divide-line rounded-xl border border-danger/40 bg-surface"
   >
+    {#if s.isAdmin}<MoveOwner kind="board" id={b.id} ownerKey={b.ownerKey} />{/if}
     {#if s.isAdmin}
       <div class="flex flex-wrap items-center gap-3 p-5">
         <div class="min-w-0 flex-1">

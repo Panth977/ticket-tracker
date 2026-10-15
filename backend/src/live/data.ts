@@ -178,7 +178,7 @@ export class DataSession {
         !ids.has('boards') &&
         !ids.has('users') &&
         !ids.has('artifacts') &&
-        !ids.has('memories')
+        !ids.has('buckets')
       )
         continue;
       l.busy = l.busy.then(() => this.refresh(lid, l));

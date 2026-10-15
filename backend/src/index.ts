@@ -82,7 +82,7 @@ const CLOUD_ONLY: Partial<Record<QueueName, Pick<TaskQueueOptions, 'timeoutSecon
   {
     boardDelete: { timeoutSeconds: 540 },
     artifactDelete: { timeoutSeconds: 540 },
-    memoryDelete: { timeoutSeconds: 540 },
+    bucketDelete: { timeoutSeconds: 540 },
     export: { timeoutSeconds: 540, memory: '1GiB' },
   };
 function queueOptions(queue: QueueName): TaskQueueOptions {
@@ -110,7 +110,7 @@ export const queueDeliver = queueFn('deliver');
 export const queueWebhooks = queueFn('webhooks');
 export const queueBoardDelete = queueFn('boardDelete');
 export const queueArtifactDelete = queueFn('artifactDelete');
-export const queueMemoryDelete = queueFn('memoryDelete');
+export const queueBucketDelete = queueFn('bucketDelete');
 export const queueExport = queueFn('export');
 export const queueEmail = queueFn('email');
 

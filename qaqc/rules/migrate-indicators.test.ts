@@ -1,7 +1,7 @@
 /**
  * scripts/lib/indicators.mjs against the firestore emulator: seed boards (with
  * legacy colour names, typed icons, rich-text descriptions, stages),
- * artifacts, memories and workspaces as they were before indicators.html, run
+ * artifacts, buckets and workspaces as they were before indicators.html, run
  * the migration dry and then for real, check the shape, then run it again:
  * nothing may change.
  *
@@ -91,8 +91,8 @@ beforeAll(async () => {
     });
     await setDoc(doc(db, 'artifacts/art_ind1'), { name: 'Dash', icon: '📊' });
     await setDoc(doc(db, 'artifacts/art_ind2'), { name: 'Plain', icon: null });
-    await setDoc(doc(db, 'memories/mem_ind1'), { name: 'Notes', icon: null });
-    await setDoc(doc(db, 'memories/mem_ind2'), { name: 'Books', icon: '📚' });
+    await setDoc(doc(db, 'buckets/mem_ind1'), { name: 'Notes', icon: null });
+    await setDoc(doc(db, 'buckets/mem_ind2'), { name: 'Books', icon: '📚' });
     await setDoc(doc(db, `users/${OWNER}/workspaces/ws_ind1`), { name: 'Home', color: '#14B8A6' });
   });
 });
@@ -107,19 +107,19 @@ describe('indicators migration (emulator)', () => {
     expect(dry).toMatchObject({
       boards: { seen: 2, toChange: 1 },
       artifacts: { seen: 2, toChange: 2 },
-      memories: { seen: 2, toChange: 2 },
+      buckets: { seen: 2, toChange: 2 },
       workspaces: { seen: 1, toChange: 1 },
       descriptions: 1,
       stages: 2,
-      applied: { boards: 0, artifacts: 0, memories: 0, workspaces: 0, failed: [] },
+      applied: { boards: 0, artifacts: 0, buckets: 0, workspaces: 0, failed: [] },
     });
     expect((await read(`boards/${B1}`))?.indicator).toBeUndefined();
-    expect((await read('memories/mem_ind1'))?.indicator).toBeUndefined();
+    expect((await read('buckets/mem_ind1'))?.indicator).toBeUndefined();
   });
 
   it('--apply writes indicators and plain descriptions', async () => {
     const s = run(true);
-    expect(s.applied).toEqual({ boards: 1, artifacts: 2, memories: 2, workspaces: 1, failed: [] });
+    expect(s.applied).toEqual({ boards: 1, artifacts: 2, buckets: 2, workspaces: 1, failed: [] });
 
     const b1 = await read(`boards/${B1}`);
     expect(b1?.indicator).toEqual({ kind: 'icon', icon: 'bug', color: '#3b82f6' });
@@ -136,8 +136,8 @@ describe('indicators migration (emulator)', () => {
     expect((await read(`boards/${B2}`))?.indicator).toEqual({ kind: 'emoji', emoji: '🚀' });
     expect((await read('artifacts/art_ind1'))?.indicator).toEqual({ kind: 'emoji', emoji: '📊' });
     expect((await read('artifacts/art_ind2'))?.indicator).toEqual(S.defaultIndicator('art_ind2'));
-    expect((await read('memories/mem_ind1'))?.indicator).toEqual({ kind: 'emoji', emoji: '🧠' });
-    expect((await read('memories/mem_ind2'))?.indicator).toEqual({ kind: 'emoji', emoji: '📚' });
+    expect((await read('buckets/mem_ind1'))?.indicator).toEqual({ kind: 'emoji', emoji: '🧠' });
+    expect((await read('buckets/mem_ind2'))?.indicator).toEqual({ kind: 'emoji', emoji: '📚' });
     expect((await read(`users/${OWNER}/workspaces/ws_ind1`))?.indicator).toEqual({
       kind: 'color',
       color: '#14b8a6',
@@ -149,11 +149,11 @@ describe('indicators migration (emulator)', () => {
     expect(again).toMatchObject({
       boards: { toChange: 0 },
       artifacts: { toChange: 0 },
-      memories: { toChange: 0 },
+      buckets: { toChange: 0 },
       workspaces: { toChange: 0 },
       descriptions: 0,
       stages: 0,
-      applied: { boards: 0, artifacts: 0, memories: 0, workspaces: 0, failed: [] },
+      applied: { boards: 0, artifacts: 0, buckets: 0, workspaces: 0, failed: [] },
     });
   });
 });

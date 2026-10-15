@@ -8,8 +8,8 @@
  * keys/{KEY}. A stale boardId (the ticket was deleted) answers 404.
  */
 import { z } from 'zod';
-import { MEMORY_REFS_MAX, MemoryRefSchema } from '../memory/schema.js';
-import { MemoryUploadSchema } from '../memory/attach.js';
+import { BUCKET_REFS_MAX, BucketRefSchema } from '../bucket/schema.js';
+import { BucketUploadSchema } from '../bucket/attach.js';
 import { MessageAggSchema } from '../schema/aggregates.js';
 import {
   BoardIdSchema,
@@ -61,22 +61,22 @@ export const ticketCreate = defineCommand({
     estimate: z.number().nonnegative().nullable().optional(),
     fields: z.record(z.string(), FieldValueSchema).optional(),
     /**
-     * RETIRED (memory.html §J): a board takes no files of its own any more —
-     * a non-empty list is refused. Use memoryUploads / memoryRefs.
+     * RETIRED (bucket.html §J): a board takes no files of its own any more —
+     * a non-empty list is refused. Use bucketUploads / bucketRefs.
      */
     attachments: z.array(StoragePathSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
     /**
-     * memory.html §J: files just uploaded INTO a memory granted `write` to this
+     * bucket.html §J: files just uploaded INTO a bucket granted `write` to this
      * board, each to become a new file at its path ('<ticketId>' in it is
      * filled with the new ticket's key) and attached by reference.
      */
-    memoryUploads: z.array(MemoryUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
+    bucketUploads: z.array(BucketUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
     /**
-     * memory.html §E: memory files to attach BY REFERENCE (no upload). The
-     * memory must be granted to this board; each becomes a ticket.files row
-     * with source 'memory'.
+     * bucket.html §E: bucket files to attach BY REFERENCE (no upload). The
+     * bucket must be granted to this board; each becomes a ticket.files row
+     * with source 'bucket'.
      */
-    memoryRefs: z.array(MemoryRefSchema).max(MEMORY_REFS_MAX).optional(),
+    bucketRefs: z.array(BucketRefSchema).max(BUCKET_REFS_MAX).optional(),
     /**
      * Who reported it from outside (intake widget, email-to-board). Only the
      * intake actor may set it (INTAKE_ACTOR, via intake | email); anyone else → 400.
@@ -241,13 +241,13 @@ export const messagePost = defineCommand({
        */
       fileIds: z.array(z.string().min(1).max(128)).max(MAX_ATTACHMENTS_PER_CALL).optional(),
       /**
-       * memory.html §E: memory files to attach BY REFERENCE (no upload). The
-       * memory must be granted to this board; each becomes a ticket.files row
-       * with source 'memory'.
+       * bucket.html §E: bucket files to attach BY REFERENCE (no upload). The
+       * bucket must be granted to this board; each becomes a ticket.files row
+       * with source 'bucket'.
        */
-      memoryRefs: z.array(MemoryRefSchema).max(MEMORY_REFS_MAX).optional(),
-      /** memory.html §J: files just uploaded into a memory (see ticketCreate.memoryUploads). */
-      memoryUploads: z.array(MemoryUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
+      bucketRefs: z.array(BucketRefSchema).max(BUCKET_REFS_MAX).optional(),
+      /** bucket.html §J: files just uploaded into a bucket (see ticketCreate.bucketUploads). */
+      bucketUploads: z.array(BucketUploadSchema).max(MAX_ATTACHMENTS_PER_CALL).optional(),
       /**
        * Phase 17 (agents.html §Y1): the TURN RECEIPT an orchestrator posts when
        * one run of an agent ends. Stored on the message, and in the SAME
@@ -270,7 +270,7 @@ export const messagePost = defineCommand({
       (r) =>
         (r.attachments?.length ?? 0) +
           (r.fileIds?.length ?? 0) +
-          (r.memoryUploads?.length ?? 0) <=
+          (r.bucketUploads?.length ?? 0) <=
         MAX_ATTACHMENTS_PER_CALL,
       {
         message: `At most ${MAX_ATTACHMENTS_PER_CALL} files per message`,

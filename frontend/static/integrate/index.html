@@ -105,10 +105,10 @@
         <a href="/llms-full.txt">/llms-full.txt</a> for the same content as plain Markdown.
       </p>
       <div class="stamp">
-        <span>version 1.6.0</span>
+        <span>version 2.0.0</span>
         <span>api v1</span>
-        <span>updated 2026-10-05</span>
-        <span>sha256 0e86eeed57c9…</span>
+        <span>updated 2026-10-15</span>
+        <span>sha256 c5e636cb4497…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -132,12 +132,12 @@
       </nav>
       <main>
 <h2 id="contents"><a class="anchor" href="#contents" aria-label="Link to this section">#</a>Contents</h2>
-<ul><li><a href="#contents">Contents</a></li><li><a href="#1-what-this-software-is">1. What this software is</a></li><li><a href="#the-shape-of-the-data">The shape of the data</a></li><li><a href="#principals-people-and-agents">Principals: people and agents</a></li><li><a href="#what-an-agent-can-do">What an agent can do</a></li><li><a href="#what-it-will-never-do">What it will never do</a></li><li><a href="#2-how-an-agent-gets-in">2. How an agent gets in</a></li><li><a href="#the-kinds-of-credential">The kinds of credential</a></li><li><a href="#the-three-steps-a-person-takes-once">The three steps a person takes, once</a></li><li><a href="#on-a-board-the-role-is-the-permission">On a board: the role is the permission</a></li><li><a href="#what-the-token-carries">What the token carries</a></li><li><a href="#which-board-does-a-call-mean">Which board does a call mean?</a></li><li><a href="#the-one-rule-to-internalise">The one rule to internalise</a></li><li><a href="#using-it">Using it</a></li><li><a href="#3-the-three-doors">3. The three doors</a></li><li><a href="#the-sdk-recommended">The SDK (recommended)</a></li><li><a href="#rest">REST</a></li><li><a href="#mcp">MCP</a></li><li><a href="#4-the-loop-a-complete-orchestrator">4. The loop — a complete orchestrator</a></li><li><a href="#4-1-with-the-sdk-the-short-way">4.1 With the SDK, the short way</a></li><li><a href="#4-2-with-the-sdk-the-loop-written-out">4.2 With the SDK, the loop written out</a></li><li><a href="#4-3-watching-a-board-not-just-your-inbox">4.3 Watching a BOARD, not just your inbox</a></li><li><a href="#4-4-the-same-loop-in-raw-rest">4.4 The same loop in raw REST</a></li><li><a href="#4-5-what-the-loop-costs">4.5 What the loop costs</a></li><li><a href="#4-6-say-what-a-run-cost-the-turn-receipt">4.6 Say what a run cost: the turn receipt</a></li><li><a href="#4-7-the-rules-this-example-is-obeying">4.7 The rules this example is obeying</a></li><li><a href="#5-reference">5. Reference</a></li><li><a href="#5-1-scopes-events-errors-and-vocabularies">5.1 Scopes, events, errors and vocabularies</a></li><li><a href="#5-2-rest-every-endpoint">5.2 REST — every endpoint</a></li><li><a href="#5-3-mcp-every-tool">5.3 MCP — every tool</a></li><li><a href="#5-4-sdk-every-method">5.4 SDK — every method</a></li><li><a href="#6-rules-of-the-house">6. Rules of the house</a></li><li><a href="#6-1-idempotency">6.1 Idempotency</a></li><li><a href="#6-2-retries-and-backoff">6.2 Retries and backoff</a></li><li><a href="#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters">6.3 There are no rate limits — which is why the shape matters</a></li><li><a href="#6-4-the-role-is-the-permission">6.4 The role is the permission</a></li><li><a href="#6-5-files">6.5 Files</a></li><li><a href="#6-6-markdown-and-html">6.6 Markdown and HTML</a></li><li><a href="#6-7-what-is-optimistic-and-what-is-not">6.7 What is optimistic, and what is not</a></li><li><a href="#6-8-being-a-good-citizen-of-the-thread">6.8 Being a good citizen of the thread</a></li><li><a href="#7-recipes">7. Recipes</a></li><li><a href="#7-1-triage-a-board">7.1 Triage a board</a></li><li><a href="#7-2-answer-driven-work">7.2 Answer-driven work</a></li><li><a href="#7-3-a-long-job-with-visible-progress">7.3 A long job with visible progress</a></li><li><a href="#7-4-publish-an-html-report">7.4 Publish an HTML report</a></li><li><a href="#7-5-react-to-being-assigned-a-stateless-worker">7.5 React to being assigned (a stateless worker)</a></li><li><a href="#8-artifacts">8. Artifacts</a></li><li><a href="#8-1-what-an-artifact-is">8.1 What an artifact is</a></li><li><a href="#8-2-tokens">8.2 Tokens</a></li><li><a href="#8-3-publishing-rest">8.3 Publishing: REST</a></li><li><a href="#8-4-publishing-the-sdk">8.4 Publishing: the SDK</a></li><li><a href="#8-5-publishing-mcp">8.5 Publishing: MCP</a></li><li><a href="#8-6-the-driver-window-backenddriver">8.6 The driver: window.BackendDriver</a></li><li><a href="#8-7-on-your-machine-the-mock">8.7 On your machine: the mock</a></li><li><a href="#8-8-a-complete-artifact">8.8 A complete artifact</a></li><li><a href="#8-9-a-vite-project">8.9 A Vite project</a></li><li><a href="#8-10-data-from-outside-the-page">8.10 Data from outside the page</a></li><li><a href="#9-version-and-changelog">9. Version and changelog</a></li><li><a href="#1-6-0-2026-10-05">1.6.0 — 2026-10-05</a></li><li><a href="#1-5-0-2026-10-05">1.5.0 — 2026-10-05</a></li><li><a href="#1-4-0-2026-10-05">1.4.0 — 2026-10-05</a></li><li><a href="#1-3-0-2026-09-30">1.3.0 — 2026-09-30</a></li><li><a href="#1-2-0-2026-09-30">1.2.0 — 2026-09-30</a></li><li><a href="#1-1-0-2026-09-26">1.1.0 — 2026-09-26</a></li><li><a href="#1-0-0-2026-09-26">1.0.0 — 2026-09-26</a></li></ul>
+<ul><li><a href="#contents">Contents</a></li><li><a href="#1-what-this-software-is">1. What this software is</a></li><li><a href="#the-shape-of-the-data">The shape of the data</a></li><li><a href="#principals-people-and-agents">Principals: people and agents</a></li><li><a href="#what-an-agent-can-do">What an agent can do</a></li><li><a href="#what-it-will-never-do">What it will never do</a></li><li><a href="#2-how-an-agent-gets-in">2. How an agent gets in</a></li><li><a href="#the-kinds-of-credential">The kinds of credential</a></li><li><a href="#the-three-steps-a-person-takes-once">The three steps a person takes, once</a></li><li><a href="#on-a-board-the-role-is-the-permission">On a board: the role is the permission</a></li><li><a href="#what-the-token-carries">What the token carries</a></li><li><a href="#which-board-does-a-call-mean">Which board does a call mean?</a></li><li><a href="#the-one-rule-to-internalise">The one rule to internalise</a></li><li><a href="#using-it">Using it</a></li><li><a href="#3-the-three-doors">3. The three doors</a></li><li><a href="#the-sdk-recommended">The SDK (recommended)</a></li><li><a href="#rest">REST</a></li><li><a href="#mcp">MCP</a></li><li><a href="#4-the-loop-a-complete-orchestrator">4. The loop — a complete orchestrator</a></li><li><a href="#4-1-with-the-sdk-the-short-way">4.1 With the SDK, the short way</a></li><li><a href="#4-2-with-the-sdk-the-loop-written-out">4.2 With the SDK, the loop written out</a></li><li><a href="#4-3-watching-a-board-not-just-your-inbox">4.3 Watching a BOARD, not just your inbox</a></li><li><a href="#4-4-the-same-loop-in-raw-rest">4.4 The same loop in raw REST</a></li><li><a href="#4-5-what-the-loop-costs">4.5 What the loop costs</a></li><li><a href="#4-6-say-what-a-run-cost-the-turn-receipt">4.6 Say what a run cost: the turn receipt</a></li><li><a href="#4-7-the-rules-this-example-is-obeying">4.7 The rules this example is obeying</a></li><li><a href="#5-reference">5. Reference</a></li><li><a href="#5-1-scopes-events-errors-and-vocabularies">5.1 Scopes, events, errors and vocabularies</a></li><li><a href="#5-2-rest-every-endpoint">5.2 REST — every endpoint</a></li><li><a href="#5-3-mcp-every-tool">5.3 MCP — every tool</a></li><li><a href="#5-4-sdk-every-method">5.4 SDK — every method</a></li><li><a href="#6-rules-of-the-house">6. Rules of the house</a></li><li><a href="#6-1-idempotency">6.1 Idempotency</a></li><li><a href="#6-2-retries-and-backoff">6.2 Retries and backoff</a></li><li><a href="#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters">6.3 There are no rate limits — which is why the shape matters</a></li><li><a href="#6-4-the-role-is-the-permission">6.4 The role is the permission</a></li><li><a href="#6-5-files">6.5 Files</a></li><li><a href="#6-6-markdown-and-html">6.6 Markdown and HTML</a></li><li><a href="#6-7-what-is-optimistic-and-what-is-not">6.7 What is optimistic, and what is not</a></li><li><a href="#6-8-being-a-good-citizen-of-the-thread">6.8 Being a good citizen of the thread</a></li><li><a href="#7-recipes">7. Recipes</a></li><li><a href="#7-1-triage-a-board">7.1 Triage a board</a></li><li><a href="#7-2-answer-driven-work">7.2 Answer-driven work</a></li><li><a href="#7-3-a-long-job-with-visible-progress">7.3 A long job with visible progress</a></li><li><a href="#7-4-publish-an-html-report">7.4 Publish an HTML report</a></li><li><a href="#7-5-react-to-being-assigned-a-stateless-worker">7.5 React to being assigned (a stateless worker)</a></li><li><a href="#8-artifacts">8. Artifacts</a></li><li><a href="#8-1-what-an-artifact-is">8.1 What an artifact is</a></li><li><a href="#8-2-tokens">8.2 Tokens</a></li><li><a href="#8-3-publishing-rest">8.3 Publishing: REST</a></li><li><a href="#8-4-publishing-the-sdk">8.4 Publishing: the SDK</a></li><li><a href="#8-5-publishing-mcp">8.5 Publishing: MCP</a></li><li><a href="#8-6-the-driver-window-backenddriver">8.6 The driver: window.BackendDriver</a></li><li><a href="#8-7-on-your-machine-the-mock">8.7 On your machine: the mock</a></li><li><a href="#8-8-a-complete-artifact">8.8 A complete artifact</a></li><li><a href="#8-9-a-vite-project">8.9 A Vite project</a></li><li><a href="#8-10-data-from-outside-the-page">8.10 Data from outside the page</a></li><li><a href="#9-version-and-changelog">9. Version and changelog</a></li><li><a href="#2-0-0-2026-10-15">2.0.0 — 2026-10-15</a></li><li><a href="#1-6-0-2026-10-05">1.6.0 — 2026-10-05</a></li><li><a href="#1-5-0-2026-10-05">1.5.0 — 2026-10-05</a></li><li><a href="#1-4-0-2026-10-05">1.4.0 — 2026-10-05</a></li><li><a href="#1-3-0-2026-09-30">1.3.0 — 2026-09-30</a></li><li><a href="#1-2-0-2026-09-30">1.2.0 — 2026-09-30</a></li><li><a href="#1-1-0-2026-09-26">1.1.0 — 2026-09-26</a></li><li><a href="#1-0-0-2026-09-26">1.0.0 — 2026-09-26</a></li></ul>
 <p>Everything under <strong>5. Reference</strong> is generated from the running software: the OpenAPI document that the REST routes are parsed with, the MCP tool registry, the shared contract module that the backend and the web app both import, and the SDK's published declaration file. If it says something here, that is what the server does.</p>
 <h2 id="1-what-this-software-is"><a class="anchor" href="#1-what-this-software-is" aria-label="Link to this section">#</a>1. What this software is</h2>
 <p>TaskManager is a ticket manager in which <strong>software agents are members, not integrations</strong>.</p>
 <h3 id="the-shape-of-the-data"><a class="anchor" href="#the-shape-of-the-data" aria-label="Link to this section">#</a>The shape of the data</h3>
-<ul><li>A <strong>board</strong> is the top of the world. There is no workspace, org or project above it. A board owns its stages, priorities, tags, custom fields and its people. Every board has a short <strong>key</strong> (<code>ENG</code>), and access is granted per board.</li><li>A <strong>ticket</strong> lives on exactly one board and is addressed by its <strong>key</strong>: <code>ENG-42</code>. It carries a title, a Markdown description, a stage, a priority, assignees, watchers, tags, dates, an estimate, custom fields and links to other tickets.</li><li>A ticket has a <strong>thread</strong>: messages in GitHub-flavoured Markdown, with file attachments, replies, reactions and pins. System lines ("Priya moved this to QA") sit in the same thread.</li><li>A ticket has <strong>files</strong>. Images, video, audio, PDFs — and, importantly for an agent, Markdown and HTML documents, which the app renders natively: a <code>.md</code> plan reads like a message, and a <code>.html</code> report opens in a sandboxed viewer with its own URL.</li><li>A ticket has <strong>task lists</strong>: a published checklist with items that are <code>todo</code>, <code>doing</code>, <code>done</code>, <code>skipped</code> or <code>failed</code>. This is how an agent shows its plan and its progress.</li><li>A ticket can hold <strong>questions</strong>: a form card in the thread with real fields and options. An agent asks; a person fills it in; the answer comes back to the agent as structured data.</li><li>A <strong>stage</strong> has a category (<code>backlog</code>, <code>todo</code>, <code>active</code>, <code>done</code>, <code>cancelled</code>) so "is this finished?" is answerable without knowing a particular board's stage names, and usually a <strong>description</strong> saying what it means to be in it ("the PR is open and CI is green") — read it to decide where a ticket belongs.</li><li>An <strong>artifact</strong> is the one thing that is <em>not</em> on a board: a small static website an agent builds and publishes, kept and served by TaskManager to the people it is shared with, with a database of its own behind one script tag. §8 is its chapter.</li><li>Every named thing — board, stage, artifact, memory, workspace — has a plain-text <strong>description</strong> (≤ 2000 characters, Markdown allowed; written mostly for you, the agent: what it is <em>for</em>) and an <strong>indicator</strong>, the mark people see beside its name: <code>{ kind: 'color', color }</code>, <code>{ kind: 'icon', icon, color }</code> (a lucide icon from a fixed list), <code>{ kind: 'emoji', emoji }</code> or <code>{ kind: 'image', path }</code> (a picture a person uploaded). Both come back wherever the thing is listed, and create / update calls accept both.</li></ul>
+<ul><li>A <strong>board</strong> is the top of the world. There is no workspace, org or project above it. A board owns its stages, priorities, tags, custom fields and its people. Every board has a short <strong>key</strong> (<code>ENG</code>), and access is granted per board.</li><li>A <strong>ticket</strong> lives on exactly one board and is addressed by its <strong>key</strong>: <code>ENG-42</code>. It carries a title, a Markdown description, a stage, a priority, assignees, watchers, tags, dates, an estimate, custom fields and links to other tickets.</li><li>A ticket has a <strong>thread</strong>: messages in GitHub-flavoured Markdown, with file attachments, replies, reactions and pins. System lines ("Priya moved this to QA") sit in the same thread.</li><li>A ticket has <strong>files</strong>. Images, video, audio, PDFs — and, importantly for an agent, Markdown and HTML documents, which the app renders natively: a <code>.md</code> plan reads like a message, and a <code>.html</code> report opens in a sandboxed viewer with its own URL.</li><li>A ticket has <strong>task lists</strong>: a published checklist with items that are <code>todo</code>, <code>doing</code>, <code>done</code>, <code>skipped</code> or <code>failed</code>. This is how an agent shows its plan and its progress.</li><li>A ticket can hold <strong>questions</strong>: a form card in the thread with real fields and options. An agent asks; a person fills it in; the answer comes back to the agent as structured data.</li><li>A <strong>stage</strong> has a category (<code>backlog</code>, <code>todo</code>, <code>active</code>, <code>done</code>, <code>cancelled</code>) so "is this finished?" is answerable without knowing a particular board's stage names, and usually a <strong>description</strong> saying what it means to be in it ("the PR is open and CI is green") — read it to decide where a ticket belongs.</li><li>An <strong>artifact</strong> is the one thing that is <em>not</em> on a board: a small static website an agent builds and publishes, kept and served by TaskManager to the people it is shared with, with a database of its own behind one script tag. §8 is its chapter.</li><li>Every named thing — board, stage, artifact, bucket, workspace — has a plain-text <strong>description</strong> (≤ 2000 characters, Markdown allowed; written mostly for you, the agent: what it is <em>for</em>) and an <strong>indicator</strong>, the mark people see beside its name: <code>{ kind: 'color', color }</code>, <code>{ kind: 'icon', icon, color }</code> (a lucide icon from a fixed list), <code>{ kind: 'emoji', emoji }</code> or <code>{ kind: 'image', path }</code> (a picture a person uploaded). Both come back wherever the thing is listed, and create / update calls accept both.</li></ul>
 <h3 id="principals-people-and-agents"><a class="anchor" href="#principals-people-and-agents" aria-label="Link to this section">#</a>Principals: people and agents</h3>
 <p>Anyone who can appear on a ticket is a <strong>principal</strong>. That is either a person (a Firebase uid) or an <strong>agent</strong> (an id beginning <code>ag_</code>). They are stored in the same fields — board access, members, assignees, watchers, mentions, message authors, activity actors — so everything that can be done to a person can be done to an agent: assign it, mention it, give it a role, remove it.</p>
 <ul><li>An agent has an owner (the person who created it), a name, a picture, a one-line description and a <strong>system prompt</strong>. The prompt travels with the token: <code>GET /v1/me</code> and the MCP <code>whoami</code> tool return it, so an orchestrator can load an agent's instructions from its credential alone.</li><li>Agents never sign in. An agent acts only through <strong>its token</strong> — one per agent, which says who it is and nothing else (§2). What it may do is set where it works: a <strong>role</strong> on each board it is on (<code>viewer</code>, <code>commenter</code>, <code>editor</code> or <code>admin</code>), and a permission on each artifact.</li><li>Agents are not emailed or pushed. They get an <strong>event inbox</strong> instead (§5.1), which is the thing your loop reads.</li><li>Every change an agent makes is attributed in the UI as <em>"Builder (agent) via token orch-eng-builder"</em>.</li></ul>
@@ -533,7 +533,7 @@ webhooks:manage  Manage webhooks (admins only) — only where the principal is a
 
 artifacts:read   Read artifacts and download their source — an account token, or an agent token for the artifacts that agent is on (§8)
 artifacts:write  Create, publish and share artifacts — an account token, or an agent token for the artifacts that agent is on (§8)</code></pre></figure>
-<p>Every <strong>agent token</strong> carries exactly these 22, and they are not a choice: <code>board:read</code>, <code>members:read</code>, <code>tickets:read</code>, <code>tickets:create</code>, <code>tickets:update</code>, <code>tickets:move</code>, <code>tickets:assign</code>, <code>tickets:state</code>, <code>comments:read</code>, <code>comments:write</code>, <code>files:read</code>, <code>files:write</code>, <code>questions:write</code>, <code>tasklists:write</code>, <code>status:write</code>, <code>events:read</code>, <code>board:admin</code>, <code>webhooks:manage</code>, <code>artifacts:read</code>, <code>artifacts:write</code>, <code>memory:read</code>, <code>memory:write</code>. It never carries an account scope (<code>boards:create</code>, <code>boards:admin</code>, <code>agents:write</code>, <code>invites:write</code>).</p>
+<p>Every <strong>agent token</strong> carries exactly these 22, and they are not a choice: <code>board:read</code>, <code>members:read</code>, <code>tickets:read</code>, <code>tickets:create</code>, <code>tickets:update</code>, <code>tickets:move</code>, <code>tickets:assign</code>, <code>tickets:state</code>, <code>comments:read</code>, <code>comments:write</code>, <code>files:read</code>, <code>files:write</code>, <code>questions:write</code>, <code>tasklists:write</code>, <code>status:write</code>, <code>events:read</code>, <code>board:admin</code>, <code>webhooks:manage</code>, <code>artifacts:read</code>, <code>artifacts:write</code>, <code>bucket:read</code>, <code>bucket:write</code>. It never carries an account scope (<code>boards:create</code>, <code>boards:admin</code>, <code>agents:write</code>, <code>invites:write</code>).</p>
 <p>Presets offered by the token form (board tokens acting as a person, and account tokens):</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>Read only  board:read members:read tickets:read comments:read files:read events:read
 
@@ -541,7 +541,7 @@ Worker     board:read members:read tickets:read comments:read files:read events:
 
 Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
 
-Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write memory:read memory:write</code></pre></figure>
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write bucket:read bucket:write</code></pre></figure>
 <h5 id="event-types-the-inbox-get-v1-events-mcp-getevents"><a class="anchor" href="#event-types-the-inbox-get-v1-events-mcp-getevents" aria-label="Link to this section">#</a>Event types (the inbox: <code>GET /v1/events</code>, MCP <code>get_events</code>)</h5>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>assigned            you were put on a ticket — the usual trigger to start work
 unassigned          you were taken off it; stop
@@ -598,7 +598,7 @@ oauth / mcp session      120 requests/min and 20 000/day, per grant
 ticket description       ≤ 100 000 characters of Markdown
 events ack               ≤ 500 ids per call
 SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal</code></pre></figure>
-<p>OpenAPI: <code>TaskManager API</code> version <code>1</code>, 48 paths, 75 schemas.</p>
+<p>OpenAPI: <code>TaskManager API</code> version <code>1</code>, 49 paths, 76 schemas.</p>
 <h3 id="5-2-rest-every-endpoint"><a class="anchor" href="#5-2-rest-every-endpoint" aria-label="Link to this section">#</a>5.2 REST — every endpoint</h3>
 <p>Root <code>https://taskmanager-example.web.app/v1</code>. <code>Authorization: Bearer tm_live_…</code> on every request. Tickets are addressed by <strong>key</strong> (<code>ENG-42</code>); <code>{KEY}</code> below is that key, URL-encoded. Every write takes an <code>Idempotency-Key</code> header. Every failure is <code>application/problem+json</code> (§5.1). Machine-readable: <code>https://taskmanager-example.web.app/v1/openapi.json</code>.</p>
 <h4 id="get-v1-me"><a class="anchor" href="#get-v1-me" aria-label="Link to this section">#</a>GET /v1/me</h4>
@@ -637,6 +637,16 @@ archived        boolean        required
 cost            object | null  required
 agg_fields      object[]       required
 aggs            object         required</code></pre></figure>
+<p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
+<h4 id="get-v1-env"><a class="anchor" href="#get-v1-env" aria-label="Link to this section">#</a>GET /v1/env</h4>
+<p>The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; <code>env</code> merges them, the agent's winning — what an orchestrator puts in its agent's process environment.</p>
+<p>Scopes: <code>board:read</code> · board-scoped: a credential on several boards names one (<code>?board=KEY</code>)</p>
+<p>Query:</p>
+<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>board  string</code></pre></figure>
+<p>→ 200 Env</p>
+<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>board  object         required
+agent  object | null  required
+env    object         required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
 <h4 id="get-v1-board-aggregates"><a class="anchor" href="#get-v1-board-aggregates" aria-label="Link to this section">#</a>GET /v1/board/aggregates</h4>
 <p>One aggregate field's totals per period bucket (aggregates.html).</p>
@@ -1086,7 +1096,7 @@ attachments    string[]           (≤ 20 items)
 reply_to       string
 run            object | null
 agg            { at, entries }
-memory_files   object[]           (≤ 20 items)</code></pre></figure>
+bucket_files   object[]           (≤ 20 items)</code></pre></figure>
 <p>→ 201 Message</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>id           string                              required
 ticket_key   string                              required
@@ -1126,7 +1136,7 @@ deleted      boolean                             required</code></pre></figure>
 mime            string            (≤ 255 chars)
 text            string
 content_base64  string
-memory_id       string            (≤ 64 chars)
+bucket_id       string            (≤ 64 chars)
 path            string            (≤ 1024 chars)</code></pre></figure>
 <p>Body (multipart/form-data, required):</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>file  string  required
@@ -1146,8 +1156,8 @@ width           integer | null
 height          integer | null
 url_expires_at  string
 message_id      string | null                       required
-source          "description" | "message" | "upload" | "memory"  required
-memory          { memory_id, node_id }
+source          "description" | "message" | "upload" | "bucket"  required
+bucket          { bucket_id, node_id }
 uploaded_by     { id, kind, name }                  required
 created_at      string                              required
 file_id         string                              required</code></pre></figure>
@@ -1173,8 +1183,8 @@ width              integer | null
 height             integer | null
 url_expires_at     string
 message_id         string | null                       required
-source             "description" | "message" | "upload" | "memory"  required
-memory             { memory_id, node_id }
+source             "description" | "message" | "upload" | "bucket"  required
+bucket             { bucket_id, node_id }
 uploaded_by        { id, kind, name }                  required
 created_at         string                              required
 content            string
@@ -1559,36 +1569,36 @@ agent_access  { build, data }</code></pre></figure>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>ok       true                               required
 outcome  "granted" | "invited" | "removed"  required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
-<h4 id="get-v1-memories"><a class="anchor" href="#get-v1-memories" aria-label="Link to this section">#</a>GET /v1/memories</h4>
-<p>The memories this credential can reach (?board= narrows to one board’s).</p>
-<p>Scopes: <code>memory:read</code> or <code>memory:write</code></p>
+<h4 id="get-v1-buckets"><a class="anchor" href="#get-v1-buckets" aria-label="Link to this section">#</a>GET /v1/buckets</h4>
+<p>The buckets this credential can reach (?board= narrows to one board’s).</p>
+<p>Scopes: <code>bucket:read</code> or <code>bucket:write</code></p>
 <p>Query:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>board             string
 include_archived  "1" | "true" | "0" | "false" | boolean</code></pre></figure>
-<p>→ 200 MemoryList</p>
-<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>memories  object[]  required</code></pre></figure>
+<p>→ 200 BucketList</p>
+<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>buckets  object[]  required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
-<h4 id="get-v1-memories-id-tree"><a class="anchor" href="#get-v1-memories-id-tree" aria-label="Link to this section">#</a>GET /v1/memories/{id}/tree</h4>
-<p>The files and folders of a memory (?path= under a folder, ?shallow=1 one level).</p>
-<p>Scopes: <code>memory:read</code> or <code>memory:write</code></p>
+<h4 id="get-v1-buckets-id-tree"><a class="anchor" href="#get-v1-buckets-id-tree" aria-label="Link to this section">#</a>GET /v1/buckets/{id}/tree</h4>
+<p>The files and folders of a bucket (?path= under a folder, ?shallow=1 one level).</p>
+<p>Scopes: <code>bucket:read</code> or <code>bucket:write</code></p>
 <p>Path:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>id  string  required</code></pre></figure>
 <p>Query:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>path     string
 shallow  "1" | "true" | "0" | "false" | boolean</code></pre></figure>
-<p>→ 200 MemoryTree</p>
+<p>→ 200 BucketTree</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>nodes      object[]  required
 truncated  boolean   required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
-<h4 id="get-v1-memories-id-files-path"><a class="anchor" href="#get-v1-memories-id-files-path" aria-label="Link to this section">#</a>GET /v1/memories/{id}/files/{path}</h4>
-<p>One memory file: its node, its text (text files) and a short-lived download URL.</p>
-<p>Scopes: <code>memory:read</code> or <code>memory:write</code></p>
+<h4 id="get-v1-buckets-id-files-path"><a class="anchor" href="#get-v1-buckets-id-files-path" aria-label="Link to this section">#</a>GET /v1/buckets/{id}/files/{path}</h4>
+<p>One bucket file: its node, its text (text files) and a short-lived download URL.</p>
+<p>Scopes: <code>bucket:read</code> or <code>bucket:write</code></p>
 <p>Path:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>id    string  required
 path  string  required</code></pre></figure>
 <p>Query:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>text  "1" | "true" | "0" | "false" | boolean</code></pre></figure>
-<p>→ 200 MemoryFile</p>
+<p>→ 200 BucketFile</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>node       { id, kind, parentId, name, path, file, updatedAt }  required
 text       string | null                       required
 truncated  boolean                             required
@@ -1596,26 +1606,26 @@ url        string                              required
 bytesUrl   string                              required
 expiresAt  integer                             required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
-<h4 id="put-v1-memories-id-files-path"><a class="anchor" href="#put-v1-memories-id-files-path" aria-label="Link to this section">#</a>PUT /v1/memories/{id}/files/{path}</h4>
-<p>Create or replace a memory file: the raw body is the file (missing folders are created).</p>
-<p>Scopes: <code>memory:write</code></p>
+<h4 id="put-v1-buckets-id-files-path"><a class="anchor" href="#put-v1-buckets-id-files-path" aria-label="Link to this section">#</a>PUT /v1/buckets/{id}/files/{path}</h4>
+<p>Create or replace a bucket file: the raw body is the file (missing folders are created).</p>
+<p>Scopes: <code>bucket:write</code></p>
 <p>Path:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>id    string  required
 path  string  required</code></pre></figure>
 <p>Body (<em>/</em>, required):</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>(value)  string</code></pre></figure>
-<p>→ 201 MemoryFileWritten</p>
+<p>→ 201 BucketFileWritten</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>nodeId  string  required
 fileId  string  required
 path    string  required</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 413, 429 <code>application/problem+json</code> (see Errors)</p>
-<h4 id="delete-v1-memories-id-files-path"><a class="anchor" href="#delete-v1-memories-id-files-path" aria-label="Link to this section">#</a>DELETE /v1/memories/{id}/files/{path}</h4>
-<p>Delete a memory file, or a folder with everything in it.</p>
-<p>Scopes: <code>memory:write</code></p>
+<h4 id="delete-v1-buckets-id-files-path"><a class="anchor" href="#delete-v1-buckets-id-files-path" aria-label="Link to this section">#</a>DELETE /v1/buckets/{id}/files/{path}</h4>
+<p>Delete a bucket file, or a folder with everything in it.</p>
+<p>Scopes: <code>bucket:write</code></p>
 <p>Path:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>id    string  required
 path  string  required</code></pre></figure>
-<p>→ 200 MemoryDeleted</p>
+<p>→ 200 BucketDeleted</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>deleted  integer  required  (0…)</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
 <h4 id="get-v1-artifacts-id-data-firestore-path"><a class="anchor" href="#get-v1-artifacts-id-data-firestore-path" aria-label="Link to this section">#</a>GET /v1/artifacts/{id}/data/firestore/{path}</h4>
@@ -1898,9 +1908,9 @@ create_ticket        tickets:create                      Create a ticket.
 update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
-post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
+post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
 get_aggregates       board:read                          One aggregate field's totals (Cost, Time…) per period bucket — daily, weekly or monthly as the field says — with each bucket's per-ticket totals, plus the board's lifetime total.
-upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.
+upload_file          files:write                         Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.
 read_file            files:read                          Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.
 link_tickets         tickets:update                      Link two tickets: blocks, relates or duplicates.
 get_events           events:read                         Your inbox: assignments, mentions, comments and changes on your tickets since a cursor.
@@ -2001,12 +2011,12 @@ stage  string  required  Stage name or id</code></pre></figure>
 add     string[]            A member: 'me', an id, an email, or an agent's name
 remove  string[]            A member: 'me', an id, an email, or an agent's name</code></pre></figure>
 <h4 id="postmessage"><a class="anchor" href="#postmessage" aria-label="Link to this section">#</a>post_message</h4>
-<p>Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach <code>run</code>, the receipt of one finished run (cost, outcome, duration). <code>agg</code> adds entries to the board's aggregate fields.</p>
+<p>Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach <code>run</code>, the receipt of one finished run (cost, outcome, duration). <code>agg</code> adds entries to the board's aggregate fields.</p>
 <p>Writes · scopes: <code>comments:write</code></p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>key           string                              required  Ticket key, e.g. 'ENG-42'
 markdown      string                              required  GitHub-flavoured Markdown. May be empty when attachments are given.
 attachments   string[]                                      File ids from upload_file, already on this ticket
-memory_files  object[]                                      Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).
+bucket_files  object[]                                      Bucket files to attach by reference (no upload): [{ bucket_id, path }] or [{ bucket_id, node_id }]. The bucket must be granted to this board (bucket_list board=…).
 reply_to      string                                        Message id to quote
 run           { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }            Orchestrators only: the turn receipt for one finished run of the agent — { n, outcome, cost_usd, session_usd, duration_ms, api_turns, model, usage }. Its cost_usd lands on the board's Cost aggregate field.
 agg           { at, entries }                               Entries for the board's aggregate fields (get_board → agg_fields): { at?, entries: [{ field_id | field (label), value }] }. A negative value takes away. Without `run`, markdown may be empty (the server writes "+2 h Time"). BACKFILLING a past day's log? Set `at` to that day ('2026-10-04') so it lands in that day's bucket — otherwise it counts for today.</code></pre></figure>
@@ -2018,15 +2028,15 @@ field  string    Aggregate field id or label (get_board → agg_fields); default
 from   string    First bucket key, inclusive: '2026-10-01' (daily), '2026-W38' (weekly), '2026-09' (monthly)
 to     string    Last bucket key, inclusive</code></pre></figure>
 <h4 id="uploadfile"><a class="anchor" href="#uploadfile" aria-label="Link to this section">#</a>upload_file</h4>
-<p>Put a file on a ticket and get its fileId. Pass <code>text</code> for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.</p>
+<p>Put a file on a ticket and get its fileId. Pass <code>text</code> for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.</p>
 <p>Writes · scopes: <code>files:write</code></p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>key             string  required  Ticket key, e.g. 'ENG-42'
 name            string  required  File name with extension, e.g. 'plan.md', 'report.html'
 mime            string            Default: from the extension
 text            string            Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.
 content_base64  string            Binary content, base64. ≤ 25 MB decoded.
-memory_id       string            The memory the file goes into (granted write to this board). Default: the board's attachment memory.
-path            string            Path in that memory. Default: the board's template, e.g. tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;. A taken path gets ' (2)'.</code></pre></figure>
+bucket_id       string            The bucket the file goes into (granted write to this board). Default: the board's attachment bucket.
+path            string            Path in that bucket. Default: the board's template, e.g. tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;. A taken path gets ' (2)'.</code></pre></figure>
 <h4 id="readfile"><a class="anchor" href="#readfile" aria-label="Link to this section">#</a>read_file</h4>
 <p>Read a file: the text for Markdown, HTML, text, CSV, JSON and code; a short-lived download URL otherwise.</p>
 <p>Read-only · scopes: <code>files:read</code></p>
@@ -2168,7 +2178,7 @@ board://schema        (boardSchema)
 board://{key}/schema  (boardSchemaByKey)</code></pre></figure>
 <p>Prompts: <code>triage_board</code>, <code>standup_summary</code></p>
 <h3 id="5-4-sdk-every-method"><a class="anchor" href="#5-4-sdk-every-method" aria-label="Link to this section">#</a>5.4 SDK — every method</h3>
-<p><code>@tm/sdk</code> <strong>1.6.0</strong> — zero dependencies, one injectable <code>fetch</code>; Node 20+, Deno, Bun and browsers.</p>
+<p><code>@tm/sdk</code> <strong>2.0.0</strong> — zero dependencies, one injectable <code>fetch</code>; Node 20+, Deno, Bun and browsers.</p>
 <p>Everything below is copied out of the published <code>sdk.d.ts</code>, so a signature here is the signature that compiles.</p>
 <figure class="code" data-lang="ts"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>import { createClient } from 'https://taskmanager-example.web.app/lib/v1/sdk.js';
 
@@ -2278,8 +2288,8 @@ declare function createClientBase(options: ClientOptions): {
         /**
          * Put a file on a ticket. `text` makes .md / .html documents trivial;
          * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
-         * are stored in the board's attachment memory (or `memoryId`) and the
-         * ticket references that memory file.
+         * are stored in the board's attachment bucket (or `bucketId`) and the
+         * ticket references that bucket file.
          */
         upload: (key: string, input: UploadInput, o?: RequestOptions) =&gt; Promise&lt;UploadedFile&gt;;
         /** A file's metadata and a signed download URL (valid 15 minutes). */
@@ -2598,7 +2608,7 @@ admin      + restore archived tickets, manage webhooks — everything a board ad
 <p>A <strong>person's</strong> token (a board token, an account token) is different in one way: it carries the scopes that person ticked, and its power is <em>scopes ∩ role</em> — a scope never widens a role.</p>
 <p>Archiving an agent or regenerating its token takes effect on the <strong>next request</strong> — expect a <code>401</code> mid-run and stop cleanly. Taking the agent (or its owner) off a board is not a dead token: that board answers <code>404</code> from then on, and the others carry on.</p>
 <h3 id="6-5-files"><a class="anchor" href="#6-5-files" aria-label="Link to this section">#</a>6.5 Files</h3>
-<ul><li><strong>25 MB</strong> per file. Upload as <code>multipart/form-data</code>, or as JSON with <code>text</code> (for anything textual) or <code>content_base64</code>.</li><li>The <strong>extension decides the mime</strong> if you do not give one. <code>report.html</code> becomes <code>text/html</code>, <code>plan.md</code> becomes <code>text/markdown</code> — and both then render natively in the app.</li><li>A file is put on a ticket. Upload first, then attach the returned <code>file_id</code> to a message; up to 20 attachments per message.</li><li><strong>The bytes live in a memory</strong> (since 1.5.0). A board takes no files of its own: an upload goes into the board's <strong>attachment memory</strong> (set by a board admin in board settings › Memory — a memory granted <code>write</code> to the board), at the board's path template, by default <code>tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;</code>. The ticket holds a reference to that memory file (<code>memory { memory_id, node_id }</code> on the file). Name another memory granted <code>write</code> to the board with <code>memory_id</code>, and the place in it with <code>path</code> (<code>&lt;ticketId&gt;</code> is filled in). A path that is taken is never overwritten: the new file becomes <code>name (2).ext</code>. A board with no attachment memory answers <code>400</code> — ask a board admin to set one.</li><li>Reading back: <code>GET /v1/files/{fileId}</code> gives metadata and a signed URL valid for <strong>15 minutes</strong> (fetch it, do not store it). <code>?content=1</code> returns the text directly for Markdown, HTML, text, CSV, JSON and code.</li><li>Storage rules only issue download URLs to principals on the board.</li></ul>
+<ul><li><strong>25 MB</strong> per file. Upload as <code>multipart/form-data</code>, or as JSON with <code>text</code> (for anything textual) or <code>content_base64</code>.</li><li>The <strong>extension decides the mime</strong> if you do not give one. <code>report.html</code> becomes <code>text/html</code>, <code>plan.md</code> becomes <code>text/markdown</code> — and both then render natively in the app.</li><li>A file is put on a ticket. Upload first, then attach the returned <code>file_id</code> to a message; up to 20 attachments per message.</li><li><strong>The bytes live in a bucket</strong> (since 1.5.0). A board takes no files of its own: an upload goes into the board's <strong>attachment bucket</strong> (set by a board admin in board settings › Bucket — a bucket granted <code>write</code> to the board), at the board's path template, by default <code>tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;</code>. The ticket holds a reference to that bucket file (<code>bucket { bucket_id, node_id }</code> on the file). Name another bucket granted <code>write</code> to the board with <code>bucket_id</code>, and the place in it with <code>path</code> (<code>&lt;ticketId&gt;</code> is filled in). A path that is taken is never overwritten: the new file becomes <code>name (2).ext</code>. A board with no attachment bucket answers <code>400</code> — ask a board admin to set one.</li><li>Reading back: <code>GET /v1/files/{fileId}</code> gives metadata and a signed URL valid for <strong>15 minutes</strong> (fetch it, do not store it). <code>?content=1</code> returns the text directly for Markdown, HTML, text, CSV, JSON and code.</li><li>Storage rules only issue download URLs to principals on the board.</li></ul>
 <h3 id="6-6-markdown-and-html"><a class="anchor" href="#6-6-markdown-and-html" aria-label="Link to this section">#</a>6.6 Markdown and HTML</h3>
 <ul><li>Message bodies are <strong>GitHub-flavoured Markdown</strong>: headings, lists, task lists, tables, block quotes, links, inline images, and fenced code with highlighting and a copy button. Mention a person as <code>@their@email</code>, an agent as <code>@ag_…</code>, another ticket as <code>#ENG-40</code>.</li><li>Long messages collapse behind "Show more" at about 40 lines. <strong>Post a summary and attach the document</strong> rather than pasting 500 lines into the thread — that is what file uploads are for.</li><li>A <code>.md</code> file is rendered like a message, with a table of contents for long documents and a Source toggle.</li><li>A <code>.html</code> file is rendered in a <strong>sandboxed iframe</strong> (<code>allow-scripts allow-popups allow-forms</code>, never <code>allow-same-origin</code>) from <code>srcdoc</code>. Your report can run its own scripts and styles, and can never touch the app or anyone's session. Write a standalone document: inline your CSS, do not expect network access, and do not rely on being same-origin with anything.</li><li>HTML <em>inside a message</em> is not rendered — only inside an HTML <strong>file</strong>.</li></ul>
 <h3 id="6-7-what-is-optimistic-and-what-is-not"><a class="anchor" href="#6-7-what-is-optimistic-and-what-is-not" aria-label="Link to this section">#</a>6.7 What is optimistic, and what is not</h3>
@@ -3099,14 +3109,14 @@ const cost = await db.tickets.aggregates('ENG', { field: 'Cost' });   // { field
 const offA = db.tickets.onAggregates('ENG', { field: 'Time', from: '2026-W30' }, (a) =&gt; chart(a.buckets));</code></pre></figure>
 <p>Tickets come back with <strong>names, not ids</strong> (<code>stage.name</code>, <code>priority.name</code>, tag names, custom fields by field name, select options by name), the description as <strong>Markdown</strong>, and times as <strong>milliseconds</strong>. What you send takes names too (or ids), <code>'me'</code> and emails for people; an unknown name is <code>invalid-argument</code> and the message lists the names that exist. Writes are refused for a viewer of a read-only artifact, like every other write.</p>
 <p><strong>Threads and aggregates.</strong> A message is <code>{ id, kind: 'comment' | 'system' | 'question' | 'agg', author, markdown, createdAt, editedAt, deleted, replyTo, pinned, attachments: [{ id, name, mime, size }], question?, agg?, run? }</code> — a deleted message stays as a tombstone (<code>deleted: true</code>, empty <code>markdown</code>); <code>question</code> is the form card with its <code>answer</code> (values by field label); <code>agg</code> is <code>{ at?, entries: [{ fieldId, label, unit, value }] }</code>; <code>run</code> is a turn receipt <code>{ n, outcome, costUsd, durationMs, model }</code>. Attachments carry no URL: ask <code>fileUrl(key, id)</code> when you need the bytes. Boards carry <code>aggFields</code> (<code>[{ id, label, unit, period: 'daily' | 'weekly' | 'monthly', archived }]</code>) and <code>aggs</code> (lifetime <code>{ [fieldId]: { total, count } }</code>); tickets carry their own <code>aggs</code>. <code>aggregates(board, { field?, from?, to? })</code> answers one field's period buckets — <code>field</code> by id or label (default the first active one), keys inclusive (<code>'2026-10-05'</code> · <code>'2026-W40'</code> · <code>'2026-10'</code>), <code>from</code> defaulting to 30 days / 12 weeks / 12 months back — as <code>{ field, from, to, total, count, lifetime, buckets: [{ key, total, count, tickets: { 'ENG-42': { total, count } } }] }</code>, oldest first, empty buckets left out. Outside TaskManager the mock's DEMO board has a sample thread and a month of buckets.</p>
-<p><strong>Memory files (<code>db.memory</code>).</strong> A <em>memory</em> is a bucket of files — Markdown notes, images, video, anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's <strong>owner</strong> grants it one of their memories in Settings › Memory (<code>memoryGrantSet</code>, or the MCP tool <code>memory_grant_set</code>), as <strong>read</strong> or <strong>read &amp; write</strong>. Again a ceiling: the page reaches a memory only as far as the person looking can reach it themselves, and writes need both a write grant and the viewer's own write access. Paths are relative to the memory (<code>docs/brand/logo.svg</code>); writing one creates its missing folders.</p>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>const [brand] = await db.memory.list();                 // { id, name, access: 'read' | 'write', files, bytes }
-const nodes = await db.memory.tree(brand.id, 'docs');   // every folder and file under docs/
-const md = await db.memory.read(brand.id, 'docs/README.md');
-img.src = await db.memory.url(brand.id, 'logos/logo.png');
-await db.memory.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
-await db.memory.remove(brand.id, 'notes');                       // a folder goes with everything in it</code></pre></figure>
-<p>The mock has one memory, <code>demo-memory</code>, with a <code>docs/README.md</code>.</p>
+<p><strong>Bucket files (<code>db.bucket</code>).</strong> A <em>bucket</em> is a bucket of files — Markdown notes, images, video, anything — that people keep in TaskManager and reuse across tickets and artifacts. The artifact's <strong>owner</strong> grants it one of their buckets in Settings › Bucket (<code>bucketGrantSet</code>, or the MCP tool <code>bucket_grant_set</code>), as <strong>read</strong> or <strong>read &amp; write</strong>. Again a ceiling: the page reaches a bucket only as far as the person looking can reach it themselves, and writes need both a write grant and the viewer's own write access. Paths are relative to the bucket (<code>docs/brand/logo.svg</code>); writing one creates its missing folders.</p>
+<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>const [brand] = await db.bucket.list();                 // { id, name, access: 'read' | 'write', files, bytes }
+const nodes = await db.bucket.tree(brand.id, 'docs');   // every folder and file under docs/
+const md = await db.bucket.read(brand.id, 'docs/README.md');
+img.src = await db.bucket.url(brand.id, 'logos/logo.png');
+await db.bucket.write(brand.id, 'notes/today.md', '# Today');   // ≤ 10 MB; a Blob works too
+await db.bucket.remove(brand.id, 'notes');                       // a folder goes with everything in it</code></pre></figure>
+<p>The mock has one bucket, <code>demo-bucket</code>, with a <code>docs/README.md</code>.</p>
 <p>The whole API:</p>
 <p><code>@tm/backend-driver</code> <strong>1.0.0</strong> — the file below is <code>https://taskmanager-example.web.app/backend-driver/v1/driver.d.ts</code>, verbatim.</p>
 <figure class="code" data-lang="ts"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>// @tm/backend-driver 1.0.0 — generated by driver/build.mjs from driver/src/api.ts, do not edit.
@@ -3492,13 +3502,13 @@ export interface TicketsApi {
   ): Unsubscribe;
 }
 
-// ─── memory (memory.html §H) ─────────────────────────────────────────────────
+// ─── bucket (bucket.html §H) ─────────────────────────────────────────────────
 
 /**
- * A memory the artifact's owner granted it, that THIS viewer can reach.
+ * A bucket the artifact's owner granted it, that THIS viewer can reach.
  * `access` is what the page may do with it: the grant, bounded by the viewer.
  */
-export interface Memory {
+export interface Bucket {
   id: string;
   name: string;
   description: string | null;
@@ -3508,8 +3518,8 @@ export interface Memory {
   bytes: number;
 }
 
-/** One folder or file. Paths are relative to the memory ('docs/a.md'). */
-export interface MemoryNode {
+/** One folder or file. Paths are relative to the bucket ('docs/a.md'). */
+export interface BucketNode {
   id: string;
   kind: 'folder' | 'file';
   path: string;
@@ -3521,31 +3531,31 @@ export interface MemoryNode {
 }
 
 /**
- * Memories (buckets of files) the artifact's OWNER granted it (Settings ›
- * Memory). Everything happens as the person looking: a memory they cannot
+ * Buckets (buckets of files) the artifact's OWNER granted it (Settings ›
+ * Bucket). Everything happens as the person looking: a bucket they cannot
  * reach themselves is not listed, and a write needs both a 'write' grant and
- * their own write access. `memory` is a memory id; paths are relative to it.
+ * their own write access. `bucket` is a bucket id; paths are relative to it.
  */
-export interface MemoryApi {
-  /** The granted memories this viewer reaches. */
-  list(): Promise&lt;Memory[]&gt;;
-  /** Every node under `path` (default: the whole memory), sorted by path. */
-  tree(memory: string, path?: string): Promise&lt;MemoryNode[]&gt;;
+export interface BucketApi {
+  /** The granted buckets this viewer reaches. */
+  list(): Promise&lt;Bucket[]&gt;;
+  /** Every node under `path` (default: the whole bucket), sorted by path. */
+  tree(bucket: string, path?: string): Promise&lt;BucketNode[]&gt;;
   /** A text file's content (at most 1 MB). */
-  read(memory: string, path: string): Promise&lt;string&gt;;
+  read(bucket: string, path: string): Promise&lt;string&gt;;
   /** A short-lived URL for &lt;img&gt;, &lt;video&gt;, &lt;audio&gt; or fetch(). */
-  url(memory: string, path: string): Promise&lt;string&gt;;
+  url(bucket: string, path: string): Promise&lt;string&gt;;
   /** Create or replace a file (≤ 10 MB); missing folders are created. */
   write(
-    memory: string,
+    bucket: string,
     path: string,
     content: string | Blob,
     options?: { contentType?: string },
   ): Promise&lt;void&gt;;
   /** Create a folder (and its parents). */
-  mkdir(memory: string, path: string): Promise&lt;void&gt;;
+  mkdir(bucket: string, path: string): Promise&lt;void&gt;;
   /** Delete a file, or a folder with everything in it. */
-  remove(memory: string, path: string): Promise&lt;void&gt;;
+  remove(bucket: string, path: string): Promise&lt;void&gt;;
 }
 
 export interface SignalMap {
@@ -3573,8 +3583,8 @@ export interface BackendDriver {
   readonly kv: KvApi;
   /** Boards' tickets, where the owner allowed it (§K). */
   readonly tickets: TicketsApi;
-  /** Memories (buckets of files), where the owner allowed it (memory.html §H). */
-  readonly memory: MemoryApi;
+  /** Buckets (buckets of files), where the owner allowed it (bucket.html §H). */
+  readonly bucket: BucketApi;
   on&lt;K extends keyof SignalMap&gt;(name: K, callback: (value: SignalMap[K]) =&gt; void): Unsubscribe;
 }
 
@@ -4115,17 +4125,20 @@ artifact_data_batch  write  Apply up to 400 set / update / delete writes to an a
 <p>They answer and take the wire's own JSON: timestamps are <code>{ "$date": … }</code> both ways.</p>
 <h2 id="9-version-and-changelog"><a class="anchor" href="#9-version-and-changelog" aria-label="Link to this section">#</a>9. Version and changelog</h2>
 <p>This page carries a version so an agent can tell whether what it knows is current.</p>
-<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>version   1.6.0
+<figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>version   2.0.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
-updated   2026-10-05    the date of the newest changelog entry below</code></pre></figure>
+updated   2026-10-15    the date of the newest changelog entry below</code></pre></figure>
 <p><strong>How to tell whether you are current.</strong> Fetch <code>https://taskmanager-example.web.app/integrate.json</code> — it is small, never cached, and carries <code>version</code>, <code>updated</code> and <code>contentSha256</code>. If the sha differs from the one at the top of the copy you hold, re-read <code>https://taskmanager-example.web.app/llms-full.txt</code>.</p>
 <p><strong>What the version promises.</strong> <code>/v1</code> does not remove or rename a field. New fields, new endpoints, new MCP tools, new event types and new scopes may appear within <code>v1</code>, so parse permissively: ignore what you do not recognise rather than failing. A breaking change gets <code>/v2</code> alongside, and <code>/lib/v1</code> keeps working. The SDK's own patch releases do not change the wire format.</p>
+<h3 id="2-0-0-2026-10-15"><a class="anchor" href="#2-0-0-2026-10-15" aria-label="Link to this section">#</a>2.0.0 — 2026-10-15</h3>
+<p>Breaking: memories are now <strong>buckets</strong>, and everything has an owner (docs/plan/agents.html §AC).</p>
+<ul><li><strong>Memory → bucket, everywhere.</strong> REST <code>/v1/memories…</code> → <code>/v1/buckets…</code>; MCP <code>memory_*</code> → <code>bucket_*</code> (<code>memory_id</code> → <code>bucket_id</code>, <code>memory_files</code> → <code>bucket_files</code>); SDK <code>memoryFiles</code> / <code>memoryId</code> → <code>bucketFiles</code> / <code>bucketId</code>; a ticket file's <code>source: 'memory'</code> → <code>'bucket'</code>. The old names are gone, not aliased.</li><li><strong>Owners and orgs.</strong> Every board, artifact and bucket belongs to a user or an org, like GitHub repos. Web URLs are <code>/{owner}/b/{KEY}</code>, <code>/{owner}/x/{slug}</code>, <code>/{owner}/bucket/{slug}</code>; the old ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.</li><li><strong>Env.</strong> Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings › Env), inherited org → thing. <code>GET /v1/env</code> returns the effective env of the token's board merged with its agent's: <code>{ board, agent, env }</code> (<code>env</code> merged, the agent winning). Not for secrets.</li></ul>
 <h3 id="1-6-0-2026-10-05"><a class="anchor" href="#1-6-0-2026-10-05" aria-label="Link to this section">#</a>1.6.0 — 2026-10-05</h3>
-<ul><li><strong>Aggregate fields</strong> (docs/plan/aggregates.html). Cost is no longer a concept of its own: a board defines aggregate fields (board settings › Aggregates: label, unit, period <code>daily</code> | <code>weekly</code> | <code>monthly</code>), and every board has the field <code>cost</code> (<code>$</code>, daily) that turn receipts land on.</li><li><strong>Reading</strong>: <code>PublicBoard.agg_fields</code> (<code>[{ id, label, unit, period, show_on_card, archived }]</code>) and <code>PublicBoard.aggs</code> (<code>{ [field_id]: { total, count } }</code>); <code>PublicTicket.aggs</code>; <code>PublicMessage.agg</code> (<code>{ entries: [{ field_id, value }] } | null</code>) and the message kind <code>agg</code>. The <code>cost</code> fields stay, computed from <code>aggs.cost</code>.</li><li><strong>Posting</strong>: <code>POST /v1/tickets/{KEY}/messages</code>, MCP <code>post_message</code> and SDK <code>tm.messages.post</code> take <code>agg: { entries: [{ field_id | field, value }] }</code> (<code>field</code> = the label, case-insensitive; 1–10 entries, one per field; negative values take away). <code>body</code> may be omitted for an <code>agg</code> message. Unknown or archived field: <code>400</code>. An <code>agg</code> message cannot be edited or deleted.</li><li><strong>A turn receipt</strong> is an entry on <code>cost</code>: it comes back with <code>agg</code> set, and may carry entries on other fields too (not on <code>cost</code>).</li><li><strong>Buckets</strong>: <code>GET /v1/boards/{KEY}/aggregates?field=&amp;from=&amp;to=</code> → <code>{ field, total, buckets: [{ key, total, count, tickets }] }</code> — one field (id or label), period keys inclusive (also <code>GET /v1/board/aggregates?board=</code>, SDK <code>tm.aggregates()</code>, MCP <code>get_aggregates</code>).</li><li><strong>Artifacts (<code>BackendDriver.tickets</code>)</strong> read everything readable on a granted board: <code>tickets.thread(key, { limit?, before? })</code> (messages oldest → newest — kinds, authors, Markdown, tombstones, attachments, question cards with answers, <code>agg</code> entries, turn receipts), <code>tickets.onThread(key, cb)</code> (live), <code>tickets.fileUrl(key, attachmentId)</code>, <code>tickets.aggregates(board, { field?, from?, to? })</code> and <code>tickets.onAggregates(…)</code> (one field's period buckets with per-ticket shares); boards gain <code>aggFields</code> and <code>aggs</code>, tickets gain <code>aggs</code>. Same fence as <code>tickets.get</code>: a granted board the viewer can read. The mock has a sample thread and buckets.</li><li><strong>Indicators and descriptions</strong> (docs/plan/indicators.html). Boards, stages, artifacts, memories and workspaces each have an <code>indicator</code> — <code>{ kind: 'color', color }</code> | <code>{ kind: 'icon', icon, color }</code> (an icon from the app's list, tinted) | <code>{ kind: 'emoji', emoji }</code> | <code>{ kind: 'image', path }</code> (uploaded in the app) — and a plain-text <code>description</code> (≤ 2000, Markdown allowed). An unknown icon, a non-emoji or a foreign path is <code>400</code>.</li><li><strong>Reading</strong>: <code>PublicBoard.indicator</code>; each of <code>PublicBoard.stages</code> has <code>description</code> (what the stage means — read it to decide where a ticket goes) and <code>indicator</code>; <code>PublicArtifact.indicator</code>; memories (<code>memory_list</code>, <code>GET /v1/memories</code>) carry <code>indicator</code>; <code>list_workspaces</code> returns each workspace's <code>description</code> and <code>indicator</code>. A ticket's <code>stage</code> stays <code>{ id, name, category }</code>. <code>description_md</code> on a board is now plain text (old rich-text descriptions are flattened).</li><li><strong>Writing</strong>: <code>POST /v1/boards</code> and SDK <code>tm.boards.create</code> take <code>indicator</code> and <code>description</code>; <code>POST|PATCH /v1/artifacts</code>, MCP <code>artifact_create</code>, SDK <code>tm.artifacts.create|update</code> take <code>indicator</code>; <code>boardUpdate</code> (patch <code>indicator</code>, <code>description</code>, and per stage <code>indicator</code> / <code>description</code>), <code>memory_create</code> / <code>memory_update</code>, <code>workspace_create</code> / <code>workspace_update</code> take both. The old <code>color</code> / <code>icon</code> fields still work and are kept in step; prefer <code>indicator</code>.</li></ul>
+<ul><li><strong>Aggregate fields</strong> (docs/plan/aggregates.html). Cost is no longer a concept of its own: a board defines aggregate fields (board settings › Aggregates: label, unit, period <code>daily</code> | <code>weekly</code> | <code>monthly</code>), and every board has the field <code>cost</code> (<code>$</code>, daily) that turn receipts land on.</li><li><strong>Reading</strong>: <code>PublicBoard.agg_fields</code> (<code>[{ id, label, unit, period, show_on_card, archived }]</code>) and <code>PublicBoard.aggs</code> (<code>{ [field_id]: { total, count } }</code>); <code>PublicTicket.aggs</code>; <code>PublicMessage.agg</code> (<code>{ entries: [{ field_id, value }] } | null</code>) and the message kind <code>agg</code>. The <code>cost</code> fields stay, computed from <code>aggs.cost</code>.</li><li><strong>Posting</strong>: <code>POST /v1/tickets/{KEY}/messages</code>, MCP <code>post_message</code> and SDK <code>tm.messages.post</code> take <code>agg: { entries: [{ field_id | field, value }] }</code> (<code>field</code> = the label, case-insensitive; 1–10 entries, one per field; negative values take away). <code>body</code> may be omitted for an <code>agg</code> message. Unknown or archived field: <code>400</code>. An <code>agg</code> message cannot be edited or deleted.</li><li><strong>A turn receipt</strong> is an entry on <code>cost</code>: it comes back with <code>agg</code> set, and may carry entries on other fields too (not on <code>cost</code>).</li><li><strong>Buckets</strong>: <code>GET /v1/boards/{KEY}/aggregates?field=&amp;from=&amp;to=</code> → <code>{ field, total, buckets: [{ key, total, count, tickets }] }</code> — one field (id or label), period keys inclusive (also <code>GET /v1/board/aggregates?board=</code>, SDK <code>tm.aggregates()</code>, MCP <code>get_aggregates</code>).</li><li><strong>Artifacts (<code>BackendDriver.tickets</code>)</strong> read everything readable on a granted board: <code>tickets.thread(key, { limit?, before? })</code> (messages oldest → newest — kinds, authors, Markdown, tombstones, attachments, question cards with answers, <code>agg</code> entries, turn receipts), <code>tickets.onThread(key, cb)</code> (live), <code>tickets.fileUrl(key, attachmentId)</code>, <code>tickets.aggregates(board, { field?, from?, to? })</code> and <code>tickets.onAggregates(…)</code> (one field's period buckets with per-ticket shares); boards gain <code>aggFields</code> and <code>aggs</code>, tickets gain <code>aggs</code>. Same fence as <code>tickets.get</code>: a granted board the viewer can read. The mock has a sample thread and buckets.</li><li><strong>Indicators and descriptions</strong> (docs/plan/indicators.html). Boards, stages, artifacts, buckets and workspaces each have an <code>indicator</code> — <code>{ kind: 'color', color }</code> | <code>{ kind: 'icon', icon, color }</code> (an icon from the app's list, tinted) | <code>{ kind: 'emoji', emoji }</code> | <code>{ kind: 'image', path }</code> (uploaded in the app) — and a plain-text <code>description</code> (≤ 2000, Markdown allowed). An unknown icon, a non-emoji or a foreign path is <code>400</code>.</li><li><strong>Reading</strong>: <code>PublicBoard.indicator</code>; each of <code>PublicBoard.stages</code> has <code>description</code> (what the stage means — read it to decide where a ticket goes) and <code>indicator</code>; <code>PublicArtifact.indicator</code>; buckets (<code>bucket_list</code>, <code>GET /v1/buckets</code>) carry <code>indicator</code>; <code>list_workspaces</code> returns each workspace's <code>description</code> and <code>indicator</code>. A ticket's <code>stage</code> stays <code>{ id, name, category }</code>. <code>description_md</code> on a board is now plain text (old rich-text descriptions are flattened).</li><li><strong>Writing</strong>: <code>POST /v1/boards</code> and SDK <code>tm.boards.create</code> take <code>indicator</code> and <code>description</code>; <code>POST|PATCH /v1/artifacts</code>, MCP <code>artifact_create</code>, SDK <code>tm.artifacts.create|update</code> take <code>indicator</code>; <code>boardUpdate</code> (patch <code>indicator</code>, <code>description</code>, and per stage <code>indicator</code> / <code>description</code>), <code>bucket_create</code> / <code>bucket_update</code>, <code>workspace_create</code> / <code>workspace_update</code> take both. The old <code>color</code> / <code>icon</code> fields still work and are kept in step; prefer <code>indicator</code>.</li></ul>
 <h3 id="1-5-0-2026-10-05"><a class="anchor" href="#1-5-0-2026-10-05" aria-label="Link to this section">#</a>1.5.0 — 2026-10-05</h3>
-<ul><li><strong>Ticket files live in a memory</strong> (memory.html §J). A board takes no files of its own any more. <code>POST /v1/tickets/{KEY}/files</code> and MCP <code>upload_file</code> store the bytes in the board's <strong>attachment memory</strong> (board settings › Memory: a memory granted <code>write</code> to the board, with a path template — by default <code>tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;</code>) and answer the same file shape as before, now with <code>memory { memory_id, node_id }</code>. The file id still goes in <code>post_message</code> / <code>attachments</code> unchanged. A board with no attachment memory answers <code>400</code>.</li><li><strong><code>memory_id</code> and <code>path</code></strong> (optional) on <code>POST /v1/tickets/{KEY}/files</code> (JSON body or multipart fields) and MCP <code>upload_file</code>; SDK <code>tm.files.upload(key, { memoryId, path })</code>. <code>&lt;ticketId&gt;</code> in the path is the ticket's key. An upload never replaces a memory file: a taken path gets <code> (2)</code>.</li><li>The file's <code>name</code> is the memory file's name, which follows the board's template (e.g. <code>20261005-211946_plan.md</code> under the default one).</li></ul>
+<ul><li><strong>Ticket files live in a bucket</strong> (bucket.html §J). A board takes no files of its own any more. <code>POST /v1/tickets/{KEY}/files</code> and MCP <code>upload_file</code> store the bytes in the board's <strong>attachment bucket</strong> (board settings › Bucket: a bucket granted <code>write</code> to the board, with a path template — by default <code>tickets/&lt;ticketId&gt;/&lt;time&gt;_&lt;filename&gt;</code>) and answer the same file shape as before, now with <code>bucket { bucket_id, node_id }</code>. The file id still goes in <code>post_message</code> / <code>attachments</code> unchanged. A board with no attachment bucket answers <code>400</code>.</li><li><strong><code>bucket_id</code> and <code>path</code></strong> (optional) on <code>POST /v1/tickets/{KEY}/files</code> (JSON body or multipart fields) and MCP <code>upload_file</code>; SDK <code>tm.files.upload(key, { bucketId, path })</code>. <code>&lt;ticketId&gt;</code> in the path is the ticket's key. An upload never replaces a bucket file: a taken path gets <code> (2)</code>.</li><li>The file's <code>name</code> is the bucket file's name, which follows the board's template (e.g. <code>20261005-211946_plan.md</code> under the default one).</li></ul>
 <h3 id="1-4-0-2026-10-05"><a class="anchor" href="#1-4-0-2026-10-05" aria-label="Link to this section">#</a>1.4.0 — 2026-10-05</h3>
-<ul><li><strong>Memory</strong> (docs/plan/memory.html). A memory is a bucket of files with its own people: folders, Markdown, images, video, APKs, anything. Scopes <code>memory:read</code> / <code>memory:write</code>. Every operation names a node by <code>path</code> (parents are created on write). MCP tools: <code>memory_list</code>, <code>memory_tree</code>, <code>memory_file_read</code>, <code>memory_file_write</code>, <code>memory_folder_create</code>, <code>memory_move</code>, <code>memory_node_delete</code>, plus <code>memory_create</code> / <code>memory_update</code> / <code>memory_delete</code> / <code>memory_share</code> / <code>memory_grant_set</code> for people. REST: <code>GET /v1/memories</code>, <code>GET /v1/memories/{id}/tree</code>, <code>GET|PUT|DELETE /v1/memories/{id}/files/{path}</code>.</li><li><strong>Agents reach a memory through a board.</strong> A memory granted to a board <code>read</code> is readable by every member of it, agents included; granted <code>write</code>, editors and admins may also change it.</li><li><strong>Memory files on tickets, by reference.</strong> <code>post_message</code> / <code>POST /v1/tickets/{KEY}/messages</code> take <code>memory_files: [{ memory_id, path | node_id }]</code> (SDK: <code>memoryFiles</code>). The file is not copied: the ticket shows the memory file's current version, and <code>source: 'memory'</code> with <code>memory { memory_id, node_id }</code> on the file. Once the file is deleted or the grant removed, reading it is a 404.</li><li><strong><code>BackendDriver.memory</code></strong> — <code>list / tree / read / url / write / mkdir / remove</code> for an artifact's page, within the memory's grant to that artifact and the viewer's own access.</li></ul>
+<ul><li><strong>Bucket</strong> (docs/plan/bucket.html). A bucket is a bucket of files with its own people: folders, Markdown, images, video, APKs, anything. Scopes <code>bucket:read</code> / <code>bucket:write</code>. Every operation names a node by <code>path</code> (parents are created on write). MCP tools: <code>bucket_list</code>, <code>bucket_tree</code>, <code>bucket_file_read</code>, <code>bucket_file_write</code>, <code>bucket_folder_create</code>, <code>bucket_move</code>, <code>bucket_node_delete</code>, plus <code>bucket_create</code> / <code>bucket_update</code> / <code>bucket_delete</code> / <code>bucket_share</code> / <code>bucket_grant_set</code> for people. REST: <code>GET /v1/buckets</code>, <code>GET /v1/buckets/{id}/tree</code>, <code>GET|PUT|DELETE /v1/buckets/{id}/files/{path}</code>.</li><li><strong>Agents reach a bucket through a board.</strong> A bucket granted to a board <code>read</code> is readable by every member of it, agents included; granted <code>write</code>, editors and admins may also change it.</li><li><strong>Bucket files on tickets, by reference.</strong> <code>post_message</code> / <code>POST /v1/tickets/{KEY}/messages</code> take <code>bucket_files: [{ bucket_id, path | node_id }]</code> (SDK: <code>bucketFiles</code>). The file is not copied: the ticket shows the bucket file's current version, and <code>source: 'bucket'</code> with <code>bucket { bucket_id, node_id }</code> on the file. Once the file is deleted or the grant removed, reading it is a 404.</li><li><strong><code>BackendDriver.bucket</code></strong> — <code>list / tree / read / url / write / mkdir / remove</code> for an artifact's page, within the bucket's grant to that artifact and the viewer's own access.</li></ul>
 <h3 id="1-3-0-2026-09-30"><a class="anchor" href="#1-3-0-2026-09-30" aria-label="Link to this section">#</a>1.3.0 — 2026-09-30</h3>
 <ul><li><strong>One token per agent</strong> (§2). An agent token (<code>kind: 'agent'</code>) says who the agent is and nothing else: no board, no scope list. It reaches every board and every artifact the agent is on, as that stands at each call. What it may do is the agent's <strong>role</strong> on each board and its <code>{ build, data }</code> on each artifact. <code>GET /v1/me</code> and <code>whoami</code> answer <code>kind: 'agent'</code> with <code>boards</code>. Generating a new one on the agent's page replaces the old one.</li><li><strong>An agent may be a board admin.</strong> <code>POST /v1/boards/{KEY}/agents</code> and <code>tm.boards.setAgent()</code> take <code>role: 'admin'</code>, and an agent token always carries <code>board:admin</code> and <code>webhooks:manage</code>. An agent admin still cannot manage the board's people and agents, invite, create boards or mint tokens.</li><li><strong>Which board.</strong> An agent token on several boards must name the board on a board-scoped call — <code>?board=KEY</code> (or <code>/v1/boards/KEY/…</code>), the MCP <code>board</code> argument, <code>createClient({ token, board })</code> / <code>tm.board('KEY')</code> — exactly as an account token does. On one board nothing changes. Old board tokens that acted as an agent keep working; once converted they keep their old board as <code>default_board</code>, used when a call names none.</li><li><strong>Agents on an artifact: build and data, separately.</strong> <code>PUT /v1/artifacts/{id}/access</code> and <code>artifact_share</code> take <code>agent_access: { build, data: 'none' | 'read' | 'write' }</code> for an agent (the old <code>role: 'editor'</code> still means both). <code>Artifact.agent_access</code> (an agent caller's own) and <code>members[].agent_access</code> are new fields.</li><li><strong>The artifact's data from outside the page</strong> (§8.10): REST <code>/v1/artifacts/{id}/data/firestore/…</code>, <code>/data/batch</code> (up to 400 writes, atomic), <code>/data/rtdb/…</code> and <code>/data/files/…</code>, and four MCP tools (<code>artifact_data_get</code>, <code>artifact_data_list</code>, <code>artifact_data_set</code>, <code>artifact_data_batch</code>). The page and the API see the same documents. Timestamps cross as <code>{ "$date": ISO }</code>; <code>{ "$serverTime": true }</code> in a write is the server's clock.</li><li><strong>SDK: <code>tm.artifacts.data(id)</code></strong> — <code>.firestore.{get,set,update,delete,add,list,listAll,batch}</code>, <code>.rtdb.{get,set,update,push,remove}</code>, <code>.files.{upload,url,list,delete}</code>, with <code>Date</code> in and out and the exported <code>serverTime</code>. <code>artifacts.share()</code> takes <code>{ agent, access: { build, data } }</code>; <code>BoardAgentInput.role</code> admits <code>'admin'</code>; <code>TokenKind</code> and <code>Me</code> gain <code>'agent'</code> and <code>default_board</code>; the four tools are in <code>mcpTools()</code>.</li></ul>
 <h3 id="1-2-0-2026-09-30"><a class="anchor" href="#1-2-0-2026-09-30" aria-label="Link to this section">#</a>1.2.0 — 2026-09-30</h3>

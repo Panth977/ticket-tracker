@@ -6,6 +6,10 @@
   go out right after (inviteCreate) — a failed invite never loses the board.
 -->
 <script lang="ts">
+  import OwnerSelect from '$lib/orgs/OwnerSelect.svelte';
+  import { ownerOf } from '$lib/orgs/store';
+  // §AC: /new-board?owner=org:{id} from an org's page.
+  let owner = $state(new URLSearchParams(globalThis.location?.search ?? '').get('owner') ?? '');
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -129,6 +133,7 @@
           template,
           indicator,
           ...(description.trim() ? { description: description.trim() } : {}),
+          ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
         },
         { toast: false },
       );
@@ -255,6 +260,7 @@
             unique across TaskManager and can’t be changed later.
           </p>
         </div>
+        <OwnerSelect bind:value={owner} />
         <div class="flex flex-col gap-1.5">
           <span class="text-sm font-medium">Indicator</span>
           <IndicatorField

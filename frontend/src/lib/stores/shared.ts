@@ -13,7 +13,7 @@
  * when it is handed back (live.ts clears errors and marks it fromCache), or to
  * refuse it by returning null.
  *
- * The memory is in-process only: it is not a second cache of the data (that is
+ * The bucket is in-process only: it is not a second cache of the data (that is
  * Firestore's IndexedDB), it is the last rendered state, bounded and dropped
  * whole on sign-out.
  *

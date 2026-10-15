@@ -1,6 +1,6 @@
 /**
  * A file's ICON and its TINT, by extension first and kind second — so a tree
- * of files reads at a glance (memory.html §F): Markdown, TypeScript, JSON,
+ * of files reads at a glance (bucket.html §F): Markdown, TypeScript, JSON,
  * a spreadsheet, an APK and a video each look different, as in an editor's
  * explorer. KIND_ICON (kinds.ts) stays the coarse per-kind answer.
  */

@@ -244,7 +244,7 @@ export function portSuite(label: string, adapter: () => DbAdapter): void {
       expect(ids(await col.where('arr', 'array-contains', 2).get())).toEqual(['a', 'b']);
     });
 
-    it('collection groups span parents (and board / memory files)', async () => {
+    it('collection groups span parents (and board / bucket files)', async () => {
       const cid = uniq('g');
       const b1 = uniq('b');
       const b2 = uniq('b');

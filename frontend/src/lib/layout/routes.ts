@@ -42,13 +42,15 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'grants', label: 'Stage grants' },
   { id: 'intake', label: 'Intake' },
   { id: 'integrations', label: 'Integrations' },
-  /** lib/access: what this board uses (memories, memory.html §D). */
+  /** lib/access: what this board uses (buckets, bucket.html §D). */
   { id: 'subscriptions', label: 'Subscriptions' },
   /** lib/access: what uses this board (artifacts §K, agents §AA2). */
   { id: 'subscribers', label: 'Subscribers' },
   /** aggregates.html: the numbers the board adds up (Cost, Time…). */
   { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
+  /** shared/src/env: key/value pairs, mostly for orchestrators. */
+  { id: 'env', label: 'Env' },
   { id: 'danger', label: 'Danger zone' },
 ] as const;
 export type BoardSettingsSection = (typeof BOARD_SETTINGS_SECTIONS)[number]['id'];
@@ -104,18 +106,23 @@ export const routes = {
    */
   artifacts: () => '/x',
   artifact: (artifactId: string) => `/x/${artifactId}`,
-  /** §AB: one of my workspaces — its boards and artifacts on one page. */
-  workspace: (workspaceId: string) => `/w/${workspaceId}`,
-  /** Memory (docs/plan/memory.html §F): the list, one memory (?path= a file or folder), its settings. */
-  memories: () => '/m',
-  memory: (memoryId: string, path?: string | null) =>
-    `/m/${memoryId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  memorySettings: (memoryId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
-    `/m/${memoryId}/settings/${section}`,
+  /** Bucket (docs/plan/bucket.html §F): the list, one bucket (?path= a file or folder), its settings. */
+  buckets: () => '/bucket',
+  bucket: (bucketId: string, path?: string | null) =>
+    `/bucket/${bucketId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
+  bucketSettings: (
+    bucketId: string,
+    section: 'general' | 'people' | 'subscribers' | 'env' = 'general',
+  ) => `/bucket/${bucketId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
-    section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data',
+    section: 'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'env',
   ) => `/x/${artifactId}/settings/${section}`,
+  /** §AC: an owner's page — a person or an org (/{handle}). */
+  owner: (handle: string) => `/${handle}`,
+  /** §AC: an org's settings (/{handle}/settings/{section}). */
+  orgSettings: (handle: string, section: 'general' | 'members' | 'env' | 'danger' = 'general') =>
+    `/${handle}/settings/${section}`,
   /** Static pages an artifact's author is pointed at (served as files, not SPA routes). */
   integrate: () => '/integrate',
   backendDriver: () => '/backend-driver/',

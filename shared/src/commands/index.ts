@@ -15,7 +15,9 @@ import * as tickets from './tickets.js';
 import * as users from './users.js';
 import * as workspaces from './workspaces.js';
 import * as artifacts from '../artifacts/commands.js';
-import * as memory from '../memory/commands.js';
+import * as bucket from '../bucket/commands.js';
+import * as env from '../env/index.js';
+import * as org from '../org/index.js';
 
 export * from './define.js';
 export * from './boards.js';
@@ -105,26 +107,34 @@ export const COMMANDS = {
   artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
   boardArtifactList: artifacts.boardArtifactList,
   // workspaces (agents.html §AB): a person's own sidebar
-  workspaceCreate: workspaces.workspaceCreate,
-  workspaceUpdate: workspaces.workspaceUpdate,
-  workspaceDelete: workspaces.workspaceDelete,
   sidebarHide: workspaces.sidebarHide,
-  workspaceShare: workspaces.workspaceShare,
-  // memory (docs/plan/memory.html)
-  memoryCreate: memory.memoryCreate,
-  memoryUpdate: memory.memoryUpdate,
-  memoryDelete: memory.memoryDelete,
-  memoryShare: memory.memoryShare,
-  memoryGrantSet: memory.memoryGrantSet,
-  boardAttachMemorySet: memory.boardAttachMemorySet,
-  memoryList: memory.memoryList,
-  memoryTree: memory.memoryTree,
-  memoryFileRead: memory.memoryFileRead,
-  memoryFileWrite: memory.memoryFileWrite,
-  memoryFilePut: memory.memoryFilePut,
-  memoryFolderCreate: memory.memoryFolderCreate,
-  memoryMove: memory.memoryMove,
-  memoryNodeDelete: memory.memoryNodeDelete,
+  // envs: key/value pairs on boards, artifacts, buckets, agents, orgs
+  envGet: env.envGet,
+  envSet: env.envSet,
+  // owners and orgs (agents.html §AC)
+  orgCreate: org.orgCreate,
+  orgUpdate: org.orgUpdate,
+  orgDelete: org.orgDelete,
+  orgInvite: org.orgInvite,
+  orgMemberSet: org.orgMemberSet,
+  ownerTransfer: org.ownerTransfer,
+  handleSet: org.handleSet,
+  pathResolve: org.pathResolve,
+  // bucket (docs/plan/bucket.html)
+  bucketCreate: bucket.bucketCreate,
+  bucketUpdate: bucket.bucketUpdate,
+  bucketDelete: bucket.bucketDelete,
+  bucketShare: bucket.bucketShare,
+  bucketGrantSet: bucket.bucketGrantSet,
+  boardAttachBucketSet: bucket.boardAttachBucketSet,
+  bucketList: bucket.bucketList,
+  bucketTree: bucket.bucketTree,
+  bucketFileRead: bucket.bucketFileRead,
+  bucketFileWrite: bucket.bucketFileWrite,
+  bucketFilePut: bucket.bucketFilePut,
+  bucketFolderCreate: bucket.bucketFolderCreate,
+  bucketMove: bucket.bucketMove,
+  bucketNodeDelete: bucket.bucketNodeDelete,
 } as const satisfies { [K in string]: CommandSpec<K> };
 
 export type Commands = typeof COMMANDS;

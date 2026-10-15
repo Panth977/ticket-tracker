@@ -10,7 +10,7 @@
   interface Props {
     text: string;
     ticketHref?: (key: string) => string;
-    /** false: no Preview / Source switch (a host that has its own, e.g. memory's Code mode). */
+    /** false: no Preview / Source switch (a host that has its own, e.g. bucket's Code mode). */
     sourceToggle?: boolean;
   }
   let { text, ticketHref, sourceToggle = true }: Props = $props();

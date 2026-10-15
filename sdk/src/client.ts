@@ -160,10 +160,10 @@ export interface PostMessageInput {
   /** File ids from `files.upload`, already on this ticket. */
   attachments?: string[];
   /**
-   * Memory files to attach BY REFERENCE (no upload): each names its memory and
-   * the file by `path` or `nodeId`. The memory must be granted to the board.
+   * Bucket files to attach BY REFERENCE (no upload): each names its bucket and
+   * the file by `path` or `nodeId`. The bucket must be granted to the board.
    */
-  memoryFiles?: { memoryId: string; path?: string; nodeId?: string }[];
+  bucketFiles?: { bucketId: string; path?: string; nodeId?: string }[];
   /** A message id to quote. */
   replyTo?: string;
   /** Orchestrators: the receipt of one finished run. The body should say the same in words. */
@@ -260,12 +260,12 @@ export interface UploadInput {
   base64?: string;
   bytes?: Uint8Array;
   /**
-   * 1.5.0: the memory the file goes into — one granted `write` to the board.
-   * Default: the board's attachment memory (board settings › Memory). A board
+   * 1.5.0: the bucket the file goes into — one granted `write` to the board.
+   * Default: the board's attachment bucket (board settings › Bucket). A board
    * takes no files of its own: with neither, the upload is refused (400).
    */
-  memoryId?: string;
-  /** 1.5.0: the path in that memory. Default: the board's template; a taken path gets ' (2)'. */
+  bucketId?: string;
+  /** 1.5.0: the path in that bucket. Default: the board's template; a taken path gets ' (2)'. */
   path?: string;
 }
 
@@ -1212,8 +1212,8 @@ function createClientBase(options: ClientOptions) {
           defined({
             body_markdown: input.markdown ?? '',
             attachments: input.attachments,
-            memory_files: input.memoryFiles?.map((m) => ({
-              memory_id: m.memoryId,
+            bucket_files: input.bucketFiles?.map((m) => ({
+              bucket_id: m.bucketId,
               ...(m.nodeId ? { node_id: m.nodeId } : {}),
               ...(m.path ? { path: m.path } : {}),
             })),
@@ -1232,8 +1232,8 @@ function createClientBase(options: ClientOptions) {
       /**
        * Put a file on a ticket. `text` makes .md / .html documents trivial;
        * `bytes` (or `base64`) carries anything else, up to 25 MB. The bytes
-       * are stored in the board's attachment memory (or `memoryId`) and the
-       * ticket references that memory file.
+       * are stored in the board's attachment bucket (or `bucketId`) and the
+       * ticket references that bucket file.
        */
       upload: (key: string, input: UploadInput, o?: RequestOptions): Promise<UploadedFile> => {
         const given = [input.text, input.base64, input.bytes].filter((v) => v !== undefined).length;
@@ -1247,7 +1247,7 @@ function createClientBase(options: ClientOptions) {
             mime: input.mime,
             text: input.text,
             content_base64: input.base64 ?? (input.bytes ? toBase64(input.bytes) : undefined),
-            memory_id: input.memoryId,
+            bucket_id: input.bucketId,
             path: input.path,
           }),
           o,

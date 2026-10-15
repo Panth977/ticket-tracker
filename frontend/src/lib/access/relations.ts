@@ -1,13 +1,13 @@
 /**
  * ACCESS BETWEEN THINGS — one vocabulary for every place one entity lets
- * another use it (memory.html §D, artifacts.html §K, agents.html §AA2–§AA3,
+ * another use it (bucket.html §D, artifacts.html §K, agents.html §AA2–§AA3,
  * §AB). Each entity shows the same two lists:
  *
  *   Subscriptions   what THIS entity uses, and with which permissions —
  *                   Add (pick → tick permissions → Add), Edit, Remove
  *   Subscribers     who uses THIS entity — Remove only
  *
- * A RELATION is one kind of link (a board using a memory, an agent on a
+ * A RELATION is one kind of link (a board using a bucket, an agent on a
  * board…). It says which permissions there are as checkboxes, what each one
  * implies, how the ticked set becomes the stored value and back, and how a
  * row reads as chips. Nothing here talks to the API: the sections that use
@@ -19,24 +19,24 @@ import {
   type AgentBoardRole,
   type ArtifactAgentAccess,
   type ArtifactBoardAccess,
-  type MemoryGrant,
+  type BucketGrant,
   type Stage,
   type StageGrant,
 } from '@tm/shared';
 
-export type EntityKind = 'board' | 'artifact' | 'memory' | 'agent';
+export type EntityKind = 'board' | 'artifact' | 'bucket' | 'agent';
 
 export const KIND_LABEL: Record<EntityKind, string> = {
   board: 'Board',
   artifact: 'Artifact',
-  memory: 'Memory',
+  bucket: 'Bucket',
   agent: 'Agent',
 };
 /** "A board you are not on" — what a row says for an entity the viewer cannot open. */
 export const HIDDEN_LABEL: Record<EntityKind, string> = {
   board: 'A board you are not on',
   artifact: 'An artifact not shared with you',
-  memory: 'A memory not shared with you',
+  bucket: 'A bucket not shared with you',
   agent: 'Someone else’s agent',
 };
 
@@ -72,8 +72,8 @@ export interface Relation<V> {
 }
 
 export type RelationId =
-  | 'board-memory'
-  | 'artifact-memory'
+  | 'board-bucket'
+  | 'artifact-bucket'
   | 'artifact-board'
   | 'agent-board'
   | 'agent-artifact'
@@ -153,15 +153,15 @@ function readWrite<V extends 'read' | 'write'>(
   };
 }
 
-/** A board subscribes to a memory (memory.html §D). */
-export const BOARD_MEMORY: Relation<MemoryGrant> = readWrite('board-memory', {
+/** A board subscribes to a bucket (bucket.html §D). */
+export const BOARD_BUCKET: Relation<BucketGrant> = readWrite('board-bucket', {
   read: 'Everyone on the board can browse it and attach its files to tickets',
   write: 'Editors and admins can also add and change files; ticket files can go into it',
 });
 
-/** An artifact subscribes to a memory (memory.html §D, §H). */
-export const ARTIFACT_MEMORY: Relation<MemoryGrant> = readWrite('artifact-memory', {
-  read: 'The page reads its files through BackendDriver.memory',
+/** An artifact subscribes to a bucket (bucket.html §D, §H). */
+export const ARTIFACT_BUCKET: Relation<BucketGrant> = readWrite('artifact-bucket', {
+  read: 'The page reads its files through BackendDriver.bucket',
   write: 'The page can also add and change files',
 });
 
@@ -302,7 +302,7 @@ export const AGENT_ARTIFACT: Relation<ArtifactAgentAccess> = {
 
 // ───────────────────────────────────────────────────────────── workspace
 
-/** A workspace includes a board / artifact / memory: no modes, it grants nothing. */
+/** A workspace includes a board / artifact / bucket: no modes, it grants nothing. */
 export const WORKSPACE: Relation<true> = {
   id: 'workspace',
   perms: [],
@@ -321,27 +321,27 @@ export const WORKSPACE: Relation<true> = {
 export type Allowed = true | string;
 
 export const can = {
-  /** memoryGrantSet grant/change: the memory's owner, who is admin of the board. */
-  grantMemoryToBoard: (o: { ownsMemory: boolean; boardAdmin: boolean }): Allowed =>
-    !o.ownsMemory
-      ? 'Only the memory’s owner can change what it grants'
+  /** bucketGrantSet grant/change: the bucket's owner, who is admin of the board. */
+  grantBucketToBoard: (o: { ownsBucket: boolean; boardAdmin: boolean }): Allowed =>
+    !o.ownsBucket
+      ? 'Only the bucket’s owner can change what it grants'
       : !o.boardAdmin
-        ? 'Only a board admin can choose the board’s memories'
+        ? 'Only a board admin can choose the board’s buckets'
         : true,
-  /** memoryGrantSet null for a board: the memory's owner or a board admin. */
-  revokeMemoryFromBoard: (o: { ownsMemory: boolean; boardAdmin: boolean }): Allowed =>
-    o.ownsMemory || o.boardAdmin ? true : 'Only the memory’s owner or a board admin can remove it',
-  /** memoryGrantSet grant/change for an artifact: memory owner who owns the artifact. */
-  grantMemoryToArtifact: (o: { ownsMemory: boolean; ownsArtifact: boolean }): Allowed =>
-    !o.ownsMemory
-      ? 'Only the memory’s owner can change what it grants'
+  /** bucketGrantSet null for a board: the bucket's owner or a board admin. */
+  revokeBucketFromBoard: (o: { ownsBucket: boolean; boardAdmin: boolean }): Allowed =>
+    o.ownsBucket || o.boardAdmin ? true : 'Only the bucket’s owner or a board admin can remove it',
+  /** bucketGrantSet grant/change for an artifact: bucket owner who owns the artifact. */
+  grantBucketToArtifact: (o: { ownsBucket: boolean; ownsArtifact: boolean }): Allowed =>
+    !o.ownsBucket
+      ? 'Only the bucket’s owner can change what it grants'
       : !o.ownsArtifact
-        ? 'Only the artifact’s owner can choose its memories'
+        ? 'Only the artifact’s owner can choose its buckets'
         : true,
-  revokeMemoryFromArtifact: (o: { ownsMemory: boolean; ownsArtifact: boolean }): Allowed =>
-    o.ownsMemory || o.ownsArtifact
+  revokeBucketFromArtifact: (o: { ownsBucket: boolean; ownsArtifact: boolean }): Allowed =>
+    o.ownsBucket || o.ownsArtifact
       ? true
-      : 'Only the memory’s owner or the artifact’s owner can remove it',
+      : 'Only the bucket’s owner or the artifact’s owner can remove it',
   /** artifactBoardAccessSet grant: the artifact's owner, on the board. */
   grantBoardToArtifact: (o: { ownsArtifact: boolean; onBoard: boolean }): Allowed =>
     !o.ownsArtifact

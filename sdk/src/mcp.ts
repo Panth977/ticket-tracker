@@ -275,19 +275,19 @@ const ISO = str("ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00
 const STAGE = str('Stage name or id');
 const CURSOR = str('Opaque cursor from a previous call');
 const FILE_IDS = list(str(), 'File ids from upload_file, already on this ticket', { maxItems: 20 });
-/** memory.html §E — memory files by reference: { memory_id, path } or { memory_id, node_id }. */
-const MEMORY_FILES = list(
+/** bucket.html §E — bucket files by reference: { bucket_id, path } or { bucket_id, node_id }. */
+const BUCKET_FILES = list(
   {
     type: 'object',
     properties: {
-      memory_id: str(undefined, { minLength: 1, maxLength: 64 }),
+      bucket_id: str(undefined, { minLength: 1, maxLength: 64 }),
       node_id: str(undefined, { minLength: 1, maxLength: 64 }),
       path: str(undefined, { minLength: 1, maxLength: 1024 }),
     },
-    required: ['memory_id'],
+    required: ['bucket_id'],
     additionalProperties: false,
   },
-  'Memory files to attach by reference (no upload): [{ memory_id, path }] or [{ memory_id, node_id }]. The memory must be granted to this board (memory_list board=…).',
+  'Bucket files to attach by reference (no upload): [{ bucket_id, path }] or [{ bucket_id, node_id }]. The bucket must be granted to this board (bucket_list board=…).',
   { maxItems: 20 },
 );
 const TICKET_STATES = ['active', 'archived', 'cancelled'] as const;
@@ -584,7 +584,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   post_message: {
     description:
-      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
+      "Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
     readOnly: false,
     scopes: ['comments:write'],
     inputSchema: schema(
@@ -594,7 +594,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
           maxLength: 100_000,
         }),
         attachments: FILE_IDS,
-        memory_files: MEMORY_FILES,
+        bucket_files: BUCKET_FILES,
         reply_to: str('Message id to quote'),
         run: RUN_RECEIPT,
         agg: AGG_INPUT,
@@ -605,10 +605,10 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       tm.messages.post(s(a.key), {
         markdown: s(a.markdown ?? ''),
         attachments: a.attachments,
-        memoryFiles: Array.isArray(a.memory_files)
-          ? (a.memory_files as { memory_id: string; node_id?: string; path?: string }[]).map(
+        bucketFiles: Array.isArray(a.bucket_files)
+          ? (a.bucket_files as { bucket_id: string; node_id?: string; path?: string }[]).map(
               (m) => ({
-                memoryId: m.memory_id,
+                bucketId: m.bucket_id,
                 ...(m.node_id ? { nodeId: m.node_id } : {}),
                 ...(m.path ? { path: m.path } : {}),
               }),
@@ -632,7 +632,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   upload_file: {
     description:
-      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
+      "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.",
     readOnly: false,
     scopes: ['files:write'],
     inputSchema: schema(
@@ -645,12 +645,12 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         mime: str('Default: from the extension'),
         text: str('Text content (Markdown, HTML, CSV, code …). Give text OR content_base64.'),
         content_base64: str('Binary content, base64. ≤ 25 MB decoded.'),
-        memory_id: str(
-          "The memory the file goes into (granted write to this board). Default: the board's attachment memory.",
+        bucket_id: str(
+          "The bucket the file goes into (granted write to this board). Default: the board's attachment bucket.",
           { minLength: 1, maxLength: 64 },
         ),
         path: str(
-          "Path in that memory. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
+          "Path in that bucket. Default: the board's template, e.g. tickets/<ticketId>/<time>_<filename>. A taken path gets ' (2)'.",
           { minLength: 1, maxLength: 1024 },
         ),
       },
@@ -660,7 +660,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       tm.files.upload(s(a.key), {
         name: s(a.name),
         mime: a.mime,
-        ...(a.memory_id !== undefined ? { memoryId: s(a.memory_id) } : {}),
+        ...(a.bucket_id !== undefined ? { bucketId: s(a.bucket_id) } : {}),
         ...(a.path !== undefined ? { path: s(a.path) } : {}),
         ...(a.text !== undefined ? { text: s(a.text) } : { base64: s(a.content_base64) }),
       }),

@@ -18,7 +18,7 @@ import {
   newPerson,
   read,
   stage,
-  giveAttachMemory,
+  giveAttachBucket,
 } from '../support/stack.js';
 
 const bearer = (key: string) => ({
@@ -130,7 +130,7 @@ test('REST with a personal board token: me, board, create, patch, move, message,
 test('REST with an agent token: system prompt, assigned work, a Markdown document, the inbox', async () => {
   const ada = await newPerson('Ada');
   const eng = await newBoard(ada, { name: 'Agent board' });
-  await giveAttachMemory(ada, eng.id);
+  await giveAttachBucket(ada, eng.id);
   const { agentId } = await call(ada, 'agentCreate', {
     name: 'Builder',
     description: 'Builds things',

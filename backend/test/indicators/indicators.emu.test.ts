@@ -5,12 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DESCRIPTION_MAX,
-  MEMORY_DEFAULT_INDICATOR,
+  BUCKET_DEFAULT_INDICATOR,
   paths,
   type Artifact,
-  type Memory,
+  type Bucket,
   type Stage,
-  type Workspace,
+  type Org,
 } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { toPublicBoard } from '../../src/platform/public.js';
@@ -156,7 +156,7 @@ describe('indicators — boards', () => {
   });
 });
 
-describe('indicators — artifacts and memories', () => {
+describe('indicators — artifacts and buckets', () => {
   it('artifact: create / update with indicator + description; legacy icon kept in step', async () => {
     const alice = await createUser();
     const { artifactId } = await call(alice, 'artifactCreate', {
@@ -189,63 +189,53 @@ describe('indicators — artifacts and memories', () => {
     ).rejects.toMatchObject({ code: 'invalid' });
   });
 
-  it('memory: create / update; default 🧠; memoryList answers the indicator', async () => {
+  it('bucket: create / update; default 🧠; bucketList answers the indicator', async () => {
     const alice = await createUser();
-    const plain = await call(alice, 'memoryCreate', { name: 'Notes' });
-    expect((await doc<Memory>(paths.memory(plain.memoryId))).indicator).toEqual(
-      MEMORY_DEFAULT_INDICATOR,
+    const plain = await call(alice, 'bucketCreate', { name: 'Notes' });
+    expect((await doc<Bucket>(paths.bucket(plain.bucketId))).indicator).toEqual(
+      BUCKET_DEFAULT_INDICATOR,
     );
-    const { memoryId } = await call(alice, 'memoryCreate', {
+    const { bucketId } = await call(alice, 'bucketCreate', {
       name: 'Brand',
       description: 'Logos and fonts',
       indicator: IMAGE,
     });
-    let m = await doc<Memory>(paths.memory(memoryId));
+    let m = await doc<Bucket>(paths.bucket(bucketId));
     expect(m).toMatchObject({ indicator: IMAGE, icon: null, description: 'Logos and fonts' });
-    await call(alice, 'memoryUpdate', { memoryId, indicator: ICON, description: 'Brand kit' });
-    m = await doc<Memory>(paths.memory(memoryId));
+    await call(alice, 'bucketUpdate', { bucketId, indicator: ICON, description: 'Brand kit' });
+    m = await doc<Bucket>(paths.bucket(bucketId));
     expect(m).toMatchObject({ indicator: ICON, description: 'Brand kit' });
 
-    const { memories } = await call(alice, 'memoryList', {});
-    const out = memories.find((x) => x.id === memoryId)!;
+    const { buckets } = await call(alice, 'bucketList', {});
+    const out = buckets.find((x) => x.id === bucketId)!;
     expect(out.indicator).toEqual(ICON);
-    expect(memories.find((x) => x.id === plain.memoryId)!.indicator).toEqual(
-      MEMORY_DEFAULT_INDICATOR,
+    expect(buckets.find((x) => x.id === plain.bucketId)!.indicator).toEqual(
+      BUCKET_DEFAULT_INDICATOR,
     );
     await expect(
-      call(alice, 'memoryUpdate', {
-        memoryId,
+      call(alice, 'bucketUpdate', {
+        bucketId,
         indicator: { kind: 'image', path: '../x' },
       } as never),
     ).rejects.toMatchObject({ code: 'invalid' });
   });
 });
 
-describe('indicators — workspaces', () => {
-  it('create / update with indicator + description; colour in step', async () => {
+describe('indicators — orgs', () => {
+  it('create / update with indicator + description', async () => {
     const alice = await createUser();
-    const { workspaceId } = await call(alice, 'workspaceCreate', {
+    const handle = `i-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const { orgId } = await call(alice, 'orgCreate', {
+      handle,
       name: 'Freelance',
       indicator: ICON,
       description: 'Client work',
     });
-    let w = await doc<Workspace>(paths.workspace(alice.uid, workspaceId));
-    expect(w).toMatchObject({ indicator: ICON, color: '#ef4444', description: 'Client work' });
-
-    await call(alice, 'workspaceUpdate', { workspaceId, indicator: EMOJI, description: null });
-    w = await doc<Workspace>(paths.workspace(alice.uid, workspaceId));
-    expect(w.indicator).toEqual(EMOJI);
-    expect(w.description).toBeUndefined();
-    expect(w.color).toBe('#ef4444');
-
-    const plain = await call(alice, 'workspaceCreate', { name: 'Home' });
-    const p = await doc<Workspace>(paths.workspace(alice.uid, plain.workspaceId));
-    expect(p.indicator).toEqual({ kind: 'color', color: p.color });
-
-    // An old client recolouring a colour workspace moves the indicator too.
-    await call(alice, 'workspaceUpdate', { workspaceId: plain.workspaceId, color: '#22c55e' });
-    expect((await doc<Workspace>(paths.workspace(alice.uid, plain.workspaceId))).indicator).toEqual(
-      { kind: 'color', color: '#22c55e' },
-    );
+    let o = await doc<Org>(paths.org(orgId));
+    expect(o).toMatchObject({ indicator: ICON, description: 'Client work' });
+    await call(alice, 'orgUpdate', { orgId, indicator: EMOJI, description: null });
+    o = await doc<Org>(paths.org(orgId));
+    expect(o.indicator).toEqual(EMOJI);
+    expect(o.description ?? null).toBeNull();
   });
 });

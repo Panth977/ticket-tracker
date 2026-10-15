@@ -8,7 +8,7 @@ import {
   indicatorOf,
   IndicatorSchema,
   legacyColor,
-  MEMORY_DEFAULT_INDICATOR,
+  BUCKET_DEFAULT_INDICATOR,
 } from './indicator.js';
 import { BoardPatchSchema } from '../commands/boards.js';
 import { StageSchema } from './board.js';
@@ -56,7 +56,7 @@ describe('indicatorOf — legacy fields', () => {
     const i = { kind: 'emoji', emoji: '🧪' } as const;
     expect(indicatorOf({ indicator: i, color: 'red', icon: 'bug' })).toBe(i);
   });
-  it('emoji icon (artifact / memory) → emoji', () => {
+  it('emoji icon (artifact / bucket) → emoji', () => {
     expect(indicatorOf({ icon: '📊' })).toEqual({ kind: 'emoji', emoji: '📊' });
   });
   it('known icon name + colour → tinted icon', () => {
@@ -81,8 +81,8 @@ describe('indicatorOf — legacy fields', () => {
   it('nothing → a stable palette colour from the seed, or the fallback', () => {
     expect(indicatorOf({}, 'abc')).toEqual(defaultIndicator('abc'));
     expect(indicatorOf({}, 'abc')).toEqual(indicatorOf({ color: 'mauve' }, 'abc'));
-    expect(indicatorOf({ icon: null }, 'm1', MEMORY_DEFAULT_INDICATOR)).toBe(
-      MEMORY_DEFAULT_INDICATOR,
+    expect(indicatorOf({ icon: null }, 'm1', BUCKET_DEFAULT_INDICATOR)).toBe(
+      BUCKET_DEFAULT_INDICATOR,
     );
     const c = defaultIndicator('board-1');
     expect(c.kind).toBe('color');

@@ -24,7 +24,7 @@
 
   interface Props {
     open: boolean;
-    /** "Add a memory", "Add to a board or artifact"… */
+    /** "Add a bucket", "Add to a board or artifact"… */
     title: string;
     candidates: Candidate[];
     /** Set = edit this one (step 2 at once). */
@@ -62,7 +62,7 @@
     }
   });
 
-  const ORDER: EntityKind[] = ['board', 'artifact', 'memory', 'agent'];
+  const ORDER: EntityKind[] = ['board', 'artifact', 'bucket', 'agent'];
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase();
     return candidates.filter(

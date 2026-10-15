@@ -6,8 +6,8 @@ rules_version = '2';
 //
 // UPLOAD DIRECT, ATTACH THROUGH A COMMAND. The browser uploads straight to
 // Storage (with progress); a command then names the object and checks it.
-// Ticket attachments now go INTO a memory (memory.html §J — see
-// memories/… at the bottom); the old boards/…/tickets/… path is read-only.
+// Ticket attachments now go INTO a bucket (bucket.html §J — see
+// buckets/… at the bottom); the old boards/…/tickets/… path is read-only.
 // Objects are never overwritten or deleted by a client.
 //
 // Board roles are read from Firestore with firestore.get() — the same
@@ -75,9 +75,9 @@ service firebase.storage {
     // boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName}
     // (and the thumb_400.webp that onAttachmentFinalized writes beside it).
     //
-    // RETIRED FOR NEW FILES (docs/plan/memory.html §J): a board takes no files
-    // of its own — a file put on a ticket goes INTO a memory granted `write`
-    // to the board (memories/… below, with metadata.boardId). Existing objects
+    // RETIRED FOR NEW FILES (docs/plan/bucket.html §J): a board takes no files
+    // of its own — a file put on a ticket goes INTO a bucket granted `write`
+    // to the board (buckets/… below, with metadata.boardId). Existing objects
     // stay readable; only the server writes here now (thumbnails).
     match /boards/{boardId}/tickets/{ticketId}/{attachmentId}/{fileName} {
       allow read: if canReadBoard(boardId);
@@ -110,7 +110,7 @@ service firebase.storage {
     }
 
     // INDICATORS (docs/plan/indicators.html): an image a person uploaded as the
-    // mark of a board, stage, artifact, memory or workspace —
+    // mark of a board, stage, artifact, bucket or workspace —
     // indicators/{uid}/{fileId}/{name}, at most 1 MB (INDICATOR_IMAGE_MAX_BYTES),
     // one of INDICATOR_IMAGE_TYPES. Written ONCE (a new picture is a new
     // fileId), only under the uploader's own uid. Shown to everyone who sees
@@ -203,29 +203,29 @@ service firebase.storage {
       allow read, write: if false;
     }
 
-    // memories/{memoryId}/{fileId}/{fileName} — one VERSION of a memory file
-    // (docs/plan/memory.html §A, D-M2). The app uploads it straight here, then
-    // memoryFilePut points a node at it. Written ONCE (a new version is a new
-    // object), by the memory's owner or an editor, up to 1 GB
-    // (MEMORY_UPLOAD_MAX_BYTES). A cross-service lookup, guarding a WRITE
+    // buckets/{bucketId}/{fileId}/{fileName} — one VERSION of a bucket file
+    // (docs/plan/bucket.html §A, D-M2). The app uploads it straight here, then
+    // bucketFilePut points a node at it. Written ONCE (a new version is a new
+    // object), by the bucket's owner or an editor, up to 1 GB
+    // (BUCKET_UPLOAD_MAX_BYTES). A cross-service lookup, guarding a WRITE
     // only (see the top of this file). Reads, updates and deletes are the
     // server's: the file door for bytes, the commands for the rest.
-    function memoryMayWrite(memoryId) {
+    function bucketMayWrite(bucketId) {
       return signedIn()
         && notRefused(request.auth.uid)
-        && firestore.get(/databases/(default)/documents/memories/$(memoryId)).data.access.get(request.auth.uid, null) in ['owner', 'editor']
-        && firestore.get(/databases/(default)/documents/memories/$(memoryId)).data.archivedAt == null;
+        && firestore.get(/databases/(default)/documents/buckets/$(bucketId)).data.access.get(request.auth.uid, null) in ['owner', 'editor']
+        && firestore.get(/databases/(default)/documents/buckets/$(bucketId)).data.archivedAt == null;
     }
 
-    // §J — A TICKET ATTACHMENT goes into a memory granted `write` to the
+    // §J — A TICKET ATTACHMENT goes into a bucket granted `write` to the
     // board, by anyone who may put words on that board (admin, editor,
-    // commenter: canWriteBoard), whatever their role on the memory. The upload
+    // commenter: canWriteBoard), whatever their role on the bucket. The upload
     // names the board in its metadata ({ boardId }); messagePost / ticketCreate
-    // `memoryUploads` then make it a NEW node (never replacing one). An
-    // archived or deleting memory takes nothing.
-    function memoryTakesBoardFile(memoryId) {
+    // `bucketUploads` then make it a NEW node (never replacing one). An
+    // archived or deleting bucket takes nothing.
+    function bucketTakesBoardFile(bucketId) {
       let boardId = request.resource.metadata.get('boardId', null);
-      let m = firestore.get(/databases/(default)/documents/memories/$(memoryId)).data;
+      let m = firestore.get(/databases/(default)/documents/buckets/$(bucketId)).data;
       return signedIn()
         && notRefused(request.auth.uid)
         && boardId is string
@@ -236,11 +236,11 @@ service firebase.storage {
         && canWriteBoard(boardId);
     }
 
-    match /memories/{memoryId}/{fileId}/{fileName} {
+    match /buckets/{bucketId}/{fileId}/{fileName} {
       allow create: if resource == null
         && fileId.matches('[A-Za-z0-9_-]{6,64}')
         && request.resource.size <= 1024 * 1024 * 1024
-        && (memoryMayWrite(memoryId) || memoryTakesBoardFile(memoryId));
+        && (bucketMayWrite(bucketId) || bucketTakesBoardFile(bucketId));
       allow read, update, delete: if false;
     }
 

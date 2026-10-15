@@ -2,6 +2,7 @@
  * Board-level documents: invites, boardKeys, boards and their subcollections
  * (members, prefs, views, webhooks, integrations).
  */
+import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { CostCounterSchema } from './message.js';
 import {
@@ -30,7 +31,7 @@ import {
   AgentIdSchema,
 } from '../types/index.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
-import { BoardAttachMemorySchema } from '../memory/attach.js';
+import { BoardAttachBucketSchema } from '../bucket/attach.js';
 import { AggCountersSchema, AggFieldDefSchema } from './aggregates.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 
@@ -67,8 +68,19 @@ export const InviteSchema = z.object({
    * are the fixed ARTIFACT_INVITE_BOARD_ID / _KEY (an artifact has no board).
    */
   artifactId: ArtifactIdSchema.optional(),
+  /**
+   * ORG INVITES (agents.html §AC) too: `orgId` set, `orgRole` the role in the
+   * org, `boardName` the org's name, boardId / boardKey the fixed
+   * ORG_INVITE_BOARD_ID / _KEY, and `role` a placeholder ('viewer').
+   */
+  orgId: z.string().min(1).max(64).optional(),
+  orgRole: z.enum(['owner', 'admin', 'member']).optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
+
+/** The placeholder board of an org invite (§AC), like ARTIFACT_INVITE_BOARD_ID. */
+export const ORG_INVITE_BOARD_ID = '_orgs';
+export const ORG_INVITE_BOARD_KEY = 'ORGS';
 
 /**
  * boardKeys/{key} — the uniqueness claim, created in the boardCreate
@@ -152,16 +164,17 @@ export const BoardSchema = z.object({
   /** aggregates.html: lifetime { total, count } per field. `cost` is the legacy mirror of aggs.cost. */
   aggs: AggCountersSchema.optional(),
   /**
-   * memory.html §J: where a file put on one of this board's tickets goes by
-   * default — one of the memories granted `write` to the board, and a path
+   * bucket.html §J: where a file put on one of this board's tickets goes by
+   * default — one of the buckets granted `write` to the board, and a path
    * template. Absent / null = none set (the attach dialog asks). Set by
-   * boardAttachMemorySet; cleared when that memory's write grant goes.
+   * boardAttachBucketSet; cleared when that bucket's write grant goes.
    */
-  attachMemory: BoardAttachMemorySchema.nullable().optional(),
+  attachBucket: BoardAttachBucketSchema.nullable().optional(),
   /** boardArchive: read-only, hidden from the sidebar, restorable. */
   archivedAt: MillisSchema.nullable(),
   createdBy: UidSchema,
   createdAt: MillisSchema,
+  ...OwnedFieldsShape,
 });
 export type Board = z.infer<typeof BoardSchema>;
 

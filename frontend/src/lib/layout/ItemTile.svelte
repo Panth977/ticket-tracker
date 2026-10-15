@@ -1,5 +1,5 @@
 <!--
-  A card for an artifact or a memory, drawn exactly like a board's
+  A card for an artifact or a bucket, drawn exactly like a board's
   (account/BoardTile) so every "All …" page and a workspace page read the
   same: its indicator, a badge, the name, a line about it, small facts at the
   bottom. On a root list page `hidden` + `ontogglehidden` show the eye that
@@ -19,7 +19,7 @@
     name: string;
     /** The entity (indicators.html): its indicator, or the legacy fields indicatorOf reads. */
     of: { indicator?: IndicatorT | null; color?: string | null; icon?: string | null };
-    /** Drawn when it has no mark (memories: MEMORY_DEFAULT_INDICATOR). */
+    /** Drawn when it has no mark (buckets: BUCKET_DEFAULT_INDICATOR). */
     fallback?: IndicatorT;
     description?: string | null;
     /** Top-left, like a board's key: e.g. the role ('Owner'). */
@@ -34,8 +34,8 @@
     /** Workspace page only: take it out of the workspace. */
     onremove?: (() => void) | null;
     onopen?: (() => void) | null;
-    /** data-artifact / data-memory = the id, for the e2e suites. */
-    dataKind: 'artifact' | 'memory';
+    /** data-artifact / data-bucket = the id, for the e2e suites. */
+    dataKind: 'artifact' | 'bucket';
     id: string;
   }
   let {

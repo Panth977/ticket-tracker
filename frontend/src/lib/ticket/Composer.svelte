@@ -4,11 +4,11 @@
     #  ticket search (Typesense, or the dev fallback)
     /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask /agg
   Σ / /agg opens 'Add to a total' (aggregates.html) when the board has active aggregate fields.
-  Paste, drop or 📎 files → the attach dialog asks which memory and at what
-  path (memory.html §J: a ticket's files live in a memory granted `write` to
-  the board); they upload with progress and go out as memoryUploads on send.
-  🧠 attaches files from a memory granted to this board BY REFERENCE
-  (memory.html §E): nothing is uploaded, the ticket points at the file.
+  Paste, drop or 📎 files → the attach dialog asks which bucket and at what
+  path (bucket.html §J: a ticket's files live in a bucket granted `write` to
+  the board); they upload with progress and go out as bucketUploads on send.
+  🧠 attaches files from a bucket granted to this board BY REFERENCE
+  (bucket.html §E): nothing is uploaded, the ticket points at the file.
   The draft (text, reply target, finished uploads) is kept per ticket in
   IndexedDB. ⌘↵ sends; the message shows at once as a bubble and goes out
   through the outbox (agents.html § K): the composer clears on send and is
@@ -24,8 +24,8 @@
   import { parseDue } from '@tm/shared/logic/time';
   import {
     MAX_ATTACHMENTS_PER_CALL,
-    MEMORY_REFS_MAX,
-    parseMemoryRefPath,
+    BUCKET_REFS_MAX,
+    parseBucketRefPath,
     type RichTextDoc,
     type TicketPatch,
   } from '@tm/shared';
@@ -52,10 +52,10 @@
   import AskDialog from './AskDialog.svelte';
   import AggDialog from './AggDialog.svelte';
   import { activeAggFields } from '$lib/aggregates/fields';
-  import MemoryPicker from '$lib/memoryRefs/MemoryPicker.svelte';
-  import { newFileId, objectPathFor } from '$lib/memory/upload.svelte';
+  import BucketPicker from '$lib/bucketRefs/BucketPicker.svelte';
+  import { newFileId, objectPathFor } from '$lib/bucket/upload.svelte';
   import AttachDialog from './AttachDialog.svelte';
-  import { mergePicks, pickAttachment, type MemoryPick } from '$lib/memoryRefs/pick';
+  import { mergePicks, pickAttachment, type BucketPick } from '$lib/bucketRefs/pick';
 
   interface Props {
     replyTo?: string | null;
@@ -88,10 +88,10 @@
   /** aggregates.html: 'Add to a total' — the Σ toolbar button and /agg. */
   let aggOpen = $state(false);
   const canAgg = $derived(t.perms.comment && activeAggFields(t.board).length > 0);
-  /** memory.html §E: files picked from a memory, sent as memoryRefs. */
-  let memoryPicks = $state<MemoryPick[]>([]);
-  let memoryOpen = $state(false);
-  /** memory.html §J: files waiting for the attach dialog's memory + paths. */
+  /** bucket.html §E: files picked from a bucket, sent as bucketRefs. */
+  let bucketPicks = $state<BucketPick[]>([]);
+  let bucketOpen = $state(false);
+  /** bucket.html §J: files waiting for the attach dialog's bucket + paths. */
   let attachFiles = $state<File[]>([]);
   let attachOpen = $state(false);
 
@@ -112,23 +112,23 @@
       if (d) {
         doc = d.doc;
         replyTo = d.replyTo;
-        // A memory reference in a draft is its virtual path (memory.html §E).
-        // Only uploads INTO a memory: an older draft's board upload can't be sent any more.
+        // A bucket reference in a draft is its virtual path (bucket.html §E).
+        // Only uploads INTO a bucket: an older draft's board upload can't be sent any more.
         uploads = d.attachments
-          .filter((a) => !parseMemoryRefPath(a.path) && a.memoryId && a.memoryPath)
+          .filter((a) => !parseBucketRefPath(a.path) && a.bucketId && a.bucketPath)
           .map((a) => ({
             id: a.path,
             ...a,
             progress: 1,
             status: 'done' as const,
           }));
-        memoryPicks = d.attachments.flatMap((a) => {
-          const ref = parseMemoryRefPath(a.path);
+        bucketPicks = d.attachments.flatMap((a) => {
+          const ref = parseBucketRefPath(a.path);
           return ref
             ? [
                 {
                   ...ref,
-                  memoryName: 'Memory',
+                  bucketName: 'Bucket',
                   name: a.name,
                   path: a.name,
                   mime: a.mime,
@@ -149,7 +149,7 @@
       replyTo,
       attachments: [
         ...uploads.filter((u) => u.status === 'done').map(toAttachment),
-        ...memoryPicks.map(pickAttachment),
+        ...bucketPicks.map(pickAttachment),
       ],
     };
     if (!loaded || !key) return;
@@ -177,8 +177,8 @@
     name: u.name,
     size: u.size,
     mime: u.mime,
-    ...(u.memoryId ? { memoryId: u.memoryId } : {}),
-    ...(u.memoryPath ? { memoryPath: u.memoryPath } : {}),
+    ...(u.bucketId ? { bucketId: u.bucketId } : {}),
+    ...(u.bucketPath ? { bucketPath: u.bucketPath } : {}),
   });
 
   /** Files added (📎, paste, drop): the attach dialog says where they go. */
@@ -197,17 +197,17 @@
     attachOpen = true;
   }
 
-  /** The dialog's answer: upload each file into the memory, headed for its path. */
-  function uploadInto(memoryId: string, list: { file: File; path: string; label: string }[]) {
+  /** The dialog's answer: upload each file into the bucket, headed for its path. */
+  function uploadInto(bucketId: string, list: { file: File; path: string; label: string }[]) {
     // The chip and the ticket show `label` (the file's name as the person left
-    // it); the memory node gets the full path's own name.
+    // it); the bucket node gets the full path's own name.
     for (const { file: f, path, label: name } of list) {
       const target = {
-        path: objectPathFor(memoryId, newFileId(), name),
+        path: objectPathFor(bucketId, newFileId(), name),
         metadata: { boardId, originalName: name },
         name,
-        memoryId,
-        memoryPath: path,
+        bucketId,
+        bucketPath: path,
       };
       const { item, cancel } = startUpload(f, target, (next) => {
         // Sent with the upload still going: the bubble shows it now.
@@ -331,19 +331,19 @@
   const ready = $derived(uploads.filter((u) => u.status === 'done'));
   const canSend = $derived(
     loaded &&
-      (!isEmptyDoc(doc) || ready.length > 0 || uploading.length > 0 || memoryPicks.length > 0),
+      (!isEmptyDoc(doc) || ready.length > 0 || uploading.length > 0 || bucketPicks.length > 0),
   );
 
   async function send(): Promise<boolean> {
     const raw = editor ? (editor.getJSON() as RichTextDoc) : doc;
-    const memory = $state.snapshot(memoryPicks) as MemoryPick[];
-    if (!raw || (isEmptyDoc(raw) && !ready.length && !uploading.length && !memory.length))
+    const bucket = $state.snapshot(bucketPicks) as BucketPick[];
+    if (!raw || (isEmptyDoc(raw) && !ready.length && !uploading.length && !bucket.length))
       return true;
     const { action, rest } = extractSlash(raw);
     if (action) {
       const ok = await runSlash(action);
       if (!ok) return true;
-      if (isEmptyDoc(rest) && !ready.length && !uploading.length && !memory.length) {
+      if (isEmptyDoc(rest) && !ready.length && !uploading.length && !bucket.length) {
         clear();
         return true;
       }
@@ -364,7 +364,7 @@
       replyTo: reply,
       attachments,
       uploading: inflight,
-      memory,
+      bucket,
     });
     onsent?.();
     return true;
@@ -374,7 +374,7 @@
     typing?.stop();
     for (const u of uploads) if (u.preview && !keep.includes(u.id)) URL.revokeObjectURL(u.preview);
     uploads = [];
-    memoryPicks = [];
+    bucketPicks = [];
     replyTo = null;
     doc = null;
     editor?.commands.clearContent(true);
@@ -451,7 +451,7 @@
         {editor}
         onattach={() => fileInput?.click()}
         onask={() => (askOpen = true)}
-        onmemory={() => (memoryOpen = true)}
+        onbucket={() => (bucketOpen = true)}
         onagg={canAgg ? () => (aggOpen = true) : undefined}
         class="border-b border-line px-1.5 py-1"
       />
@@ -477,18 +477,18 @@
         onfiles={addFiles}
       />
 
-      {#if uploads.length || memoryPicks.length}
+      {#if uploads.length || bucketPicks.length}
         <ul class="flex flex-wrap gap-2 border-t border-line px-2 py-2" aria-label="Attachments">
-          {#each memoryPicks as p (p.memoryId + p.nodeId)}
+          {#each bucketPicks as p (p.bucketId + p.nodeId)}
             <li
               class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border border-line px-2 py-1.5"
-              data-memory-pick={p.name}
+              data-bucket-pick={p.name}
             >
-              <Brain size={16} class="shrink-0 text-accent" aria-label="From memory" />
+              <Brain size={16} class="shrink-0 text-accent" aria-label="From bucket" />
               <span class="flex min-w-0 flex-col leading-tight">
                 <span class="truncate text-xs">{p.name}</span>
                 <span class="truncate text-[11px] text-muted"
-                  >{p.memoryName} · {formatBytes(p.size)}</span
+                  >{p.bucketName} · {formatBytes(p.size)}</span
                 >
               </span>
               <IconButton
@@ -496,8 +496,8 @@
                 label="Remove {p.name}"
                 size="sm"
                 onclick={() =>
-                  (memoryPicks = memoryPicks.filter(
-                    (x) => !(x.memoryId === p.memoryId && x.nodeId === p.nodeId),
+                  (bucketPicks = bucketPicks.filter(
+                    (x) => !(x.bucketId === p.bucketId && x.nodeId === p.nodeId),
                   ))}
               />
             </li>
@@ -567,16 +567,16 @@
       {boardId}
       boardKey={t.board.key}
       ticketKey={t.ticket.key}
-      attachMemory={t.board.attachMemory}
+      attachBucket={t.board.attachBucket}
       isAdmin={t.perms.role === 'admin'}
       files={attachFiles}
-      onattach={(a) => uploadInto(a.memoryId, a.list)}
+      onattach={(a) => uploadInto(a.bucketId, a.list)}
     />
-    <MemoryPicker
-      bind:open={memoryOpen}
+    <BucketPicker
+      bind:open={bucketOpen}
       {boardId}
-      room={MEMORY_REFS_MAX - memoryPicks.length}
-      onpick={(picks) => (memoryPicks = mergePicks(memoryPicks, picks, MEMORY_REFS_MAX))}
+      room={BUCKET_REFS_MAX - bucketPicks.length}
+      onpick={(picks) => (bucketPicks = mergePicks(bucketPicks, picks, BUCKET_REFS_MAX))}
     />
     <input
       bind:this={fileInput}

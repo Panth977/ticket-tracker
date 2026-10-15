@@ -18,7 +18,7 @@ export interface PaletteItem {
   /** Secondary text, right of / under the label. */
   hint?: string;
   icon?: IconComponent;
-  /** indicators.html: an entity's mark (board, artifact, memory, workspace), drawn instead of `icon`. */
+  /** indicators.html: an entity's mark (board, artifact, bucket, workspace), drawn instead of `icon`. */
   indicator?: MenuItem['indicator'];
   kbd?: string;
   href?: string;

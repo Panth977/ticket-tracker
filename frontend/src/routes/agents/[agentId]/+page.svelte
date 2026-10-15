@@ -21,6 +21,7 @@
   import AgentActivity from '$lib/agents/AgentActivity.svelte';
   import AgentSubscriptions from '$lib/agents/AgentSubscriptions.svelte';
   import AgentTokenCard from '$lib/agents/AgentTokenCard.svelte';
+  import EnvEditor from '$lib/env/EnvEditor.svelte';
   import PromptEditor from '$lib/agents/PromptEditor.svelte';
   import {
     AGENT_DESCRIPTION_MAX,
@@ -253,6 +254,13 @@
       description="Everything this agent may use: a role on each board (the role is the permission) and Build / data on each artifact. A change here applies to its token at once."
     >
       <AgentSubscriptions {agentId} name={agent.name} {archived} />
+    </Panel>
+
+    <Panel
+      title="Env"
+      description="Key/value pairs your orchestrator puts in this agent's environment, after its board's (a pair here wins). Plain text, not for secrets."
+    >
+      <EnvEditor kind="agent" id={agentId} canEdit={!archived} />
     </Panel>
 
     <Panel title={archived ? 'Restore' : 'Archive'} tone={archived ? 'default' : 'danger'}>

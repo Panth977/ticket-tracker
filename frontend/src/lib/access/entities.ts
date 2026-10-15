@@ -1,14 +1,14 @@
 /**
- * How a board / artifact / memory / agent appears in a Subscriptions or
+ * How a board / artifact / bucket / agent appears in a Subscriptions or
  * Subscribers row and in the Add dialog's list: its mark, its name (or
  * "A board you are not on" when the viewer cannot open it), where it links.
  */
 import {
-  MEMORY_DEFAULT_INDICATOR,
-  memoryAppPath,
+  BUCKET_DEFAULT_INDICATOR,
+  bucketAppPath,
   type Board,
   type Indicator,
-  type Memory,
+  type Bucket,
   type Stage,
 } from '@tm/shared';
 import { agentRoutes } from '$lib/agents/routes';
@@ -66,7 +66,7 @@ export const artifactView = (a: ArtifactLike): EntityView => ({
   note: a.archivedAt != null ? 'archived' : undefined,
 });
 
-type MemoryLike = Pick<Memory, 'name'> & {
+type BucketLike = Pick<Bucket, 'name'> & {
   id: string;
   archivedAt?: number | null;
   archived?: boolean;
@@ -74,12 +74,12 @@ type MemoryLike = Pick<Memory, 'name'> & {
   icon?: string | null;
   stats?: { files: number };
 };
-export const memoryView = (m: MemoryLike): EntityView => ({
-  kind: 'memory',
+export const bucketView = (m: BucketLike): EntityView => ({
+  kind: 'bucket',
   id: m.id,
   name: m.name,
-  href: memoryAppPath(m.id),
-  mark: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
+  href: bucketAppPath(m.id),
+  mark: { of: m, seed: m.id, fallback: BUCKET_DEFAULT_INDICATOR },
   note:
     m.archivedAt != null || m.archived
       ? 'archived'

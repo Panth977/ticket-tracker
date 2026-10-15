@@ -33,8 +33,8 @@ import {
   doc,
   getDocData,
   people,
-  putMemoryObject,
-  seedAttachMemory,
+  putBucketObject,
+  seedAttachBucket,
   seedBoard,
   spyPorts,
 } from './helpers.js';
@@ -156,10 +156,10 @@ describe('the ticket IS the thread (§W)', () => {
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'F' });
-    const memoryId = await seedAttachMemory(b.id, asha);
-    const up = await putMemoryObject(
+    const bucketId = await seedAttachBucket(b.id, asha);
+    const up = await putBucketObject(
       s.files,
-      memoryId,
+      bucketId,
       'log.txt',
       new Uint8Array(42),
       'text/plain',
@@ -168,7 +168,7 @@ describe('the ticket IS the thread (§W)', () => {
       boardId: b.id,
       ticketId,
       body: doc('see log'),
-      memoryUploads: [{ memoryId, path: 'logs/log.txt', storagePath: up.storagePath }],
+      bucketUploads: [{ bucketId, path: 'logs/log.txt', storagePath: up.storagePath }],
       clientId: uniq('c'),
     });
     const t = await T(b.id, ticketId);

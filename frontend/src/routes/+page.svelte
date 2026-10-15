@@ -16,8 +16,7 @@
   import { boardPref, myBoards, myInvites } from '$lib/stores';
   import { Button, EmptyState, Skeleton, toast } from '$lib/ui';
   import { dateOnly } from '$lib/account/format';
-  import { workspaceContext } from '$lib/workspaces/context.svelte';
-  import { hiddenItems } from '$lib/workspaces/store';
+  import { hiddenItems } from '$lib/layout/hidden';
 
   const uid = $derived(auth.uid);
   const boardsQ = $derived(myBoards(uid));
@@ -109,7 +108,6 @@
             board={b}
             uid={uid ?? ''}
             hidden={$hiddenQ}
-            onopen={() => workspaceContext.leave()}
           />
         {/each}
         <a

@@ -18,6 +18,7 @@ import { descriptionText } from '@tm/shared/logic/index';
 import { can } from '@tm/shared/logic/index';
 import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
+import { ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
 import {
   BOARD_CREATES_PER_DAY,
@@ -87,6 +88,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     ctx.now,
   );
 
+  const own = await ownerForCreate(ctx.actor, input.owner);
   const access = { [ctx.actor]: 'admin' as const };
   // indicators.html: every new board (and each of its stages) gets an indicator.
   const indicator =
@@ -115,6 +117,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     archivedAt: null,
     createdBy: ctx.actor,
     createdAt: ctx.now,
+    ...own.fields,
   };
   const pref: BoardPref = { mode: 'mine', watching: [], starred: false, lastViewId: defaultViewId };
 
@@ -140,5 +143,6 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   }
 
   await syncReaders(boardId, board.readerUids);
+  if (own.org) await syncThing('board', boardId, own.org);
   return { boardId };
 });

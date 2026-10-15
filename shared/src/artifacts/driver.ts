@@ -295,10 +295,10 @@ export interface TicketInput {
 }
 
 /**
- * A memory this artifact was granted (memory.html §H) that the VIEWER reaches.
+ * A bucket this artifact was granted (bucket.html §H) that the VIEWER reaches.
  * `access` is what this page may do with it: the grant, bounded by the viewer.
  */
-export interface DriverMemory {
+export interface DriverBucket {
   id: string;
   name: string;
   description: string | null;
@@ -308,8 +308,8 @@ export interface DriverMemory {
   bytes: number;
 }
 
-/** One node of a memory's tree. Paths are relative to the memory ('docs/a.md'). */
-export interface DriverMemoryNode {
+/** One node of a bucket's tree. Paths are relative to the bucket ('docs/a.md'). */
+export interface DriverBucketNode {
   id: string;
   kind: 'folder' | 'file';
   path: string;
@@ -365,17 +365,17 @@ export interface DriverOps {
   'tk.fileUrl': [{ key: string; file: string }, { url: string; expiresAt: number }];
   'tk.aggregates': [{ board: string; query?: AggregateQuery }, DriverAggregates];
   'tk.onAggregates': [{ board: string; query?: AggregateQuery }, { sub: string }];
-  // memory.html §H — memories granted to this artifact, as far as the viewer reaches
-  'mem.list': [Record<string, never>, DriverMemory[]];
-  'mem.tree': [{ memory: string; path?: string }, DriverMemoryNode[]];
-  'mem.read': [{ memory: string; path: string }, { text: string; truncated: boolean }];
-  'mem.url': [{ memory: string; path: string }, { url: string; expiresAt: number }];
+  // bucket.html §H — buckets granted to this artifact, as far as the viewer reaches
+  'mem.list': [Record<string, never>, DriverBucket[]];
+  'mem.tree': [{ bucket: string; path?: string }, DriverBucketNode[]];
+  'mem.read': [{ bucket: string; path: string }, { text: string; truncated: boolean }];
+  'mem.url': [{ bucket: string; path: string }, { url: string; expiresAt: number }];
   'mem.write': [
-    { memory: string; path: string; text?: string; blob?: BlobLike; contentType?: string },
+    { bucket: string; path: string; text?: string; blob?: BlobLike; contentType?: string },
     { path: string },
   ];
-  'mem.mkdir': [{ memory: string; path: string }, { path: string }];
-  'mem.remove': [{ memory: string; path: string }, { ok: true }];
+  'mem.mkdir': [{ bucket: string; path: string }, { path: string }];
+  'mem.remove': [{ bucket: string; path: string }, { ok: true }];
 }
 export type DriverOp = keyof DriverOps;
 export type DriverArgs<O extends DriverOp> = DriverOps[O][0];
@@ -438,7 +438,7 @@ export const DRIVER_WRITE_OPS: ReadonlySet<DriverOp> = new Set([
   'tk.create',
   'tk.update',
   'tk.comment',
-  // memory.html §H: the same for memory writes.
+  // bucket.html §H: the same for bucket writes.
   'mem.write',
   'mem.mkdir',
   'mem.remove',

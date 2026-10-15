@@ -17,12 +17,12 @@ import {
   User,
 } from 'lucide-svelte';
 import {
-  MEMORY_DEFAULT_INDICATOR,
+  BUCKET_DEFAULT_INDICATOR,
   descriptionText,
   type Artifact,
   type Board,
-  type Memory,
-  type Workspace,
+  type Bucket,
+  type Org,
 } from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
 import type { QueryState } from '$lib/stores';
@@ -33,10 +33,10 @@ export function registerNavProviders(
   boards: () => Readable<QueryState<Board>> | null,
   /** Artifacts I have a role on (artifacts.html §F: ⌘K finds them by name). */
   artifacts: () => Readable<QueryState<Artifact>> | null = () => null,
-  /** My workspaces (agents.html §AB): ⌘K opens one by name. */
-  workspaces: () => Readable<QueryState<Workspace>> | null = () => null,
-  /** My memories (memory.html §F): ⌘K opens one by name. */
-  memories: () => Readable<QueryState<Memory>> | null = () => null,
+  /** My orgs (agents.html §AC): ⌘K opens one by name. */
+  orgs: () => Readable<QueryState<Org>> | null = () => null,
+  /** My buckets (bucket.html §F): ⌘K opens one by name. */
+  buckets: () => Readable<QueryState<Bucket>> | null = () => null,
 ): () => void {
   const screens: PaletteItem[] = [
     {
@@ -75,10 +75,10 @@ export function registerNavProviders(
       keywords: 'apps dashboards archived',
     },
     {
-      id: 'nav-memory',
-      label: 'All memory',
+      id: 'nav-bucket',
+      label: 'All bucket',
       icon: Brain,
-      href: routes.memories(),
+      href: routes.buckets(),
       keywords: 'files bucket drive assets notes',
     },
     {
@@ -164,11 +164,11 @@ export function registerNavProviders(
       },
     }),
     palette.register({
-      id: 'memories',
-      group: 'Memory',
+      id: 'buckets',
+      group: 'Bucket',
       order: 13,
       search: (q) => {
-        const s = memories();
+        const s = buckets();
         const list = s ? get(s).data.filter((m) => m.archivedAt == null) : [];
         return filterItems(
           q,
@@ -177,29 +177,29 @@ export function registerNavProviders(
             label: m.name,
             hint: m.description ?? undefined,
             icon: Brain,
-            indicator: { of: m, seed: m.id, fallback: MEMORY_DEFAULT_INDICATOR },
-            href: routes.memory(m.id),
-            keywords: 'memory files bucket',
+            indicator: { of: m, seed: m.id, fallback: BUCKET_DEFAULT_INDICATOR },
+            href: routes.bucket(m.id),
+            keywords: 'bucket files bucket',
           })),
         );
       },
     }),
     palette.register({
-      id: 'workspaces',
-      group: 'Workspaces',
+      id: 'orgs',
+      group: 'Orgs',
       order: 11,
       search: (q) => {
-        const s = workspaces();
+        const s = orgs();
         return filterItems(
           q,
           (s ? get(s).data : []).map((w) => ({
-            id: `w-${w.id}`,
+            id: `o-${w.id}`,
             label: w.name,
-            hint: `${w.boardIds.length} boards · ${w.artifactIds.length} artifacts`,
+            hint: `@${w.handle} · ${w.memberUids.length} members`,
             icon: Layers,
             indicator: { of: w, seed: w.id },
-            href: routes.workspace(w.id),
-            keywords: `workspace group ${w.description ?? ''}`,
+            href: routes.owner(w.handle),
+            keywords: `org team ${w.handle} ${w.description ?? ''}`,
           })),
         );
       },

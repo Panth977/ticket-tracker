@@ -191,8 +191,23 @@ service cloud.firestore {
             && request.auth.token.email_verified == true
             && resource.data.email == request.auth.token.email.lower())
           || boardRole(resource.data.boardId) == 'admin'
-          || artifactRole(resource.data.artifactId) == 'owner');
+          || artifactRole(resource.data.artifactId) == 'owner'
+          || orgRole(resource.data.orgId) in ['owner', 'admin']);
       allow write: if false;
+    }
+
+    // §AC — orgs: their members read them (the sidebar lists mine by memberUids).
+    // Every change goes through the org commands (fan-out to its things).
+    match /orgs/{orgId} {
+      allow get: if signedIn() && resource.data.members.get(request.auth.uid, null) != null;
+      allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow write: if false;
+    }
+
+    // §AC — handles/{handle}: 'is this name free?' and whose it is. Reveals only ids.
+    match /handles/{handle} {
+      allow get: if signedIn();
+      allow list, write: if false;
     }
 
     // 'Is ENG free?' while typing a new board's key.
@@ -280,6 +295,11 @@ service cloud.firestore {
 
     // 'owner' | 'editor' | 'viewer' | null. A missing artifact is an error,
     // and an error denies.
+    // §AC: an org's role for the caller ('owner' | 'admin' | 'member'), or null.
+    function orgRole(o) {
+      return signedIn() ? get(/databases/$(database)/documents/orgs/$(o)).data.members.get(request.auth.uid, null) : null;
+    }
+
     function artifactRole(a) {
       return signedIn() ? artifact(a).access.get(request.auth.uid, null) : null;
     }
@@ -328,26 +348,26 @@ service cloud.firestore {
       }
     }
 
-    // ------------------------------------------------------------ memories
-    // (docs/plan/memory.html §A, §B). A memory's PEOPLE read it straight from
+    // ------------------------------------------------------------ buckets
+    // (docs/plan/bucket.html §A, §B). A bucket's PEOPLE read it straight from
     // Firestore — the document and its tree of nodes — so the app draws the
     // tree with one listener. Board members who reach it only through a grant
-    // (§D) and every token read it through memoryTree / memoryFileRead
+    // (§D) and every token read it through bucketTree / bucketFileRead
     // instead: a rule cannot ask "is this person on any granted board". The
     // bytes are never read through the rules (the file door, storage.rules).
-    function memoryMember(memoryId) {
+    function bucketMember(bucketId) {
       return signedIn()
-        && request.auth.uid in get(/databases/$(database)/documents/memories/$(memoryId)).data.memberUids;
+        && request.auth.uid in get(/databases/$(database)/documents/buckets/$(bucketId)).data.memberUids;
     }
 
-    match /memories/{memoryId} {
+    match /buckets/{bucketId} {
       // A LIST is provable only with where(memberUids array-contains auth.uid).
       allow get, list: if signedIn() && request.auth.uid in resource.data.memberUids;
-      allow write: if false; // memoryCreate / Update / Share / GrantSet / Delete
+      allow write: if false; // bucketCreate / Update / Share / GrantSet / Delete
 
       match /nodes/{nodeId} {
-        allow read: if memoryMember(memoryId);
-        allow write: if false; // memoryFileWrite / FilePut / FolderCreate / Move / NodeDelete
+        allow read: if bucketMember(bucketId);
+        allow write: if false; // bucketFileWrite / FilePut / FolderCreate / Move / NodeDelete
       }
     }
 

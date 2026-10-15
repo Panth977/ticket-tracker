@@ -1,7 +1,7 @@
 /**
  * INDICATORS AND DESCRIPTIONS (docs/plan/indicators.html) — one way to mark
  * every entity a person names: a board, a board's stage, an artifact, a
- * memory, a workspace.
+ * bucket, a workspace.
  *
  *   indicator    what the sidebar, the title dropdowns, cards and pickers draw
  *                for it. Exactly one of:
@@ -15,7 +15,7 @@
  *                mostly by agents (MCP / REST list it), shown under the name.
  *
  * Old documents carry the legacy fields (board color + typed icon, stage
- * color, artifact / memory emoji `icon`, workspace color); indicatorOf()
+ * color, artifact / bucket emoji `icon`, workspace color); indicatorOf()
  * reads either, so nothing breaks before scripts/migrate-indicators.mjs runs.
  */
 import { z } from 'zod';
@@ -228,7 +228,7 @@ const isIcon = (s: unknown): s is IndicatorIcon =>
 /**
  * The indicator to DRAW for an entity: its own, else one read from the legacy
  * fields (a board's / stage's / workspace's `color` and typed `icon`, an
- * artifact's / memory's emoji `icon`), else a palette colour from `seed`.
+ * artifact's / bucket's emoji `icon`), else a palette colour from `seed`.
  */
 export function indicatorOf(
   e: { indicator?: Indicator | null; color?: string | null; icon?: string | null },
@@ -244,8 +244,8 @@ export function indicatorOf(
   return fallback ?? defaultIndicator(seed);
 }
 
-/** A memory nobody gave a mark draws 🧠 (as it always did): pass as indicatorOf's fallback. */
-export const MEMORY_DEFAULT_INDICATOR: Indicator = { kind: 'emoji', emoji: '🧠' };
+/** A bucket nobody gave a mark draws 🧠 (as it always did): pass as indicatorOf's fallback. */
+export const BUCKET_DEFAULT_INDICATOR: Indicator = { kind: 'emoji', emoji: '🧠' };
 
 /** The tint an indicator stands for (a stage column, a key chip): its colour, or the palette's first. */
 export function indicatorColor(i: Indicator): string {

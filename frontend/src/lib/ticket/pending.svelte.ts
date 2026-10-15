@@ -11,8 +11,8 @@
  *
  * Attachments may still be uploading when Send is pressed: the entry carries
  * their progress (shown inside the bubble) and waits for them before posting.
- * A file put on a ticket goes INTO a memory (memory.html §J): the bytes are
- * uploaded under the memory and the message carries `memoryUploads`.
+ * A file put on a ticket goes INTO a bucket (bucket.html §J): the bytes are
+ * uploaded under the bucket and the message carries `bucketUploads`.
  */
 import {
   AppError,
@@ -24,8 +24,8 @@ import {
 import { outbox, type OutboxEntry, type OutboxStatus, type OutboxUpload } from '$lib/api';
 import type { DraftAttachment, UploadItem } from '$lib/editor';
 import { routes } from '$lib/layout/routes';
-import { pickAttachment, toMemoryRefs, type MemoryPick } from '$lib/memoryRefs/pick';
-import { toMemoryUploads } from './attach';
+import { pickAttachment, toBucketRefs, type BucketPick } from '$lib/bucketRefs/pick';
+import { toBucketUploads } from './attach';
 
 export interface PendingMsg {
   id: string;
@@ -112,8 +112,8 @@ const toOutboxUpload = (u: UploadItem): OutboxUpload => ({
   progress: u.progress,
   status: u.status,
   ...(u.error ? { error: u.error } : {}),
-  ...(u.memoryId ? { memoryId: u.memoryId } : {}),
-  ...(u.memoryPath ? { memoryPath: u.memoryPath } : {}),
+  ...(u.bucketId ? { bucketId: u.bucketId } : {}),
+  ...(u.bucketPath ? { bucketPath: u.bucketPath } : {}),
 });
 
 /** A finished upload as the draft keeps it. */
@@ -122,15 +122,15 @@ const toDraftAttachment = ({
   name,
   size,
   mime,
-  memoryId,
-  memoryPath,
+  bucketId,
+  bucketPath,
 }: OutboxUpload): DraftAttachment => ({
   path,
   name,
   size,
   mime,
-  ...(memoryId ? { memoryId } : {}),
-  ...(memoryPath ? { memoryPath } : {}),
+  ...(bucketId ? { bucketId } : {}),
+  ...(bucketPath ? { bucketPath } : {}),
 });
 
 /**
@@ -166,28 +166,28 @@ export interface SendInput {
   authorName: string;
   body: RichTextDoc;
   replyTo: string | null;
-  /** Finished uploads (into a memory: memoryId + memoryPath set). */
+  /** Finished uploads (into a bucket: bucketId + bucketPath set). */
   attachments: DraftAttachment[];
   /** Uploads still in flight: the message waits for them. */
   uploading?: UploadItem[];
   /**
-   * memory.html §E: memory files attached BY REFERENCE. Sent as memoryRefs;
+   * bucket.html §E: bucket files attached BY REFERENCE. Sent as bucketRefs;
    * the bubble shows them at once with the virtual path the server stores.
    */
-  memory?: MemoryPick[];
+  bucket?: BucketPick[];
 }
 
 /** Queue a message. Returns its id (= the bubble's and the stored message's id). */
 export function sendMessage(m: SendInput): string {
   const inflight = m.uploading ?? [];
-  const memory = m.memory ?? [];
-  const memoryRows = memory.map(pickAttachment);
+  const bucket = m.bucket ?? [];
+  const bucketRows = bucket.map(pickAttachment);
   const draft: MessageDraft = {
     authorUid: m.authorUid,
     authorName: m.authorName,
     body: m.body,
     replyTo: m.replyTo,
-    attachments: [...m.attachments, ...memoryRows],
+    attachments: [...m.attachments, ...bucketRows],
     ticketKey: m.ticketKey,
   };
   const input = {
@@ -195,8 +195,8 @@ export function sendMessage(m: SendInput): string {
     ticketId: m.ticketId,
     body: m.body,
     ...(m.replyTo ? { replyTo: m.replyTo } : {}),
-    ...(m.attachments.length ? { memoryUploads: toMemoryUploads(m.attachments) } : {}),
-    ...(memory.length ? { memoryRefs: toMemoryRefs(memory) } : {}),
+    ...(m.attachments.length ? { bucketUploads: toBucketUploads(m.attachments) } : {}),
+    ...(bucket.length ? { bucketRefs: toBucketRefs(bucket) } : {}),
   };
   const { id } = outbox.queue('messagePost', input, {
     kind: 'message',
@@ -230,17 +230,17 @@ export function sendMessage(m: SendInput): string {
           const bad = now?.uploads?.find((u) => u.status === 'error');
           if (bad) throw new AppError('invalid', `${bad.name} did not upload`);
           const all = (now?.uploads ?? []).filter((u) => u.status === 'done');
-          const uploads = toMemoryUploads(all);
+          const uploads = toBucketUploads(all);
           const d = now?.draft as MessageDraft | undefined;
           if (now && d) {
             outbox.setUploads(entry.id, all);
             // The draft now lists every attachment (a reload resends them all).
             outbox.setDraft(entry.id, {
               ...d,
-              attachments: [...all.map(toDraftAttachment), ...memoryRows],
+              attachments: [...all.map(toDraftAttachment), ...bucketRows],
             });
           }
-          return { ...input, ...(uploads.length ? { memoryUploads: uploads } : {}) };
+          return { ...input, ...(uploads.length ? { bucketUploads: uploads } : {}) };
         }
       : undefined,
     openTo: routes.ticket(m.ticketKey),

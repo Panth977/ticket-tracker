@@ -155,9 +155,9 @@ export async function autoArchive(now: number): Promise<number> {
  * a ticket's prefix older than 24h was uploaded and abandoned. Thumbnails go
  * with their original.
  *
- * memory.html §J: ONLY the boards/ prefix is swept. A ticket file that lives
- * in a memory (an API upload, a memoryUpload — row.memory set) is a node of
- * that memory: its object is the memory's, never this sweep's, whether or
+ * bucket.html §J: ONLY the boards/ prefix is swept. A ticket file that lives
+ * in a bucket (an API upload, a bucketUpload — row.bucket set) is a node of
+ * that bucket: its object is the bucket's, never this sweep's, whether or
  * not the ticket row is ever posted in a message.
  */
 export async function pruneUploads(now: number): Promise<number> {

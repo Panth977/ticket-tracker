@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "apiVersion": "v1",
-  "updated": "2026-10-05",
-  "contentSha256": "0e86eeed57c94c63091d38aeaf3eb64c815ba7692c6c983dc8e7e941e2e96095",
+  "updated": "2026-10-15",
+  "contentSha256": "c5e636cb44971f5a749f3c8af1fcdaae33a9218df27fba552aa88e97dbb87cf5",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -288,8 +288,8 @@
         "webhooks:manage",
         "artifacts:read",
         "artifacts:write",
-        "memory:read",
-        "memory:write"
+        "bucket:read",
+        "bucket:write"
       ],
       "boardRoles": [
         "admin",
@@ -448,8 +448,8 @@
       "invites:write",
       "artifacts:read",
       "artifacts:write",
-      "memory:read",
-      "memory:write"
+      "bucket:read",
+      "bucket:write"
     ]
   },
   "events": [
@@ -575,6 +575,14 @@
         "board:read"
       ],
       "summary": "Stages, priorities, tags, fields, members"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/env",
+      "scopes": [
+        "board:read"
+      ],
+      "summary": "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment"
     },
     {
       "method": "GET",
@@ -928,46 +936,46 @@
     },
     {
       "method": "GET",
-      "path": "/v1/memories",
+      "path": "/v1/buckets",
       "scopes": [
-        "memory:read",
-        "memory:write"
+        "bucket:read",
+        "bucket:write"
       ],
-      "summary": "The memories this credential can reach (?board= narrows to one board’s)"
+      "summary": "The buckets this credential can reach (?board= narrows to one board’s)"
     },
     {
       "method": "GET",
-      "path": "/v1/memories/{id}/tree",
+      "path": "/v1/buckets/{id}/tree",
       "scopes": [
-        "memory:read",
-        "memory:write"
+        "bucket:read",
+        "bucket:write"
       ],
-      "summary": "The files and folders of a memory (?path= under a folder, ?shallow=1 one level)"
+      "summary": "The files and folders of a bucket (?path= under a folder, ?shallow=1 one level)"
     },
     {
       "method": "GET",
-      "path": "/v1/memories/{id}/files/{path}",
+      "path": "/v1/buckets/{id}/files/{path}",
       "scopes": [
-        "memory:read",
-        "memory:write"
+        "bucket:read",
+        "bucket:write"
       ],
-      "summary": "One memory file: its node, its text (text files) and a short-lived download URL"
+      "summary": "One bucket file: its node, its text (text files) and a short-lived download URL"
     },
     {
       "method": "PUT",
-      "path": "/v1/memories/{id}/files/{path}",
+      "path": "/v1/buckets/{id}/files/{path}",
       "scopes": [
-        "memory:write"
+        "bucket:write"
       ],
-      "summary": "Create or replace a memory file: the raw body is the file (missing folders are created)"
+      "summary": "Create or replace a bucket file: the raw body is the file (missing folders are created)"
     },
     {
       "method": "DELETE",
-      "path": "/v1/memories/{id}/files/{path}",
+      "path": "/v1/buckets/{id}/files/{path}",
       "scopes": [
-        "memory:write"
+        "bucket:write"
       ],
-      "summary": "Delete a memory file, or a folder with everything in it"
+      "summary": "Delete a bucket file, or a folder with everything in it"
     },
     {
       "method": "GET",
@@ -1225,7 +1233,7 @@
     },
     {
       "name": "post_message",
-      "description": "Post a Markdown message in a ticket's thread, optionally with files from upload_file or memory_files (memory files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
+      "description": "Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.",
       "readOnly": false,
       "scopes": [
         "comments:write"
@@ -1241,7 +1249,7 @@
     },
     {
       "name": "upload_file",
-      "description": "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment memory (or memory_id) and the ticket references it.",
+      "description": "Put a file on a ticket and get its fileId. Pass `text` for Markdown / HTML documents, or content_base64. The file is stored in the board's attachment bucket (or bucket_id) and the ticket references it.",
       "readOnly": false,
       "scopes": [
         "files:write"
@@ -1439,6 +1447,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "2.0.0",
+      "date": "2026-10-15"
+    },
     {
       "version": "1.6.0",
       "date": "2026-10-05"

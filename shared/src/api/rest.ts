@@ -34,6 +34,7 @@ import { ApiKeyKindSchema } from '../schema/user.js';
 import { AgentBoardRoleSchema } from '../schema/board.js';
 import { AGENT_DESCRIPTION_MAX, AGENT_NAME_MAX, AGENT_SYSTEM_PROMPT_MAX } from '../schema/agent.js';
 import { MAX_API_UPLOAD_BYTES } from '../logic/files.js';
+import { EnvVarsSchema } from '../env/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
 import { BOARD_TEMPLATES } from '../commands/boards.js';
 import {
@@ -57,7 +58,7 @@ import {
   PublicRunReceiptSchema,
   PublicAggBucketsSchema,
   PublicAggInputSchema,
-  PublicMemoryFileRefSchema,
+  PublicBucketFileRefSchema,
   PublicQuestionSchema,
   PublicQuestionFieldSchema,
   PublicTasklistSchema,
@@ -313,10 +314,10 @@ export const RestPostMessageBodySchema = z
      */
     agg: PublicAggInputSchema.optional(),
     /**
-     * memory.html §E: memory files to attach BY REFERENCE (no upload). The
-     * memory must be granted to this board. Name each by node_id or path.
+     * bucket.html §E: bucket files to attach BY REFERENCE (no upload). The
+     * bucket must be granted to this board. Name each by node_id or path.
      */
-    memory_files: z.array(PublicMemoryFileRefSchema).max(20).optional(),
+    bucket_files: z.array(PublicBucketFileRefSchema).max(20).optional(),
   })
   .strict()
   .refine(
@@ -324,8 +325,8 @@ export const RestPostMessageBodySchema = z
       b.body_markdown.trim().length > 0 ||
       (b.agg?.entries.length ?? 0) > 0 ||
       (b.attachments?.length ?? 0) > 0 ||
-      (b.memory_files?.length ?? 0) > 0,
-    { message: 'A message needs body_markdown, agg, attachments or memory_files' },
+      (b.bucket_files?.length ?? 0) > 0,
+    { message: 'A message needs body_markdown, agg, attachments or bucket_files' },
   );
 export type RestPostMessageBody = z.infer<typeof RestPostMessageBodySchema>;
 export const RestPostMessageResSchema = PublicMessageSchema;
@@ -349,6 +350,13 @@ export const RestAggregatesQuerySchema = z.object({
 });
 export const RestAggregatesResSchema = PublicAggBucketsSchema;
 
+/** GET /v1/env (agents.html §AC): the board's effective env, the agent's, and both merged. */
+export const RestEnvResSchema = z.object({
+  board: EnvVarsSchema,
+  agent: EnvVarsSchema.nullable(),
+  env: EnvVarsSchema,
+});
+
 // ───────────────────────── files ─────────────────────────
 
 /** Multipart upload: the file part's field name (an optional `name` field overrides its filename). */
@@ -366,12 +374,12 @@ export const RestUploadJsonBodySchema = z
     text: z.string().optional(),
     content_base64: z.string().optional(),
     /**
-     * memory.html §J: a board takes no files of its own — the bytes go into a
-     * memory granted `write` to the board. Default: the board's attachment
-     * memory (board settings › Memory); none set and none named → 400.
+     * bucket.html §J: a board takes no files of its own — the bytes go into a
+     * bucket granted `write` to the board. Default: the board's attachment
+     * bucket (board settings › Bucket); none set and none named → 400.
      */
-    memory_id: z.string().min(1).max(64).optional(),
-    /** Where in that memory (default: the board's path template). '<ticketId>' is filled; a taken path gets ' (2)'. */
+    bucket_id: z.string().min(1).max(64).optional(),
+    /** Where in that bucket (default: the board's path template). '<ticketId>' is filled; a taken path gets ' (2)'. */
     path: z.string().min(1).max(1024).optional(),
   })
   .strict()
@@ -815,10 +823,10 @@ export const RestArtifactFileListResSchema = z.object({ data: z.array(ArtifactDa
 export const RestArtifactFileUploadResSchema = ArtifactDataFileSchema;
 export const RestArtifactFileUrlResSchema = z.object({ url: z.string(), expires_at: Iso });
 
-// ───────────────────────── memory (memory.html §G) ─────────────────────────
+// ───────────────────────── bucket (bucket.html §G) ─────────────────────────
 
-/** GET /v1/memories?board=&include_archived= */
-export const RestMemoryListQuerySchema = z.object({
+/** GET /v1/buckets?board=&include_archived= */
+export const RestBucketListQuerySchema = z.object({
   /** Only those granted to this board (key or id). */
   board: z.string().min(1).optional(),
   include_archived: z
@@ -826,16 +834,16 @@ export const RestMemoryListQuerySchema = z.object({
     .transform((v) => v === true || v === '1' || v === 'true')
     .optional(),
 });
-/** GET /v1/memories/{id}/tree?path=&shallow= */
-export const RestMemoryTreeQuerySchema = z.object({
+/** GET /v1/buckets/{id}/tree?path=&shallow= */
+export const RestBucketTreeQuerySchema = z.object({
   path: z.string().max(1024).optional(),
   shallow: z
     .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.boolean()])
     .transform((v) => v === true || v === '1' || v === 'true')
     .optional(),
 });
-/** GET /v1/memories/{id}/files/{path}?text= */
-export const RestMemoryFileQuerySchema = z.object({
+/** GET /v1/buckets/{id}/files/{path}?text= */
+export const RestBucketFileQuerySchema = z.object({
   /** Read the bytes as text even when the type does not say text. */
   text: z
     .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.boolean()])
@@ -939,6 +947,14 @@ export const REST_ROUTES = [
     scopes: ['board:read'],
     board: true,
     summary: 'Stages, priorities, tags, fields, members',
+  },
+  {
+    method: 'GET',
+    path: '/v1/env',
+    scopes: ['board:read'],
+    board: true,
+    summary:
+      "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment",
   },
   {
     method: 'GET',
@@ -1215,39 +1231,39 @@ export const REST_ROUTES = [
     scopes: ['artifacts:write'],
     summary: 'Share with a person or an agent, change a role, or remove (owner)',
   },
-  // memory (docs/plan/memory.html §G). Not about a board: an account token
-  // reaches the memories its person reaches, an agent token those granted to
-  // a board the agent is on. Files are named by their path in the memory.
+  // bucket (docs/plan/bucket.html §G). Not about a board: an account token
+  // reaches the buckets its person reaches, an agent token those granted to
+  // a board the agent is on. Files are named by their path in the bucket.
   {
     method: 'GET',
-    path: '/v1/memories',
-    scopes: ['memory:read', 'memory:write'],
-    summary: 'The memories this credential can reach (?board= narrows to one board’s)',
+    path: '/v1/buckets',
+    scopes: ['bucket:read', 'bucket:write'],
+    summary: 'The buckets this credential can reach (?board= narrows to one board’s)',
   },
   {
     method: 'GET',
-    path: '/v1/memories/{id}/tree',
-    scopes: ['memory:read', 'memory:write'],
-    summary: 'The files and folders of a memory (?path= under a folder, ?shallow=1 one level)',
+    path: '/v1/buckets/{id}/tree',
+    scopes: ['bucket:read', 'bucket:write'],
+    summary: 'The files and folders of a bucket (?path= under a folder, ?shallow=1 one level)',
   },
   {
     method: 'GET',
-    path: '/v1/memories/{id}/files/{path}',
-    scopes: ['memory:read', 'memory:write'],
-    summary: 'One memory file: its node, its text (text files) and a short-lived download URL',
+    path: '/v1/buckets/{id}/files/{path}',
+    scopes: ['bucket:read', 'bucket:write'],
+    summary: 'One bucket file: its node, its text (text files) and a short-lived download URL',
   },
   {
     method: 'PUT',
-    path: '/v1/memories/{id}/files/{path}',
-    scopes: ['memory:write'],
+    path: '/v1/buckets/{id}/files/{path}',
+    scopes: ['bucket:write'],
     summary:
-      'Create or replace a memory file: the raw body is the file (missing folders are created)',
+      'Create or replace a bucket file: the raw body is the file (missing folders are created)',
   },
   {
     method: 'DELETE',
-    path: '/v1/memories/{id}/files/{path}',
-    scopes: ['memory:write'],
-    summary: 'Delete a memory file, or a folder with everything in it',
+    path: '/v1/buckets/{id}/files/{path}',
+    scopes: ['bucket:write'],
+    summary: 'Delete a bucket file, or a folder with everything in it',
   },
   // artifact data (agents.html §AA4): the artifact's own Firestore, RTDB and
   // files, behind the same fence as the page's driver. Reads: data ≥ read (an

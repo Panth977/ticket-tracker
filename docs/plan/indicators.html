@@ -39,7 +39,7 @@
           <a href="/plan/roadmap">Roadmap</a>
           <a href="/plan/agents">Agents</a>
           <a href="/plan/artifacts">Artifacts</a>
-          <a href="/plan/memory">Memory</a>
+          <a href="/plan/bucket">Bucket</a>
           <a href="/plan/indicators" class="on">Indicators</a>
           <a href="/plan/sdk">SDK</a>
           <a href="/plan/review">Review</a>
@@ -51,10 +51,10 @@
         <h1>Indicators and descriptions</h1>
         <p class="lede">
           Everything a person names — a <b>board</b>, a board's <b>stage</b>, an <b>artifact</b>, a
-          <b>memory</b>, a <b>workspace</b> — carries the same two things: an <b>indicator</b> (the
+          <b>bucket</b>, a <b>workspace</b> — carries the same two things: an <b>indicator</b> (the
           mark the sidebar, the title dropdowns, cards and every picker draw beside its name) and a
           <b>description</b> (plain text saying what it is for). Before this, boards and artifacts
-          asked for a colour, memories for a typed emoji, boards had rich text and stages had
+          asked for a colour, buckets for a typed emoji, boards had rich text and stages had
           nothing. Now there is one model, one picker, one component, and agents get a sentence of
           intent on everything they can list.
         </p>
@@ -158,12 +158,12 @@
         <ul>
           <li>
             <b>Plain text</b> (Markdown allowed), at most <code>DESCRIPTION_MAX</code> = 2000
-            characters, the same limit everywhere (artifact and memory descriptions grew from 500).
+            characters, the same limit everywhere (artifact and bucket descriptions grew from 500).
             Shown under the name in settings and as a tooltip or subtitle where there is room.
           </li>
           <li>
             <b>Mostly for agents.</b> MCP and REST list them: an agent reads a board's description
-            to know what goes there, a memory's to know what it holds, and a <b>stage's</b> to know
+            to know what goes there, a bucket's to know what it holds, and a <b>stage's</b> to know
             when a ticket belongs in it — "Ready for QA: the build is on staging and the PR is
             linked" says more than the name. The MCP tool descriptions say so.
           </li>
@@ -205,10 +205,10 @@
             <td>emoji <code>icon</code> (none = the old ◆ glyph)</td>
           </tr>
           <tr>
-            <td>memory <code>memories/{m}</code></td>
+            <td>bucket <code>buckets/{m}</code></td>
             <td><code>indicator</code></td>
             <td><code>description</code></td>
-            <td>emoji <code>icon</code> (none = 🧠, <code>MEMORY_DEFAULT_INDICATOR</code>)</td>
+            <td>emoji <code>icon</code> (none = 🧠, <code>BUCKET_DEFAULT_INDICATOR</code>)</td>
           </tr>
           <tr>
             <td>workspace <code>users/{u}/workspaces/{w}</code></td>
@@ -231,8 +231,8 @@
             <b>Create and update</b> take <code>indicator</code> and <code>description</code>:
             <code>boardCreate</code> / <code>boardUpdate</code> (patch), stages inside
             <code>boardUpdate</code>'s <code>stages</code> patch (each validated),
-            <code>artifactCreate</code> / <code>artifactUpdate</code>, <code>memoryCreate</code> /
-            <code>memoryUpdate</code> (the old <code>icon</code> emoji is still accepted from old
+            <code>artifactCreate</code> / <code>artifactUpdate</code>, <code>bucketCreate</code> /
+            <code>bucketUpdate</code> (the old <code>icon</code> emoji is still accepted from old
             clients), <code>workspaceCreate</code> / <code>workspaceUpdate</code>. A bad icon id, a
             typed non-emoji or a path outside <code>indicators/</code> is a 400.
           </li>
@@ -240,8 +240,8 @@
             <b>Out</b>: <code>PublicBoard</code> has <code>indicator</code> and
             <code>description_md</code>; every <code>PublicStage</code> has
             <code>indicator</code> and <code>description</code>; <code>PublicArtifact</code> and
-            <code>MemoryOut</code> have <code>indicator</code>. REST (<code>POST /v1/boards</code>),
-            MCP (board, artifact, memory and workspace tools) and the SDK accept and return them
+            <code>BucketOut</code> have <code>indicator</code>. REST (<code>POST /v1/boards</code>),
+            MCP (board, artifact, bucket and workspace tools) and the SDK accept and return them
             (SDK 1.6.0).
           </li>
         </ul>
@@ -258,15 +258,15 @@
           </li>
           <li>
             <b>Everywhere an entity is shown or picked</b>: the sidebar (boards, artifacts,
-            memories, workspaces and their children), the title switchers, every dropdown and menu
-            that lists boards, artifacts, memories, workspaces or stages (<code>MenuItem</code>
+            buckets, workspaces and their children), the title switchers, every dropdown and menu
+            that lists boards, artifacts, buckets, workspaces or stages (<code>MenuItem</code>
             takes an <code>indicator</code>), the command palette and search results, cards, the
             kanban column headers (with the stage description as a tooltip) and a ticket's stage
             chip.
           </li>
           <li>
-            <b>Settings and create dialogs</b> — board General and Stages, artifact and memory
-            General, the workspace dialog, and New board / artifact / memory / workspace — all ask
+            <b>Settings and create dialogs</b> — board General and Stages, artifact and bucket
+            General, the workspace dialog, and New board / artifact / bucket / workspace — all ask
             for <b>name, description, indicator</b>, with the same component in the same order. The
             free-typed icon box and the colour-only input are gone.
           </li>
@@ -287,7 +287,7 @@
             descriptions stay absent;
           </li>
           <li>
-            every artifact: its emoji, else a palette colour; every memory: its emoji, else 🧠;
+            every artifact: its emoji, else a palette colour; every bucket: its emoji, else 🧠;
             every workspace: its colour.
           </li>
         </ul>
