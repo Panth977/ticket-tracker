@@ -1,7 +1,7 @@
 <!--
   /{handle}/settings/{section} (rerouted here) — an ORG's settings
   (agents.html §AC), for its owners and admins:
-    general   name, handle, and the base role every member gets on what it owns
+    general   picture, name, handle, and the base role every member gets on what it owns
     members   who is in it and as what; invite by e-mail
     env       key/value pairs its boards, artifacts and buckets inherit
     danger    delete it (once it owns nothing); leave it
@@ -18,6 +18,7 @@
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { orgDoc } from '$lib/orgs/store';
+  import OrgPictureEditor from '$lib/orgs/OrgPictureEditor.svelte';
   import PersonName from '$lib/orgs/PersonName.svelte';
   import { Button, EmptyState, Input, Select, Skeleton, toast } from '$lib/ui';
   import Textarea from '$lib/ui/Textarea.svelte';
@@ -162,8 +163,12 @@
     </nav>
     <div class="min-w-0 flex-1">
       {#if section === 'general'}
-        <Section title="General" description="Its name, its address, and what every member gets.">
+        <Section
+          title="General"
+          description="Its picture, its name, its address, and what every member gets."
+        >
           <div class="flex max-w-md flex-col gap-4">
+            <OrgPictureEditor {org} disabled={!manage} />
             <Input label="Name" bind:value={name} disabled={!manage} />
             <Input
               label="Handle"

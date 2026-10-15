@@ -13,6 +13,9 @@
  *   AC4  everything under its owner, like GitHub: me and the people who share
  *        with me under Users, no hiding, `/` is my page; + creates in my
  *        space; Move hands a board to another person
+ *   AC6  an org's picture: uploaded and cropped in General settings like my
+ *        own; the sidebar and the org's page show it; Remove brings the
+ *        colour back
  */
 import { expect, test, type Page } from '@playwright/test';
 import { admin, call, eventually, newBoard, newPerson, read } from '../support/stack.js';
@@ -210,4 +213,53 @@ test('AC4: everything under its owner — me and who shares with me; no hiding; 
   });
   // In the sidebar it now sits under Ben (once: nothing is listed twice).
   await expect(users.locator(`[data-board="${mine.key}"]`)).toHaveCount(1);
+});
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGP4z8AARwzEcQCukw/x0F8jngAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test('AC6: an org gets a picture, cropped like my own; the sidebar shows it; Remove undoes it', async ({
+  page,
+}) => {
+  const ada = await newPerson('Ada');
+  const handle = uniqueHandle();
+  const { orgId } = await call(ada, 'orgCreate', { handle, name: 'Pictured' });
+
+  await signIn(page, ada.email, `/${handle}/settings/general`);
+  const editor = page.locator('[data-org-picture]');
+  const pic = editor.getByRole('img', { name: 'Pictured’s picture' });
+  await expect(pic).toHaveAttribute('data-indicator', 'color');
+  await editor.getByRole('button', { name: 'Upload a picture' }).click();
+  await page
+    .locator('input[type="file"][accept="image/*"]')
+    .setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+  const crop = page.getByRole('dialog', { name: 'Crop Pictured’s picture' });
+  await crop.getByRole('button', { name: 'Save picture' }).click();
+  await expect(crop).toHaveCount(0);
+
+  const org = await eventually('the picture saved', async () => {
+    const o = await read<{ indicator?: { kind: string; path?: string } }>(`orgs/${orgId}`);
+    return o?.indicator?.kind === 'image' ? o : null;
+  });
+  expect(org.indicator!.path).toMatch(new RegExp(`^indicators/${ada.uid}/[^/]+/picture\\.`));
+  await expect(pic).toHaveAttribute('data-indicator', 'image');
+  await expect(pic.locator('img')).toBeVisible();
+  await expect(
+    sidebar(page).locator(`[data-org="${orgId}"] [data-indicator="image"] img`),
+  ).toBeVisible();
+  await page.goto(`/${handle}`);
+  await expect(page.locator('main [data-indicator="image"] img').first()).toBeVisible();
+
+  await page.goto(`/${handle}/settings/general`);
+  await editor.getByRole('button', { name: 'Remove' }).click();
+  await eventually('back to a colour', async () => {
+    const o = await read<{ indicator?: { kind: string } }>(`orgs/${orgId}`);
+    return o?.indicator?.kind === 'color' ? true : null;
+  });
+  await expect(pic).toHaveAttribute('data-indicator', 'color');
+  await expect(
+    sidebar(page).locator(`[data-org="${orgId}"] [data-indicator="color"]`),
+  ).toBeVisible();
 });
