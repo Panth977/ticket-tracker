@@ -23,8 +23,9 @@ Breaking: memories are now **buckets**, and everything has an owner (docs/plan/a
 
 - **Memory → bucket, everywhere.** REST `/v1/memories…` → `/v1/buckets…`; MCP `memory_*` →
   `bucket_*` (`memory_id` → `bucket_id`, `memory_files` → `bucket_files`); SDK `memoryFiles` /
-  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`. The old
-  names are gone, not aliased.
+  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`; token
+  scopes `memory:read` / `memory:write` → `bucket:read` / `bucket:write` (existing tokens were
+  migrated). The old names are gone, not aliased.
 - **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
   repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
   ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.

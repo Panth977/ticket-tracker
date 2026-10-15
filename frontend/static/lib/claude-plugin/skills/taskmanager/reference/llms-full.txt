@@ -7,7 +7,7 @@
 version:           2.0.0
 api:               v1
 updated:           2026-10-15  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    c5e636cb44971f5a749f3c8af1fcdaae33a9218df27fba552aa88e97dbb87cf5
+content-sha256:    f966fc3bbb28cae0ec572e7036aea20d0e74ad5ca34e141fa3ff55d46219d5d9
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -6090,8 +6090,9 @@ Breaking: memories are now **buckets**, and everything has an owner (docs/plan/a
 
 - **Memory → bucket, everywhere.** REST `/v1/memories…` → `/v1/buckets…`; MCP `memory_*` →
   `bucket_*` (`memory_id` → `bucket_id`, `memory_files` → `bucket_files`); SDK `memoryFiles` /
-  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`. The old
-  names are gone, not aliased.
+  `memoryId` → `bucketFiles` / `bucketId`; a ticket file's `source: 'memory'` → `'bucket'`; token
+  scopes `memory:read` / `memory:write` → `bucket:read` / `bucket:write` (existing tokens were
+  migrated). The old names are gone, not aliased.
 - **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
   repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
   ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.
