@@ -11,6 +11,7 @@
   its commands — the server checks the address on every one of them.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { ShieldCheck, Trash2, UserPlus, Users } from 'lucide-svelte';
   import { auth } from '$lib/firebase/auth.svelte';
   import { Button, Dialog, EmptyState, Input, Skeleton, toast } from '$lib/ui';
@@ -79,7 +80,7 @@
       users = r.users;
       adminAddress = r.admin;
       addOpen = false;
-      toast.success(`${addr} can use TaskManager`);
+      toast.success(`${addr} can use ${APP_NAME}`);
     } catch {
       /* toasted */
     } finally {
@@ -105,7 +106,7 @@
       const r = await disallowUser(u.email);
       users = r.users;
       removeOpen = false;
-      toast.success(`${u.email} can no longer use TaskManager`);
+      toast.success(`${u.email} can no longer use ${APP_NAME}`);
     } catch {
       /* toasted */
     } finally {
@@ -116,7 +117,7 @@
 
 <SectionHeader
   title="Users"
-  description="TaskManager is private: anyone can sign in, but only the accounts below can do anything. Everyone else lands on a screen asking you for access."
+  description="{APP_NAME} is private: anyone can sign in, but only the accounts below can do anything. Everyone else lands on a screen asking you for access."
 >
   {#snippet actions()}
     {#if admin}<Button variant="primary" icon={UserPlus} onclick={openAdd}>Add someone</Button>{/if}
@@ -127,7 +128,7 @@
   <EmptyState
     icon={ShieldCheck}
     title="Only the admin manages access"
-    description="Who may use this TaskManager is set by its owner, {ADMIN_EMAIL}. Ask them if you need to let someone in."
+    description="Who may use this {APP_NAME} is set by its owner, {ADMIN_EMAIL}. Ask them if you need to let someone in."
   />
 {:else if loading}
   <div class="flex flex-col gap-2"><Skeleton height="3.5rem" /><Skeleton height="3.5rem" /></div>
@@ -140,7 +141,7 @@
     {#snippet action()}<Button onclick={load}>Try again</Button>{/snippet}
   </EmptyState>
 {:else}
-  <ul class="flex flex-col gap-2" aria-label="People who may use this TaskManager">
+  <ul class="flex flex-col gap-2" aria-label="People who may use this {APP_NAME}">
     {#each users as u (u.email)}
       <li class="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-4">
         <div class="min-w-0 flex-1">

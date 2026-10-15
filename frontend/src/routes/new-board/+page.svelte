@@ -6,6 +6,7 @@
   go out right after (inviteCreate) — a failed invite never loses the board.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import OwnerSelect from '$lib/orgs/OwnerSelect.svelte';
   import { ownerOf } from '$lib/orgs/store';
   // §AC: /new-board?owner=org:{id} from an org's page.
@@ -164,7 +165,7 @@
   }
 </script>
 
-<svelte:head><title>New board · TaskManager</title></svelte:head>
+<svelte:head><title>New board · {APP_NAME}</title></svelte:head>
 
 <main class="min-h-dvh bg-bg px-4 py-8 sm:py-12">
   <div class="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -257,7 +258,7 @@
           </div>
           <p class="text-xs text-muted">
             Tickets are numbered with it: <span class="font-mono">{key || 'ENG'}-42</span>. It’s
-            unique across TaskManager and can’t be changed later.
+            unique across {APP_NAME} and can’t be changed later.
           </p>
         </div>
         <OwnerSelect bind:value={owner} />

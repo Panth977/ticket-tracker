@@ -663,6 +663,27 @@ Agents · Notifications · Tokens · Sign out</pre>
         offline response) so "installable" is a test, not a claim.</li>
     </ul>
 
+    <h3 id="s-brand">Branding: one image, any name and logo</h3>
+    <p>Asked on ORCH-6: a Docker deploy names itself and wears its own logo, everywhere the app shows either — the tab, the
+    installed PWA, the home screen, the favicon — with no rebuild. Decided when the server starts (<code>backend/src/runtime/brand.ts</code>):</p>
+    <ul>
+      <li><b><code>TM_APP_NAME</code></b> (and optionally <code>TM_APP_SHORT_NAME</code>, the home-screen label; default the name if it is
+        ≤ 12 characters, else its first word). The server rewrites the static HTML as it serves it (<code>&lt;title&gt;</code>,
+        <code>application-name</code>, <code>apple-mobile-web-app-title</code>, the offline page) and the manifest's
+        <code>name</code>/<code>short_name</code>, and hands the SPA <code>PUBLIC_APP_NAME</code>; every tab title and the app's own
+        name in the UI read it through <code>frontend/src/lib/brand.ts</code>. Sign-in mails and the default sender name use it too.</li>
+      <li><b>A logo</b>: mount it as <code>/branding/logo.svg</code> (or <code>.png</code>, <code>.webp</code>, <code>.jpg</code>), or
+        point <code>TM_LOGO</code> at a file. At start every icon the build ships is made from it in memory with sharp and served in
+        place of the build's file: <code>favicon.svg/.ico/-96.png</code>, <code>icons/icon-{192,256,384,512}.png</code> (the logo
+        contained on transparency), <code>icons/icon-maskable-512.png</code> and <code>icons/apple-touch-icon-180.png</code> (the logo on
+        an opaque <code>TM_LOGO_BG</code> tile, default white). They go out <code>no-cache</code> with an ETag. A logo that cannot be
+        read is logged and the built-in icons stay.</li>
+      <li><b>The service worker</b> asks the network first (3 s, then the cache) for <code>/_app/env.js</code>, the manifest, the
+        favicons and <code>/icons/*</code>, so a new name or logo reaches an installed app after the next restart, not the next build.
+        An installed PWA's home-screen icon and label are refreshed by the OS on its own schedule.</li>
+      <li>Firebase deploys set <code>PUBLIC_APP_NAME</code> at build time; their icons stay the generated set (<code>scripts/gen-icons.mjs</code>).</li>
+    </ul>
+
     <h2 id="t">T · Local first: a refresh that shows the app, not a skeleton</h2>
     <p>Today a reload waits: the root layout holds a skeleton until Firebase Auth restores the session from IndexedDB, and every store
     starts at <code>loading: true</code>. Firestore's persistent cache already holds the data — the app just refuses to draw it until a

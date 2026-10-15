@@ -8,6 +8,7 @@
   the wrong person.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -99,7 +100,7 @@
   }
 </script>
 
-<svelte:head><title>Invitation · TaskManager</title></svelte:head>
+<svelte:head><title>Invitation · {APP_NAME}</title></svelte:head>
 
 <main class="grid min-h-dvh place-items-center bg-bg px-4 py-10">
   <div class="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-pop">

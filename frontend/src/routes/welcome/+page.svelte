@@ -7,6 +7,7 @@
   Leaving by any door calls auth.finishWelcome() so the guard lets you go.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -72,7 +73,7 @@
   }
 </script>
 
-<svelte:head><title>Welcome · TaskManager</title></svelte:head>
+<svelte:head><title>Welcome · {APP_NAME}</title></svelte:head>
 
 <main class="min-h-dvh bg-bg px-4 py-10 sm:py-16">
   <div class="mx-auto flex w-full max-w-xl flex-col gap-6">
@@ -80,7 +81,7 @@
       <p class="text-xs font-medium tracking-wide text-subtle uppercase">Step {step} of 2</p>
       <h1 class="text-2xl font-semibold">
         {step === 1
-          ? 'Welcome to TaskManager'
+          ? `Welcome to ${APP_NAME}`
           : invites.length
             ? 'You’ve been invited'
             : 'Start your first board'}

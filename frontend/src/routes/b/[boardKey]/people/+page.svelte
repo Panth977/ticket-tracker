@@ -5,6 +5,7 @@
   already have — emails, bookmarks, an agent's board list — still land.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // goto() targets are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -17,7 +18,7 @@
   });
 </script>
 
-<svelte:head><title>People — TaskManager</title></svelte:head>
+<svelte:head><title>People — {APP_NAME}</title></svelte:head>
 
 <div class="flex flex-col gap-3 p-6" aria-busy="true" aria-label="Opening People &amp; roles">
   <Skeleton height="1.5rem" width="16rem" /><Skeleton lines={4} />

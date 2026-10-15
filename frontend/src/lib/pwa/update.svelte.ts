@@ -8,6 +8,7 @@
  * and reload once it has.
  */
 import { toast } from '$lib/ui';
+import { APP_NAME } from '$lib/brand';
 
 const KEY = 'tm.update';
 /** How often an open window asks whether a new build was deployed. */
@@ -20,7 +21,7 @@ function offer(waiting: ServiceWorker): void {
   toast.show({
     key: KEY, // one at a time, however many times we notice
     kind: 'info',
-    message: 'A new version of TaskManager is ready',
+    message: `A new version of ${APP_NAME} is ready`,
     detail: 'Reload to pick it up — nothing you have typed is lost.',
     duration: 0, // sticky: this is not an interruption to time out
     action: {

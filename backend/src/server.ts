@@ -11,6 +11,9 @@
  *   with firebase.json's headers. firebase.json stays the one description of
  *   routing for both deploys.
  *
+ * Branding (runtime/brand.ts): TM_APP_NAME and a logo mounted at
+ * /branding/logo.* rename the app and replace every icon at start.
+ *
  * Also runs the in-process task queue + scheduler (runtime/localJobs.ts) and
  * the local triggers. `node lib/server.js` (PORT, default 8080).
  */
@@ -28,6 +31,7 @@ import { ensureVapid } from './adapters/webPush.js';
 import { ensureServerSecrets } from './runtime/deploy.js';
 import { startLocalJobs } from './runtime/localJobs.js';
 import { platform } from './runtime/platform.js';
+import { loadBrand, type Brand } from './runtime/brand.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 /** The repository root (backend/src or backend/lib → two up). */
@@ -147,6 +151,9 @@ function sendFile(
         : 'public, max-age=3600',
   );
   for (const h of headers) if (h.test(urlPath)) for (const [k, v] of h.headers) res.setHeader(k, v);
+  // This deploy's name in the HTML and the manifest (runtime/brand.ts).
+  const branded = rewritten(file);
+  if (branded) return sendBody(req, res, file, branded);
   // Compressed as Hosting serves it: brotli or gzip for text, made once per
   // file (the build never changes under a running server) and kept in memory.
   const enc = compressible(file) ? pickEncoding(req.headers['accept-encoding']) : null;
@@ -162,7 +169,44 @@ function sendFile(
   createReadStream(file).pipe(res);
 }
 
-const COMPRESSIBLE = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.xml', '.webmanifest', '.map', '.md', '.ts']);
+/** The deploy's branding, read once at start (startServer). */
+let brand: Brand | null = null;
+const rewrites_ = new Map<string, Buffer | null>();
+function rewritten(file: string): Buffer | null {
+  if (!brand) return null;
+  if (!rewrites_.has(file)) rewrites_.set(file, brand.rewrite(file, readFileSync(file)));
+  return rewrites_.get(file)!;
+}
+
+/** An in-memory body (a rewritten file), compressed like any other. */
+function sendBody(req: IncomingMessage, res: ServerResponse, key: string, raw: Buffer): void {
+  const enc = raw.length > 1024 ? pickEncoding(req.headers['accept-encoding']) : null;
+  res.setHeader('vary', 'accept-encoding');
+  let body = raw;
+  if (enc) {
+    const k = `${enc}:brand:${key}`;
+    body = zipped.get(k) ?? zip(raw, enc);
+    zipped.set(k, body);
+    res.setHeader('content-encoding', enc);
+  }
+  res.setHeader('content-length', body.length);
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
+const COMPRESSIBLE = new Set([
+  '.js',
+  '.mjs',
+  '.css',
+  '.html',
+  '.json',
+  '.svg',
+  '.txt',
+  '.xml',
+  '.webmanifest',
+  '.map',
+  '.md',
+  '.ts',
+]);
 const compressible = (file: string) =>
   COMPRESSIBLE.has(extname(file).toLowerCase()) && statSync(file).size > 1024;
 
@@ -178,14 +222,16 @@ function compressed(file: string, enc: 'br' | 'gzip'): Buffer {
   const key = `${enc}:${file}`;
   let b = zipped.get(key);
   if (!b) {
-    const raw = readFileSync(file);
-    b =
-      enc === 'br'
-        ? brotliCompressSync(raw, { params: { [zlib.BROTLI_PARAM_QUALITY]: 9 } })
-        : gzipSync(raw, { level: 9 });
+    b = zip(readFileSync(file), enc);
     zipped.set(key, b);
   }
   return b;
+}
+
+function zip(raw: Buffer, enc: 'br' | 'gzip'): Buffer {
+  return enc === 'br'
+    ? brotliCompressSync(raw, { params: { [zlib.BROTLI_PARAM_QUALITY]: 9 } })
+    : gzipSync(raw, { level: 9 });
 }
 
 /** Routes the VM adds to what Firebase Hosting rewrites to the api. */
@@ -203,6 +249,9 @@ export async function startServer(
   const api = getRequestListener(app.fetch);
   const { rewrites, headers } = loadHosting();
   const { publicKey: vapidKey } = await ensureVapid();
+  brand = await loadBrand();
+  rewrites_.clear();
+  const icons = brand.files;
   const config = JSON.stringify({
     platform: 'vm',
     vapidKey,
@@ -218,6 +267,7 @@ export async function startServer(
     PUBLIC_FIREBASE_PROJECT_ID: 'vm',
     PUBLIC_FCM_VAPID_KEY: 'from-server',
     ...(process.env.TM_ADMIN_EMAIL ? { PUBLIC_TM_ADMIN_EMAIL: process.env.TM_ADMIN_EMAIL } : {}),
+    ...brand.publicEnv,
     ...Object.fromEntries(
       Object.entries(process.env).filter(
         (e): e is [string, string] => e[0].startsWith('PUBLIC_') && typeof e[1] === 'string',
@@ -241,6 +291,18 @@ export async function startServer(
         'cache-control': 'no-cache',
       });
       return void res.end(config);
+    }
+    const icon = icons.get(urlPath);
+    if (icon && (req.method === 'GET' || req.method === 'HEAD')) {
+      // The deploy's own logo: revalidated every time, so a new one shows after a restart.
+      const fresh = req.headers['if-none-match'] === icon.etag;
+      res.writeHead(fresh ? 304 : 200, {
+        'content-type': icon.type,
+        'cache-control': 'no-cache',
+        etag: icon.etag,
+        ...(fresh ? {} : { 'content-length': icon.body.length }),
+      });
+      return void res.end(fresh || req.method === 'HEAD' ? undefined : icon.body);
     }
     if (VM_API.some((t) => t(urlPath))) return void api(req, res);
     const isRead = req.method === 'GET' || req.method === 'HEAD';

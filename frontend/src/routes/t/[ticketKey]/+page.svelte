@@ -3,6 +3,7 @@
   page'). keys/{KEY} resolves the ticket.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { page } from '$app/state';
@@ -13,7 +14,7 @@
   const ticketKey = $derived((page.params.ticketKey ?? '').toUpperCase());
 </script>
 
-<svelte:head><title>{ticketKey} · TaskManager</title></svelte:head>
+<svelte:head><title>{ticketKey} · {APP_NAME}</title></svelte:head>
 
 {#key ticketKey}
   <TicketDrawer

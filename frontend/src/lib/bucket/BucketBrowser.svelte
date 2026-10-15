@@ -15,6 +15,7 @@
   listener redraws.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { untrack } from 'svelte';
@@ -471,7 +472,7 @@
 </script>
 
 <svelte:window onresize={measure} />
-<svelte:head><title>{mem?.name ?? 'Bucket'} · TaskManager</title></svelte:head>
+<svelte:head><title>{mem?.name ?? 'Bucket'} · {APP_NAME}</title></svelte:head>
 
 {#if $docQ.error || (!$docQ.loading && !mem)}
   <EmptyState

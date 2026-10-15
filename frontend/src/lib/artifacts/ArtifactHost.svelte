@@ -17,6 +17,7 @@
   per artifact, all gone on unmount.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { onDestroy, untrack } from 'svelte';
@@ -273,7 +274,7 @@
 </script>
 
 <svelte:window onkeydown={onKey} onresize={measure} />
-<svelte:head><title>{art?.name ?? 'Artifact'} — TaskManager</title></svelte:head>
+<svelte:head><title>{art?.name ?? 'Artifact'} — {APP_NAME}</title></svelte:head>
 
 {#if revoked}
   <EmptyState

@@ -44,6 +44,7 @@ import {
 import { outChannels } from './router.js';
 import { EVENT_STYLE } from './summary.js';
 import { phantomRootId, replyAddress, replyToken, unsubscribeToken } from './tokens.js';
+import { appName } from '../runtime/brand.js';
 
 /** A re-run within this much of the quiet window's end just sends (clock skew). */
 const QUIET_SLACK_MS = 2 * 60_000;
@@ -290,7 +291,7 @@ const SENDERS: Record<OutChannel, (c: SendContext, deliveryId: string) => Promis
       count: item.count,
       ticketKey: item.ticketKey,
       ticketTitle: item.ticketTitle,
-      boardName: board?.name ?? 'TaskManager',
+      boardName: board?.name ?? appName(),
       url: itemUrl(item),
       settingsUrl: settingsUrl(),
       replyable,

@@ -46,6 +46,19 @@ const PRECACHE = [...build, ...files, ENV];
 const PRECACHED = new Set(PRECACHE);
 
 /**
+ * Precached but asked of the network FIRST: what a deploy decides when its
+ * server starts rather than at build time — the public env (PUBLIC_APP_NAME)
+ * and the icons, favicons and manifest a VM rebrands from a mounted logo
+ * (backend src/runtime/brand.ts). Cache-first would keep the old name and
+ * logo until the next build; the cache still answers offline.
+ */
+const FRESH = (path: string) =>
+  path === ENV ||
+  path === `${base}/manifest.webmanifest` ||
+  path.startsWith(`${base}/favicon`) ||
+  path.startsWith(`${base}/icons/`);
+
+/**
  * Static HTML pages that are NOT the SPA: /integrate (the page an orchestrator
  * is pointed at), /qa/mobile.html, /offline.html. Without this every navigation
  * below falls through to "render the shell", and an installed worker turns
@@ -178,6 +191,20 @@ sw.addEventListener('fetch', (event) => {
     // otherwise be a hosting redirect, and a navigation may not be answered
     // with a redirected response.
     const key = page ?? url.pathname;
+    if (!page && FRESH(url.pathname)) {
+      event.respondWith(
+        (async () => {
+          try {
+            const res = await fetchWithin(req, 3000);
+            if (res.ok) void (await caches.open(CACHE)).put(key, res.clone());
+            return res;
+          } catch {
+            return (await caches.match(key, { cacheName: CACHE })) ?? Response.error();
+          }
+        })(),
+      );
+      return;
+    }
     event.respondWith(
       (async () => {
         const hit = await caches.match(key, { cacheName: CACHE });
@@ -217,3 +244,10 @@ sw.addEventListener('fetch', (event) => {
     );
   }
 });
+
+/** fetch, given up after `ms` (a slow network must not hold the boot). */
+function fetchWithin(req: Request, ms: number): Promise<Response> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(req, { signal: ctl.signal }).finally(() => clearTimeout(t));
+}
