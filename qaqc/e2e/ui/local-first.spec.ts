@@ -18,7 +18,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { call, newBoard, newPerson, stage } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { boardPath, signIn } from '../support/ui.js';
 
 const SHELL = 'aside[aria-label="Sidebar"]';
 /**
@@ -209,7 +209,7 @@ test('a reload with every Firebase backend unreachable renders the board from th
   // The sidebar's board list came from the cache too.
   await expect(page.locator(`a[data-board="${b.key}"]`)).toBeVisible();
   // And we were never bounced to /login: the remembered session held.
-  expect(new URL(page.url()).pathname.startsWith(`/b/${b.key}`)).toBe(true);
+  expect(boardPath(page.url()).startsWith(`/b/${b.key}`)).toBe(true);
 
   const m = await readMarks(page);
   expect(m.splash, 'a cached boot must not show the first-visit skeleton').toBeUndefined();

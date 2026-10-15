@@ -5,7 +5,7 @@
  * exactly as opening the email would.
  */
 import { expect, type Page } from '@playwright/test';
-import { eventually, mailTo, PROJECT_ID } from './stack.js';
+import { call, eventually, mailTo, PROJECT_ID, type Person } from './stack.js';
 import { VM } from '../../seed/vm.js';
 
 interface OobCode {
@@ -20,7 +20,11 @@ async function signInLinks(email: string): Promise<OobCode[]> {
     return (await mailTo(email))
       .filter((m) => m.subject === 'Sign in to TaskManager')
       .reverse()
-      .map((m) => ({ email, requestType: 'EMAIL_SIGNIN', oobLink: /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0] }));
+      .map((m) => ({
+        email,
+        requestType: 'EMAIL_SIGNIN',
+        oobLink: /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0],
+      }));
   const host = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
   const r = await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/oobCodes`);
   const { oobCodes } = (await r.json()) as { oobCodes: OobCode[] };
@@ -93,3 +97,24 @@ export async function subscribe(
   await dlg.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(dlg).toHaveCount(0);
 }
+
+/**
+ * After creating an artifact or a bucket the app lands on its owner-first URL
+ * (/{owner}/x/{slug}, /{owner}/bucket/{slug}; agents.html §AC). Wait for it
+ * and name the thing's id, as its owner resolves it.
+ */
+export async function thingIdAt(
+  page: Page,
+  who: Person,
+  kind: 'artifact' | 'bucket',
+): Promise<string> {
+  const seg = kind === 'bucket' ? 'bucket' : 'x';
+  await page.waitForURL((u) => new RegExp(`^/[^/]+/${seg}/[^/]+$`).test(u.pathname));
+  const [, handle, , slug] = new URL(page.url()).pathname.split('/');
+  const r = await call(who, 'pathResolve', { handle: handle!, kind, slug: slug! });
+  return r.thing!.id;
+}
+
+/** A board URL's path without its owner prefix: /{owner}/b/KEY/… → /b/KEY/… (agents.html §AC). */
+export const boardPath = (url: string): string =>
+  new URL(url).pathname.replace(/^\/[^/]+(?=\/b\/)/, '');

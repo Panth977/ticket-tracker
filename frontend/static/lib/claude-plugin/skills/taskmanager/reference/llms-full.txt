@@ -7,7 +7,7 @@
 version:           2.0.0
 api:               v1
 updated:           2026-10-15  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    349ef08fb67e3183ac98672cd210b81b0743f49363ac1770b6e9377d7b7a3c85
+content-sha256:    c5e636cb44971f5a749f3c8af1fcdaae33a9218df27fba552aa88e97dbb87cf5
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -952,7 +952,7 @@ events ack               ≤ 500 ids per call
 SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal
 ```
 
-OpenAPI: `TaskManager API` version `1`, 48 paths, 75 schemas.
+OpenAPI: `TaskManager API` version `1`, 49 paths, 76 schemas.
 
 ### 5.2 REST — every endpoint
 
@@ -1011,6 +1011,26 @@ archived        boolean        required
 cost            object | null  required
 agg_fields      object[]       required
 aggs            object         required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/env
+
+The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment.
+
+Scopes: `board:read` · board-scoped: a credential on several boards names one (`?board=KEY`)
+
+Query:
+```text
+board  string
+```
+
+→ 200 Env
+```text
+board  object         required
+agent  object | null  required
+env    object         required
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)

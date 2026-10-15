@@ -17,7 +17,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { admin, call, eventually, newBoard, newPerson, read } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, thingIdAt } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 
@@ -54,8 +54,7 @@ test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move 
   const dialog = page.getByRole('dialog', { name: 'New bucket' });
   await dialog.getByLabel('Name').fill('Brand kit');
   await dialog.getByRole('button', { name: 'Create' }).click();
-  await page.waitForURL(/\/m\/[A-Za-z0-9_-]+$/);
-  const bucketId = new URL(page.url()).pathname.split('/')[2]!;
+  const bucketId = await thingIdAt(page, ada, 'bucket');
   await expect(page.locator('[data-bucket-switcher]')).toContainText('Brand kit');
   // the sidebar lists it
   await expect(sidebar(page).locator(`[data-bucket="${bucketId}"]`)).toBeVisible();

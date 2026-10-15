@@ -13,7 +13,7 @@
  */
 import { expect, test, type ConsoleMessage, type Page } from '@playwright/test';
 import { admin, call, eventually, newBoard, newPerson, read, stage } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { boardPath, signIn } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const column = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
@@ -49,7 +49,7 @@ test('§Q1: the sidebar is a flat board list — one click opens the board, and 
   // ONE click = that board's default view (no intermediate page to click through).
   await nav.getByRole('link', { name: /Engineering/ }).click();
   await page.waitForURL(`**/b/${eng.key}/**`);
-  expect(new URL(page.url()).pathname).toBe(`/b/${eng.key}/${engDefaultView}`);
+  expect(boardPath(page.url())).toBe(`/b/${eng.key}/${engDefaultView}`);
   await expect(page.getByRole('heading', { name: `${eng.key} Engineering` })).toBeVisible();
   // …and the row I am on is the current one.
   await expect(nav.getByRole('link', { name: /Engineering/ })).toHaveAttribute(
@@ -60,9 +60,9 @@ test('§Q1: the sidebar is a flat board list — one click opens the board, and 
   // Open a different view here, go elsewhere, come back: the row remembers it.
   await page.getByRole('link', { name: 'Table', exact: true }).click();
   await page.waitForURL(
-    (u) => u.pathname.startsWith(`/b/${eng.key}/`) && !u.pathname.endsWith(engDefaultView),
+    (u) => boardPath(u.href).startsWith(`/b/${eng.key}/`) && !u.pathname.endsWith(engDefaultView),
   );
-  const tableUrl = new URL(page.url()).pathname;
+  const tableUrl = boardPath(page.url());
 
   await nav.getByRole('link', { name: /Operations/ }).click();
   await page.waitForURL(`**/b/${ops.key}/**`);
@@ -70,7 +70,7 @@ test('§Q1: the sidebar is a flat board list — one click opens the board, and 
 
   await expect(async () => {
     await nav.getByRole('link', { name: /Engineering/ }).click();
-    expect(new URL(page.url()).pathname).toBe(tableUrl);
+    expect(boardPath(page.url())).toBe(tableUrl);
   }).toPass();
 });
 

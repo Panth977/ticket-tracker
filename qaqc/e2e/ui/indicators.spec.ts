@@ -10,7 +10,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { call, eventually, newPerson, read, uniqueKey } from '../support/stack.js';
-import { signIn } from '../support/ui.js';
+import { signIn, thingIdAt } from '../support/ui.js';
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 
@@ -112,8 +112,7 @@ test('I1–I3: board icon + description, stage emoji + description, bucket image
   ).toBeVisible();
   await dialog.getByTestId('indicator-field').click();
   await dialog.getByRole('button', { name: 'Create' }).click();
-  await page.waitForURL(/\/m\/[A-Za-z0-9_-]+$/);
-  const bucketId = new URL(page.url()).pathname.split('/')[2]!;
+  const bucketId = await thingIdAt(page, ada, 'bucket');
 
   const bucket = await read<{ indicator?: Ind }>(`buckets/${bucketId}`);
   expect(bucket?.indicator?.kind).toBe('image');
