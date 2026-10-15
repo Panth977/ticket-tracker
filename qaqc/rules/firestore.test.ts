@@ -68,8 +68,6 @@ beforeAll(async () => {
     await put(`users/${ADMIN}/reads/${TICKET}`, fixtures.reads);
     await put(`users/${ADMIN}/apiKeys/k1`, fixtures.apiKeys);
     await put(`users/${ADMIN}/oauthGrants/g1`, fixtures.oauthGrants);
-    await put(`users/${ADMIN}/workspaces/w1`, fixtures.workspaces);
-    await put(`users/${ADMIN}/ui/sidebar`, fixtures.sidebarPrefs);
 
     // STRANGER is invited to BOARD; VIEWER is invited to OTHER_BOARD.
     await put('invites/inv_stranger', {
@@ -276,8 +274,8 @@ describe('users/{uid}/reads', () => {
   });
 });
 
-describe('users/{uid}/apiKeys, oauthGrants, workspaces and ui (§AB)', () => {
-  for (const sub of ['apiKeys/k1', 'oauthGrants/g1', 'workspaces/w1', 'ui/sidebar']) {
+describe('users/{uid}/apiKeys and oauthGrants', () => {
+  for (const sub of ['apiKeys/k1', 'oauthGrants/g1']) {
     it(`${sub}: owner reads, nobody writes`, async () => {
       const path = `users/${ADMIN}/${sub}`;
       await assertSucceeds(getDoc(doc(db(ADMIN), path)));
@@ -288,9 +286,10 @@ describe('users/{uid}/apiKeys, oauthGrants, workspaces and ui (§AB)', () => {
       await assertFails(setDoc(doc(db(ADMIN), `${path}-new`), { name: 'x' }));
     });
   }
-  it("workspaces: the owner lists their own, nobody lists anyone else's", async () => {
-    await assertSucceeds(getDocs(collection(db(ADMIN), `users/${ADMIN}/workspaces`)));
-    await assertFails(getDocs(collection(db(EDITOR), `users/${ADMIN}/workspaces`)));
+  // §AC5: the old per-person workspaces and sidebar hide lists are gone — nobody reads them.
+  it('workspaces and ui: no longer readable by anyone', async () => {
+    await assertFails(getDocs(collection(db(ADMIN), `users/${ADMIN}/workspaces`)));
+    await assertFails(getDoc(doc(db(ADMIN), `users/${ADMIN}/ui/sidebar`)));
   });
 });
 

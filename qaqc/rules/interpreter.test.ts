@@ -60,8 +60,6 @@ put(`users/${ADMIN}/inbox/n1`, fixtures.inbox);
 put(`users/${ADMIN}/reads/${TICKET}`, fixtures.reads);
 put(`users/${ADMIN}/apiKeys/k1`, fixtures.apiKeys);
 put(`users/${ADMIN}/oauthGrants/g1`, fixtures.oauthGrants);
-put(`users/${ADMIN}/workspaces/w1`, fixtures.workspaces);
-put(`users/${ADMIN}/ui/sidebar`, fixtures.sidebarPrefs);
 put('invites/inv_stranger', { ...fixtures.invites, boardId: BOARD, email: emailOf(STRANGER) });
 put('boardKeys/ENG', fixtures.boardKeys);
 put('keys/ENG-1', fixtures.keys);

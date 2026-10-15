@@ -120,7 +120,8 @@ export async function migrateIndicators(deps, opts) {
   const buckets = await db.collection(C.buckets).get();
   await each('buckets', buckets.docs, planBucket, (s) => s.id);
   // users/{uid}/workspaces/{id} — only that collection of that name.
-  const ws = await db.collectionGroup(C.workspaces).get();
+  // (workspaces left the schema with §AC; their documents may still be here before that migration)
+  const ws = await db.collectionGroup('workspaces').get();
   await each(
     'workspaces',
     ws.docs.filter((d) => d.ref.parent.parent?.parent?.id === C.users),
