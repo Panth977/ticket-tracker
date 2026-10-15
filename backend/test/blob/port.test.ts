@@ -24,6 +24,7 @@ describe('blob: disk paths', () => {
 describe('blob: the /blob door serves signed URLs', () => {
   const pathOf = (url: string) => url.replace(/^https?:\/\/[^/]+/, '');
 
+  // createApp imports every command: slow on a busy machine (CI), so not the 5 s default.
   it('PUT through a signed write URL, GET (and a range) through a signed read URL', async () => {
     const { createApp } = await import('../../src/http/app.js');
     const app = await createApp();
@@ -61,7 +62,7 @@ describe('blob: the /blob door serves signed URLs', () => {
     expect((await app.request(pathOf(get).replace(/sig=[^&]+/, 'sig=AAAA'))).status).toBe(403);
     const [old] = await file.getSignedUrl({ action: 'read', expires: Date.now() - 1 });
     expect((await app.request(pathOf(old))).status).toBe(403);
-  });
+  }, 30_000);
 });
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
