@@ -18,6 +18,7 @@
   page with "Cannot read properties of null".
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { untrack } from 'svelte';
@@ -426,7 +427,7 @@
 </script>
 
 <svelte:head
-  ><title>{board ? `${board.key} · ${board.name}` : 'Board'} — TaskManager</title></svelte:head
+  ><title>{board ? `${board.key} · ${board.name}` : 'Board'} — {APP_NAME}</title></svelte:head
 >
 
 {#if !$boardStore.loading && !board}

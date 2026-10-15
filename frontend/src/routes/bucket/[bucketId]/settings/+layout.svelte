@@ -5,6 +5,7 @@
   The owner sees all three; an editor or viewer only Subscribers.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import type { Snippet } from 'svelte';
@@ -49,7 +50,7 @@
 </script>
 
 <svelte:head
-  ><title>{m ? `Settings · ${m.name}` : 'Bucket settings'} — TaskManager</title></svelte:head
+  ><title>{m ? `Settings · ${m.name}` : 'Bucket settings'} — {APP_NAME}</title></svelte:head
 >
 
 {#if $docQ.loading}

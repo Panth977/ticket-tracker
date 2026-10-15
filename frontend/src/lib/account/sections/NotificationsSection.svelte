@@ -8,6 +8,7 @@
   Every change saves at once (profileUpdate merges channels per event).
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   /* eslint-disable svelte/no-navigation-without-resolve -- routes.* already builds resolved app paths */
   import {
     paths,
@@ -126,7 +127,7 @@
   }
 </script>
 
-<svelte:head><title>Notifications · TaskManager</title></svelte:head>
+<svelte:head><title>Notifications · {APP_NAME}</title></svelte:head>
 
 <SectionHeader
   title="Notifications"

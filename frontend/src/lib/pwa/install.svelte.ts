@@ -17,6 +17,7 @@
  */
 
 import { toast } from '$lib/ui';
+import { APP_NAME } from '$lib/brand';
 
 const DISMISS_KEY = 'tm.pwa.installDismissed';
 const HELP_KEY = 'tm.pwa.iosHelp';
@@ -126,7 +127,7 @@ class InstallController {
     toast.show({
       key: HELP_KEY,
       kind: 'info',
-      message: 'Add TaskManager to your Home Screen',
+      message: `Add ${APP_NAME} to your Home Screen`,
       detail:
         'iPhone and iPad install web apps from the browser’s Share menu — no site can do it for you. ' +
         'Tap Share (the square with an arrow), then “Add to Home Screen”, then Add.',

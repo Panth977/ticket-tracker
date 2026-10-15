@@ -7,6 +7,7 @@
   Firebase Auth is the IDENTITY; this is only the DELEGATION.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { CircleAlert, ShieldCheck } from 'lucide-svelte';
@@ -46,7 +47,7 @@
       loadError =
         isAppError(e) && (e.code === 'not_found' || e.code === 'invalid')
           ? 'This app isn’t registered, or its return address doesn’t match. Go back to the app and try again.'
-          : 'Couldn’t reach TaskManager to check this app — try again.';
+          : `Couldn’t reach ${APP_NAME} to check this app — try again.`;
     }
   });
 
@@ -80,7 +81,7 @@
   });
 </script>
 
-<svelte:head><title>Authorize {client?.clientName ?? 'an app'} · TaskManager</title></svelte:head>
+<svelte:head><title>Authorize {client?.clientName ?? 'an app'} · {APP_NAME}</title></svelte:head>
 
 <main class="grid min-h-dvh place-items-center bg-bg px-4 py-10">
   <div class="w-full max-w-md rounded-xl border border-line bg-surface shadow-pop">
@@ -89,7 +90,7 @@
         <span class="text-danger"><CircleAlert size={22} aria-hidden="true" /></span>
         <h1 class="text-lg font-semibold">This authorization link is broken</h1>
         <p class="text-sm text-muted">{parsed.error}</p>
-        <Button href={routes.home()}>Go to TaskManager</Button>
+        <Button href={routes.home()}>Go to {APP_NAME}</Button>
       </div>
     {:else if loadError}
       <div class="flex flex-col gap-3 p-6">
@@ -122,7 +123,7 @@
           {/if}
           <div class="min-w-0">
             <h1 class="text-lg leading-tight font-semibold">
-              {client.clientName} wants to use your TaskManager account
+              {client.clientName} wants to use your {APP_NAME} account
             </h1>
             {#if host}<p class="text-xs text-muted">It will return you to {host}</p>{/if}
           </div>

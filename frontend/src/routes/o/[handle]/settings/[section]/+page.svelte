@@ -7,6 +7,7 @@
     danger    delete it (once it owns nothing); leave it
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -138,7 +139,7 @@
   };
 </script>
 
-<svelte:head><title>{org?.name ?? handle} settings · TaskManager</title></svelte:head>
+<svelte:head><title>{org?.name ?? handle} settings · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl gap-8 px-4 py-8 sm:px-8">
   {#if missing}

@@ -4,6 +4,7 @@
   issued under it (grantRevoke) — the app is signed out at once.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { Plug } from 'lucide-svelte';
   import { paths, type OAuthGrant } from '@tm/shared';
   import { command } from '$lib/api';
@@ -49,7 +50,7 @@
 
 <SectionHeader
   title="Connected apps"
-  description="Apps you allowed to use TaskManager as you — AI assistants over MCP, automations. They can never do more than you can."
+  description="Apps you allowed to use {APP_NAME} as you — AI assistants over MCP, automations. They can never do more than you can."
 />
 
 {#if $grantsQ.loading}

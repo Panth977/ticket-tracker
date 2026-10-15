@@ -7,6 +7,7 @@
   Removing a stage that still holds tickets asks where they go (remap).
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import {
     DESCRIPTION_MAX,
     STAGE_CATEGORIES,
@@ -76,7 +77,7 @@
 
 <Section
   title="Stages"
-  description="The columns of your board, in order. The category tells TaskManager what a stage means — done and cancelled stop due-date reminders and count as finished."
+  description="The columns of your board, in order. The category tells {APP_NAME} what a stage means — done and cancelled stop due-date reminders and count as finished."
   dirty={draft.dirty}
   readOnly={s.readOnly}
   onsave={save}

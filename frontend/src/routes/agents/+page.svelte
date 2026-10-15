@@ -5,6 +5,7 @@
   like a person, reached only through a token.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { Archive, Bot, Plus } from 'lucide-svelte';
   import { auth } from '$lib/firebase/auth.svelte';
@@ -25,7 +26,7 @@
   let creating = $state(false);
 </script>
 
-<svelte:head><title>Agents · TaskManager</title></svelte:head>
+<svelte:head><title>Agents · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
   <header class="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">

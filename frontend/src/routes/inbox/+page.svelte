@@ -7,6 +7,7 @@
   or a shared link lands on the same ticket.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -268,7 +269,7 @@
   };
 </script>
 
-<svelte:head><title>Inbox · TaskManager</title></svelte:head>
+<svelte:head><title>Inbox · {APP_NAME}</title></svelte:head>
 
 <SearchProviders />
 

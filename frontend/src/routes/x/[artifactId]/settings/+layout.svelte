@@ -7,6 +7,7 @@
   behind these screens checks the role itself.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import type { Snippet } from 'svelte';
@@ -64,7 +65,7 @@
 </script>
 
 <svelte:head
-  ><title>{art ? `Settings · ${art.name}` : 'Artifact settings'} — TaskManager</title></svelte:head
+  ><title>{art ? `Settings · ${art.name}` : 'Artifact settings'} — {APP_NAME}</title></svelte:head
 >
 
 {#if $docQ.loading}

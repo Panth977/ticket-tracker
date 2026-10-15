@@ -8,6 +8,7 @@
   also get its Settings. `/`, `/x` and `/bucket` land on my own page.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { page } from '$app/state';
@@ -93,7 +94,7 @@
   const ROLE: Record<string, string> = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 </script>
 
-<svelte:head><title>{who?.name ?? handle} · TaskManager</title></svelte:head>
+<svelte:head><title>{who?.name ?? handle} · {APP_NAME}</title></svelte:head>
 
 <div
   class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-8"

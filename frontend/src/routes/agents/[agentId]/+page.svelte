@@ -10,6 +10,7 @@
   private).
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   /* eslint-disable svelte/no-navigation-without-resolve -- agentRoutes; the SPA has no base path */
   import { page } from '$app/state';
   import { beforeNavigate } from '$app/navigation';
@@ -130,7 +131,7 @@
   }
 </script>
 
-<svelte:head><title>{agent?.name ?? 'Agent'} · Agents · TaskManager</title></svelte:head>
+<svelte:head><title>{agent?.name ?? 'Agent'} · Agents · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-8">
   <a

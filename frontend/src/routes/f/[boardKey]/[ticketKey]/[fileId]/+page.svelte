@@ -9,6 +9,7 @@
   only grant to people on the board.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   /* eslint-disable svelte/no-navigation-without-resolve -- paths built by fileViewerPath / routes; the SPA has no base path */
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -74,7 +75,7 @@
 </script>
 
 <svelte:head
-  ><title>{file?.name ?? 'File'} · {ticket?.key ?? ticketKey} · TaskManager</title></svelte:head
+  ><title>{file?.name ?? 'File'} · {ticket?.key ?? ticketKey} · {APP_NAME}</title></svelte:head
 >
 
 <div class="flex h-dvh flex-col bg-bg text-text">

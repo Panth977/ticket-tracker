@@ -38,6 +38,7 @@ import {
   type AccountDoc,
 } from './accounts.js';
 import { checkPassword, hashPassword, ID_TOKEN_TTL_S, secret, verifyJwt } from './tokens.js';
+import { appName } from '../../runtime/brand.js';
 
 export const LINKS = '_authLinks';
 export const OAUTH = '_authOauth';
@@ -228,10 +229,10 @@ async function mailLink(
   const signIn = purpose === 'signIn';
   await ports().email.send({
     to: normalizeEmail(email),
-    subject: signIn ? 'Sign in to TaskManager' : 'Confirm your new e-mail address',
+    subject: signIn ? `Sign in to ${appName()}` : 'Confirm your new e-mail address',
     text: signIn
       ? `Open this link to sign in (it works once, for one hour):\n\n${url}\n\nIf you did not ask for it, ignore this mail.`
-      : `Open this link to make this your TaskManager address (it works once, for one hour):\n\n${url}\n`,
+      : `Open this link to make this your ${appName()} address (it works once, for one hour):\n\n${url}\n`,
     tag: signIn ? 'signin-link' : 'email-change',
   });
 }

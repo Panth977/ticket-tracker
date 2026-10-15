@@ -9,6 +9,7 @@
   Commitment cell sets MY pickup date via ticketUpdate { commitments }.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -170,7 +171,7 @@
   } as const;
 </script>
 
-<svelte:head><title>My work · TaskManager</title></svelte:head>
+<svelte:head><title>My work · {APP_NAME}</title></svelte:head>
 
 <SearchProviders />
 <PushPrompt />

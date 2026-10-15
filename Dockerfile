@@ -11,6 +11,10 @@
 # Everything is served on :8080 — the web app, /api, /v1, /mcp, /oauth,
 # /identity, /blob, /rtdb, /c (artifacts) and the /live WebSocket. All state
 # is under /data: mount a volume there. See docs (VM deploy) and .env.vm.example.
+#
+# Branding: -e TM_APP_NAME="Acme Tasks" -v ./logo.png:/branding/logo.png:ro
+# names the app and makes every icon (favicon, PWA, Apple touch) from the logo
+# when the server starts (backend/src/runtime/brand.ts).
 
 ARG NODE=22-bookworm-slim
 

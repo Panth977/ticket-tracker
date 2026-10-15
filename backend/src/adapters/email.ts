@@ -11,8 +11,9 @@ import { isEmulated } from '../runtime/firebase.js';
 import { recordDev } from './dev.js';
 import { smtpEmail } from './smtp.js';
 import { NotConfiguredError } from './notConfigured.js';
+import { appName } from '../runtime/brand.js';
 
-export const DEFAULT_FROM = process.env.EMAIL_FROM ?? 'TaskManager <notify@taskmanager.app>';
+export const DEFAULT_FROM = process.env.EMAIL_FROM ?? `${appName()} <notify@taskmanager.app>`;
 
 export function devEmail(): EmailSender {
   return {

@@ -5,6 +5,7 @@
   has to sign them in. Opening an emailed link lands here and finishes it.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { Mail, MailCheck } from 'lucide-svelte';
@@ -87,16 +88,14 @@
   }
 </script>
 
-<svelte:head><title>Sign in · TaskManager</title></svelte:head>
+<svelte:head><title>Sign in · {APP_NAME}</title></svelte:head>
 
 <main class="grid min-h-dvh place-items-center bg-bg px-4 py-10">
   <div class="w-full max-w-sm">
     <div class="mb-8 flex flex-col items-center gap-3 text-center">
-      <span
-        class="grid size-11 place-items-center rounded-xl bg-accent text-lg font-bold text-accent-fg"
-        aria-hidden="true">T</span
-      >
-      <h1 class="text-xl font-semibold">Sign in to TaskManager</h1>
+      <!-- The app icon: the built-in mark, or the deploy's own logo (backend runtime/brand.ts). -->
+      <img src="/icons/icon-192.png" alt="" aria-hidden="true" class="size-11" draggable="false" />
+      <h1 class="text-xl font-semibold">Sign in to {APP_NAME}</h1>
       <p class="text-sm text-muted">New here? Signing in creates your account.</p>
     </div>
 

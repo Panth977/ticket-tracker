@@ -4,6 +4,7 @@
   and the offline notice. Pages render into the main column.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes or passed in by callers; the SPA has no
   // base path, so resolve() would be the identity.
   /* eslint-disable svelte/no-navigation-without-resolve */
@@ -79,7 +80,7 @@
       class="tm-safe-top tm-safe-x sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-line bg-surface px-2 md:hidden"
     >
       <IconButton icon={MenuIcon} label="Open navigation" onclick={() => (navOpen = true)} />
-      <a href={routes.home()} class="flex-1 truncate font-semibold">TaskManager</a>
+      <a href={routes.home()} class="flex-1 truncate font-semibold">{APP_NAME}</a>
       <NotificationBell />
     </header>
 

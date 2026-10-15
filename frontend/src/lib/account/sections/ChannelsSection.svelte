@@ -7,6 +7,7 @@
   A channel you haven't set up is greyed out in Notifications.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { onMount } from 'svelte';
   import { BellRing, Mail, MessageCircle, Monitor, Smartphone, Trash2 } from 'lucide-svelte';
   import { paths, type Device } from '@tm/shared';
@@ -163,7 +164,7 @@
 
   <Panel
     title="Push"
-    description="Notifications on this computer or phone, even when TaskManager isn’t open."
+    description="Notifications on this computer or phone, even when {APP_NAME} isn’t open."
   >
     {#snippet actions()}
       {#if thisEnabled}

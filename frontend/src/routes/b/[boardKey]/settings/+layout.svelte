@@ -5,6 +5,7 @@
   look (read-only) and use the Danger zone to leave.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
   import type { Snippet } from 'svelte';
@@ -60,7 +61,7 @@
 </script>
 
 <svelte:head
-  ><title>{board ? `Settings · ${board.key}` : 'Board settings'} — TaskManager</title></svelte:head
+  ><title>{board ? `Settings · ${board.key}` : 'Board settings'} — {APP_NAME}</title></svelte:head
 >
 
 {#if $boardStore.loading}

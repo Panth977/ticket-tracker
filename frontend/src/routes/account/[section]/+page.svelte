@@ -3,6 +3,7 @@
   own route (/account/notifications) and never reaches here.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   import { page } from '$app/state';
   import { SearchX } from 'lucide-svelte';
   import ChannelsSection from '$lib/account/sections/ChannelsSection.svelte';
@@ -20,7 +21,7 @@
   const label = $derived(ACCOUNT_SECTIONS.find((s) => s.id === section)?.label);
 </script>
 
-<svelte:head><title>{label ?? 'Account'} · TaskManager</title></svelte:head>
+<svelte:head><title>{label ?? 'Account'} · {APP_NAME}</title></svelte:head>
 
 {#if section === 'profile'}
   <ProfileSection />

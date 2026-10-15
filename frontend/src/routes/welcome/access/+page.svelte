@@ -12,6 +12,7 @@
   document, which is the one thing an account that is not allowed may read.
 -->
 <script lang="ts">
+  import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes; the SPA has no base path.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
@@ -35,7 +36,7 @@
   }
 </script>
 
-<svelte:head><title>Ask for access · TaskManager</title></svelte:head>
+<svelte:head><title>Ask for access · {APP_NAME}</title></svelte:head>
 
 <main class="flex min-h-dvh items-center justify-center bg-bg px-4 py-10">
   <div
@@ -46,7 +47,7 @@
       <Lock size={22} aria-hidden="true" />
     </div>
     <div class="flex flex-col gap-2">
-      <h1 class="text-xl font-semibold">This TaskManager is private</h1>
+      <h1 class="text-xl font-semibold">This {APP_NAME} is private</h1>
       <p class="text-sm text-muted">
         It is one person's tracker, and your account is not on its list. Ask
         <a class="text-accent hover:underline" href="mailto:{ADMIN_EMAIL}">{ADMIN_EMAIL}</a> for access
