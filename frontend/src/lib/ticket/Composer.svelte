@@ -455,30 +455,9 @@
         onagg={canAgg ? () => (aggOpen = true) : undefined}
         class="border-b border-line px-1.5 py-1"
       />
-      <RichEditor
-        value={doc}
-        {resetKey}
-        bind:editor
-        label="Write a reply"
-        class="max-h-72 overflow-y-auto px-3 py-2 text-sm"
-        options={{
-          placeholder: 'Write a reply — @ to mention, # to link, / for commands',
-          people: pick.people,
-          tickets: pick.tickets,
-          nameOf: pick.nameOf,
-          slash: true,
-          onSubmit: () => (void send(), true),
-        }}
-        onchange={(d) => {
-          doc = d;
-          typing?.ping();
-        }}
-        onblur={() => typing?.stop()}
-        onfiles={addFiles}
-      />
-
       {#if uploads.length || bucketPicks.length}
-        <ul class="flex flex-wrap gap-2 border-t border-line px-2 py-2" aria-label="Attachments">
+        <!-- Above the editor: an attachment never pushes Send away from where you type. -->
+        <ul class="flex flex-wrap gap-2 border-b border-line px-2 py-2" aria-label="Attachments">
           {#each bucketPicks as p (p.bucketId + p.nodeId)}
             <li
               class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border border-line px-2 py-1.5"
@@ -542,8 +521,43 @@
         </ul>
       {/if}
 
-      <div class="flex items-center gap-2 px-2 pb-1.5">
-        <span class="hidden text-xs text-subtle sm:inline"
+      <div class="flex items-end">
+        <RichEditor
+          value={doc}
+          {resetKey}
+          bind:editor
+          label="Write a reply"
+          class="max-h-72 min-w-0 flex-1 overflow-y-auto px-3 py-2 text-sm"
+          options={{
+            placeholder: 'Write a reply — @ to mention, # to link, / for commands',
+            people: pick.people,
+            tickets: pick.tickets,
+            nameOf: pick.nameOf,
+            slash: true,
+            onSubmit: () => (void send(), true),
+          }}
+          onchange={(d) => {
+            doc = d;
+            typing?.ping();
+          }}
+          onblur={() => typing?.stop()}
+          onfiles={addFiles}
+        />
+        <!-- A phone: Send sits beside the text, so the keyboard can't hide it. -->
+        <span class="shrink-0 pr-1.5 pb-1.5 sm:hidden">
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Send}
+            disabled={!canSend}
+            onclick={send}
+            class="tm-press">Send</Button
+          >
+        </span>
+      </div>
+
+      <div class="hidden items-center gap-2 px-2 pb-1.5 sm:flex">
+        <span class="text-xs text-subtle"
           ><Kbd keys="mod+enter" /> to send{#if uploads.length}
             · {uploads.length}
             {uploads.length === 1 ? 'file' : 'files'}{#if uploading.length}, uploading…{/if}{/if}</span

@@ -416,17 +416,26 @@
 <svelte:window onkeydown={onWindowKey} onpointerdown={onWindowPointerDown} />
 
 {#snippet body()}
-  <header class="tm-safe-top flex h-12 shrink-0 items-center gap-2 border-b border-line px-3">
-    <nav class="flex min-w-0 flex-1 items-center gap-1.5 text-sm" aria-label="Breadcrumb">
+  <!-- box-content: the safe-area padding sits on top of the 48 px bar, never inside it. -->
+  <header
+    class="tm-safe-top box-content flex h-12 shrink-0 items-center gap-2 border-b border-line px-3"
+  >
+    <!-- overflow-hidden: on a phone the chips run out of room — they clip, never draw over the buttons. -->
+    <nav
+      class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-sm"
+      aria-label="Breadcrumb"
+    >
       {#if board}
-        <a href={routes.board(board.key)} class="truncate text-muted hover:text-text"
-          >{board.name}</a
+        <!-- The board's name gives way first: hidden on a phone, where the key says enough. -->
+        <a
+          href={routes.board(board.key)}
+          class="hidden min-w-0 truncate text-muted hover:text-text sm:inline">{board.name}</a
         >
-        <span class="text-subtle" aria-hidden="true">›</span>
+        <span class="hidden text-subtle sm:inline" aria-hidden="true">›</span>
       {/if}
       <button
         type="button"
-        class="font-mono text-sm hover:text-accent"
+        class="shrink-0 font-mono text-sm whitespace-nowrap hover:text-accent"
         title="Copy link"
         onclick={copyLink}
       >
@@ -448,7 +457,7 @@
       {#if waiting.length}
         <button
           type="button"
-          class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
+          class="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
           title={waiting.map((q) => q.title).join(' · ')}
           data-waiting
           onclick={() => ((details = false), (focusMsg = waiting[0]!.messageId))}
@@ -459,7 +468,7 @@
       {#if unsent}
         <button
           type="button"
-          class="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning"
+          class="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning"
           title="Messages not sent yet"
           onclick={() =>
             (focusMsg =

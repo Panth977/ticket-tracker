@@ -8,9 +8,8 @@
   board with required fields always opens the full form.
 
   Create never waits (agents.html § K): the ticket goes into the outbox with
-  a client-chosen id and shows at once as a pending card; the full form
-  closes the instant you press Create (quick add clears and stays open for
-  the next one). New '+tags' and '#KEY' references are resolved in the
+  a client-chosen id and shows at once as a pending card; both quick add and
+  the full form close the instant you create. New '+tags' and '#KEY' references are resolved in the
   background just before sending. If the create fails, the toast's Open
   brings this dialog back with the full form prefilled (`restore`).
 -->
@@ -308,10 +307,8 @@
         };
       },
     );
-    // Stay open for the next one (quick add is for bursts).
-    text = '';
-    pickedTags = [];
-    input?.focus();
+    // Done: one ticket per open — the dialog closes (it resets on the next open).
+    open = false;
   }
 
   function createFull(e: SubmitEvent) {
