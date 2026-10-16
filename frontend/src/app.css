@@ -128,8 +128,11 @@
     outline: 2px solid var(--tm-accent);
     outline-offset: 2px;
   }
+  /* A tint of the accent, not accent-soft: accent-soft is the background of
+     your own message bubbles (and highlights), where a selection in the same
+     colour was invisible. */
   ::selection {
-    background: var(--tm-accent-soft);
+    background: color-mix(in srgb, var(--tm-accent) 40%, transparent);
   }
   dialog::backdrop {
     background: var(--tm-overlay);

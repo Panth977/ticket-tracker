@@ -500,6 +500,15 @@ export function toPublicMessageWith(
           entries: m.agg.entries.map((e) => ({ field_id: e.fieldId, value: e.value })),
         }
       : null,
+    ...(m.template
+      ? {
+          template: {
+            id: m.template.id,
+            name: m.template.name,
+            ...(m.template.data !== undefined ? { data: m.template.data } : {}),
+          },
+        }
+      : {}),
     created_at: toIso(m.createdAt)!,
     edited_at: toIso(m.editedAt),
     deleted: m.deletedAt !== null,

@@ -136,6 +136,8 @@ skills/artifact/SKILL.md            how to build, run locally and publish an ART
                                     kept inside TaskManager, with its own data)
 skills/artifact/example/index.html  a complete single-file artifact, ready to publish
 skills/artifact/template/…          a Vite project with the three settings that matter already right
+skills/template/SKILL.md            how to write a board's TEMPLATES (forms in the composer and New
+                                    ticket, custom kanban cards)
 commands/tm-inbox.md                /tm-inbox      what is waiting on you
 commands/tm-triage.md               /tm-triage     a board's untriaged tickets, one pass
 commands/tm-new.md                  /tm-new        a ticket from a sentence
@@ -215,6 +217,16 @@ account** preset includes (an agent's token always has them; what it may do on a
 page** — `artifact_data_get / list / set / batch` — so "refresh the numbers on the sales dashboard" is a
 data write, not a rebuild. Without the plugin the same `artifact_*` tools are there; point Claude at §8 of
 {{url:llmsFullUrl}} for the rest.
+
+## Writing templates
+
+A board's **templates** are its own forms and cards, written as a little JavaScript: a *message template*
+is a form in the composer whose answer is posted (with its data kept for agents), a *ticket template* is a
+form in New ticket, a *card template* draws each card of a kanban view. Ask in plain words ("add a bug
+report form to ENG where the type decides the next fields") and the `template` skill reads the reference
+with `get_template_docs`, looks at the board with `get_board_settings`, and saves it with `template_save` —
+it needs a board admin's token. The code runs sandboxed in each person's browser and can only read that
+board, as them. §9 of {{url:llmsFullUrl}} is the whole reference.
 
 ## The memory palace
 

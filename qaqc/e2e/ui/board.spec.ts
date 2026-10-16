@@ -46,7 +46,8 @@ test('quick add: tokens become assignee + priority; the card appears and is the 
   // the @ token offers people on this board
   await expect(page.getByRole('option', { name: /Grace Hopper/ })).toBeVisible();
   await page.keyboard.press('Enter'); // pick Grace
-  await input.press('Enter'); // create
+  await input.press('Enter'); // create — and the dialog closes
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const c = card(column(page, 'To do'), `${b.key}-1`);
   await expect(c).toBeVisible();

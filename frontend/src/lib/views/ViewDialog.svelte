@@ -21,10 +21,13 @@
     initialType?: ViewType;
     /** Editors may create shared views. */
     canShared: boolean;
+    /** templates.html §E: card templates a new kanban view may draw its cards with. */
+    cardTemplates?: { id: string; name: string }[];
     onsubmit: (v: {
       name: string;
       type: ViewType;
       scope: 'personal' | 'shared';
+      cardTemplateId?: string | null;
     }) => Promise<void> | void;
   }
   let {
@@ -34,12 +37,14 @@
     initialScope = 'personal',
     initialType = 'kanban',
     canShared,
+    cardTemplates = [],
     onsubmit,
   }: Props = $props();
 
   let name = $state('');
   let type = $state<ViewType>('kanban');
   let scope = $state<'personal' | 'shared'>('personal');
+  let cardTemplateId = $state('');
   let busy = $state(false);
 
   $effect(() => {
@@ -47,6 +52,7 @@
       name = initialName;
       type = initialType;
       scope = canShared ? initialScope : 'personal';
+      cardTemplateId = '';
     }
   });
 
@@ -60,7 +66,12 @@
     if (!n) return;
     busy = true;
     try {
-      await onsubmit({ name: n.slice(0, 60), type, scope });
+      await onsubmit({
+        name: n.slice(0, 60),
+        type,
+        scope,
+        ...(mode === 'new' && type === 'kanban' && cardTemplateId ? { cardTemplateId } : {}),
+      });
       open = false;
     } catch {
       /* the command already toasted */
@@ -96,6 +107,20 @@
           {/each}
         </div>
       </fieldset>
+      {#if type === 'kanban' && cardTemplates.length}
+        <label class="flex flex-col gap-1 text-sm">
+          <span class="font-medium">Cards</span>
+          <select
+            bind:value={cardTemplateId}
+            class="h-8 rounded-md border border-line bg-surface px-2"
+            aria-label="Card template"
+          >
+            <option value="">Built-in card</option>
+            {#each cardTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+          </select>
+          <span class="text-xs text-muted">A card template draws each card its own way.</span>
+        </label>
+      {/if}
     {/if}
     {#if mode !== 'rename'}
       <fieldset class="flex flex-col gap-1 text-sm">

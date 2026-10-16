@@ -691,6 +691,9 @@ describe('MCP with an agent token', () => {
         // doors/mcpApp.ts: the app's own reads.
         'get_board_settings',
         'list_views',
+        // templates.html §G: the board's templates and their reference.
+        'list_templates',
+        'get_template_docs',
         // ticketWatch's spec scope is tickets:read: watching is the reader's own subscription.
         'ticket_watch',
         // agents.html §AC: env, orgs and owner paths are reads.

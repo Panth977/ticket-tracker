@@ -8,11 +8,15 @@
   board with required fields always opens the full form.
 
   Create never waits (agents.html § K): the ticket goes into the outbox with
-  a client-chosen id and shows at once as a pending card; the full form
-  closes the instant you press Create (quick add clears and stays open for
-  the next one). New '+tags' and '#KEY' references are resolved in the
+  a client-chosen id and shows at once as a pending card; both quick add and
+  the full form close the instant you create. New '+tags' and '#KEY' references are resolved in the
   background just before sending. If the create fails, the toast's Open
   brings this dialog back with the full form prefilled (`restore`).
+
+  Ticket templates (templates.html §D2): when the board has any, a row of
+  them sits on top; one opens its form — the board's own code, run in a
+  sandboxed worker — and its submit's ticket (names, not ids) is resolved
+  against the board and created the same way.
 -->
 <script lang="ts" module>
   import type { TicketPatch } from '@tm/shared';
@@ -49,6 +53,13 @@
   import { formatDate } from '$lib/views/format';
   import FieldInput from './FieldInput.svelte';
   import { useBoard, type BoardDoc } from './context.svelte';
+  import { markdownToDoc } from '@tm/shared/logic/richtext/index';
+  import { auth } from '$lib/firebase/auth.svelte';
+  import { Indicator } from '$lib/ui';
+  import TemplateForm from '$lib/templates/TemplateForm.svelte';
+  import { templatesOfKind } from '$lib/templates/store';
+  import { memberInfo } from '$lib/templates/info';
+  import { checkTicketResult, resolveTicket } from '$lib/templates/resolve';
 
   interface Props {
     /** The loaded board (§Q4) — never null. */
@@ -62,7 +73,26 @@
   const bs = useBoard();
   const requiredFields = $derived(board.fields.filter((f) => f.required && !f.archived));
 
-  let mode = $state<'quick' | 'full'>('quick');
+  let mode = $state<'quick' | 'full' | 'template'>('quick');
+  /** templates.html §D2 — the board's ticket templates, and the one being filled in. */
+  const ticketTemplates = $derived(templatesOfKind(board.id, 'ticket'));
+  let tplId = $state<string | null>(null);
+  let tplForm: TemplateForm | undefined = $state();
+  let tplErr = $state('');
+  let tplBusy = $state(false);
+  let tplReady = $state(false);
+  const tpl = $derived($ticketTemplates.list.find((x) => x.id === tplId) ?? null);
+  const meInfo = $derived({
+    id: bs.me,
+    name: auth.profile?.name || bs.memberByUid.get(bs.me)?.name || '',
+    email: auth.user?.email ?? bs.memberByUid.get(bs.me)?.email ?? '',
+    role: bs.role ?? '',
+  });
+  function useTemplate(id: string) {
+    tplId = id;
+    tplErr = '';
+    mode = 'template';
+  }
   let text = $state('');
   let caret = $state(0);
   let input: HTMLInputElement | null = $state(null);
@@ -93,6 +123,8 @@
       text = '';
       pick = 0;
       pickedTags = [];
+      tplId = null;
+      tplErr = '';
       mode = requiredFields.length || restore ? 'full' : 'quick';
       resetForm();
       if (restore) f = { ...f, ...restore, fields: { ...restore.fields } };
@@ -308,10 +340,8 @@
         };
       },
     );
-    // Stay open for the next one (quick add is for bursts).
-    text = '';
-    pickedTags = [];
-    input?.focus();
+    // Done: one ticket per open — the dialog closes (it resets on the next open).
+    open = false;
   }
 
   function createFull(e: SubmitEvent) {
@@ -338,6 +368,82 @@
       text.trim() ? async (i) => ({ ...i, description: await refsDoc([], text) }) : undefined,
     );
     open = false;
+  }
+
+  /** templates.html §D2: submit → resolve names → the same queued create as the full form. */
+  async function createFromTemplate() {
+    if (!tplForm || !tpl) return;
+    tplBusy = true;
+    tplErr = '';
+    try {
+      const r = await tplForm.submit();
+      if (r.error) {
+        tplErr = r.line ? `Line ${r.line}: ${r.error}` : r.error;
+        return;
+      }
+      const c = checkTicketResult(r.result);
+      if (c.kind === 'broken') {
+        tplErr = c.message;
+        return;
+      }
+      if (c.kind === 'invalid') {
+        tplErr = c.errMsg;
+        tplForm.setErrors(c.errors);
+        return;
+      }
+      tplForm.setErrors({});
+      const res = resolveTicket(c.value, board, bs.members.map(memberInfo), {
+        now: Date.now(),
+        tz: bs.tz,
+        defaults: { stageId: defaults.stageId ?? defaultStage() },
+      });
+      const fields = res.input.fields ?? {};
+      const lacking = requiredFields.filter((d) => {
+        const v = fields[d.id];
+        return v == null || v === '' || (Array.isArray(v) && v.length === 0);
+      });
+      if (lacking.length)
+        res.problems.push(
+          `Required: ${lacking.map((d) => d.name).join(', ')} (the template must set it)`,
+        );
+      if (res.problems.length) {
+        tplErr = res.problems.join(' · ');
+        return;
+      }
+      const { input: i } = res;
+      const newTags = res.newTags;
+      const md = res.description;
+      create(
+        i,
+        {
+          ...blankDraft(),
+          ...i,
+          fields: { ...fields },
+          description: md,
+        } as CreateDraft,
+        async (x) => {
+          const newTagIds = newTags.length ? await ensureTags(newTags) : [];
+          const emails = new Map(
+            bs.members.filter((m) => m.email).map((m) => [m.email.toLowerCase(), m.uid]),
+          );
+          const description = md.trim()
+            ? markdownToDoc(md, {
+                uidForEmail: (e) => emails.get(e.toLowerCase()),
+                agentOnBoard: (id) => bs.memberByUid.has(id),
+                ticketIdForKey: (k) => bs.tickets.find((t) => t.key === k)?.id,
+              })
+            : undefined;
+          return {
+            ...x,
+            tagIds: [...new Set([...(x.tagIds as string[]), ...newTagIds])],
+            ...(description && description.content.length ? { description } : {}),
+          };
+        },
+      );
+      open = false;
+    } finally {
+      tplBusy = false;
+    }
   }
 
   function blankDraft(): CreateDraft {
@@ -395,12 +501,48 @@
   };
 </script>
 
+{#snippet templateRow()}
+  {#if $ticketTemplates.list.length}
+    <div class="mb-3 flex flex-wrap items-center gap-1.5" aria-label="Ticket templates">
+      <span class="mr-1 text-xs text-muted">From a template</span>
+      {#each $ticketTemplates.list as x (x.id)}
+        <button
+          type="button"
+          class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-xs font-medium hover:bg-surface-2"
+          title={x.description ?? undefined}
+          onclick={() => useTemplate(x.id)}
+        >
+          <Indicator of={x} seed={x.id} size="xs" />
+          {x.name}
+        </button>
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 <Dialog
   bind:open
-  title={mode === 'quick' ? 'New ticket' : `New ticket in ${board.key}`}
+  title={mode === 'template' && tpl
+    ? `${tpl.name} · ${board.key}`
+    : mode === 'quick'
+      ? 'New ticket'
+      : `New ticket in ${board.key}`}
   size={mode === 'quick' ? 'md' : 'lg'}
 >
-  {#if mode === 'quick'}
+  {#if mode === 'template' && tpl}
+    {#key tpl.id}
+      <TemplateForm
+        bind:this={tplForm}
+        bind:ready={tplReady}
+        template={tpl}
+        {board}
+        me={meInfo}
+        openTicket={(k) => bs.openTicket(k)}
+      />
+    {/key}
+    {#if tplErr}<p role="alert" class="mt-3 text-sm text-danger">{tplErr}</p>{/if}
+  {:else if mode === 'quick'}
+    {@render templateRow()}
     <div class="flex flex-col gap-2">
       <div class="relative">
         <input
@@ -484,6 +626,7 @@
       </p>
     </div>
   {:else}
+    {@render templateRow()}
     <form
       id="new-ticket"
       class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[8rem_1fr] sm:items-center"
@@ -580,7 +723,21 @@
     </form>
   {/if}
   {#snippet footer()}
-    {#if mode === 'quick'}
+    {#if mode === 'template'}
+      <Button
+        variant="ghost"
+        class="mr-auto"
+        onclick={() => (mode = requiredFields.length ? 'full' : 'quick')}>Back</Button
+      >
+      <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+      <Button
+        variant="primary"
+        loading={tplBusy}
+        disabled={!tplReady}
+        onclick={createFromTemplate}
+        class="tm-press">Create ticket</Button
+      >
+    {:else if mode === 'quick'}
       <Button variant="ghost" onclick={toFull}>Full form</Button>
       <Button
         variant="primary"

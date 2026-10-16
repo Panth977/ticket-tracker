@@ -318,6 +318,11 @@ export const ViewSchema = z.object({
   cardFields: z.array(z.string()),
   /** Default ['active']. */
   includeStates: z.array(TicketStateSchema).min(1),
+  /**
+   * templates.html §E: a kanban card drawn by one of the board's `card`
+   * templates instead of the built-in card. Absent / null = the built-in card.
+   */
+  cardTemplateId: z.string().min(1).max(64).nullable().optional(),
 });
 export type View = z.infer<typeof ViewSchema>;
 

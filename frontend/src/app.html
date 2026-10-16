@@ -7,8 +7,13 @@
     <link rel="icon" href="%sveltekit.assets%/favicon-96.png" type="image/png" sizes="96x96" />
     <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="16x16 32x32 48x48" />
     <!-- viewport-fit=cover: the app draws under the notch / home indicator and every
-         fixed bar pads itself with env(safe-area-inset-*) (agents.html § S). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+         fixed bar pads itself with env(safe-area-inset-*) (agents.html § S).
+         interactive-widget=resizes-content: the on-screen keyboard shrinks the layout
+         (h-dvh, fixed inset-y-0), so the composer and its Send button sit above it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="color-scheme" content="light dark" />
     <title>TaskManager</title>
 

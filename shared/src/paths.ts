@@ -25,6 +25,8 @@ export const COLLECTIONS = {
   members: 'members',
   prefs: 'prefs',
   views: 'views',
+  /** templates.html: boards/{b}/templates/{templateId}. */
+  templates: 'templates',
   tickets: 'tickets',
   messages: 'messages',
   activity: 'activity',
@@ -167,6 +169,9 @@ export const paths = {
   aggStat: (boardId: string, id: string) => `${C.boards}/${seg(boardId)}/${C.aggStats}/${seg(id)}`,
   view: (boardId: string, viewId: string) =>
     `${C.boards}/${seg(boardId)}/${C.views}/${seg(viewId)}`,
+  templates: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.templates}`,
+  template: (boardId: string, templateId: string) =>
+    `${C.boards}/${seg(boardId)}/${C.templates}/${seg(templateId)}`,
   webhooks: (boardId: string) => `${C.boards}/${seg(boardId)}/${C.webhooks}`,
   webhook: (boardId: string, webhookId: string) =>
     `${C.boards}/${seg(boardId)}/${C.webhooks}/${seg(webhookId)}`,

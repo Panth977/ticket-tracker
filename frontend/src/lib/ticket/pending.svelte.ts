@@ -175,6 +175,10 @@ export interface SendInput {
    * the bubble shows them at once with the virtual path the server stores.
    */
   bucket?: BucketPick[];
+  /** The Markdown source, when the message was written as Markdown (a message template). */
+  markdown?: string;
+  /** templates.html §D: which message template wrote it, and its form's data. */
+  template?: { id: string; name: string; data?: unknown };
 }
 
 /** Queue a message. Returns its id (= the bubble's and the stored message's id). */
@@ -197,6 +201,8 @@ export function sendMessage(m: SendInput): string {
     ...(m.replyTo ? { replyTo: m.replyTo } : {}),
     ...(m.attachments.length ? { bucketUploads: toBucketUploads(m.attachments) } : {}),
     ...(bucket.length ? { bucketRefs: toBucketRefs(bucket) } : {}),
+    ...(m.markdown ? { markdown: m.markdown } : {}),
+    ...(m.template ? { template: m.template } : {}),
   };
   const { id } = outbox.queue('messagePost', input, {
     kind: 'message',

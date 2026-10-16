@@ -52,6 +52,7 @@
   import FilterBuilder from '$lib/views/FilterBuilder.svelte';
   import SortEditor from '$lib/views/SortEditor.svelte';
   import LayoutEditor from '$lib/views/LayoutEditor.svelte';
+  import { templatesOfKind } from '$lib/templates/store';
   import { countConditions } from '$lib/views/filter';
   import { fieldInfo } from '$lib/views/fields';
   import { VIEW_TYPE_LABEL, withType } from '$lib/views/draft';
@@ -118,6 +119,8 @@
     onstar,
     onnewticket,
   }: Props = $props();
+  /** templates.html §E: the card templates a kanban view may draw its cards with. */
+  const cardTemplates = $derived(templatesOfKind(board.id, 'card'));
 
   let filterOpen = $state(false);
   let sortOpen = $state(false);
@@ -377,5 +380,5 @@
   label="View options"
   class="z-40"
 >
-  <LayoutEditor {draft} {board} {onchange} />
+  <LayoutEditor {draft} {board} {onchange} cardTemplates={$cardTemplates.list} />
 </Popover>

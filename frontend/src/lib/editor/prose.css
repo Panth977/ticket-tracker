@@ -109,12 +109,21 @@
   font-size: 0.92em;
 }
 /* Placeholder (TipTap sets data-placeholder on the empty first node). */
+.tm-prose p.is-editor-empty:first-child {
+  position: relative;
+}
 .tm-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--tm-subtle);
-  float: left;
-  height: 0;
   pointer-events: none;
+  /* Out of the flow and on one line, cut with an ellipsis: a wrapped placeholder
+     spilled out of the empty one-line editor and under the composer's Send row. */
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tm-prose.ProseMirror {
   min-height: 1.55em;

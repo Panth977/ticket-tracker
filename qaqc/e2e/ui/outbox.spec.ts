@@ -55,11 +55,8 @@ test('create while the API is failing: pending card → failed card + toast → 
   await quick.fill('Flaky network ticket');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-  // Nothing waits: quick add is ready for the next title at once (it stays
-  // open for bursts), and the card is already on the board, dimmed and busy.
-  await expect(quick).toHaveValue('');
-  await expect(quick).toBeFocused();
-  await page.keyboard.press('Escape');
+  // Nothing waits: quick add closes at once, and the card is already on the
+  // board, dimmed and busy.
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const pending = todo.getByRole('button', { name: /Flaky network ticket — being created$/ });
   await expect(pending).toBeVisible();

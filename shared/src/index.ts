@@ -11,6 +11,7 @@
  *   artifacts/ artifacts (docs/plan/artifacts.html): schema, commands, the driver
  *              protocol and the path fence
  *   bucket/    bucket (docs/plan/bucket.html): buckets of files, grants, refs
+ *   templates/ templates (docs/plan/templates.html): a board's forms and cards, as code
  *   ports/     adapter interfaces (email, push, WhatsApp, search, queue …)
  *
  * Fixtures live at '@tm/shared/schema/fixtures' (not re-exported here).
@@ -30,3 +31,4 @@ export * from './artifacts/index.js';
 export * from './bucket/index.js';
 export * from './env/index.js';
 export * from './org/index.js';
+export * from './templates/index.js';

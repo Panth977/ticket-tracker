@@ -101,9 +101,9 @@
         <a href="/integrate#2-how-an-agent-gets-in">token model</a> the rest of the API does.
       </p>
       <div class="stamp">
-        <span>version 2.0.1</span>
+        <span>version 2.1.0</span>
         <span>api v1</span>
-        <span>updated 2026-10-15</span>
+        <span>updated 2026-10-16</span>
         <span><a href="/integrate">integrate</a></span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="https://taskmanager-example.web.app/lib/claude-plugin.zip">claude-plugin.zip</a></span>
@@ -119,6 +119,7 @@
         <a href="#3-the-plugin">3 · The plugin</a>
         <a href="#what-claude-can-do-once-it-is-in">What Claude can do once it is in</a>
         <a href="#building-artifacts">Building artifacts</a>
+        <a href="#writing-templates">Writing templates</a>
         <a href="#the-memory-palace">The memory palace</a>
         <a href="#when-something-is-wrong">When something is wrong</a>
       </nav>
@@ -185,6 +186,8 @@ skills/artifact/SKILL.md            how to build, run locally and publish an ART
                                     kept inside TaskManager, with its own data)
 skills/artifact/example/index.html  a complete single-file artifact, ready to publish
 skills/artifact/template/…          a Vite project with the three settings that matter already right
+skills/template/SKILL.md            how to write a board's TEMPLATES (forms in the composer and New
+                                    ticket, custom kanban cards)
 commands/tm-inbox.md                /tm-inbox      what is waiting on you
 commands/tm-triage.md               /tm-triage     a board's untriaged tickets, one pass
 commands/tm-new.md                  /tm-new        a ticket from a sentence
@@ -247,6 +250,8 @@ artifact_data_batch  write  Apply up to 400 set / update / delete writes to an a
 <ul><li><strong><code>board</code> is an argument.</strong> With an account token, a connector grant or an agent's token on several boards, a call that does not name a ticket key needs to know which board it means, so <code>list_boards</code> is the natural first call and <code>board: 'ENG'</code> is how every other call says where. A ticket key already names its board, so <code>get_ticket ENG-42</code> needs nothing else.</li><li><strong>Nothing exceeds your own access.</strong> A tool call is checked against the boards the credential reaches <em>right now</em> and the role you hold on each. Claude cannot see a board you left, and it cannot do on a board something you could not do yourself.</li></ul>
 <h2 id="building-artifacts"><a class="anchor" href="#building-artifacts" aria-label="Link to this section">#</a>Building artifacts</h2>
 <p>An <strong>artifact</strong> is a small website that lives inside TaskManager — a dashboard, a tracker, a poll — shared with the people you choose, with its own database behind one script tag. With the plugin installed, ask for one in plain words ("build me a shared packing list as a TaskManager artifact and share it with priya@example.com") and the <code>artifact</code> skill takes it from there: it writes the page, loads <code>https://taskmanager-example.web.app/backend-driver/v1/driver.js</code> for the backend, publishes it with <code>artifact_publish</code> and shares it with <code>artifact_share</code>. The token needs the <code>artifacts:read</code> and <code>artifacts:write</code> scopes, which the <strong>Full account</strong> preset includes (an agent's token always has them; what it may do on an artifact is the <code>{ build, data }</code> its owner gave it there). The same skill covers the artifact's <strong>data from outside the page</strong> — <code>artifact_data_get / list / set / batch</code> — so "refresh the numbers on the sales dashboard" is a data write, not a rebuild. Without the plugin the same <code>artifact_*</code> tools are there; point Claude at §8 of <a href="https://taskmanager-example.web.app/llms-full.txt">https://taskmanager-example.web.app/llms-full.txt</a> for the rest.</p>
+<h2 id="writing-templates"><a class="anchor" href="#writing-templates" aria-label="Link to this section">#</a>Writing templates</h2>
+<p>A board's <strong>templates</strong> are its own forms and cards, written as a little JavaScript: a <em>message template</em> is a form in the composer whose answer is posted (with its data kept for agents), a <em>ticket template</em> is a form in New ticket, a <em>card template</em> draws each card of a kanban view. Ask in plain words ("add a bug report form to ENG where the type decides the next fields") and the <code>template</code> skill reads the reference with <code>get_template_docs</code>, looks at the board with <code>get_board_settings</code>, and saves it with <code>template_save</code> — it needs a board admin's token. The code runs sandboxed in each person's browser and can only read that board, as them. §9 of <a href="https://taskmanager-example.web.app/llms-full.txt">https://taskmanager-example.web.app/llms-full.txt</a> is the whole reference.</p>
 <h2 id="the-memory-palace"><a class="anchor" href="#the-memory-palace" aria-label="Link to this section">#</a>The memory palace</h2>
 <p>An honest note, because this is the use people arrive at on their own: a TaskManager board makes a good long-term memory for Claude, and a bad one for some things.</p>
 <p>It is good at durable, addressable notes that accumulate a history. It is not a vector store, it does not do semantic recall, and it will not remember anything nobody wrote down. What it gives you is better than that in one specific way: <strong>everything has a key, and a key survives the conversation.</strong></p>

@@ -23,6 +23,7 @@ import {
 } from '../types/index.js';
 import { QuestionSchema, type Question } from './question.js';
 import { MessageAggSchema } from './aggregates.js';
+import { MessageTemplateSchema } from '../templates/schema.js';
 
 /** An id that used to be a document id — generated, one path segment. */
 export const StoredIdSchema = z.string().min(1).max(200);
@@ -135,6 +136,8 @@ export const MessageSchema = z.object({
    * fields — present on a kind 'agg' message, and on a turn receipt (its cost).
    */
   agg: MessageAggSchema.nullable().optional(),
+  /** templates.html §D: posted through a message template — which one, and what its form held. */
+  template: MessageTemplateSchema.nullable().optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;
 

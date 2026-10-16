@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "apiVersion": "v1",
-  "updated": "2026-10-15",
-  "contentSha256": "f35567a12d7b6c934081c55af020239ccf38bf045fbac47449b12f5a0325751d",
+  "updated": "2026-10-16",
+  "contentSha256": "bfda43b7e96c54cefae929bdd648686fa8ad30abb71dd95f5d64fab0fe0fa63a",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -1447,6 +1447,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "2.1.0",
+      "date": "2026-10-16"
+    },
     {
       "version": "2.0.1",
       "date": "2026-10-15"

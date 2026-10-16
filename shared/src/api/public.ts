@@ -391,6 +391,15 @@ export const PublicMessageSchema = z.object({
   run: PublicRunReceiptSchema.nullable(),
   /** aggregates.html: the entries this message added (kind 'agg', or a receipt's cost); null otherwise. */
   agg: PublicMessageAggSchema.nullable(),
+  /**
+   * templates.html §D: posted through a message template — its id and name,
+   * and `data`, the JSON its form produced (read this instead of parsing body_md).
+   * null / absent otherwise.
+   */
+  template: z
+    .object({ id: z.string(), name: z.string(), data: z.unknown().optional() })
+    .nullable()
+    .optional(),
   created_at: Iso,
   edited_at: Iso.nullable(),
   deleted: z.boolean(),

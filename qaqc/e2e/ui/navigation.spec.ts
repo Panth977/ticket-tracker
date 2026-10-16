@@ -118,7 +118,7 @@ test('§Q3: a ticket created with no stage lands in the first column', async ({ 
   const quick = page.getByRole('textbox', { name: 'Ticket title with tokens' });
   await quick.fill('Where does this land');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await expect(
     column(page, 'Backlog').getByRole('button', { name: /Where does this land/ }),
