@@ -12,7 +12,15 @@
  */
 import { expect, test } from '@playwright/test';
 import { TEMPLATE_STARTERS } from '@tm/shared';
-import { call, eventually, messagesOf, newBoard, newPerson, read, stage } from '../support/stack.js';
+import {
+  call,
+  eventually,
+  messagesOf,
+  newBoard,
+  newPerson,
+  read,
+  stage,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 test('message templates: write one in settings, use it from the composer', async ({ page }) => {
@@ -29,6 +37,8 @@ test('message templates: write one in settings, use it from the composer', async
   await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible();
   await page.getByTestId('templates-message').getByRole('button', { name: 'New' }).click();
   await page.getByRole('textbox', { name: 'Name' }).fill('Bug report');
+  // The code box shows the starter (CodeMirror loads after the draft is filled in).
+  await expect(page.getByTestId('template-code')).toContainText('export default');
   const preview = page.getByTestId('template-preview');
   await expect(preview.getByRole('combobox', { name: 'Type' })).toBeVisible();
   await preview.getByRole('button', { name: 'Try submit' }).click();
@@ -169,6 +179,7 @@ test('the sandbox: no app storage, no endless loops', async ({ page }) => {
 
   await signIn(page, ada.email, `/b/${b.key}/settings/templates?t=${probe.templateId}`);
   const preview = page.getByTestId('template-preview');
+  await expect(page.getByTestId('template-code')).toContainText('firebaseLocalStorageDb');
   await expect(preview).toContainText('idb:blocked');
   await expect(preview).toContainText('local:none');
   await expect(preview).toContainText('api:unreachable');
