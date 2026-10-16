@@ -12,7 +12,15 @@
  */
 import { expect, test } from '@playwright/test';
 import { TEMPLATE_STARTERS } from '@tm/shared';
-import { call, eventually, messagesOf, newBoard, newPerson, read, stage } from '../support/stack.js';
+import {
+  call,
+  eventually,
+  messagesOf,
+  newBoard,
+  newPerson,
+  read,
+  stage,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 test('message templates: write one in settings, use it from the composer', async ({ page }) => {

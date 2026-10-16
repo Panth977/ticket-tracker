@@ -145,7 +145,6 @@ export function safeImage(v: unknown): string | null {
 /** el(tag) attributes that pass through, beside style / title / class-free styling. */
 const EL_ATTRS = new Set(['colspan', 'rowspan', 'open', 'start', 'reversed', 'align']);
 
-
 /**
  * Mount a renderer into `root`. `update(tree, ack)` patches it to a new tree;
  * `setErrors` shows a refused submit's field errors; `destroy` cleans up.
