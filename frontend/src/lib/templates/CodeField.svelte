@@ -17,7 +17,7 @@
   let { value, readOnly = false, onchange, onsave, class: cls = '' }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
-  let ed: CodeEditor | null = null;
+  let ed = $state.raw<CodeEditor | null>(null);
   let loading = $state(true);
 
   onMount(() => {
@@ -32,6 +32,8 @@
       onSave: () => onsave?.(),
     }).then((e) => {
       if (gone) return e.destroy();
+      // The draft may have been filled in while CodeMirror loaded.
+      if (e.getText() !== value) e.setText(value);
       ed = e;
       loading = false;
     });
