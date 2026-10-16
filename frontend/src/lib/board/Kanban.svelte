@@ -5,6 +5,9 @@
   is in manual order, the drop position ({ after, before } neighbours → the
   server computes the fractional rank; we overlay a local one meanwhile).
 
+  A view with a `cardTemplateId` draws each card with that card template
+  (templates.html §E), the built-in card standing in while it loads or fails.
+
   WIP: a stage column shows count / wipLimit and turns amber above it.
   A stage whose `requires` fields are missing answers 422 → the requires prompt.
 
@@ -27,6 +30,9 @@
   import { groupLabel, isPeopleGroup } from '$lib/views/format';
   import { dropPosition, mergePatches, movePatch } from '$lib/views/move';
   import TicketCard from './TicketCard.svelte';
+  import TemplateCard from '$lib/templates/TemplateCard.svelte';
+  import { boardTemplates } from '$lib/templates/store';
+  import { auth } from '$lib/firebase/auth.svelte';
   import { useBoard, type BoardDoc, type BoardTicket } from './context.svelte';
   import { updateTicket } from './ops';
 
@@ -40,6 +46,19 @@
   }
   let { board, groups, view, onadd }: Props = $props();
   const bs = useBoard();
+  /** templates.html §E: the view's card template, when it names one this board has. */
+  const templates = $derived(boardTemplates(view.cardTemplateId ? board.id : null));
+  const cardTemplate = $derived(
+    view.cardTemplateId
+      ? ($templates.data.find((x) => x.id === view.cardTemplateId && x.kind === 'card') ?? null)
+      : null,
+  );
+  const meInfo = $derived({
+    id: bs.me,
+    name: auth.profile?.name || bs.memberByUid.get(bs.me)?.name || '',
+    email: auth.user?.email ?? bs.memberByUid.get(bs.me)?.email ?? '',
+    role: bs.role ?? '',
+  });
 
   type Item = { id: string; t: BoardTicket };
   const FLIP = 150;
@@ -255,7 +274,17 @@
               aria-hidden="true"
             />
           {/if}
-          <TicketCard {board} ticket={item.t} cardFields={view.cardFields} />
+          {#if cardTemplate && !pend}
+            <TemplateCard template={cardTemplate} {board} ticket={item.t} me={meInfo}>
+              {#snippet fallback()}<TicketCard
+                  {board}
+                  ticket={item.t}
+                  cardFields={view.cardFields}
+                />{/snippet}
+            </TemplateCard>
+          {:else}
+            <TicketCard {board} ticket={item.t} cardFields={view.cardFields} />
+          {/if}
         </div>
       </div>
     {/each}

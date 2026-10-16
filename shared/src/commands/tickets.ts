@@ -26,6 +26,7 @@ import {
   UidSchema,
 } from '../types/index.js';
 import { RunReceiptSchema } from '../schema/message.js';
+import { MessageTemplateSchema } from '../templates/schema.js';
 import { ClientIdSchema, defineCommand, OkResSchema, req } from './define.js';
 
 export const MAX_BULK_TICKETS = 500;
@@ -262,6 +263,12 @@ export const messagePost = defineCommand({
        * receipt). Each field must exist on the board and not be archived.
        */
       agg: MessageAggSchema.optional(),
+      /**
+       * templates.html §D: the message comes from one of the board's message
+       * templates — its id, name and the form's data (JSON). Stored as
+       * Message.template; the template must exist on the board.
+       */
+      template: MessageTemplateSchema.optional(),
       /** REQUIRED here: the optimistic bubble's id; a retried post is one message. */
       clientId: ClientIdSchema,
     })

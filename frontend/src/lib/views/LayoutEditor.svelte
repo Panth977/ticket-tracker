@@ -1,6 +1,7 @@
 <!--
   Per-type layout of a view draft: group / swimlanes (kanban, table), the fields
-  a card shows (kanban), the date fields (calendar, timeline), which ticket
+  a card shows (kanban) — or the card template that draws it (templates.html
+  §E) — the date fields (calendar, timeline), which ticket
   states are included. Table columns are edited on the table itself (drag the
   header edge, the column menu) but can also be toggled here.
 -->
@@ -14,8 +15,10 @@
     draft: ViewInput;
     board: Pick<Board, 'stages' | 'priorities' | 'tags' | 'fields'>;
     onchange: (draft: ViewInput) => void;
+    /** templates.html §E: the board's card templates. */
+    cardTemplates?: { id: string; name: string }[];
   }
-  let { draft, board, onchange }: Props = $props();
+  let { draft, board, onchange, cardTemplates = [] }: Props = $props();
 
   const all = $derived(boardFields(board));
   const groupable = $derived(all.filter((f) => f.groupable));
@@ -85,8 +88,26 @@
           >{/each}
       </select>
     </label>
+    {#if cardTemplates.length || draft.cardTemplateId}
+      <label class="flex items-center justify-between gap-2">
+        <span class="text-muted">Card</span>
+        <select
+          class="h-7 w-44 rounded-md border border-line bg-surface px-1.5"
+          aria-label="Card template"
+          value={draft.cardTemplateId ?? ''}
+          onchange={(e) => onchange({ ...draft, cardTemplateId: e.currentTarget.value || null })}
+        >
+          <option value="">Built-in card</option>
+          {#each cardTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+        </select>
+      </label>
+    {/if}
     <fieldset class="flex flex-col gap-1">
-      <legend class="mb-1 text-muted">Card shows</legend>
+      <legend class="mb-1 text-muted"
+        >{draft.cardTemplateId
+          ? 'Built-in card shows (while the template loads)'
+          : 'Card shows'}</legend
+      >
       {#each cardable as f (f.key)}
         <Checkbox
           label={f.label}

@@ -5,7 +5,7 @@ description: How TaskManager works — boards, tickets, threads, task lists and 
 
 # TaskManager
 
-Version 2.0.1 · API v1 · updated 2026-10-15 · this deployment: https://taskmanager-example.web.app
+Version 2.1.0 · API v1 · updated 2026-10-16 · this deployment: https://taskmanager-example.web.app
 
 Boards, tickets and threads that people and agents share. You reach it through the `taskmanager` MCP server,
 which is already connected — you never construct HTTP requests for it, and you never ask the user for a token.

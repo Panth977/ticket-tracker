@@ -10,7 +10,15 @@
  * SHARED views of a board the caller can read — never its people, tickets or
  * anyone's personal views.
  */
-import { errors, isAgentId, paths, type Board, type BoardPref, type View } from '@tm/shared';
+import {
+  errors,
+  isAgentId,
+  paths,
+  type Board,
+  type BoardPref,
+  type Template,
+  type View,
+} from '@tm/shared';
 import { COST_AGG_FIELD, type AggFieldDef } from '@tm/shared';
 import { rateBuckets } from '@tm/shared';
 import { indicatorColor, indicatorOf } from '@tm/shared';
@@ -43,6 +51,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   // Copy-a-board: read the source first (outside the tx — it is not modified).
   let seed: BoardSeed;
   let copiedViews: { key: string; view: View; wasDefault: boolean }[] | null = null;
+  let copiedTemplates: { id: string; template: Template }[] = [];
   // aggregates.html: every new board starts with Cost; a copy takes the source's active fields.
   let aggFields: AggFieldDef[] = [COST_AGG_FIELD];
   if (typeof template === 'object') {
@@ -60,11 +69,33 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     const activeAggs = (data.aggFields ?? []).filter((f) => !f.archived);
     if (activeAggs.length) aggFields = activeAggs;
     const views = await typedCol('views', paths.views(src.id)).where('scope', '==', 'shared').get();
-    copiedViews = views.docs.map((d) => ({
-      key: d.id,
-      view: { ...d.data(), ownerUid: ctx.actor },
-      wasDefault: d.id === data.defaultViewId,
+    // templates.html §A: the board's templates come along, with new ids; a
+    // copied view's card template follows its template to the new id.
+    const tpls = await typedCol('templates', paths.templates(src.id)).get();
+    const newIds = new Map(tpls.docs.map((d) => [d.id, ctx.ids.id()]));
+    copiedTemplates = tpls.docs.map((d) => ({
+      id: newIds.get(d.id)!,
+      template: {
+        ...d.data(),
+        createdBy: ctx.actor,
+        createdAt: ctx.now,
+        updatedBy: ctx.actor,
+        updatedAt: ctx.now,
+      },
     }));
+    copiedViews = views.docs.map((d) => {
+      const v = d.data();
+      const cardTemplateId = v.cardTemplateId ? (newIds.get(v.cardTemplateId) ?? null) : undefined;
+      return {
+        key: d.id,
+        view: {
+          ...v,
+          ownerUid: ctx.actor,
+          ...(cardTemplateId !== undefined ? { cardTemplateId } : {}),
+        },
+        wasDefault: d.id === data.defaultViewId,
+      };
+    });
   } else {
     seed = seedFor(template, ctx.ids);
   }
@@ -136,6 +167,8 @@ export default defineCommand('boardCreate', async (ctx, input) => {
       views.forEach(({ view }, i) =>
         tx.set(typedDoc('views', paths.view(boardId, viewIds[i]!)), view),
       );
+      for (const c of copiedTemplates)
+        tx.set(typedDoc('templates', paths.template(boardId, c.id)), c.template);
     });
   } catch (e) {
     await refund();

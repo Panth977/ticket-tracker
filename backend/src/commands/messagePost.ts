@@ -67,6 +67,8 @@ import {
   type BoardDayStats,
   type CostCounter,
   type MessageAgg,
+  type MessageTemplate,
+  type CommandReqParsed,
   type Message,
   type Read,
 } from '@tm/shared';
@@ -142,6 +144,18 @@ export function planAggEntries(
   return entries;
 }
 
+/** templates.html §D: the stored Message.template, after checking the board has it. */
+async function messageTemplateOf(
+  boardId: string,
+  t: NonNullable<CommandReqParsed<'messagePost'>['template']>,
+): Promise<MessageTemplate> {
+  const snap = await typedDoc('templates', paths.template(boardId, t.id)).get();
+  const stored = snap.exists ? snap.data()! : null;
+  if (!stored || stored.kind !== 'message')
+    throw errors.invalid('No such message template on this board', { field: 'template' });
+  return { id: t.id, name: stored.name, ...(t.data !== undefined ? { data: t.data } : {}) };
+}
+
 export default defineCommand('messagePost', async (ctx, input) => {
   const { boardId, ticketId } = input;
   const board = await loadBoard(ctx, boardId);
@@ -178,6 +192,8 @@ export default defineCommand('messagePost', async (ctx, input) => {
     : empty
       ? { rich: EMPTY_RICH, refAt: new Map() }
       : await parseBody(input.body, board, ctx, ticketId);
+  // templates.html §D: a message from a template names one this board has.
+  const template = input.template ? await messageTemplateOf(boardId, input.template) : null;
   // bucket.html §E: bucket files by reference (the bucket must be granted to this board).
   const bucketFiles = await resolveBucketRefs(ctx, input.bucketRefs, boardId);
   const fileIds = [...new Set(input.fileIds ?? [])];
@@ -240,6 +256,7 @@ export default defineCommand('messagePost', async (ctx, input) => {
         body: parsed.rich,
         ...(markdown ? { markdown } : summary ? { markdown: summary } : {}),
         ...(receipt ? { run: receipt } : {}),
+        ...(template ? { template } : {}),
         ...(entries.length
           ? { agg: { ...(input.agg?.at !== undefined ? { at: input.agg.at } : {}), entries } }
           : {}),

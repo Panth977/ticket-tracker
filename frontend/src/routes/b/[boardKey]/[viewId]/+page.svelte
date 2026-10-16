@@ -66,6 +66,7 @@
   import RequiresPrompt from '$lib/board/RequiresPrompt.svelte';
   import { joinBoard, onlineHere } from '$lib/board/presence';
   import ViewDialog, { type ViewDialogMode } from '$lib/views/ViewDialog.svelte';
+  import { templatesOfKind } from '$lib/templates/store';
   import {
     clearDraft,
     draftKey,
@@ -95,6 +96,9 @@
   const bs = provideBoard(new BoardState(() => board));
 
   const views = $derived(boardViews(boardId, uid));
+  /** templates.html §E: card templates for '+ View'. */
+  const cardTemplateStore = $derived(templatesOfKind(boardId, 'card'));
+  const cardTemplates = $derived($cardTemplateStore.list);
   const pref = $derived(boardPref(boardId, uid));
   // The same three queries the boot prewarm opens (§T): shared helpers, so the
   // two spellings cannot drift apart and leave the prewarm warming a key nobody reads.
@@ -248,7 +252,12 @@
   }
   const nextPosition = () => Math.max(0, ...$views.data.map((v) => v.position)) + 1;
 
-  async function onDialog(v: { name: string; type: ViewType; scope: 'personal' | 'shared' }) {
+  async function onDialog(v: {
+    name: string;
+    type: ViewType;
+    scope: 'personal' | 'shared';
+    cardTemplateId?: string | null;
+  }) {
     if (!boardId || !board) return;
     if (dialogMode === 'rename') {
       if (!saved || !savedInput) return;
@@ -266,7 +275,10 @@
     // A new view needs its id before we can go to it: this one waits (the dialog shows it working).
     const view: ViewInput =
       dialogMode === 'new'
-        ? newViewInput(v.type, { name: v.name, scope: v.scope, position: nextPosition() })
+        ? {
+            ...newViewInput(v.type, { name: v.name, scope: v.scope, position: nextPosition() }),
+            ...(v.cardTemplateId ? { cardTemplateId: v.cardTemplateId } : {}),
+          }
         : {
             ...draft,
             filter: normalize(draft.filter),
@@ -597,6 +609,7 @@
         : ''}
     initialScope={dialogMode === 'saveAs' ? saveAsScope : bs.canEdit ? 'shared' : 'personal'}
     canShared={bs.canEdit}
+    {cardTemplates}
     onsubmit={onDialog}
   />
 {/if}

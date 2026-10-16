@@ -1,7 +1,8 @@
 <!--
   Formatting bar for a RichEditor: B I S </> Link • 1. ☐ ❝ (📎 when onattach,
   ❓ when onask — the composer's 'Ask a question', §N1; 🧠 when onbucket —
-  'Attach from bucket', bucket.html §E).
+  'Attach from bucket', bucket.html §E; 📋 when ontemplate — the board's
+  message templates, templates.html §D1).
   <EditorToolbar {editor} onattach={() => fileInput.click()} onask={() => (askOpen = true)} />
 -->
 <script lang="ts">
@@ -17,6 +18,7 @@
     ListOrdered,
     Paperclip,
     Brain,
+    ClipboardList,
     Quote,
     Sigma,
     Strikethrough,
@@ -34,6 +36,8 @@
     onbucket?: () => void;
     /** aggregates.html: 'Add to a total' — shown when the board has active aggregate fields. */
     onagg?: () => void;
+    /** templates.html §D1: 'Use a template' — shown when the board has message templates. */
+    ontemplate?: () => void;
     disabled?: boolean;
     class?: string;
   }
@@ -43,6 +47,7 @@
     onask,
     onbucket,
     onagg,
+    ontemplate,
     disabled = false,
     class: cls = '',
   }: Props = $props();
@@ -166,7 +171,7 @@
     {#if t.id === 'link' || t.id === 'code'}<span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"
       ></span>{/if}
   {/each}
-  {#if onattach || onask || onbucket || onagg}
+  {#if onattach || onask || onbucket || onagg || ontemplate}
     <span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"></span>
   {/if}
   {#if onattach}
@@ -180,5 +185,14 @@
   {/if}
   {#if onagg}
     <IconButton icon={Sigma} label="Add to a total" size="sm" {disabled} onclick={onagg} />
+  {/if}
+  {#if ontemplate}
+    <IconButton
+      icon={ClipboardList}
+      label="Use a template"
+      size="sm"
+      {disabled}
+      onclick={ontemplate}
+    />
   {/if}
 </div>

@@ -81,6 +81,8 @@ export function toInput(v: View | (View & { id: string })): ViewInput {
     endDateField: v.endDateField ?? null,
     cardFields: v.cardFields ?? [...DEFAULT_CARD_FIELDS],
     includeStates: v.includeStates?.length ? v.includeStates : ['active'],
+    // templates.html §E: absent on views saved before card templates.
+    cardTemplateId: v.cardTemplateId ?? null,
   };
 }
 
@@ -121,6 +123,7 @@ function comparable(v: ViewInput) {
     endDateField: v.endDateField ?? null,
     cardFields: v.cardFields,
     includeStates: [...v.includeStates].sort(),
+    cardTemplateId: v.cardTemplateId ?? null,
   };
 }
 

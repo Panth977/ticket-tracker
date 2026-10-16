@@ -34,6 +34,7 @@ import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
 import { AggStatsSchema } from './aggregates.js';
 import { BucketNodeSchema, BucketSchema } from '../bucket/schema.js';
+import { TemplateSchema } from '../templates/schema.js';
 import {
   ApiKeySchema,
   DeviceSchema,
@@ -70,6 +71,8 @@ export const DOC_SCHEMAS = {
   members: BoardMemberSchema,
   prefs: BoardPrefSchema,
   views: ViewSchema,
+  /** boards/{b}/templates/{id} — templates.html. */
+  templates: TemplateSchema,
   tickets: TicketSchema,
   /**
    * Phase 15 (§W): messages, activity and files are FIELDS of the ticket now.

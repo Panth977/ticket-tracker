@@ -17,6 +17,7 @@ import * as artifacts from '../artifacts/commands.js';
 import * as bucket from '../bucket/commands.js';
 import * as env from '../env/index.js';
 import * as org from '../org/index.js';
+import * as templates from '../templates/commands.js';
 
 export * from './define.js';
 export * from './boards.js';
@@ -41,6 +42,9 @@ export const COMMANDS = {
   boardPrefSet: boards.boardPrefSet,
   viewSave: boards.viewSave,
   viewDelete: boards.viewDelete,
+  // templates (docs/plan/templates.html)
+  templateSave: templates.templateSave,
+  templateDelete: templates.templateDelete,
   // tickets and threads
   ticketCreate: tickets.ticketCreate,
   ticketUpdate: tickets.ticketUpdate,

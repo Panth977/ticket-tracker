@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Templates · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/templates" class="on">Templates</a>
+          <a href="/plan/bucket">Bucket</a>
+          <a href="/plan/indicators">Indicators</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+      <article class="mg">
+        <h1>Templates</h1>
+        <p class="lede">
+          A board's own UI, written as code. Panth asked (ORCH-8, 2026-10-16) for message
+          templates "where based on field1 dropdown selection the next form fields are set" —
+          something a fixed form builder cannot express and a few lines of JavaScript can. A
+          <b>template</b> is that JavaScript: a board's admins write it (or ask an agent to), and
+          it shapes three places — a form in the composer, a form in New ticket, and the cards of a
+          kanban view. The reference a template author reads is §9 of
+          <a href="/integrate#9-templates">/integrate</a> (also <code>get_template_docs</code> over
+          MCP and the plugin's <code>template</code> skill); this page is why it is built the way
+          it is.
+        </p>
+
+        <h2 id="a">A · The thing</h2>
+        <ul>
+          <li>
+            <b><code>boards/{b}/templates/{id}</code></b> —
+            <code>{ kind, name, description, indicator?, code, position, createdBy, createdAt,
+            updatedBy, updatedAt }</code> (<code>@tm/shared</code> <code>TemplateSchema</code>).
+            <code>kind</code> is <code>message | ticket | card</code> and never changes (a view names
+            a card template; a form could not stand in). ≤ 50 per board, ≤ 100 000 characters of
+            code each.
+          </li>
+          <li>
+            Indicator + description like every entity (indicators.html): the composer's menu, New
+            ticket's row and the settings list draw them.
+          </li>
+          <li>
+            <b>Admins write, the board reads.</b> <code>templateSave</code> /
+            <code>templateDelete</code> are <code>can(admin)</code> (scopes
+            <code>board:admin</code>, <code>boards:admin</code> — an agent that is a board admin may
+            too); the security rules let every reader of the board read the collection. Decided by
+            Panth: admins only — the code runs in everyone's browser.
+          </li>
+          <li>
+            Deleting a card template sets <code>cardTemplateId: null</code> on every view that used
+            it, in the same transaction. Copying a board (<code>boardCreate { fromBoardId }</code>)
+            copies its templates under new ids and re-points the copied views.
+          </li>
+        </ul>
+
+        <h2 id="b">B · Where the code runs</h2>
+        <p>
+          The one decision that shapes everything. A card template runs in the browser of everyone
+          who opens the view; in the app's page it would hold their Firebase session — an admin's
+          template could act as any member who looks. So it never runs in the page. Panth's choice
+          (of three: worker + virtual DOM, a sandboxed iframe per form, trusting authors):
+          <b>"All this code will be run in frontend and ideally on a separate thread and communicate
+          via API, while the render engine remains in the main thread."</b>
+        </p>
+        <ul>
+          <li>
+            <b>B1 · A worker with an opaque origin.</b> <code>host.ts</code> starts
+            <code>worker/runtime.js</code> as a module Worker from a <code>data:</code> URL. A
+            worker from a <code>blob:</code> URL would share the app's origin — and with it the
+            IndexedDB where Firebase keeps the refresh token. A <code>data:</code> worker's origin
+            is <code>null</code>: <code>indexedDB.open</code> throws, there is no localStorage, a
+            relative <code>fetch</code> has no base, an absolute one to the app is cross-origin
+            without credentials. Probed in Chromium and WebKit before building, and asserted by
+            e2e <code>templates.spec</code> (<i>idb:blocked local:none api:unreachable
+            origin:null</i>).
+          </li>
+          <li>
+            <b>B2 · <code>api</code> is the only door.</b> The worker asks; the page answers with
+            the viewer's own reads of <b>this board only</b> (<code>bridge.ts</code>: board,
+            members, tickets get / list / search from the live list the board screen already keeps,
+            a small per-person store). Never another board — a template could <code>fetch()</code>
+            what it reads to anywhere, so it may read only what its author, an admin of that board,
+            can already see. Never a write: the only thing a template sends is its
+            <code>submit</code> answer, when the person presses the button.
+          </li>
+          <li>
+            <b>B3 · The render engine stays in the page.</b> <code>render</code> returns a tree of
+            the builder's node types (<code>protocol.ts</code>); functions become handler ids.
+            <code>render.ts</code> draws it with the app's own classes and <b>patches</b> on every
+            new tree: a node keeps its DOM element while its type and slot (or <code>key</code>)
+            match, a hole (<code>cond &amp;&amp; h.x()</code> that is false) keeps its slot, and a
+            node already in place is never moved — so the input being typed in keeps focus and caret
+            while fields appear and vanish around it.
+          </li>
+          <li>
+            <b>B4 · Typing never goes backwards.</b> Every event carries a sequence number; every
+            tree carries the newest one the worker had seen (<code>ack</code>). A controlled input
+            is written only when <code>ack</code> has caught up with the last event <i>it</i> sent,
+            so a render computed before your last key cannot undo it. (The e2e test types 56
+            characters at 5 ms each and compares.)
+          </li>
+          <li>
+            <b>B5 · No HTML from a template.</b> Text is text; <code>h.markdown</code> goes through
+            the app's sanitising renderer; <code>h.el</code> takes a fixed list of tags;
+            <code>style</code> refuses <code>url()</code>, <code>expression()</code> and script;
+            links are http(s), mailto or app paths; images https or inline raster.
+          </li>
+          <li>
+            <b>B6 · A watchdog.</b> The page pings every second; three seconds without a pong (an
+            endless loop) and the worker is terminated, with "The template stopped responding" in
+            the form. Errors carry the template's line (the runtime measures where line 1 sits
+            inside <code>new Function</code>).
+          </li>
+        </ul>
+
+        <h2 id="c">C · The module</h2>
+        <p>
+          <code>export default { state?(ctx), render(state, setState, h, ctx), submit?(state,
+          ctx) }</code> — Panth's sketch (<code>render(state, setState, builder)</code>,
+          <code>onsubmit(state)</code> → <code>{ type: 'valid' | 'invalid' … }</code>) kept almost
+          word for word. <code>setState</code> merges and batches one render per microtask.
+          <code>ctx</code> is plain, named data: the board with its stages, priorities, tags and
+          fields; the viewer; for message templates the ticket of the thread, for cards the card's
+          ticket (<code>info.ts</code> — fields by name with readable values, and by id as
+          stored).
+        </p>
+
+        <h2 id="d">D · What a submit does</h2>
+        <ul>
+          <li>
+            <b>D1 · Message.</b> <code>{ type: 'valid', msg, data? }</code>: <code>msg</code> is
+            Markdown, turned into the rich doc in the page (mentions as <code>@email</code>,
+            <code>#KEY</code> refs of the board) and sent through the same outbox as a typed reply
+            with <code>markdown</code> beside it. <code>data</code> (JSON ≤ 16 000 characters) is
+            stored as <code>Message.template = { id, name, data }</code> — the server checks the
+            template exists and writes its current name — and every door returns it, so an agent
+            reads the form's answer instead of parsing prose.
+          </li>
+          <li>
+            <b>D2 · Ticket.</b> <code>{ type: 'valid', ticket }</code> names things as people do —
+            a stage or tag by name, a person by email, a field by name — and
+            <code>resolve.ts</code> turns names into ids. A tag name the board lacks becomes a tag
+            (as quick add does); anything else that names nothing is listed and nothing is created.
+            Required fields must be set. The create is the full form's: queued, a pending card at
+            once.
+          </li>
+          <li>
+            <b>Invalid</b> keeps the form open: <code>errMsg</code> above the buttons, and
+            <code>error: { name: message }</code> under the input with that <code>name</code>.
+          </li>
+        </ul>
+
+        <h2 id="e">E · Card templates</h2>
+        <ul>
+          <li>
+            A kanban view's <code>cardTemplateId</code> (ViewSchema; <code>viewSave</code> checks it
+            names a card template of the board). Chosen in the view bar's Layout menu, or when
+            creating a view with + (Panth: "click on + in view tabs, create a custom board view and
+            there you will get the option to set the preview").
+          </li>
+          <li>
+            <b>One worker per template</b>, shared by every card (<code>cards.ts</code>): the asks
+            of one tick go as one batch, and a card's tree is kept until its ticket's
+            <code>updatedAt</code> changes. Drawn static — no handlers; the card opens the ticket.
+          </li>
+          <li>
+            While a card's tree is on its way, or when the template throws for that ticket, the
+            built-in card stands in, with a ⚠ naming the error. Calendar chips and the table stay
+            built-in.
+          </li>
+        </ul>
+
+        <h2 id="f">F · The editor</h2>
+        <p>
+          Settings › Templates lists the three kinds (and keeps "Copy this board" below).
+          <code>?t={id}</code> opens one: name, indicator, description; the code in CodeMirror
+          (⌘S saves); a live preview that restarts 600 ms after typing stops, against a ticket of
+          the board you pick; the template's console; errors with a line that jumps the cursor; and
+          <b>Try submit</b>, which shows what would be posted or created without sending it.
+          Non-admins can read the code and try it.
+        </p>
+
+        <h2 id="g">G · For agents</h2>
+        <p>
+          "Add all these features to MCP too, so we can ask AI to build this for us": the commands
+          are bridged as <code>template_save</code> / <code>template_delete</code> like every
+          command with scopes; <code>list_templates</code> (with <code>include_code</code>) and
+          <code>get_template_docs</code> (the reference text + a starter per kind) are reads;
+          <code>view_save</code> takes <code>cardTemplateId</code>. The reference text lives once,
+          in <code>@tm/shared</code> <code>TEMPLATE_DOCS_MD</code>, and is printed by the MCP tool,
+          §9 of llms-full and the plugin's <code>template</code> skill. SDK 2.1.0 (the public
+          message shape gained <code>template</code>).
+        </p>
+
+        <h2 id="h">H · Not in v1</h2>
+        <ul>
+          <li>Templates for the table, calendar or timeline; per-person templates.</li>
+          <li>Writes from a template through <code>api</code> (moving, assigning) — by design.</li>
+          <li>Reading other boards, archived tickets, or a ticket's thread from <code>api</code>.</li>
+          <li>Versions / history of a template's code (the editor saves over).</li>
+        </ul>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

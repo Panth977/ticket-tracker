@@ -31,6 +31,9 @@ import {
   COMMANDS,
   isAgentId,
   paths,
+  TEMPLATE_DOCS_MD,
+  TEMPLATE_KINDS,
+  TEMPLATE_STARTERS,
   tokenMayCall,
   type CommandName,
   type CommandReq,
@@ -85,6 +88,10 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
   viewSave:
     'Create or update a saved view (kanban / table / calendar / timeline …), personal or shared.',
   viewDelete: 'Delete a saved view.',
+  templateSave:
+    "Create or update one of the board's TEMPLATES (admins): kind 'message' (a form in the composer whose submit posts a message), 'ticket' (a form in New ticket whose submit creates a ticket) or 'card' (what a kanban card shows; a view uses it through view_save cardTemplateId). `code` is JavaScript with `export default { state?, render(state, setState, h, ctx), submit? }` — read get_template_docs first, then list_templates. Leave templateId out to create.",
+  templateDelete:
+    "Delete one of the board's templates (admins). Views whose cards used it go back to the built-in card.",
   inviteCreate: 'Invite people to a board by email with a role.',
   inviteRevoke: 'Revoke a pending invite, or resend it (resend: true).',
   inviteAccept:
@@ -358,6 +365,36 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
           (v as { ownerUid?: string }).ownerUid === ctx.actor,
       );
     },
+  );
+  read(
+    'list_templates',
+    ['board:read'],
+    "The board's templates (templates.html): id, kind (message | ticket | card), name, description, indicator, position — and, with include_code, the code. Create or change one with template_save.",
+    {
+      board: boardArg,
+      kind: z.enum(TEMPLATE_KINDS).optional().describe('Only this kind'),
+      include_code: z.boolean().optional().describe('Also return each template’s code'),
+    },
+    async (a) => {
+      const b = await board(a);
+      const all = (await docs(db().collection(paths.templates(b.id)))) as Record<string, unknown>[];
+      return all
+        .filter((t) => !a.kind || t.kind === a.kind)
+        .sort((x, y) => Number(x.position) - Number(y.position))
+        .map((t) => (a.include_code ? t : { ...t, code: undefined }));
+    },
+  );
+  read(
+    'get_template_docs',
+    ['board:read'],
+    'How to write a template: the runtime, the builder `h`, `api`, ctx, what submit returns, and a starter per kind. Read this before template_save.',
+    { kind: z.enum(TEMPLATE_KINDS).optional().describe('Starter code for this kind') },
+    async (a) => ({
+      docs: TEMPLATE_DOCS_MD,
+      starters: a.kind
+        ? { [a.kind as string]: TEMPLATE_STARTERS[a.kind as keyof typeof TEMPLATE_STARTERS] }
+        : TEMPLATE_STARTERS,
+    }),
   );
   read(
     'list_invites',

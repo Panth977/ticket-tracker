@@ -4,6 +4,8 @@
     #  ticket search (Typesense, or the dev fallback)
     /  slash commands at the start of a line: /assign /unassign /me /due /stage /priority /watch /ask /agg
   Σ / /agg opens 'Add to a total' (aggregates.html) when the board has active aggregate fields.
+  📋 opens the board's message templates (templates.html §D1): a form the
+  board's own code draws, whose submit becomes the message.
   Paste, drop or 📎 files → the attach dialog asks which bucket and at what
   path (bucket.html §J: a ticket's files live in a bucket granted `write` to
   the board); they upload with progress and go out as bucketUploads on send.
@@ -56,6 +58,8 @@
   import { newFileId, objectPathFor } from '$lib/bucket/upload.svelte';
   import AttachDialog from './AttachDialog.svelte';
   import { mergePicks, pickAttachment, type BucketPick } from '$lib/bucketRefs/pick';
+  import { templatesOfKind } from '$lib/templates/store';
+  import MessageTemplateDialog from '$lib/templates/MessageTemplateDialog.svelte';
 
   interface Props {
     replyTo?: string | null;
@@ -94,6 +98,9 @@
   /** bucket.html §J: files waiting for the attach dialog's bucket + paths. */
   let attachFiles = $state<File[]>([]);
   let attachOpen = $state(false);
+  /** templates.html §D1: the board's message templates. */
+  const msgTemplates = templatesOfKind(boardId, 'message');
+  let templateOpen = $state(false);
 
   const typing = t.me ? typingSignal(boardId, ticketId, t.me) : null;
   onDestroy(() => {
@@ -453,6 +460,7 @@
         onask={() => (askOpen = true)}
         onbucket={() => (bucketOpen = true)}
         onagg={canAgg ? () => (aggOpen = true) : undefined}
+        ontemplate={$msgTemplates.list.length ? () => (templateOpen = true) : undefined}
         class="border-b border-line px-1.5 py-1"
       />
       {#if uploads.length || bucketPicks.length}
@@ -576,6 +584,17 @@
     </div>
     <AskDialog bind:open={askOpen} onasked={() => onsent?.()} />
     {#if canAgg}<AggDialog bind:open={aggOpen} onsent={() => onsent?.()} />{/if}
+    {#if $msgTemplates.list.length}
+      <MessageTemplateDialog
+        bind:open={templateOpen}
+        templates={$msgTemplates.list}
+        {replyTo}
+        onsent={() => {
+          replyTo = null;
+          onsent?.();
+        }}
+      />
+    {/if}
     <AttachDialog
       bind:open={attachOpen}
       {boardId}

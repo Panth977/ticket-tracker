@@ -111,6 +111,9 @@ export const PLUGIN_FILES = [
   join('skills', 'artifact', 'template', 'index.html'),
   join('skills', 'artifact', 'template', 'src', 'main.js'),
   join('skills', 'artifact', 'template', 'publish.mjs'),
+  // The `template` skill (docs/plan/templates.html): a board's message, ticket
+  // and card templates — the reference text is @tm/shared's TEMPLATE_DOCS_MD.
+  join('skills', 'template', 'SKILL.md'),
 ];
 /** The artifact skill's bundled files, as the Artifacts chapter quotes them. */
 const ARTIFACT_EXAMPLE = join('skills', 'artifact', 'example', 'index.html');
@@ -1102,6 +1105,9 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
     artifactdatalimits: artifactDataLimitsBlock(S),
     artifactdatasdk: artifactDataSdkBlock(dts),
     driver: driverBlock(driver, u),
+    // templates.html — the Templates chapter (§9), the MCP tool get_template_docs and the
+    // plugin's `template` skill all print the one reference text in @tm/shared.
+    templates: S.TEMPLATE_DOCS_MD.replace(/^## Templates\n+/, ''),
   };
 
   // The plugin's files are expanded FIRST: the chapter quotes the artifact

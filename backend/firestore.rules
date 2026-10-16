@@ -386,6 +386,12 @@ service cloud.firestore {
         allow write: if false; // viewSave
       }
 
+      // templates.html: the board's templates — code everyone on it runs (sandboxed). templateSave / templateDelete.
+      match /templates/{templateId} {
+        allow read: if canRead(boardId);
+        allow write: if false;
+      }
+
       match /webhooks/{webhookId} {
         allow read: if boardRole(boardId) == 'admin';
         allow write: if false;

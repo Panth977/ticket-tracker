@@ -7,6 +7,7 @@
  * Every field a view names (filter leaves, sort, group, columns, dates,
  * card fields) must exist on the board: a view naming a deleted field would
  * silently match nothing. Archived fields still exist (values are kept).
+ * A `cardTemplateId` must name one of the board's card templates.
  */
 import { errors, isFilterGroup, paths, type Board, type FilterNode, type View } from '@tm/shared';
 import { can } from '@tm/shared/logic/index';
@@ -67,6 +68,12 @@ export default defineCommand('viewSave', async (ctx, input) => {
       throw errors.conflict("The board's default view must stay shared");
 
     assertViewFields(board, view);
+    // templates.html §E: a card template must be one of this board's card templates.
+    if (view.cardTemplateId) {
+      const tpl = await txGet(tx, typedDoc('templates', paths.template(boardId, view.cardTemplateId)));
+      if (!tpl || tpl.kind !== 'card')
+        throw errors.invalid('No such card template on this board', { field: 'cardTemplateId' });
+    }
     // ownerUid is the actor for new views and personal ones; a shared view keeps its author.
     const ownerUid =
       existing && existing.scope === 'shared' && view.scope === 'shared'

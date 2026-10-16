@@ -1,4 +1,4 @@
-## 9. Version and changelog
+## 10. Version and changelog
 
 This page carries a version so an agent can tell whether what it knows is current.
 
@@ -16,6 +16,18 @@ the copy you hold, re-read `{{url:llmsFullUrl}}`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 2.1.0 — 2026-10-16
+
+- **Templates** (§9, docs/plan/templates.html). A board's admins write its own forms and cards as a little
+  JavaScript: **message templates** (the composer's 📋 — the form's answer is posted as Markdown and kept on the
+  message as `template: { id, name, data }`), **ticket templates** (New ticket) and **card templates** (what a
+  kanban view's cards show). The code runs in each person's browser in a worker with an opaque origin and reads
+  only its board, as them.
+- New commands `templateSave` / `templateDelete` (MCP `template_save` / `template_delete`, board admins), new
+  MCP reads `list_templates` and `get_template_docs`; `view_save` takes `view.cardTemplateId`; messages
+  (`GET …/messages`, `get_messages`) carry `template` when a message template wrote them; `messagePost` accepts it.
+- The Claude plugin has a third skill, `template`.
 
 ### 2.0.1 — 2026-10-15
 
