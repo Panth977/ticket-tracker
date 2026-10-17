@@ -103,4 +103,37 @@ describe('VM server, one port', () => {
     );
     ws.close();
   });
+
+  it('/live: a refused token never leaves the socket running as signed out', async () => {
+    const { idToken } = await signInWithPassword('live@x.dev', 'secret-123');
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/live`);
+    const frames: Frame[] = [];
+    ws.onmessage = (e) => frames.push(JSON.parse(String(e.data)));
+    await new Promise((ok) => (ws.onopen = ok));
+    const ask = async (msg: object) => {
+      const id = String(Math.random());
+      ws.send(JSON.stringify({ id, ...msg }));
+      for (let i = 0; i < 100; i++) {
+        const f = frames.find((x) => x.id === id);
+        if (f) return f;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw new Error('no answer');
+    };
+    // e.g. a laptop waking up: the socket reconnects with an expired token.
+    expect((await ask({ op: 'auth', token: 'expired.or.bogus' })).error.code).toBe(
+      'unauthenticated',
+    );
+    // Not "permission-denied" as an anonymous reader would get: the page must
+    // re-authenticate, not conclude that users/{uid} is not there.
+    expect((await ask({ op: 'get', path: 'users/u_live' })).error.code).toBe('unauthenticated');
+    expect((await ask({ op: 'auth', token: idToken })).result).toEqual({ uid: 'u_live' });
+    expect((await ask({ op: 'get', path: 'users/u_live' })).ok).toBe(true);
+    // A bad refresh for a session already signed in keeps that session.
+    expect((await ask({ op: 'auth', token: 'expired.or.bogus' })).error.code).toBe(
+      'unauthenticated',
+    );
+    expect((await ask({ op: 'get', path: 'users/u_live' })).ok).toBe(true);
+    ws.close();
+  });
 });

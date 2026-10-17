@@ -9,6 +9,14 @@
  * The socket authenticates with the signed-in user's ID token (auth.ts tells
  * it via setLiveToken) and re-sends every live subscription after a
  * reconnect or a sign-in change, so a listener never silently goes stale.
+ *
+ * Nothing goes out before the server has ACCEPTED that token. A socket that
+ * reconnects after a laptop slept still holds an expired one; sent ahead of
+ * the answer, the listeners ran signed out, users/{uid} came back denied, and
+ * the page took that for "no profile" and sent the person to /welcome. So each
+ * new socket asks auth.ts for the token now (setLiveTokenSource — refreshed if
+ * it is about to lapse), waits for the server's yes, forces one refresh on a
+ * no, and otherwise closes and tries again later.
  */
 
 type Frame = Record<string, unknown> & { id?: string; lid?: string };
@@ -26,6 +34,14 @@ let gate: Promise<unknown> = Promise.resolve();
 export function holdLiveUntil(p: Promise<unknown>): void {
   gate = p.catch(() => {});
 }
+/** auth.ts: the current ID token, refreshed first when it is stale (or `force`). */
+type TokenSource = (force: boolean) => Promise<string | null>;
+let source: TokenSource | null = null;
+export function setLiveTokenSource(fn: TokenSource | null): void {
+  source = fn;
+}
+/** Auth frames waiting for the server's answer: id → accepted? */
+const authWaits = new Map<string, (ok: boolean) => void>();
 
 export class LiveError extends Error {
   constructor(
@@ -49,29 +65,38 @@ function connect(): Promise<void> {
       new Promise<void>((resolve) => {
         const ws = new WebSocket(url());
         socket = ws;
-        ws.onopen = () => {
-          backoff = 250;
-          // Authenticate first, then send EVERYTHING this page is waiting on:
-          // what an earlier socket carried and what never got out (a socket
-          // can close before it opens — a sign-in does that — and whatever
-          // was queued for it must not be left hanging).
-          ws.send(JSON.stringify({ id: `auth${++seq}`, op: 'auth', token }));
-          for (const [lid, s] of subs) {
-            ws.send(JSON.stringify({ ...s.msg, id: `s${++seq}`, lid }));
-            s.sent = true;
-          }
-          for (const [id, p] of pending) {
-            ws.send(JSON.stringify({ ...p.msg, id }));
-            p.sent = true;
-          }
-          resolve();
-        };
+        ws.onopen = () =>
+          void authenticate(ws).then((ok) => {
+            if (socket !== ws || ws.readyState !== WebSocket.OPEN) return resolve();
+            // Refused even after a refresh: never carry on signed out. Close;
+            // onclose resolves and reconnects with backoff.
+            if (!ok) return ws.close();
+            backoff = 250;
+            // Signed in: send EVERYTHING this page is waiting on — what an
+            // earlier socket carried and what never got out (a socket can
+            // close before it opens — a sign-in does that — and whatever was
+            // queued for it must not be left hanging).
+            for (const [lid, s] of subs) {
+              ws.send(JSON.stringify({ ...s.msg, id: `s${++seq}`, lid }));
+              s.sent = true;
+            }
+            for (const [id, p] of pending) {
+              ws.send(JSON.stringify({ ...p.msg, id }));
+              p.sent = true;
+            }
+            resolve();
+          });
         ws.onmessage = (e) => {
           let f: Frame;
           try {
             f = JSON.parse(String(e.data)) as Frame;
           } catch {
             return;
+          }
+          const waiting = f.id ? authWaits.get(f.id) : undefined;
+          if (waiting) {
+            authWaits.delete(f.id!);
+            return waiting(!!f.ok);
           }
           if (f.lid) {
             subs.get(f.lid)?.onFrame(f);
@@ -90,6 +115,8 @@ function connect(): Promise<void> {
         ws.onclose = () => {
           if (socket === ws) socket = null;
           ready = null;
+          for (const done of authWaits.values()) done(false);
+          authWaits.clear();
           resolve(); // never leave a caller waiting on a socket that is gone
           for (const s of subs.values()) s.sent = false;
           for (const p of pending.values()) p.sent = false;
@@ -100,6 +127,32 @@ function connect(): Promise<void> {
       }),
   );
   return ready;
+}
+
+/** Send { op: 'auth' } and wait for the answer: true = accepted. */
+function sendAuth(ws: WebSocket, tok: string | null): Promise<boolean> {
+  if (ws.readyState !== WebSocket.OPEN) return Promise.resolve(false);
+  const id = `auth${++seq}`;
+  const answer = new Promise<boolean>((done) => authWaits.set(id, done));
+  ws.send(JSON.stringify({ id, op: 'auth', token: tok }));
+  return answer;
+}
+
+/** A new socket's handshake: the token as of now, then one forced refresh if refused. */
+async function authenticate(ws: WebSocket): Promise<boolean> {
+  const current = async (force: boolean) => {
+    if (!source) return token;
+    try {
+      return await source(force);
+    } catch {
+      return token; // offline, or signed out meanwhile (setLiveToken says which)
+    }
+  };
+  token = await current(false);
+  if (await sendAuth(ws, token)) return true;
+  if (!token) return false;
+  token = await current(true);
+  return sendAuth(ws, token);
 }
 
 /** The signed-in user changed (or their token refreshed): re-authenticate the socket. */

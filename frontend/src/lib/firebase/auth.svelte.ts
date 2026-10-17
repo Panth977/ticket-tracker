@@ -123,7 +123,7 @@ class AuthState {
     if (this.status === 'signedOut') return 'loading';
     if (this.status === 'loading' && !this.remembered) return 'loading';
     if (!this.profileLoaded) return 'loading';
-    if (!this.profile) return 'missing';
+    if (!this.profile) return this.profileError ? 'unreadable' : 'missing';
     if (this.welcomePending) return 'new';
     return 'ready';
   }
@@ -160,8 +160,12 @@ class AuthState {
       // loading here means 'nothing to show yet' (§T): a cached profile
       // resolves on the first frame and the server's copy patches it.
       if (s.loading) return;
-      this.profile = s.data;
+      // A failed listener is not "no profile": keep the copy we have (and the
+      // guard away from /welcome). Only a snapshot that says the document does
+      // not exist clears it.
       this.profileError = s.error;
+      if (s.error && this.profile) return;
+      this.profile = s.data;
       this.profileLoaded = true;
       if (s.data) this.remember(uid, s.data.theme);
     });

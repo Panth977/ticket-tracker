@@ -357,6 +357,11 @@ function onSocket(ws: WebSocket): void {
   const send = (m: unknown) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   };
+  // A token was offered and refused, and nothing has signed this socket in
+  // since. Its data ops are refused too: running them as signed out would
+  // answer "permission-denied" for the person's own documents, and the page
+  // would read that as "your profile is not there" (it sent them to /welcome).
+  let refused = false;
   let chain = Promise.resolve();
   ws.on('message', (raw) => {
     let msg: { id?: string; op?: string; token?: string };
@@ -373,6 +378,9 @@ function onSocket(ws: WebSocket): void {
             const d = await identity().verifyIdToken(msg.token, true);
             auth = { uid: d.uid, token: d as unknown as Record<string, unknown> };
           } catch {
+            // A session already signed in keeps its identity (a late refresh
+            // that failed changes nothing); a socket with none stays refused.
+            if (!session?.auth) refused = true;
             send({
               id: msg.id,
               ok: false,
@@ -381,6 +389,7 @@ function onSocket(ws: WebSocket): void {
             return;
           }
         }
+        refused = false;
         // A refreshed token for the same person keeps the session (its
         // listeners and onDisconnect writes); anyone else starts afresh.
         if (session && (session.auth?.uid ?? null) === (auth?.uid ?? null)) session.reauth(auth);
@@ -389,6 +398,14 @@ function onSocket(ws: WebSocket): void {
           session = new DataSession(auth, send);
         }
         send({ id: msg.id, ok: true, result: { uid: auth?.uid ?? null } });
+        return;
+      }
+      if (refused) {
+        send({
+          id: msg.id,
+          ok: false,
+          error: { code: 'unauthenticated', message: 'Sign in again: the ID token was refused' },
+        });
         return;
       }
       if (!session) session = new DataSession(null, send);

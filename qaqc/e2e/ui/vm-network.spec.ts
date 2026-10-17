@@ -97,3 +97,61 @@ test('static files are served compressed', async ({ request }) => {
   // Anything over 1 KB is brotli; the tiny entry stubs may go as they are.
   expect(encodings).toContain('br');
 });
+
+test('a socket that reconnects with an expired token stays signed in (no trip to /welcome)', async ({
+  context,
+}) => {
+  // The laptop slept: the /live socket dropped, and the page reconnects still
+  // holding the ID token that lapsed in the meantime. The route below plays
+  // that: after `stale` is set, the first auth frame carries a dead token.
+  let stale = false;
+  const sockets: { close: () => Promise<void> }[] = [];
+  await context.routeWebSocket(/\/live$/, (ws) => {
+    const server = ws.connectToServer();
+    sockets.push(ws);
+    ws.onMessage((m) => {
+      const f = JSON.parse(String(m)) as { op?: string; token?: string };
+      if (stale && f.op === 'auth' && f.token) {
+        stale = false;
+        server.send(JSON.stringify({ ...f, token: 'expired.id.token' }));
+      } else server.send(m);
+    });
+    server.onMessage((m) => ws.send(m));
+  });
+
+  const email = uniqueEmail('wake');
+  const page = await context.newPage();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByRole('button', { name: 'Email me a sign-in link' }).click();
+  await expect(page.getByText('We sent a sign-in link')).toBeVisible();
+  const link = await eventually('sign-in link', async () => {
+    const m = (await mailTo(email)).find((x) => x.subject === 'Sign in to TaskManager');
+    return m ? /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0] : null;
+  });
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, ''));
+  await expect(page).toHaveURL(/\/welcome/, { timeout: 30_000 });
+  await page.getByLabel('Display name').fill('Woke Up');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: 'Start your first board' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expect(page).not.toHaveURL(/\/welcome/);
+  await page.goto('/account/profile');
+  await expect(page).toHaveURL(/\/account\/profile/);
+  await expect(page.getByLabel(/name/i).first()).toHaveValue('Woke Up', { timeout: 20_000 });
+
+  // Network drops; the page reconnects with the lapsed token.
+  stale = true;
+  const before = sockets.length;
+  await sockets.at(-1)!.close();
+  await expect.poll(() => sockets.length, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect.poll(() => stale, { timeout: 20_000 }).toBe(false); // the dead token went out
+
+  // Still here, still signed in, and the profile listener still live.
+  await page.waitForTimeout(3000);
+  await expect(page).toHaveURL(/\/account\/profile/);
+  await expect(page.getByLabel(/name/i).first()).toHaveValue('Woke Up');
+  await page.goto('/');
+  await page.waitForTimeout(1500);
+  await expect(page).not.toHaveURL(/\/welcome|\/login/);
+});
