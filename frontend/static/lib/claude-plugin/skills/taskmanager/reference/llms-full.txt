@@ -4,10 +4,10 @@
 > OpenAPI document, MCP tool registry, shared contracts and SDK declaration file — it cannot
 > drift from the software it describes.
 
-version:           2.1.0
+version:           2.2.0
 api:               v1
-updated:           2026-10-16  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    bfda43b7e96c54cefae929bdd648686fa8ad30abb71dd95f5d64fab0fe0fa63a
+updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
+content-sha256:    937ee9f7c871397ca459f156030a4c59eb29021d419a7edb250b5cb36609110a
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -85,6 +85,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [Examples](#examples)
   - [Over MCP](#over-mcp)
 - [10. Version and changelog](#10-version-and-changelog)
+  - [2.2.0 — 2026-10-17](#2-2-0-2026-10-17)
   - [2.1.0 — 2026-10-16](#2-1-0-2026-10-16)
   - [2.0.1 — 2026-10-15](#2-0-1-2026-10-15)
   - [2.0.0 — 2026-10-15](#2-0-0-2026-10-15)
@@ -873,7 +874,7 @@ artifacts:read   Read artifacts and download their source — an account token, 
 artifacts:write  Create, publish and share artifacts — an account token, or an agent token for the artifacts that agent is on (§8)
 ```
 
-Every **agent token** carries exactly these 22, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`, `bucket:read`, `bucket:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
+Every **agent token** carries exactly these 24, and they are not a choice: `board:read`, `members:read`, `tickets:read`, `tickets:create`, `tickets:update`, `tickets:move`, `tickets:assign`, `tickets:state`, `comments:read`, `comments:write`, `files:read`, `files:write`, `questions:write`, `tasklists:write`, `status:write`, `events:read`, `board:admin`, `webhooks:manage`, `artifacts:read`, `artifacts:write`, `bucket:read`, `bucket:write`, `dictionary:read`, `dictionary:write`. It never carries an account scope (`boards:create`, `boards:admin`, `agents:write`, `invites:write`).
 
 Presets offered by the token form (board tokens acting as a person, and account tokens):
 
@@ -884,7 +885,7 @@ Worker     board:read members:read tickets:read comments:read files:read events:
 
 Everything board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read
 
-Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write bucket:read bucket:write
+Full account board:read members:read tickets:read tickets:create tickets:update tickets:move tickets:assign tickets:state comments:read comments:write files:read files:write questions:write tasklists:write status:write events:read boards:create boards:admin agents:write invites:write artifacts:read artifacts:write bucket:read bucket:write dictionary:read dictionary:write
 ```
 
 ##### Event types (the inbox: `GET /v1/events`, MCP `get_events`)
@@ -964,7 +965,7 @@ events ack               ≤ 500 ids per call
 SSE stream               ends at ~50 s (it lives inside a 60 s function) — reconnect from the cursor; that is normal
 ```
 
-OpenAPI: `TaskManager API` version `1`, 49 paths, 76 schemas.
+OpenAPI: `TaskManager API` version `1`, 52 paths, 79 schemas.
 
 ### 5.2 REST — every endpoint
 
@@ -986,7 +987,7 @@ owner          object | null                       required
 board          object | null                       required
 boards         object[]
 role           "admin" | "editor" | "commenter" | "viewer" | null  required
-scopes         "board:read" | "members:read" | "tickets:read" | … (26 values)[]  required
+scopes         "board:read" | "members:read" | "tickets:read" | … (28 values)[]  required
 via            "api" | "mcp" | "integration"       required
 kind           "board" | "account" | "oauth" | "agent"  required
 default_board  object | null
@@ -1029,7 +1030,7 @@ aggs            object         required
 
 #### GET /v1/env
 
-The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment.
+The dictionaries granted to the board and, for an agent token, to the agent, as process environment (env-style keys; non-string values as JSON); `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment.
 
 Scopes: `board:read` · board-scoped: a credential on several boards names one (`?board=KEY`)
 
@@ -1040,9 +1041,10 @@ board  string
 
 → 200 Env
 ```text
-board  object         required
-agent  object | null  required
-env    object         required
+board         object         required
+agent         object | null  required
+env           object         required
+dictionaries  object[]       required
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
@@ -2620,6 +2622,72 @@ deleted  integer  required  (0…)
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
 
+#### GET /v1/dictionaries
+
+The dictionaries this credential can reach (?board= narrows to one board’s).
+
+Scopes: `dictionary:read` or `dictionary:write`
+
+Query:
+```text
+board             string
+include_archived  "1" | "true" | "0" | "false" | boolean
+```
+
+→ 200 DictionaryList
+```text
+dictionaries  object[]  required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### GET /v1/dictionaries/{id}
+
+One dictionary and its entries, in order (values are JSON).
+
+Scopes: `dictionary:read` or `dictionary:write`
+
+Path:
+```text
+id  string  required
+```
+
+→ 200 DictionaryEntries
+```text
+dictionary        { id, name, description, indicator, handle, slug, reach, archived, stats, updatedAt, grant }  required
+entries           object[]                            required
+entriesUpdatedAt  integer | null                      required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
+#### PATCH /v1/dictionaries/{id}/entries
+
+Change entries: { set: { key: value | null } } or { replace: [{ key, value }] }.
+
+Scopes: `dictionary:write`
+
+Path:
+```text
+id  string  required
+```
+
+Body (application/json, required):
+```text
+set                object
+replace            object[]
+expectedUpdatedAt  number | null
+```
+
+→ 200 DictionaryEntries
+```text
+dictionary        { id, name, description, indicator, handle, slug, reach, archived, stats, updatedAt, grant }  required
+entries           object[]                            required
+entriesUpdatedAt  integer | null                      required
+```
+
+→ 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
+
 #### GET /v1/artifacts/{id}/data/firestore/{path}
 
 Read a document, or list a collection, of the artifact's Firestore.
@@ -3653,7 +3721,7 @@ Prompts: `triage_board`, `standup_summary`
 
 ### 5.4 SDK — every method
 
-`@tm/sdk` **2.1.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
+`@tm/sdk` **2.2.0** — zero dependencies, one injectable `fetch`; Node 20+, Deno, Bun and browsers.
 
 Everything below is copied out of the published `sdk.d.ts`, so a signature here is the signature that compiles.
 
@@ -6319,9 +6387,9 @@ template wrote them.
 This page carries a version so an agent can tell whether what it knows is current.
 
 ```text
-version   2.1.0
+version   2.2.0
 api       v1            the wire version — /v1 and /lib/v1 are stable, whatever the release above says
-updated   2026-10-16    the date of the newest changelog entry below
+updated   2026-10-17    the date of the newest changelog entry below
 ```
 
 **How to tell whether you are current.** Fetch `https://taskmanager-example.web.app/integrate.json` — it is small, never cached,
@@ -6332,6 +6400,20 @@ the copy you hold, re-read `https://taskmanager-example.web.app/llms-full.txt`.
 new MCP tools, new event types and new scopes may appear within `v1`, so parse permissively: ignore
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
+
+### 2.2.0 — 2026-10-17
+
+- **Dictionaries** (docs/plan/dictionary.html). A fourth thing beside boards, artifacts and buckets: a named set
+  of key → value entries, values any JSON, owned by a person or an org, used by boards, artifacts and agents
+  through `read` / `write` grants. New scopes `dictionary:read` / `dictionary:write` (every agent token carries
+  them); commands and MCP tools `dictionary_create / update / delete / share / grant_set / list / get / set`;
+  REST `GET /v1/dictionaries`, `GET /v1/dictionaries/{id}`, `PATCH /v1/dictionaries/{id}/entries`.
+- **Env is gone.** Boards, artifacts, buckets, agents and orgs no longer carry key/value pairs: the `envGet` /
+  `envSet` commands and the MCP tool `env_get` are removed; every pair moved into a dictionary granted where it
+  applied. `GET /v1/env` stays, same `env` field: it now merges the dictionaries granted to the board, then those
+  granted to the calling agent (env-style keys; non-string values as JSON text), and says where each came from
+  in `dictionaries`.
+- The app's artifact page has tabs: Website, DB, JSON, Bucket and Dictionary.
 
 ### 2.1.0 — 2026-10-16
 
@@ -6365,7 +6447,7 @@ Breaking: memories are now **buckets**, and everything has an owner (docs/plan/a
 - **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
   repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
   ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.
-- **Env.** Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
+- **Env** (replaced by dictionaries in 2.2.0). Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
   Env), inherited org → thing. `GET /v1/env` returns the effective env of the token's board merged
   with its agent's: `{ board, agent, env }` (`env` merged, the agent winning). Not for secrets.
 

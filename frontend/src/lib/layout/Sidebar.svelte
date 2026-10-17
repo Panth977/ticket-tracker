@@ -34,6 +34,7 @@
   import { agentRoutes } from '$lib/agents/routes';
   import { myArtifacts, splitArtifacts } from '$lib/artifacts/store';
   import { myBuckets, splitBuckets } from '$lib/bucket/store';
+  import { myDictionaries, splitDictionaries } from '$lib/dictionary/store';
   import { myOrgs } from '$lib/orgs/store';
   import { ownerGroups } from '$lib/orgs/owners';
   import { parseThingPath } from '$lib/orgs/path';
@@ -64,11 +65,13 @@
   const inboxCount = $derived($inboxQ.data.length);
   const inviteCount = $derived($invitesQ.data.length);
 
-  // Artifacts and buckets I have a role on. Archived ones are on their owner's page only.
+  // Artifacts, buckets and dictionaries I have a role on. Archived ones are on their owner's page only.
   const artifactsQ = $derived(myArtifacts(uid));
   const artifacts = $derived(splitArtifacts($artifactsQ.data).active);
   const bucketsQ = $derived(myBuckets(uid));
   const buckets = $derived(splitBuckets($bucketsQ.data).active);
+  const dictionariesQ = $derived(myDictionaries(uid));
+  const dictionaries = $derived(splitDictionaries($dictionariesQ.data).active);
 
   const path: string = $derived(page.url.pathname);
   // /b/KEY or /{handle}/b/KEY (§AC); an artifact / bucket by id or by slug.
@@ -76,6 +79,7 @@
   const currentArtifact = $derived(at?.kind === 'artifact' ? at.ref : null);
   const currentKey = $derived(at?.kind === 'board' ? at.ref.toUpperCase() : null);
   const currentBucket = $derived(at?.kind === 'bucket' ? at.ref : null);
+  const currentDictionary = $derived(at?.kind === 'dictionary' ? at.ref : null);
 
   // Everything under its owner (§AC): my orgs, then me and the people who share with me.
   const orgsQ = $derived(myOrgs(uid));
@@ -87,6 +91,7 @@
       boards: active,
       artifacts,
       buckets,
+      dictionaries,
     }),
   );
   let newOrg = $state(false);
@@ -128,6 +133,7 @@
     {currentKey}
     {currentArtifact}
     {currentBucket}
+    {currentDictionary}
     onNewOrg={() => (newOrg = true)}
   />
   <SidebarOwners
@@ -139,6 +145,7 @@
     {currentKey}
     {currentArtifact}
     {currentBucket}
+    {currentDictionary}
   />
 
   <div class="mt-auto flex flex-col gap-px border-t border-line pt-3">

@@ -249,6 +249,8 @@ describe('can — scopes narrow, never widen', () => {
     'artifacts:write': ['read'],
     'bucket:read': ['read'],
     'bucket:write': ['read'],
+    'dictionary:read': ['read'],
+    'dictionary:write': ['read'],
   };
   it('the table covers every scope', () => {
     expect(Object.keys(ONLY).sort()).toEqual([...SCOPES].sort());

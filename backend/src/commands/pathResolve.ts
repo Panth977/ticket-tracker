@@ -6,10 +6,11 @@
 import { errors, paths, roleOf, type HandleDoc, type OwnerRef } from '@tm/shared';
 import { artifactRef, roleFor } from '../artifacts/shared.js';
 import { bucketRef, reachFor } from '../bucket/shared.js';
+import { dictionaryRef, reachFor as dictionaryReachFor } from '../dictionary/shared.js';
 import { db } from '../db/index.js';
 import { boardByKey } from '../platform/resolve.js';
 import { defineCommand } from './_registry.js';
-import { handleOf, handleRef, ownerKeyOfThing } from '../org/shared.js';
+import { handleOf, handleRef, ownerKeyOfThing, thingCollection } from '../org/shared.js';
 
 export default defineCommand('pathResolve', async (ctx, input) => {
   const h = (await handleRef(input.handle.toLowerCase()).get()).data() as HandleDoc | undefined;
@@ -39,7 +40,7 @@ export default defineCommand('pathResolve', async (ctx, input) => {
       thing: { kind: 'board' as const, id: b.id, slug: b.key },
     };
   }
-  const col = input.kind === 'artifact' ? 'artifacts' : 'buckets';
+  const col = thingCollection(input.kind);
   const hit = await db()
     .collection(col)
     .where('ownerKey', '==', ownerKeyOfThing(owner))
@@ -51,6 +52,9 @@ export default defineCommand('pathResolve', async (ctx, input) => {
   if (input.kind === 'artifact') {
     const a = (await artifactRef(doc.id).get()).data();
     if (!a || !roleFor(ctx, a)) throw notFound();
+  } else if (input.kind === 'dictionary') {
+    const d = (await dictionaryRef(doc.id).get()).data();
+    if (!d || !(await dictionaryReachFor(ctx, d))) throw notFound();
   } else {
     const m = (await bucketRef(doc.id).get()).data();
     if (!m || !(await reachFor(ctx, m))) throw notFound();

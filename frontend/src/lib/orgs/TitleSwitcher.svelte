@@ -3,7 +3,8 @@
   artifact and a bucket, so the three headers look and behave the same: the
   name as the page title, a ▾, and the switcher list (./switcher) on click.
   `kind` names the data attribute tests and the e2e suites find it by
-  (data-board-switcher / data-artifact-switcher / data-bucket-switcher).
+  (data-board-switcher / data-artifact-switcher / data-bucket-switcher /
+  data-dictionary-switcher).
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte';
@@ -13,7 +14,7 @@
   import type { MenuItem } from '$lib/ui/types';
 
   interface Props {
-    kind: 'board' | 'artifact' | 'bucket';
+    kind: 'board' | 'artifact' | 'bucket' | 'dictionary';
     items: MenuItem[];
     name: string;
     /** Before the name, small and muted: a board's key. */

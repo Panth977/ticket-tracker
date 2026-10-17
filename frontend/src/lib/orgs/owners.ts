@@ -1,6 +1,6 @@
 /**
  * EVERYTHING UNDER ITS OWNER (agents.html §AC, like GitHub): the sidebar has
- * no root lists of boards, artifacts and buckets — each lives under the
+ * no root lists of boards, artifacts, buckets and dictionaries — each lives under the
  * person or org that owns it. This groups what I can open by owner:
  *
  *   orgs   every org I am in (even an empty one), then any other org that
@@ -14,7 +14,7 @@
 import type { Org, OrgRole } from '@tm/shared';
 import { ownerKeyOfThing } from './store';
 
-interface Owned {
+export interface Owned {
   id: string;
   name: string;
   ownerKey?: string | null;
@@ -23,7 +23,7 @@ interface Owned {
   createdBy?: string;
 }
 
-export interface OwnerGroup<B, A, M> {
+export interface OwnerGroup<B, A, M, D = Owned> {
   /** 'org:{id}' / 'user:{uid}' */
   key: string;
   kind: 'org' | 'user';
@@ -40,18 +40,25 @@ export interface OwnerGroup<B, A, M> {
   boards: B[];
   artifacts: A[];
   buckets: M[];
+  dictionaries: D[];
 }
 
-export function ownerGroups<B extends Owned, A extends Owned, M extends Owned>(input: {
+export function ownerGroups<
+  B extends Owned,
+  A extends Owned,
+  M extends Owned,
+  D extends Owned = Owned,
+>(input: {
   me: string;
   myHandle: string | null | undefined;
   orgs: readonly (Org & { id: string })[];
   boards: readonly B[];
   artifacts: readonly A[];
   buckets: readonly M[];
-}): { orgs: OwnerGroup<B, A, M>[]; users: OwnerGroup<B, A, M>[] } {
-  const groups = new Map<string, OwnerGroup<B, A, M>>();
-  const group = (key: string): OwnerGroup<B, A, M> => {
+  dictionaries?: readonly D[];
+}): { orgs: OwnerGroup<B, A, M, D>[]; users: OwnerGroup<B, A, M, D>[] } {
+  const groups = new Map<string, OwnerGroup<B, A, M, D>>();
+  const group = (key: string): OwnerGroup<B, A, M, D> => {
     let g = groups.get(key);
     if (!g) {
       const [kind, id] = key.split(':') as ['org' | 'user', string];
@@ -68,6 +75,7 @@ export function ownerGroups<B extends Owned, A extends Owned, M extends Owned>(i
         boards: [],
         artifacts: [],
         buckets: [],
+        dictionaries: [],
       };
       groups.set(key, g);
     }
@@ -86,7 +94,7 @@ export function ownerGroups<B extends Owned, A extends Owned, M extends Owned>(i
       canCreate: role === 'owner' || role === 'admin',
     });
   }
-  const place = <T extends Owned>(list: readonly T[], pick: (g: OwnerGroup<B, A, M>) => T[]) => {
+  const place = <T extends Owned>(list: readonly T[], pick: (g: OwnerGroup<B, A, M, D>) => T[]) => {
     for (const t of list) {
       const g = group(ownerKeyOfThing(t));
       g.handle ??= t.ownerHandle ?? null;
@@ -96,8 +104,9 @@ export function ownerGroups<B extends Owned, A extends Owned, M extends Owned>(i
   place(input.boards, (g) => g.boards as unknown as B[]);
   place(input.artifacts, (g) => g.artifacts as unknown as A[]);
   place(input.buckets, (g) => g.buckets as unknown as M[]);
+  place(input.dictionaries ?? [], (g) => g.dictionaries as unknown as D[]);
 
-  const byName = (a: OwnerGroup<B, A, M>, b: OwnerGroup<B, A, M>) =>
+  const byName = (a: OwnerGroup<B, A, M, D>, b: OwnerGroup<B, A, M, D>) =>
     (a.name ?? a.handle ?? a.id).localeCompare(b.name ?? b.handle ?? b.id);
   const all = [...groups.values()];
   return {

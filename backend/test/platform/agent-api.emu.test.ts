@@ -696,8 +696,7 @@ describe('MCP with an agent token', () => {
         'get_template_docs',
         // ticketWatch's spec scope is tickets:read: watching is the reader's own subscription.
         'ticket_watch',
-        // agents.html §AC: env, orgs and owner paths are reads.
-        'env_get',
+        // agents.html §AC: orgs and owner paths are reads.
         'list_orgs',
         'path_resolve',
       ]).toContain(n);

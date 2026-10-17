@@ -71,8 +71,6 @@ export const BUCKET_SETTINGS_SECTIONS = [
   { id: 'people', label: 'People', owner: true },
   /** lib/access: the boards and artifacts that use it. */
   { id: 'subscribers', label: 'Subscribers', owner: false },
-  /** shared/src/env: key/value pairs (editors read, the owner writes). */
-  { id: 'env', label: 'Env', owner: false },
 ] as const;
 export type BucketSettingsSection = (typeof BUCKET_SETTINGS_SECTIONS)[number]['id'];
 
@@ -81,8 +79,7 @@ export function bucketSettingsFor(
   role: BucketRole | null,
 ): readonly { id: BucketSettingsSection; label: string }[] {
   if (role === 'owner') return BUCKET_SETTINGS_SECTIONS;
-  if (role === 'editor') return BUCKET_SETTINGS_SECTIONS.filter((s) => !s.owner);
-  if (role) return BUCKET_SETTINGS_SECTIONS.filter((s) => !s.owner && s.id !== 'env');
+  if (role) return BUCKET_SETTINGS_SECTIONS.filter((s) => !s.owner);
   return [];
 }
 

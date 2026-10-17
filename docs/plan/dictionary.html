@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Dictionary · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/templates">Templates</a>
+          <a href="/plan/bucket">Bucket</a>
+          <a href="/plan/dictionary" class="on">Dictionary</a>
+          <a href="/plan/indicators">Indicators</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+      <article class="mg">
+        <h1>Dictionary</h1>
+        <p class="lede">
+          A named set of <b>key → value</b> entries, owned like a bucket and used by boards,
+          artifacts and agents through grants. Panth asked (ORCH-9, 2026-10-16) for a fourth entity
+          beside board, artifact and bucket, and for the key/value <i>Env</i> pairs in every thing's
+          settings to go. A dictionary replaces them: one place for settings, prompts and config,
+          written once and granted to whatever needs it. Values are any JSON (Panth's choice over
+          text only).
+        </p>
+
+        <h2 id="a">A · The thing</h2>
+        <ul>
+          <li>
+            <b><code>dictionaries/{d}</code></b> —
+            <code
+              >{ name, description, indicator, ownerUid, owner, ownerKey, ownerHandle, orgGranted?,
+              slug, access, memberUids, boards, artifacts, agents, boardIds, artifactIds, agentIds,
+              stats { entries, bytes }, archivedAt, createdAt, updatedAt }</code
+            >
+            (<code>@tm/shared</code> <code>DictionarySchema</code>). Lives at
+            <code>/{handle}/dictionary/{slug}</code> like everything else (§AC).
+          </li>
+          <li>
+            <b><code>dictionaries/{d}/content/entries</code></b> —
+            <code>{ entries: [{ k, v }], updatedAt, updatedBy }</code>, one document, in order.
+            <code>v</code> is the value's JSON text: Firestore cannot hold every JSON value (nested
+            arrays), and the text round-trips exactly. Kept apart so the sidebar and the lists,
+            which read the dictionary documents, never load the entries.
+          </li>
+          <li>
+            Limits: 500 entries, 64 KB per value, 512 KB per dictionary, keys of 1–128
+            <code>[A-Za-z0-9_.:-]</code> not starting with <code>. : -</code>; 100 owned; 50 grants
+            of each kind.
+          </li>
+          <li>Indicator (default 📖) and description like every entity (indicators.html).</li>
+        </ul>
+
+        <h2 id="b">B · Who may do what</h2>
+        <p>
+          <code>dictionaryReach()</code> is the one answer, exactly the bucket's rule plus agents:
+        </p>
+        <ul>
+          <li>Its people: owner → manage, editor → write, viewer → read. Orgs fan out (§AC).</li>
+          <li>
+            A <b>board</b> grant (<code>read | write</code>) is a ceiling: every member reads; a
+            <code>write</code> grant lets the board's editors and admins (and agents in those roles)
+            write.
+          </li>
+          <li>
+            An <b>agent</b> grant: that agent reads (or writes) it on any board — what the old agent
+            env did.
+          </li>
+          <li>
+            An <b>artifact</b> grant: the page may use it, the viewer's own reach the floor
+            (<code>dictionaryArtifactReach</code>).
+          </li>
+          <li>
+            Archived = read-only for everyone until restored. No reach answers 404, never 403.
+            Granting needs both sides (the dictionary's owner who is also admin of the board / owner
+            of the artifact / owner of the agent); either side may end it. Never an agent.
+          </li>
+        </ul>
+
+        <h2 id="c">C · Commands and doors</h2>
+        <ul>
+          <li>
+            <code>dictionaryCreate · Update · Delete · Share · GrantSet · List · Get · Set</code>;
+            scopes <code>dictionary:read</code> / <code>dictionary:write</code> (in every agent
+            token and in the Full account preset). MCP tools <code>dictionary_*</code>.
+          </li>
+          <li>
+            <code>dictionarySet</code> takes <code>set</code> (null removes; a new key goes last) or
+            <code>replace</code> (the order given); <code>expectedUpdatedAt</code> makes it
+            conditional (409 when the entries changed since that read — the editor's guard).
+          </li>
+          <li>
+            REST: <code>GET /v1/dictionaries</code>, <code>GET /v1/dictionaries/{id}</code>,
+            <code>PATCH /v1/dictionaries/{id}/entries</code>.
+          </li>
+          <li>
+            Rules: its people read both documents straight from Firestore (the app's live
+            listeners); everyone else, and every token, reads through the commands. Every write is a
+            command.
+          </li>
+        </ul>
+
+        <h2 id="d">D · In the app</h2>
+        <ul>
+          <li>
+            Sidebar: dictionaries under their owner, like buckets, with <i>New dictionary</i> in the
+            owner's + menu. The page is the entries editor: one row per key, each value
+            <b>Text</b> or <b>JSON</b> (validated as you type), reorder, filter, Save.
+          </li>
+          <li>
+            Settings: General, People, Subscribers. Board, artifact and agent settings get a
+            <b>Dictionaries</b> section (Subscriptions, lib/access) where Env was.
+          </li>
+          <li>
+            The artifact page has tabs: <b>Website</b> (the page), <b>DB</b> (its Firestore),
+            <b>JSON</b> (its realtime tree), <b>Bucket</b> (buckets granted to it) and
+            <b>Dictionary</b> (dictionaries granted to it). DB and JSON are for its owner and
+            editors.
+          </li>
+        </ul>
+
+        <h2 id="e">E · Orchestrators: GET /v1/env</h2>
+        <p>
+          Kept, with the same <code>env</code> field, so the workspaces orch needs no change. It now
+          answers the dictionaries granted to the board, then those granted to the calling agent,
+          each set by name (a later name wins a key); the agent's win over the board's. Archived
+          ones are left out. Only env-style keys (<code>[A-Za-z_][A-Za-z0-9_]*</code>) become
+          variables; a string value as it is, anything else as its JSON text.
+          <code>dictionaries</code> says where each came from.
+        </p>
+
+        <h2 id="f">F · The migration</h2>
+        <p>
+          <code>backend/src/migrate/dictionary.ts</code> (Firebase:
+          <code>scripts/migrate-dictionary.mjs</code>; a VM:
+          <code>backend/lib/migrate/dictionaryCli.js</code>). Every non-empty
+          <code>_env/{kind}:{id}</code> becomes one dictionary "<i>name</i> env" with the same
+          pairs, owned by the thing's owner and granted <code>read</code> where the pairs applied: a
+          board → that board, an artifact → that artifact, an agent → that agent, an org → every
+          board and artifact it owns (they inherited it), a bucket → nothing (nothing read it). The
+          id is derived from the env document, so it is idempotent; the <code>_env</code> document
+          is removed once its dictionary exists. Dry run unless <code>--apply</code>.
+        </p>
+
+        <h2 id="g">G · Not in v1</h2>
+        <ul>
+          <li>Secrets: entries are plain text to everyone who reaches them, as Env was.</li>
+          <li>Invites by email to someone without an account (like buckets).</li>
+          <li>
+            <code>BackendDriver.dictionary</code> for an artifact's own code (the grant exists; the
+            page reads it in the app's Dictionary tab).
+          </li>
+          <li>History of entries.</li>
+        </ul>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

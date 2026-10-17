@@ -359,6 +359,27 @@ service cloud.firestore {
       }
     }
 
+    // -------------------------------------------------------- dictionaries
+    // (docs/plan/dictionary.html §A). Like a bucket: its PEOPLE read the
+    // document and its entries straight from Firestore; boards, artifacts,
+    // agents and tokens read through dictionaryList / dictionaryGet.
+
+    function dictionaryMember(dictionaryId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/dictionaries/$(dictionaryId)).data.memberUids;
+    }
+
+    match /dictionaries/{dictionaryId} {
+      // A LIST is provable only with where(memberUids array-contains auth.uid).
+      allow get, list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow write: if false; // dictionaryCreate / Update / Share / GrantSet / Delete
+
+      match /content/{docId} {
+        allow read: if dictionaryMember(dictionaryId);
+        allow write: if false; // dictionarySet
+      }
+    }
+
     // ------------------------------------------------------- boards/{boardId}
 
     match /boards/{boardId} {

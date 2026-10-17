@@ -1,8 +1,9 @@
 <!--
   Keeps the address bar owner-first (agents.html §AC): on /b/KEY, /x/{id},
-  /bucket/{id} — or an owner-first URL whose handle is stale after a move or
-  a rename — it rewrites the URL in place to /{handle}/b/KEY,
-  /{handle}/x/{slug}, /{handle}/bucket/{slug}. No navigation, no reload.
+  /bucket/{id}, /dictionary/{id} — or an owner-first URL whose handle is
+  stale after a move or a rename — it rewrites the URL in place to
+  /{handle}/b/KEY, /{handle}/x/{slug}, /{handle}/bucket/{slug},
+  /{handle}/dictionary/{slug}. No navigation, no reload.
 -->
 <script lang="ts">
   // The owner-first URLs are built from data (handles, slugs), not routes; the SPA has no base path.
@@ -11,6 +12,7 @@
   import { page } from '$app/state';
   import { myArtifacts } from '$lib/artifacts/store';
   import { myBuckets } from '$lib/bucket/store';
+  import { myDictionaries } from '$lib/dictionary/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import { myBoards } from '$lib/stores';
   import { parseThingPath } from './path';
@@ -18,6 +20,7 @@
   const boardsQ = $derived(myBoards(auth.uid));
   const artifactsQ = $derived(myArtifacts(auth.uid));
   const bucketsQ = $derived(myBuckets(auth.uid));
+  const dictionariesQ = $derived(myDictionaries(auth.uid));
 
   $effect(() => {
     const t = parseThingPath(page.url.pathname);
@@ -31,11 +34,16 @@
         (x) => x.id === t.ref || (x.slug === t.ref && t.handle === x.ownerHandle),
       );
       if (a?.ownerHandle && a.slug) want = `/${a.ownerHandle}/x/${a.slug}${t.rest}`;
-    } else {
+    } else if (t.kind === 'bucket') {
       const m = $bucketsQ.data.find(
         (x) => x.id === t.ref || (x.slug === t.ref && t.handle === x.ownerHandle),
       );
       if (m?.ownerHandle && m.slug) want = `/${m.ownerHandle}/bucket/${m.slug}${t.rest}`;
+    } else {
+      const d = $dictionariesQ.data.find(
+        (x) => x.id === t.ref || (x.slug === t.ref && t.handle === x.ownerHandle),
+      );
+      if (d?.ownerHandle && d.slug) want = `/${d.ownerHandle}/dictionary/${d.slug}${t.rest}`;
     }
     if (want && want !== page.url.pathname)
       replaceState(want + page.url.search + page.url.hash, page.state);

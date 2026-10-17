@@ -36,4 +36,32 @@ describe('the title switcher (§AC)', () => {
     });
     expect(items.map((i) => i.label)).toEqual(['FL · FreeLance', 'HEA · Health', 'FR · Review']);
   });
+  it('a dictionary: its org’s things with its dictionaries last; personal → every dictionary', () => {
+    const dict = (id: string, name: string, ownerKey?: string) =>
+      ({ id, name, ownerKey, archivedAt: null }) as never;
+    const dictionaries = [dict('d1', 'Deploy', 'org:o1'), dict('d2', 'Mine', 'user:u1')];
+    const o = ownerOrg([org], { boards, artifacts, dictionaries }, { dictionaryId: 'd1' });
+    expect(o).toBe(org);
+    const items = switcherItems({
+      boards,
+      artifacts,
+      dictionaries,
+      org: o,
+      current: { dictionaryId: 'd1' },
+    });
+    expect(items.at(-1)).toMatchObject({
+      label: 'Deploy',
+      disabled: true,
+      separator: true,
+      href: '/dictionary/d1',
+    });
+    const mine = switcherItems({
+      boards,
+      artifacts,
+      dictionaries,
+      org: null,
+      current: { dictionaryId: 'd2' },
+    });
+    expect(mine.map((i) => i.label)).toEqual(['Deploy', 'Mine']);
+  });
 });

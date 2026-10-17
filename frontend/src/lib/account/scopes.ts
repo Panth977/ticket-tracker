@@ -16,7 +16,8 @@ export interface ScopeGroup {
     | 'boards'
     | 'agents'
     | 'artifacts'
-    | 'bucket';
+    | 'bucket'
+    | 'dictionary';
   label: string;
   hint: string;
   scopes: Scope[];
@@ -83,6 +84,12 @@ export const SCOPE_GROUPS: ScopeGroup[] = [
     label: 'Can read and change your bucket',
     hint: 'Browse bucket files; create buckets, upload, edit, move and delete files',
     scopes: ['bucket:read', 'bucket:write'],
+  },
+  {
+    id: 'dictionary',
+    label: 'Can read and change your dictionaries',
+    hint: 'Read dictionaries; create them and change their entries',
+    scopes: ['dictionary:read', 'dictionary:write'],
   },
 ];
 

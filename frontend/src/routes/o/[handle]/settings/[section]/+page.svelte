@@ -3,7 +3,6 @@
   (agents.html §AC), for its owners and admins:
     general   picture, name, handle, and the base role every member gets on what it owns
     members   who is in it and as what; invite by e-mail
-    env       key/value pairs its boards, artifacts and buckets inherit
     danger    delete it (once it owns nothing); leave it
 -->
 <script lang="ts">
@@ -15,7 +14,6 @@
   import { ORG_BASE_ROLES, ORG_ROLES, type OrgBaseRole, type OrgRole } from '@tm/shared';
   import { command } from '$lib/api';
   import Section from '$lib/board/settings/Section.svelte';
-  import EnvEditor from '$lib/env/EnvEditor.svelte';
   import { auth } from '$lib/firebase/auth.svelte';
   import { routes } from '$lib/layout/routes';
   import { orgDoc } from '$lib/orgs/store';
@@ -46,7 +44,6 @@
   const SECTIONS = [
     { id: 'general', label: 'General' },
     { id: 'members', label: 'Members' },
-    { id: 'env', label: 'Env' },
     { id: 'danger', label: 'Danger zone' },
   ] as const;
 
@@ -242,13 +239,6 @@
               </div>
             </form>
           {/if}
-        </Section>
-      {:else if section === 'env'}
-        <Section
-          title="Env"
-          description="Key/value pairs every board, artifact and bucket of this org inherits (theirs win). Plain text, not for secrets."
-        >
-          <EnvEditor kind="org" id={orgId ?? ''} canEdit={manage} />
         </Section>
       {:else if section === 'danger'}
         <Section title="Danger zone" description="Leaving or deleting takes effect at once.">

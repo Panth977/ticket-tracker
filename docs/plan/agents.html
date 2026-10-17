@@ -26,6 +26,7 @@
         <a href="/plan/agents" class="on">Agents</a>
         <a href="/plan/artifacts">Artifacts</a>
         <a href="/plan/templates">Templates</a>
+        <a href="/plan/dictionary">Dictionary</a>
         <a href="/plan/sdk">SDK</a>
         <a href="/plan/review">Review</a>
         <a href="/plan/reference">From TeamTrack</a>
@@ -1146,7 +1147,9 @@ users/{uid}/ui/sidebar       = { hiddenBoardIds[], hiddenArtifactIds[], updatedA
       <li><b>Envs</b> — key/value pairs on boards, artifacts, buckets, agents and orgs (<code>envGet</code> / <code>envSet</code>,
         each thing's settings › Env, server-only <code>_env/{kind}:{id}</code>). A thing inherits its org's pairs, its own winning.
         <code>GET /v1/env</code> gives an orchestrator its board's and its agent's, merged — the workspaces orch puts them in its
-        agent's process environment. Plain text, not for secrets.</li>
+        agent's process environment. Plain text, not for secrets. <i>Replaced by dictionaries
+        (ORCH-9, <a href="/plan/dictionary">dictionary.html</a>): the pairs moved into dictionaries granted where
+        they applied; <code>GET /v1/env</code> now merges the granted dictionaries.</i></li>
       <li><b>The app</b> — <code>src/hooks.ts</code> reroutes owner-first URLs onto the existing pages (a slug through
         <code>pathResolve</code>), and <code>CanonicalUrl</code> rewrites the old <code>/b/KEY</code> · <code>/x/{id}</code> ·
         <code>/bucket/{id}</code> forms in place. The title switcher and the "Org ›" crumb follow the open item's owner org.</li>

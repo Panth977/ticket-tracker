@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_ARTIFACT,
   AGENT_BOARD,
+  AGENT_DICTIONARY,
   ARTIFACT_BOARD,
+  ARTIFACT_DICTIONARY,
   BOARD_BUCKET,
+  BOARD_DICTIONARY,
   can,
   normalize,
   toggle,
@@ -12,7 +15,13 @@ import {
 
 describe('read / write relations', () => {
   it('maps boxes to the stored grant and back', () => {
-    for (const r of [BOARD_BUCKET, ARTIFACT_BOARD]) {
+    for (const r of [
+      BOARD_BUCKET,
+      ARTIFACT_BOARD,
+      BOARD_DICTIONARY,
+      ARTIFACT_DICTIONARY,
+      AGENT_DICTIONARY,
+    ]) {
       expect(r.fromPerms({ checks: [] })).toBeNull();
       expect(r.fromPerms({ checks: ['read'] })).toBe('read');
       expect(r.fromPerms({ checks: ['read', 'write'] })).toBe('write');
@@ -97,5 +106,19 @@ describe('workspace and the rule mirror', () => {
     expect(can.addAgentToBoard({ ownsAgent: true, boardAdmin: false })).toBe(
       'You are not an admin there',
     );
+  });
+});
+
+describe('dictionary grants (either side may end one)', () => {
+  it('granting needs both sides; removing needs either', () => {
+    const both = { ownsDictionary: true, managesOther: true, other: 'board' } as const;
+    expect(can.grantDictionary(both)).toBe(true);
+    expect(can.grantDictionary({ ...both, managesOther: false })).toMatch(/board admin/);
+    expect(can.grantDictionary({ ...both, ownsDictionary: false })).toMatch(/owner/);
+    expect(can.revokeDictionary({ ...both, ownsDictionary: false })).toBe(true);
+    expect(can.revokeDictionary({ ...both, managesOther: false })).toBe(true);
+    expect(
+      can.revokeDictionary({ ownsDictionary: false, managesOther: false, other: 'agent' }),
+    ).toMatch(/agent’s owner/);
   });
 });

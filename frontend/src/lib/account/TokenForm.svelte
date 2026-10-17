@@ -33,6 +33,7 @@
     ACCOUNT_TOKEN_NEVER,
     ARTIFACT_SCOPE_SECTION,
     BUCKET_SCOPE_SECTION,
+    DICTIONARY_SCOPE_SECTION,
     artifactScopesFit,
     choiceOf,
     EXPIRY_OPTIONS,
@@ -297,25 +298,33 @@
         </div>
       {/if}
       {#if artifactScopesFit(draft)}
-        <!-- bucket.html §G — account tokens only, like artifacts. -->
-        <div class="flex flex-col gap-1.5" data-bucket-scopes>
-          <p class="text-xs font-semibold tracking-wide text-subtle uppercase">
-            {BUCKET_SCOPE_SECTION.title}
-          </p>
-          {#each BUCKET_SCOPE_SECTION.scopes as s (s)}
-            <Checkbox
-              checked={draft.scopes.includes(s)}
-              label={s}
-              description={SCOPE_LABELS[s]}
-              onchange={(e) =>
-                (draft.scopes = toggleScope(
-                  draft.scopes,
-                  s,
-                  (e.currentTarget as HTMLInputElement).checked,
-                ))}
-            />
-          {/each}
-        </div>
+        {#each [BUCKET_SCOPE_SECTION, DICTIONARY_SCOPE_SECTION] as section (section.title)}
+          <!-- bucket.html §G, dictionary.html §C — account tokens only, like artifacts. -->
+          <div
+            class="flex flex-col gap-1.5"
+            {...{
+              [section === BUCKET_SCOPE_SECTION ? 'data-bucket-scopes' : 'data-dictionary-scopes']:
+                '',
+            }}
+          >
+            <p class="text-xs font-semibold tracking-wide text-subtle uppercase">
+              {section.title}
+            </p>
+            {#each section.scopes as s (s)}
+              <Checkbox
+                checked={draft.scopes.includes(s)}
+                label={s}
+                description={SCOPE_LABELS[s]}
+                onchange={(e) =>
+                  (draft.scopes = toggleScope(
+                    draft.scopes,
+                    s,
+                    (e.currentTarget as HTMLInputElement).checked,
+                  ))}
+              />
+            {/each}
+          </div>
+        {/each}
       {/if}
     </div>
     {#if touched && errors.scopes}<p class="text-xs text-danger">{errors.scopes}</p>{/if}

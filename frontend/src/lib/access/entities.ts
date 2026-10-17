@@ -5,7 +5,9 @@
  */
 import {
   BUCKET_DEFAULT_INDICATOR,
+  DICTIONARY_DEFAULT_INDICATOR,
   bucketAppPath,
+  dictionaryAppPath,
   type Board,
   type Indicator,
   type Bucket,
@@ -85,6 +87,28 @@ export const bucketView = (m: BucketLike): EntityView => ({
       ? 'archived'
       : m.stats
         ? `${m.stats.files} ${m.stats.files === 1 ? 'file' : 'files'}`
+        : undefined,
+});
+
+type DictionaryLike = {
+  id: string;
+  name: string;
+  archivedAt?: number | null;
+  archived?: boolean;
+  indicator?: Indicator | null;
+  stats?: { entries: number };
+};
+export const dictionaryView = (d: DictionaryLike): EntityView => ({
+  kind: 'dictionary',
+  id: d.id,
+  name: d.name,
+  href: dictionaryAppPath(d.id),
+  mark: { of: d, seed: d.id, fallback: DICTIONARY_DEFAULT_INDICATOR },
+  note:
+    d.archivedAt != null || d.archived
+      ? 'archived'
+      : d.stats
+        ? `${d.stats.entries} ${d.stats.entries === 1 ? 'entry' : 'entries'}`
         : undefined,
 });
 

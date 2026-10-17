@@ -13,7 +13,7 @@
   import SubscriptionsSection from '$lib/artifacts/settings/SubscriptionsSection.svelte';
   import { useArtifactSettings } from '$lib/artifacts/settings/context.svelte';
   import Section from '$lib/board/settings/Section.svelte';
-  import EnvEditor from '$lib/env/EnvEditor.svelte';
+  import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
   import { firstSettingsSection, settingsSectionsFor } from '$lib/artifacts/store';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -26,9 +26,10 @@
   const mine = $derived(settingsSectionsFor(s.role).some((x) => x.id === section));
   const first = $derived(firstSettingsSection(s.role));
   // Renamed sections (lib/access): old links still land.
-  const MOVED: Record<string, 'subscriptions'> = {
+  const MOVED: Record<string, 'subscriptions' | 'dictionaries'> = {
     boards: 'subscriptions',
     bucket: 'subscriptions',
+    env: 'dictionaries',
   };
   $effect(() => {
     const to = MOVED[section];
@@ -63,12 +64,17 @@
     <BuildsSection />
   {:else if section === 'data'}
     <DataSection />
-  {:else if section === 'env'}
+  {:else if section === 'dictionaries'}
     <Section
-      title="Env"
-      description="Key/value pairs for this artifact, mostly for orchestrators and its agents. Its org's pairs come first; one here with the same name wins."
+      title="Dictionaries"
+      description="The dictionaries this artifact's page may use through BackendDriver.dictionary — read, or also write. Anyone looking at the page still reads and changes only what they already can in that dictionary. The artifact's owner adds dictionaries they own; either side can remove one."
     >
-      <EnvEditor kind="artifact" id={s.artifact.id} canEdit={s.isOwner} />
+      <DictionarySubscriptions
+        name="artifact-dictionaries"
+        target={{ artifactId: s.artifact.id }}
+        manages={s.isOwner}
+        frozen={s.artifact.archivedAt != null ? 'Restore the artifact to change this' : null}
+      />
     </Section>
   {/if}
 {/key}

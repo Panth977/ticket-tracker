@@ -64,7 +64,11 @@ export type Scope =
   // Bucket (docs/plan/bucket.html §G): an account token reaches the buckets
   // its person reaches; an agent token only those granted to its boards.
   | 'bucket:read'
-  | 'bucket:write';
+  | 'bucket:write'
+  // Dictionary (docs/plan/dictionary.html §C): an account token reaches the
+  // dictionaries its person reaches; an agent token those granted to it or its boards.
+  | 'dictionary:read'
+  | 'dictionary:write';
 
 /** A person (a Firebase uid) or an agent (`ag_` + 16 chars). */
 export type PrincipalKind = 'user' | 'agent';

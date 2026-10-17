@@ -28,6 +28,7 @@ import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import {
   isAgentId,
+  entriesToEnv,
   errors,
   MAX_API_UPLOAD_BYTES,
   paths,
@@ -47,6 +48,8 @@ import {
   RestArtifactFilesQuerySchema,
   RestBucketFileQuerySchema,
   RestBucketListQuerySchema,
+  RestDictionaryListQuerySchema,
+  RestDictionarySetBodySchema,
   RestBucketTreeQuerySchema,
   RestArtifactSourceQuerySchema,
   RestCreateArtifactBodySchema,
@@ -111,7 +114,7 @@ import {
   updateTaskItem,
 } from '../platform/phase3.js';
 import { boardMembers, toPublicBoard, toPublicFile } from '../platform/public.js';
-import { envOf, envTarget } from '../env/shared.js';
+import { readEntries, reachableDictionaries } from '../dictionary/shared.js';
 import { boardByKey, readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
 import { bucketRawPut } from '../bucket/files.js';
 import { storeTicketUpload, uploadBytes } from '../platform/uploads.js';
@@ -258,14 +261,27 @@ v1.get('/env', async (c) => {
   const ctx = gate(c, 'GET', '/v1/env');
   const q = query(c, RestBoardQuerySchema);
   const b = await requestBoard(ctx, q.board);
-  const board = await envOf('board', await envTarget(ctx, 'board', b.id, 'read'));
-  const agent = isAgentId(ctx.actor)
-    ? await envOf('agent', await envTarget(ctx, 'agent', ctx.actor, 'read'))
+  // dictionary.html §E: the board's dictionaries, then the agent's own, each by name.
+  const live = (l: Awaited<ReturnType<typeof reachableDictionaries>>) =>
+    l.filter((x) => x.d.archivedAt === null);
+  const fromBoard = live(await reachableDictionaries(ctx, { boardId: b.id }));
+  const fromAgent = isAgentId(ctx.actor)
+    ? live(await reachableDictionaries(ctx, { agentId: ctx.actor })).filter(
+        (x) => !fromBoard.some((y) => y.id === x.id),
+      )
     : null;
+  const entriesOf = (l: typeof fromBoard) =>
+    Promise.all(l.map((x) => readEntries(x.id).then((r) => r.entries)));
+  const board = entriesToEnv(await entriesOf(fromBoard));
+  const agent = fromAgent ? entriesToEnv(await entriesOf(fromAgent)) : null;
   return c.json({
-    board: board.effective,
-    agent: agent?.effective ?? null,
-    env: { ...board.effective, ...(agent?.effective ?? {}) },
+    board,
+    agent,
+    env: { ...board, ...(agent ?? {}) },
+    dictionaries: [
+      ...fromBoard.map((x) => ({ id: x.id, name: x.d.name, via: 'board' as const })),
+      ...(fromAgent ?? []).map((x) => ({ id: x.id, name: x.d.name, via: 'agent' as const })),
+    ],
   });
 });
 
@@ -1039,6 +1055,34 @@ v1.put('/artifacts/:id/data/files/*', async (c) => {
 v1.delete('/artifacts/:id/data/files/*', async (c) => {
   const ctx = gate(c, 'DELETE', FILES);
   return c.json(await fileDelete(ctx, aid(c), dataPath(c)));
+});
+
+// ─── dictionary (dictionary.html §C) ─────────────────────────────────────────
+
+v1.get('/dictionaries', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/dictionaries');
+  const q = query(c, RestDictionaryListQuerySchema);
+  const boardId = q.board ? (await requestBoard(ctx, q.board)).id : undefined;
+  c.header('cache-control', 'no-store');
+  return c.json(
+    await invoke(
+      'dictionaryList',
+      { ...(boardId ? { boardId } : {}), ...(q.include_archived ? { includeArchived: true } : {}) },
+      ctx,
+    ),
+  );
+});
+
+v1.get('/dictionaries/:id', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/dictionaries/{id}');
+  c.header('cache-control', 'no-store');
+  return c.json(await invoke('dictionaryGet', { dictionaryId: c.req.param('id') }, ctx));
+});
+
+v1.patch('/dictionaries/:id/entries', async (c) => {
+  const ctx = gate(c, 'PATCH', '/v1/dictionaries/{id}/entries');
+  const b = await body(c, RestDictionarySetBodySchema);
+  return c.json(await invoke('dictionarySet', { dictionaryId: c.req.param('id'), ...b }, ctx));
 });
 
 // ─── bucket (bucket.html §G) ─────────────────────────────────────────────────

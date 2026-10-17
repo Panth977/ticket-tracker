@@ -64,7 +64,7 @@ describe('roles', () => {
     expect(viewerReadOnly(art(), null)).toBe(true);
   });
 
-  it('settings: owners get every section (Subscriptions and Subscribers too), editors Builds, Data and Env (read-only), viewers none', () => {
+  it('settings: owners get every section (Subscriptions and Subscribers too), editors Builds, Data and Dictionaries (read-only), viewers none', () => {
     expect(settingsSectionsFor('owner').map((s) => s.id)).toEqual([
       'general',
       'people',
@@ -72,9 +72,13 @@ describe('roles', () => {
       'subscribers',
       'builds',
       'data',
-      'env',
+      'dictionaries',
     ]);
-    expect(settingsSectionsFor('editor').map((s) => s.id)).toEqual(['builds', 'data', 'env']);
+    expect(settingsSectionsFor('editor').map((s) => s.id)).toEqual([
+      'builds',
+      'data',
+      'dictionaries',
+    ]);
     expect(settingsSectionsFor('viewer')).toEqual([]);
     expect(settingsSectionsFor(null)).toEqual([]);
     expect(firstSettingsSection('owner')).toBe('general');

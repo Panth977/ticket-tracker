@@ -5,7 +5,7 @@ description: How to write a TaskManager board TEMPLATE — a few lines of JavaSc
 
 # TaskManager templates
 
-Version 2.1.0 · updated 2026-10-16 · this deployment: https://taskmanager-example.web.app
+Version 2.2.0 · updated 2026-10-17 · this deployment: https://taskmanager-example.web.app
 
 The steps, every time:
 

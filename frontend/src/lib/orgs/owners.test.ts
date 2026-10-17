@@ -32,6 +32,7 @@ describe('ownerGroups (§AC: everything under its owner)', () => {
       ],
       artifacts: [thing('a1', 'user:u_al', 'al')],
       buckets: [thing('m1', 'org:o2')],
+      dictionaries: [thing('d1', 'org:o1'), thing('d2', 'user:u_al', 'al')],
     });
     expect(users.map((g) => [g.key, g.handle, g.canCreate])).toEqual([
       ['user:u_me', 'me', true],
@@ -45,6 +46,8 @@ describe('ownerGroups (§AC: everything under its owner)', () => {
       ['org:o9', 'other', null, false],
     ]);
     expect(orgs[1]!.buckets.map((m) => m.id)).toEqual(['m1']);
+    expect(orgs[0]!.dictionaries.map((d) => d.id)).toEqual(['d1']);
+    expect(users[1]!.dictionaries.map((d) => d.id)).toEqual(['d2']);
   });
 
   it('an empty space still shows me; things from before owners count as their creator’s', () => {

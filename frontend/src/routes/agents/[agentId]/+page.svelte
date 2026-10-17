@@ -6,6 +6,7 @@
             converted tokens listed until they are revoked)
     SUBSCRIPTIONS  every board it is on with its role, every artifact with
             Build and data (lib/access) — "what may this agent do?" has one answer, and it is here
+    DICTIONARIES  the dictionaries granted to the agent itself (lib/dictionary)
   then archive / restore. Owner only: anyone else gets "not found" (agents are
   private).
 -->
@@ -22,7 +23,7 @@
   import AgentActivity from '$lib/agents/AgentActivity.svelte';
   import AgentSubscriptions from '$lib/agents/AgentSubscriptions.svelte';
   import AgentTokenCard from '$lib/agents/AgentTokenCard.svelte';
-  import EnvEditor from '$lib/env/EnvEditor.svelte';
+  import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
   import PromptEditor from '$lib/agents/PromptEditor.svelte';
   import {
     AGENT_DESCRIPTION_MAX,
@@ -258,10 +259,15 @@
     </Panel>
 
     <Panel
-      title="Env"
-      description="Key/value pairs your orchestrator puts in this agent's environment, after its board's (a pair here wins). Plain text, not for secrets."
+      title="Dictionaries"
+      description="Dictionaries this agent may use wherever it works, on top of the ones granted to its boards. Its orchestrator hands the env-style keys (API_URL…) to it as environment. Read, or also write. Not for secrets."
     >
-      <EnvEditor kind="agent" id={agentId} canEdit={!archived} />
+      <DictionarySubscriptions
+        name="agent-dictionaries"
+        target={{ agentId }}
+        manages={true}
+        frozen={archived ? 'Restore the agent to change this' : null}
+      />
     </Panel>
 
     <Panel title={archived ? 'Restore' : 'Archive'} tone={archived ? 'default' : 'danger'}>

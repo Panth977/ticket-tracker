@@ -257,28 +257,4 @@ describe('orgs (§AC)', () => {
     });
     expect((await artifactRef(artifactId).get()).data()).toMatchObject({ ownerUid: asha.uid });
   });
-
-  it('envs: things inherit their org’s, their own winning', async () => {
-    const { asha } = await people('asha');
-    const { orgId } = await call(asha, 'orgCreate', { handle: handle(), name: 'Delta' });
-    const key = `D${uniq('')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(-5)}`;
-    const { boardId } = await call(asha, 'boardCreate', {
-      name: 'Ops',
-      key,
-      owner: { kind: 'org', id: orgId },
-    });
-    await call(asha, 'envSet', {
-      target: { kind: 'org', id: orgId },
-      set: { REGION: 'eu', TIER: 'org' },
-    });
-    await call(asha, 'envSet', { target: { kind: 'board', id: boardId }, set: { TIER: 'board' } });
-    expect(await call(asha, 'envGet', { target: { kind: 'board', id: boardId } })).toMatchObject({
-      vars: { TIER: 'board' },
-      inherited: { REGION: 'eu', TIER: 'org' },
-      effective: { REGION: 'eu', TIER: 'board' },
-    });
-  });
 });

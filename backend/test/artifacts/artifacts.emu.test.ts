@@ -828,6 +828,42 @@ describe('the artifact’s uploaded files', () => {
   });
 });
 
+describe('artifactDataCollections (the DB tab)', () => {
+  it('lists the root’s collections and a document’s, for the owner and editors only', async () => {
+    const { owner, editor, viewer, stranger, id } = await scene();
+    const put = (p: string) => db().doc(artifactFirestoreDoc(id, p)).set({ at: 1 });
+    await put('/todos/a');
+    await put('/todos/a/steps/1');
+    await put('/todos/a/notes/x');
+    await put('/settings/main');
+
+    expect(await call(owner, 'artifactDataCollections', { artifactId: id })).toEqual({
+      collections: ['settings', 'todos'],
+    });
+    expect(
+      await call(editor, 'artifactDataCollections', { artifactId: id, path: '/todos/a' }),
+    ).toEqual({ collections: ['notes', 'steps'] });
+    expect(
+      (await call(owner, 'artifactDataCollections', { artifactId: id, path: 'settings/main' }))
+        .collections,
+    ).toEqual([]);
+
+    // A collection path, or one that steps outside: the fence says no.
+    await expect(
+      call(owner, 'artifactDataCollections', { artifactId: id, path: '/todos' }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    await expect(
+      call(owner, 'artifactDataCollections', { artifactId: id, path: '/../../x' }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    await expect(call(viewer, 'artifactDataCollections', { artifactId: id })).rejects.toMatchObject(
+      { code: 'forbidden' },
+    );
+    await expect(
+      call(stranger, 'artifactDataCollections', { artifactId: id }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
 describe('artifactShare', () => {
   it('an account that exists gets the role at once, an inbox row, and the mirror follows', async () => {
     const owner = await createUser({ name: 'Olive' });

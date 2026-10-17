@@ -327,3 +327,19 @@ export const artifactDataClear = defineCommand({
   req: req({ artifactId: ArtifactIdSchema }),
   res: OkResSchema,
 });
+
+/**
+ * The host page's DB tab (§F): the collection ids at the artifact's root, or
+ * under one of its documents. The client SDK cannot list collections, so
+ * this is the one read of the artifact's data that needs the server; the
+ * documents themselves are read in the viewer's session, through the rules.
+ */
+export const artifactDataCollections = defineCommand({
+  name: 'artifactDataCollections',
+  source: 'extra',
+  permission:
+    "Owner or editor (artifactCan.publish). path is '' (the root) or a DOCUMENT path in the artifact's own view.",
+  errors: ['not_found', 'forbidden', 'invalid'],
+  req: req({ artifactId: ArtifactIdSchema, path: z.string().max(1024).default('') }),
+  res: z.object({ collections: z.array(z.string()) }),
+});

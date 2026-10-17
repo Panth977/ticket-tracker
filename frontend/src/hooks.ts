@@ -4,6 +4,7 @@
  *   /{handle}/b/{KEY}/…          → /b/{KEY}/…        (a KEY is global)
  *   /{handle}/x/{slug}/…         → /x/{id}/…         (the slug resolved by pathResolve)
  *   /{handle}/bucket/{slug}/…    → /bucket/{id}/…
+ *   /{handle}/dictionary/{slug}/… → /dictionary/{id}/…
  *   /{handle}  /{handle}/settings/…  → /o/{handle}…  (the owner's page)
  *
  * The address bar keeps the owner-first URL; the old forms still work and
@@ -32,7 +33,7 @@ export const reroute: Reroute = async ({ url }) => {
         /* not found / not mine: the page under the id route says so */
       }
     }
-    const seg = t.kind === 'artifact' ? 'x' : 'bucket';
+    const seg = t.kind === 'artifact' ? 'x' : t.kind;
     return `/${seg}/${encodeURIComponent(id ?? t.ref)}${t.rest}`;
   }
   const o = parseOwnerPath(url.pathname);

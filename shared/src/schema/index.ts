@@ -34,6 +34,7 @@ import { TasklistSchema } from './tasklist.js';
 import { AgentStatusSchema } from './agentStatus.js';
 import { AggStatsSchema } from './aggregates.js';
 import { BucketNodeSchema, BucketSchema } from '../bucket/schema.js';
+import { DictionaryContentSchema, DictionarySchema } from '../dictionary/schema.js';
 import { TemplateSchema } from '../templates/schema.js';
 import {
   ApiKeySchema,
@@ -120,6 +121,11 @@ export const DOC_SCHEMAS = {
   buckets: BucketSchema,
   /** buckets/{bucketId}/nodes/{nodeId} */
   bucketNodes: BucketNodeSchema,
+  // dictionary (docs/plan/dictionary.html)
+  /** dictionaries/{dictionaryId} */
+  dictionaries: DictionarySchema,
+  /** dictionaries/{dictionaryId}/content/entries */
+  dictionaryContent: DictionaryContentSchema,
 } as const satisfies Record<string, z.ZodTypeAny>;
 export type DocName = keyof typeof DOC_SCHEMAS;
 export type DocOf<N extends DocName> = z.infer<(typeof DOC_SCHEMAS)[N]>;
