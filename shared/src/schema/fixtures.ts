@@ -538,6 +538,31 @@ export const fixtures: { [N in DocName]: DocOf<N> } = {
     updatedAt: T0,
     updatedBy: UID_ASHA,
   },
+  dictionaries: {
+    name: 'Deploy settings',
+    description: 'What the orchestrator hands its agents',
+    ownerUid: UID_ASHA,
+    access: { [UID_ASHA]: 'owner' },
+    memberUids: [UID_ASHA],
+    boards: { [BOARD_ID]: 'read' },
+    artifacts: {},
+    agents: { [AGENT_ID]: 'read' },
+    boardIds: [BOARD_ID],
+    artifactIds: [],
+    agentIds: [AGENT_ID],
+    stats: { entries: 2, bytes: 48 },
+    archivedAt: null,
+    createdAt: T0,
+    updatedAt: T0,
+  },
+  dictionaryContent: {
+    entries: [
+      { k: 'API_URL', v: '"https://api.example.com"' },
+      { k: 'limits', v: '{"daily":5}' },
+    ],
+    updatedAt: T0,
+    updatedBy: UID_ASHA,
+  },
 };
 
 /** Phase 3: the question card in the thread (a message with kind 'question'). */
@@ -637,4 +662,6 @@ export const invalidFixtures: { [N in DocName]: unknown } = {
   artifactKv: { value: 1 },
   buckets: { ...fixtures.buckets, boards: { [BOARD_ID]: 'admin' } },
   bucketNodes: { ...fixtures.bucketNodes, path: '/abs/path' },
+  dictionaries: { ...fixtures.dictionaries, agents: { [AGENT_ID]: 'admin' } },
+  dictionaryContent: { ...fixtures.dictionaryContent, entries: [{ k: '.bad', v: '1' }] },
 };

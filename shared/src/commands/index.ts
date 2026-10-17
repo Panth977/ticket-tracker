@@ -15,7 +15,7 @@ import * as tickets from './tickets.js';
 import * as users from './users.js';
 import * as artifacts from '../artifacts/commands.js';
 import * as bucket from '../bucket/commands.js';
-import * as env from '../env/index.js';
+import * as dictionary from '../dictionary/commands.js';
 import * as org from '../org/index.js';
 import * as templates from '../templates/commands.js';
 
@@ -106,11 +106,18 @@ export const COMMANDS = {
   artifactFileDelete: artifacts.artifactFileDelete,
   artifactSourceUrl: artifacts.artifactSourceUrl,
   artifactDataClear: artifacts.artifactDataClear,
+  artifactDataCollections: artifacts.artifactDataCollections,
   artifactBoardAccessSet: artifacts.artifactBoardAccessSet,
   boardArtifactList: artifacts.boardArtifactList,
-  // envs: key/value pairs on boards, artifacts, buckets, agents, orgs
-  envGet: env.envGet,
-  envSet: env.envSet,
+  // dictionaries (docs/plan/dictionary.html): key → JSON entries, granted to boards, artifacts, agents
+  dictionaryCreate: dictionary.dictionaryCreate,
+  dictionaryUpdate: dictionary.dictionaryUpdate,
+  dictionaryDelete: dictionary.dictionaryDelete,
+  dictionaryShare: dictionary.dictionaryShare,
+  dictionaryGrantSet: dictionary.dictionaryGrantSet,
+  dictionaryList: dictionary.dictionaryList,
+  dictionaryGet: dictionary.dictionaryGet,
+  dictionarySet: dictionary.dictionarySet,
   // owners and orgs (agents.html §AC)
   orgCreate: org.orgCreate,
   orgUpdate: org.orgUpdate,

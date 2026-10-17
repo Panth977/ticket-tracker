@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasShell, routes } from './routes';
+import { BOARD_SETTINGS_SECTIONS, hasShell, routes } from './routes';
 
 describe('routes', () => {
   it('builds urls', () => {
@@ -11,6 +11,20 @@ describe('routes', () => {
     // §Y3: Analytics is a section of board settings.
     expect(routes.boardAnalytics('ENG')).toBe('/b/ENG/settings/analytics');
     expect(routes.login('/me')).toBe('/login?next=%2Fme');
+  });
+  it('builds dictionary urls (and Env is gone: Dictionaries replaced it)', () => {
+    expect(routes.dictionaries()).toBe('/dictionary');
+    expect(routes.dictionary('d_abc123')).toBe('/dictionary/d_abc123');
+    expect(routes.dictionarySettings('d_abc123')).toBe('/dictionary/d_abc123/settings/general');
+    expect(routes.dictionarySettings('d_abc123', 'subscribers')).toBe(
+      '/dictionary/d_abc123/settings/subscribers',
+    );
+    expect(routes.boardSettings('ENG', 'dictionaries')).toBe('/b/ENG/settings/dictionaries');
+    expect(routes.artifactSettings('x1', 'dictionaries')).toBe('/x/x1/settings/dictionaries');
+    const ids: string[] = BOARD_SETTINGS_SECTIONS.map((s) => s.id);
+    expect(ids).toContain('dictionaries');
+    expect(ids).not.toContain('env');
+    expect(hasShell('/dictionary/d_abc123')).toBe(true);
   });
   it('knows which screens have the shell', () => {
     expect(hasShell('/')).toBe(true);

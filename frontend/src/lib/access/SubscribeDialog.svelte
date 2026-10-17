@@ -62,7 +62,7 @@
     }
   });
 
-  const ORDER: EntityKind[] = ['board', 'artifact', 'bucket', 'agent'];
+  const ORDER: EntityKind[] = ['board', 'artifact', 'bucket', 'dictionary', 'agent'];
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase();
     return candidates.filter(

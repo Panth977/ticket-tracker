@@ -2,7 +2,7 @@
  * OWNERS AND ORGS on the server (shared/src/org, agents.html §AC):
  *
  *   handles      claim / release a handle (users and orgs, one namespace)
- *   slugs        an artifact's / bucket's URL name, unique per owner
+ *   slugs        an artifact's / bucket's / dictionary's URL name, unique per owner
  *   org roles    who is what in an org; the checks every org command makes
  *   FAN-OUT      syncThing(): make a thing's access say what its owner org
  *                gives — members added at orgRoleOn*(), what the org gave
@@ -30,12 +30,8 @@ import {
   type ThingKind,
   type Uid,
 } from '@tm/shared';
-import {
-  artifactRef,
-  syncArtifactMirror,
-  withMembers as artifactMembers,
-} from '../artifacts/shared.js';
-import { bucketRef, withMembers as bucketMembers } from '../bucket/shared.js';
+import { syncArtifactMirror, withMembers as artifactMembers } from '../artifacts/shared.js';
+import { withMembers as bucketMembers } from '../bucket/shared.js';
 import {
   boardRef,
   deriveAccess,
@@ -46,10 +42,19 @@ import {
 } from '../commands/boardShared.js';
 import { db } from '../db/index.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { provideOrgEnvTarget } from '../env/shared.js';
 import { runTx, type Tx } from '../runtime/tx.js';
 
 export const orgRef = (orgId: string) => db().doc(paths.org(orgId));
+
+/** The collection a thing of this kind lives in. */
+export const thingCollection = (kind: ThingKind): string =>
+  kind === 'board'
+    ? 'boards'
+    : kind === 'artifact'
+      ? 'artifacts'
+      : kind === 'bucket'
+        ? 'buckets'
+        : 'dictionaries';
 export const handleRef = (handle: string) => db().doc(paths.handle(handle));
 
 // ─── orgs ────────────────────────────────────────────────────────────────────
@@ -132,12 +137,12 @@ export async function ensureUserHandle(uid: Uid): Promise<string> {
 
 /** A slug for `name` unique among the owner's things of this kind ('dash', 'dash-2', …). */
 export async function freeSlug(
-  kind: 'artifact' | 'bucket',
+  kind: 'artifact' | 'bucket' | 'dictionary',
   owner: OwnerRef,
   name: string,
   exceptId?: string,
 ): Promise<string> {
-  const col = db().collection(kind === 'artifact' ? 'artifacts' : 'buckets');
+  const col = db().collection(thingCollection(kind));
   const base = slugify(name);
   for (let n = 1; n < 1000; n++) {
     const s = n === 1 ? base : `${base.slice(0, 55)}-${n}`;
@@ -238,7 +243,7 @@ export async function syncThing(
     await syncReaders(id, res.readerUids);
     return;
   }
-  const ref = db().doc(`${kind === 'artifact' ? 'artifacts' : 'buckets'}/${id}`);
+  const ref = db().doc(`${thingCollection(kind)}/${id}`);
   const next = await runTx(async (tx) => {
     const t = (await tx.get(ref)).data() as
       | { access: Record<Uid, string>; ownerUid: Uid; orgGranted?: Record<string, string> }
@@ -302,7 +307,7 @@ export async function grantOwner(kind: ThingKind, id: string, uid: Uid): Promise
     await syncReaders(id, res.readerUids);
     return;
   }
-  const ref = db().doc(`${kind === 'artifact' ? 'artifacts' : 'buckets'}/${id}`);
+  const ref = db().doc(`${thingCollection(kind)}/${id}`);
   const next = await runTx(async (tx) => {
     const t = (await tx.get(ref)).data() as
       | { access: Record<Uid, string>; ownerUid: Uid; orgGranted?: Record<string, string> }
@@ -328,8 +333,8 @@ export async function grantOwner(kind: ThingKind, id: string, uid: Uid): Promise
 /** Every thing an org owns: [kind, id]. */
 export async function thingsOf(owner: OwnerRef): Promise<[ThingKind, string][]> {
   const key = ownerKeyOf(owner);
-  const [boards, artifacts, buckets] = await Promise.all(
-    (['boards', 'artifacts', 'buckets'] as const).map((c) =>
+  const [boards, artifacts, buckets, dictionaries] = await Promise.all(
+    (['boards', 'artifacts', 'buckets', 'dictionaries'] as const).map((c) =>
       db().collection(c).where('ownerKey', '==', key).get(),
     ),
   );
@@ -337,6 +342,7 @@ export async function thingsOf(owner: OwnerRef): Promise<[ThingKind, string][]> 
     ...boards!.docs.map((d) => ['board', d.id] as [ThingKind, string]),
     ...artifacts!.docs.map((d) => ['artifact', d.id] as [ThingKind, string]),
     ...buckets!.docs.map((d) => ['bucket', d.id] as [ThingKind, string]),
+    ...dictionaries!.docs.map((d) => ['dictionary', d.id] as [ThingKind, string]),
   ];
 }
 
@@ -374,19 +380,12 @@ export async function ownerForCreate(
 
 export const ownerKeyOfThing = ownerKeyOf;
 
-// An org's env (shared/src/env): its members read it, its owners and admins write it.
-provideOrgEnvTarget(async (ctx, id, op) => {
-  const org = await loadOrg(id);
-  if (op === 'write') requireOrgRole(org, ctx, 'admin');
-  else if (!orgRoleOf(org, ctx.actor)) throw errors.not_found('No such org');
-  return { id, orgId: null };
-});
-
 /** An owner's handle changed: every thing it owns carries the new one. */
 export async function restampHandle(owner: OwnerRef, handle: string): Promise<void> {
   const things = await thingsOf(owner);
   for (const [kind, id] of things) {
-    const col = kind === 'board' ? 'boards' : kind === 'artifact' ? 'artifacts' : 'buckets';
-    await db().doc(`${col}/${id}`).update({ ownerHandle: handle });
+    await db()
+      .doc(`${thingCollection(kind)}/${id}`)
+      .update({ ownerHandle: handle });
   }
 }

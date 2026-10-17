@@ -24,13 +24,16 @@
   import SubscriptionsSection from '$lib/board/settings/SubscriptionsSection.svelte';
   import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
-  import EnvEditor from '$lib/env/EnvEditor.svelte';
+  import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
 
   const s = useSettings();
   const section = $derived(page.params.section ?? 'general');
   const known = $derived(BOARD_SETTINGS_SECTIONS.some((x) => x.id === section));
   // Renamed sections (lib/access): old links still land.
-  const MOVED: Record<string, 'subscriptions'> = { bucket: 'subscriptions' };
+  const MOVED: Record<string, 'subscriptions' | 'dictionaries'> = {
+    bucket: 'subscriptions',
+    env: 'dictionaries',
+  };
   $effect(() => {
     const to = MOVED[section];
     if (to) void goto(routes.boardSettings(s.board.key, to), { replaceState: true });
@@ -71,12 +74,17 @@
     <AggregatesSection />
   {:else if section === 'analytics'}
     <AnalyticsSection />
-  {:else if section === 'env'}
+  {:else if section === 'dictionaries'}
     <Section
-      title="Env"
-      description="Key/value pairs for this board, mostly for orchestrators: the workspaces orch puts them in its agents' environment. Its org's pairs come first; a pair here with the same name wins."
+      title="Dictionaries"
+      description="The dictionaries this board uses. Read: everyone on the board and its agents can read their entries, and orchestrators hand the env-style keys (API_URL…) to agents as environment. Write: editors, admins and agents with write can also change entries. Nobody gets more than their role here allows. You can add dictionaries you own; any board admin can remove one."
     >
-      <EnvEditor kind="board" id={s.board.id} canEdit={s.isAdmin} />
+      <DictionarySubscriptions
+        name="board-dictionaries"
+        target={{ boardId: s.board.id }}
+        manages={s.isAdmin}
+        frozen={s.board.archivedAt != null ? 'The board is archived' : null}
+      />
     </Section>
   {:else if section === 'danger'}
     <DangerSection />

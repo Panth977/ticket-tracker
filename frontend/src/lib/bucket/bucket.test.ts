@@ -140,8 +140,8 @@ describe('store helpers', () => {
       'general',
       'people',
       'subscribers',
-      'env',
     ]);
+    expect(bucketSettingsFor('editor').map((s) => s.id)).toEqual(['subscribers']);
     expect(bucketSettingsFor('viewer').map((s) => s.id)).toEqual(['subscribers']);
     expect(bucketSettingsFor(null)).toEqual([]);
   });

@@ -1,5 +1,5 @@
 /**
- * ownerTransfer (§AC) — move a board, artifact or bucket to another owner,
+ * ownerTransfer (§AC) — move a board, artifact, bucket or dictionary to another owner,
  * like transferring a GitHub repo: to a person (yourself or anyone else, who
  * becomes its admin / owner) or to an org where you are an owner or admin.
  * Its people stay; the old org's grants are taken back and the new org's
@@ -9,6 +9,7 @@
 import { errors, isAgentId, ownerKeyOf, paths, roleOf, type OwnerRef } from '@tm/shared';
 import { artifactRef } from '../artifacts/shared.js';
 import { bucketRef, reachFor } from '../bucket/shared.js';
+import { dictionaryRef } from '../dictionary/shared.js';
 import { boardRef } from './boardShared.js';
 import { defineCommand } from './_registry.js';
 import { db } from '../db/index.js';
@@ -42,6 +43,12 @@ export default defineCommand('ownerTransfer', async (ctx, input) => {
     if (a.access[ctx.actor] !== 'owner') throw errors.forbidden('Only its owners can move it');
     name = a.name;
     from = a.owner;
+  } else if (kind === 'dictionary') {
+    const d = (await dictionaryRef(id).get()).data();
+    if (!d) throw errors.not_found('No such dictionary');
+    if (d.access[ctx.actor] !== 'owner') throw errors.forbidden('Only its owners can move it');
+    name = d.name;
+    from = d.owner;
   } else {
     const m = (await bucketRef(id).get()).data();
     if (!m) throw errors.not_found('No such bucket');
@@ -72,7 +79,13 @@ export default defineCommand('ownerTransfer', async (ctx, input) => {
   };
   if (kind !== 'board') fields.slug = await freeSlug(kind, to, name, id);
   const ref =
-    kind === 'board' ? boardRef(id) : kind === 'artifact' ? artifactRef(id) : bucketRef(id);
+    kind === 'board'
+      ? boardRef(id)
+      : kind === 'artifact'
+        ? artifactRef(id)
+        : kind === 'dictionary'
+          ? dictionaryRef(id)
+          : bucketRef(id);
   await (ref as ReturnType<typeof boardRef>).update(fields as never);
   // The old org's grants go (null org), then the new one's come.
   await syncThing(kind, id, null);

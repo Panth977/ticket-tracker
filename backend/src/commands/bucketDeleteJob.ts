@@ -4,9 +4,7 @@
  */
 import { purgeBucket } from '../bucket/purge.js';
 import { defineTask } from '../runtime/functions.js';
-import { dropEnv } from '../env/shared.js';
 
 defineTask('bucketDelete', async ({ bucketId }) => {
   await purgeBucket(bucketId);
-  await dropEnv('bucket', bucketId);
 });

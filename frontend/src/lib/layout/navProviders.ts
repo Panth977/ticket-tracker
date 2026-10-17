@@ -5,6 +5,7 @@
 import { get } from 'svelte/store';
 import {
   Bell,
+  BookA,
   Brain,
   FolderPlus,
   Layers,
@@ -18,10 +19,12 @@ import {
 } from 'lucide-svelte';
 import {
   BUCKET_DEFAULT_INDICATOR,
+  DICTIONARY_DEFAULT_INDICATOR,
   descriptionText,
   type Artifact,
   type Board,
   type Bucket,
+  type Dictionary,
   type Org,
 } from '@tm/shared';
 import { filterItems, palette, type PaletteItem } from '$lib/keyboard/palette.svelte';
@@ -37,6 +40,8 @@ export function registerNavProviders(
   orgs: () => Readable<QueryState<Org>> | null = () => null,
   /** My buckets (bucket.html §F): ⌘K opens one by name. */
   buckets: () => Readable<QueryState<Bucket>> | null = () => null,
+  /** My dictionaries (dictionary.html): ⌘K opens one by name. */
+  dictionaries: () => Readable<QueryState<Dictionary>> | null = () => null,
 ): () => void {
   const screens: PaletteItem[] = [
     {
@@ -180,6 +185,27 @@ export function registerNavProviders(
             indicator: { of: m, seed: m.id, fallback: BUCKET_DEFAULT_INDICATOR },
             href: routes.bucket(m.id),
             keywords: 'bucket files bucket',
+          })),
+        );
+      },
+    }),
+    palette.register({
+      id: 'dictionaries',
+      group: 'Dictionaries',
+      order: 14,
+      search: (q) => {
+        const s = dictionaries();
+        const list = s ? get(s).data.filter((d) => d.archivedAt == null) : [];
+        return filterItems(
+          q,
+          list.map((d) => ({
+            id: `d-${d.id}`,
+            label: d.name,
+            hint: d.description ?? undefined,
+            icon: BookA,
+            indicator: { of: d, seed: d.id, fallback: DICTIONARY_DEFAULT_INDICATOR },
+            href: routes.dictionary(d.id),
+            keywords: 'dictionary env settings keys values',
           })),
         );
       },

@@ -283,7 +283,6 @@ describe('MCP round trip (SDK client)', () => {
       'assign_ticket',
       'board_pref_set',
       'create_ticket',
-      'env_get',
       'get_aggregates',
       'get_board',
       'get_board_settings',

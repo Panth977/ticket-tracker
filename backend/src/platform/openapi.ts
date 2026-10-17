@@ -40,6 +40,8 @@ import {
   RestBucketFileQuerySchema,
   RestBucketListQuerySchema,
   RestBucketTreeQuerySchema,
+  RestDictionaryListQuerySchema,
+  RestDictionarySetBodySchema,
   COMMANDS,
   RestArtifactFileUploadResSchema,
   RestArtifactFileUrlResSchema,
@@ -126,6 +128,9 @@ const COMPONENTS: Record<string, z.ZodTypeAny> = {
   BucketFile: COMMANDS.bucketFileRead.res,
   BucketFileWritten: COMMANDS.bucketFileWrite.res,
   BucketDeleted: COMMANDS.bucketNodeDelete.res,
+  DictionaryList: COMMANDS.dictionaryList.res,
+  DictionaryEntries: COMMANDS.dictionaryGet.res,
+  DictionarySet: RestDictionarySetBodySchema,
   Me: RestMeResSchema,
   Board: RestBoardResSchema,
   BoardList: RestBoardListResSchema,
@@ -269,8 +274,8 @@ const IO: Record<string, RouteIO> = {
     query: RestBoardQuerySchema,
     res: 'Env',
     notes:
-      "agents.html §AC: the board's effective env (its org's pairs, then its own), the agent's own " +
-      "(agent tokens; null otherwise), and `env`, both merged with the agent's winning. Plain text — not for secrets.",
+      'dictionary.html §E: the dictionaries granted to the board, then those granted to the calling agent (agent tokens; null otherwise), ' +
+      "each set by name; `env` merges them with the agent's winning. Env-style keys only; non-string values as JSON text. Plain text — not for secrets.",
   },
   'GET /v1/boards': {
     res: 'BoardList',
@@ -568,6 +573,22 @@ const IO: Record<string, RouteIO> = {
   'DELETE /v1/artifacts/{id}/data/files/{path}': {
     res: 'Ok',
     notes: `${DATA_WRITE} Deleting a file that is not there is fine.`,
+  },
+  'GET /v1/dictionaries': {
+    query: RestDictionaryListQuerySchema,
+    res: 'DictionaryList',
+    notes: 'Each dictionary says what YOU may do there: reach manage | write | read.',
+  },
+  'GET /v1/dictionaries/{id}': {
+    res: 'DictionaryEntries',
+    notes:
+      'Every entry, in order; values are JSON. `entriesUpdatedAt` is what PATCH takes as expectedUpdatedAt.',
+  },
+  'PATCH /v1/dictionaries/{id}/entries': {
+    body: 'DictionarySet',
+    res: 'DictionaryEntries',
+    notes:
+      '`set` changes some keys (a null value removes one), `replace` gives them all, in order. 409 when expectedUpdatedAt is stale.',
   },
   'GET /v1/buckets': {
     query: RestBucketListQuerySchema,

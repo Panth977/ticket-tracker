@@ -1,10 +1,10 @@
 {
   "name": "TaskManager",
   "description": "Boards, tickets and threads that people and agents share. One token, three doors: SDK, REST, MCP.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "apiVersion": "v1",
-  "updated": "2026-10-16",
-  "contentSha256": "bfda43b7e96c54cefae929bdd648686fa8ad30abb71dd95f5d64fab0fe0fa63a",
+  "updated": "2026-10-17",
+  "contentSha256": "937ee9f7c871397ca459f156030a4c59eb29021d419a7edb250b5cb36609110a",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -289,7 +289,9 @@
         "artifacts:read",
         "artifacts:write",
         "bucket:read",
-        "bucket:write"
+        "bucket:write",
+        "dictionary:read",
+        "dictionary:write"
       ],
       "boardRoles": [
         "admin",
@@ -449,7 +451,9 @@
       "artifacts:read",
       "artifacts:write",
       "bucket:read",
-      "bucket:write"
+      "bucket:write",
+      "dictionary:read",
+      "dictionary:write"
     ]
   },
   "events": [
@@ -582,7 +586,7 @@
       "scopes": [
         "board:read"
       ],
-      "summary": "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment"
+      "summary": "The dictionaries granted to the board and, for an agent token, to the agent, as process environment (env-style keys; non-string values as JSON); `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment"
     },
     {
       "method": "GET",
@@ -976,6 +980,32 @@
         "bucket:write"
       ],
       "summary": "Delete a bucket file, or a folder with everything in it"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dictionaries",
+      "scopes": [
+        "dictionary:read",
+        "dictionary:write"
+      ],
+      "summary": "The dictionaries this credential can reach (?board= narrows to one board’s)"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dictionaries/{id}",
+      "scopes": [
+        "dictionary:read",
+        "dictionary:write"
+      ],
+      "summary": "One dictionary and its entries, in order (values are JSON)"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/dictionaries/{id}/entries",
+      "scopes": [
+        "dictionary:write"
+      ],
+      "summary": "Change entries: { set: { key: value | null } } or { replace: [{ key, value }] }"
     },
     {
       "method": "GET",
@@ -1447,6 +1477,10 @@
     "requestsPerDay": 10000
   },
   "changelog": [
+    {
+      "version": "2.2.0",
+      "date": "2026-10-17"
+    },
     {
       "version": "2.1.0",
       "date": "2026-10-16"

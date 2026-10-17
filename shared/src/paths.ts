@@ -69,6 +69,9 @@ export const COLLECTIONS = {
   /** Bucket (bucket.html §A): buckets/{id} and buckets/{id}/nodes/{nodeId}. */
   buckets: 'buckets',
   nodes: 'nodes',
+  /** Dictionary (dictionary.html §A): dictionaries/{id} and dictionaries/{id}/content/entries. */
+  dictionaries: 'dictionaries',
+  content: 'content',
   /** Command idempotency records: _idem/{uid}_{clientId}, 24h TTL. */
   idem: '_idem',
   /** Long-running job parameters (accountExport's queued job). Server-only. */
@@ -121,6 +124,11 @@ export const paths = {
   bucketNodes: (bucketId: string) => `${C.buckets}/${seg(bucketId)}/${C.nodes}`,
   bucketNode: (bucketId: string, nodeId: string) =>
     `${C.buckets}/${seg(bucketId)}/${C.nodes}/${seg(nodeId)}`,
+  /** dictionary.html §A */
+  dictionaries: () => C.dictionaries,
+  dictionary: (dictionaryId: string) => `${C.dictionaries}/${seg(dictionaryId)}`,
+  dictionaryContent: (dictionaryId: string) =>
+    `${C.dictionaries}/${seg(dictionaryId)}/${C.content}/entries`,
 
   // top-level
   invites: () => C.invites,

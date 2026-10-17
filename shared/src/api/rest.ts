@@ -34,7 +34,6 @@ import { ApiKeyKindSchema } from '../schema/user.js';
 import { AgentBoardRoleSchema } from '../schema/board.js';
 import { AGENT_DESCRIPTION_MAX, AGENT_NAME_MAX, AGENT_SYSTEM_PROMPT_MAX } from '../schema/agent.js';
 import { MAX_API_UPLOAD_BYTES } from '../logic/files.js';
-import { EnvVarsSchema } from '../env/index.js';
 import { MAX_ACK_IDS } from '../commands/agents.js';
 import { BOARD_TEMPLATES } from '../commands/boards.js';
 import {
@@ -350,11 +349,23 @@ export const RestAggregatesQuerySchema = z.object({
 });
 export const RestAggregatesResSchema = PublicAggBucketsSchema;
 
-/** GET /v1/env (agents.html §AC): the board's effective env, the agent's, and both merged. */
+/**
+ * GET /v1/env (dictionary.html §E): the dictionaries granted to the board and,
+ * for an agent token, to the agent — merged into process environment, the
+ * agent's winning. Only env-style keys (ENV_NAME_RE) are in `env`.
+ */
+const EnvVarsSchema = z.record(z.string(), z.string());
 export const RestEnvResSchema = z.object({
+  /** The board's dictionaries, merged by name (a later name wins a key). */
   board: EnvVarsSchema,
+  /** The agent's own dictionaries, merged the same way; null for a person. */
   agent: EnvVarsSchema.nullable(),
+  /** board, then agent: what an orchestrator puts in its agent's environment. */
   env: EnvVarsSchema,
+  /** Where it came from, weakest first. */
+  dictionaries: z.array(
+    z.object({ id: z.string(), name: z.string(), via: z.enum(['board', 'agent']) }),
+  ),
 });
 
 // ───────────────────────── files ─────────────────────────
@@ -851,6 +862,19 @@ export const RestBucketFileQuerySchema = z.object({
     .optional(),
 });
 
+// ───────────────────────── dictionary (dictionary.html §C) ─────────────────────────
+
+/** GET /v1/dictionaries?board=&include_archived= */
+export const RestDictionaryListQuerySchema = RestBucketListQuerySchema;
+/** PATCH /v1/dictionaries/{id}/entries — what dictionarySet takes, without the id. */
+export const RestDictionarySetBodySchema = z
+  .object({
+    set: z.record(z.string(), z.unknown()).optional(),
+    replace: z.array(z.object({ key: z.string(), value: z.unknown() })).optional(),
+    expectedUpdatedAt: z.number().nullable().optional(),
+  })
+  .strict();
+
 // ───────────────────────── search, webhooks ─────────────────────────
 
 /** GET /v1/search?q= */
@@ -954,7 +978,7 @@ export const REST_ROUTES = [
     scopes: ['board:read'],
     board: true,
     summary:
-      "The board's effective env (its org's pairs, then its own) and, for an agent token, the agent's own; `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment",
+      "The dictionaries granted to the board and, for an agent token, to the agent, as process environment (env-style keys; non-string values as JSON); `env` merges them, the agent's winning — what an orchestrator puts in its agent's process environment",
   },
   {
     method: 'GET',
@@ -1264,6 +1288,27 @@ export const REST_ROUTES = [
     path: '/v1/buckets/{id}/files/{path}',
     scopes: ['bucket:write'],
     summary: 'Delete a bucket file, or a folder with everything in it',
+  },
+  // dictionary (docs/plan/dictionary.html §C). An account token reaches the
+  // dictionaries its person reaches, an agent token those granted to it or to
+  // a board it is on.
+  {
+    method: 'GET',
+    path: '/v1/dictionaries',
+    scopes: ['dictionary:read', 'dictionary:write'],
+    summary: 'The dictionaries this credential can reach (?board= narrows to one board’s)',
+  },
+  {
+    method: 'GET',
+    path: '/v1/dictionaries/{id}',
+    scopes: ['dictionary:read', 'dictionary:write'],
+    summary: 'One dictionary and its entries, in order (values are JSON)',
+  },
+  {
+    method: 'PATCH',
+    path: '/v1/dictionaries/{id}/entries',
+    scopes: ['dictionary:write'],
+    summary: 'Change entries: { set: { key: value | null } } or { replace: [{ key, value }] }',
   },
   // artifact data (agents.html §AA4): the artifact's own Firestore, RTDB and
   // files, behind the same fence as the page's driver. Reads: data ≥ read (an

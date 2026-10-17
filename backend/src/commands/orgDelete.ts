@@ -2,7 +2,6 @@
 import { errors } from '@tm/shared';
 import { runTx } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
-import { dropEnv } from '../env/shared.js';
 import { handleRef, loadOrg, orgRef, requireOrgRole, thingsOf } from '../org/shared.js';
 
 export default defineCommand('orgDelete', async (ctx, input) => {
@@ -16,6 +15,5 @@ export default defineCommand('orgDelete', async (ctx, input) => {
     tx.delete(orgRef(input.orgId));
     tx.delete(handleRef(org.handle));
   });
-  await dropEnv('org', input.orgId);
   return { ok: true as const };
 });

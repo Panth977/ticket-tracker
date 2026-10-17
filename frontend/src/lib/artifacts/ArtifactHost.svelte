@@ -1,7 +1,7 @@
 <!--
   THE HOST PAGE of one artifact (docs/plan/artifacts.html §D3) — /x/{id}.
 
-    [◆ Name · build a1B2c3 · 2 hours ago]        [Reload] [Share] [Settings] [⤢]
+    [◆ Name │ Website DB JSON Bucket · build a1B2c3]   [Reload] [Share] [Settings] [⤢]
     ┌───────────────────────────────────────────────────────────────────────┐
     │ <iframe sandbox …  src = the build on the USERCONTENT origin>         │
     └───────────────────────────────────────────────────────────────────────┘
@@ -15,6 +15,10 @@
 
   Mounted under {#key artifactId}: one broker, one iframe, one set of timers
   per artifact, all gone on unmount.
+
+  TABS (./tabs, ?tab=): the Website is this iframe; the others look at what the
+  artifact keeps (its DB, its RTDB as JSON, its buckets). The iframe stays
+  mounted behind them, so going back to the Website never reloads it.
 -->
 <script lang="ts">
   import { APP_NAME } from '$lib/brand';
@@ -43,11 +47,13 @@
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import Tabs from '$lib/ui/Tabs.svelte';
   import { switcherFor } from '$lib/orgs/switcherStore';
   import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
   import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import { createBroker, type Broker } from './broker';
   import { firebaseBackend } from './firebaseBackend';
+  import { ARTIFACT_TABS, artifactTabHref, parseArtifactTab } from './tabs';
   import {
     artifactBuild,
     artifactDoc,
@@ -100,6 +106,18 @@
       : null,
   );
   const settingsSection = $derived(firstSettingsSection(role));
+
+  // ── tabs: ?tab= (none = the website) ───────────────────────────────────────
+  const tab = $derived(parseArtifactTab(page.url.searchParams.get('tab')));
+  const onSite = $derived(tab.id === 'website');
+  const tabItems = $derived(
+    ARTIFACT_TABS.map((t) => ({
+      id: t.id,
+      label: t.label,
+      icon: t.icon,
+      href: artifactTabHref(page.url, t.id),
+    })),
+  );
 
   // ── the broker: one for the life of this component ─────────────────────────
   let broker: Broker | null = null;
@@ -318,7 +336,13 @@
             >Archived</span
           >
         {/if}
-        {#if opened}
+        <Tabs
+          items={tabItems}
+          value={tab.id}
+          label="Artifact"
+          class="min-w-0 shrink md:border-l md:border-line md:pl-2"
+        />
+        {#if opened && onSite}
           <span
             class="hidden min-w-0 shrink truncate text-xs text-subtle sm:inline"
             title={$buildQ.data?.message ?? `Build ${opened.buildId}`}
@@ -329,7 +353,7 @@
           </span>
         {/if}
         <span class="flex-1"></span>
-        {#if opened}
+        {#if opened && onSite}
           <IconButton
             icon={RotateCw}
             label="Reload the artifact"
@@ -353,7 +377,7 @@
             href={routes.artifactSettings(artifactId, settingsSection)}
           />
         {/if}
-        {#if opened}
+        {#if opened && onSite}
           <IconButton icon={Maximize} label="Full screen" onclick={() => (full = true)} />
         {/if}
       </header>
@@ -371,54 +395,71 @@
       </div>
     {/if}
 
-    {#if failure}
-      <EmptyState
-        icon={TriangleAlert}
-        title="Couldn't open this artifact"
-        description={failure.message ??
-          'Something went wrong. Check your connection and try again.'}
-      >
-        {#snippet action()}<Button onclick={() => ((failure = null), openBuild())}>Try again</Button
-          >{/snippet}
-      </EmptyState>
-    {:else if !art.currentBuild}
-      <!-- Created, nothing published yet (§A: a build is a folder with an index.html). -->
-      <EmptyState
-        icon={PackageOpen}
-        title="Nothing published yet"
-        description={artifactCan.publish(role)
-          ? 'An artifact is a static folder with an index.html at its root. Publish one from the SDK, MCP or REST — or drop a zip on the Builds tab. Its backend is one script tag: window.BackendDriver.'
-          : 'Its owner has not published a build yet. It will appear here when they do.'}
-      >
-        {#snippet action()}
-          <div class="flex flex-wrap justify-center gap-2">
-            {#if artifactCan.publish(role)}
-              <Button variant="primary" href={routes.artifactSettings(artifactId, 'builds')}
-                >Publish a build</Button
+    {#if !onSite}
+      {#if tab.data && !artifactCan.publish(role)}
+        <EmptyState
+          icon={Lock}
+          title="Only the artifact's owner and editors can see its data"
+          description="The Website tab shows you everything this artifact shares with you."
+        />
+      {:else if tab.panel}
+        {#key tab.id}
+          <tab.panel {artifactId} {role} />
+        {/key}
+      {/if}
+    {/if}
+
+    <!-- The website: hidden, never unmounted, while another tab is open. -->
+    <div class="flex min-h-0 flex-1 flex-col {onSite ? '' : 'hidden'}">
+      {#if failure}
+        <EmptyState
+          icon={TriangleAlert}
+          title="Couldn't open this artifact"
+          description={failure.message ??
+            'Something went wrong. Check your connection and try again.'}
+        >
+          {#snippet action()}<Button onclick={() => ((failure = null), openBuild())}
+              >Try again</Button
+            >{/snippet}
+        </EmptyState>
+      {:else if !art.currentBuild}
+        <!-- Created, nothing published yet (§A: a build is a folder with an index.html). -->
+        <EmptyState
+          icon={PackageOpen}
+          title="Nothing published yet"
+          description={artifactCan.publish(role)
+            ? 'An artifact is a static folder with an index.html at its root. Publish one from the SDK, MCP or REST — or drop a zip on the Builds tab. Its backend is one script tag: window.BackendDriver.'
+            : 'Its owner has not published a build yet. It will appear here when they do.'}
+        >
+          {#snippet action()}
+            <div class="flex flex-wrap justify-center gap-2">
+              {#if artifactCan.publish(role)}
+                <Button variant="primary" href={routes.artifactSettings(artifactId, 'builds')}
+                  >Publish a build</Button
+                >
+              {/if}
+              <!-- Static pages, not SPA routes: a full navigation, in a new tab. -->
+              <a
+                class="inline-flex h-8 items-center rounded-md border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
+                href={routes.integrate()}
+                target="_blank"
+                rel="noopener">How to publish</a
               >
-            {/if}
-            <!-- Static pages, not SPA routes: a full navigation, in a new tab. -->
-            <a
-              class="inline-flex h-8 items-center rounded-md border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
-              href={routes.integrate()}
-              target="_blank"
-              rel="noopener">How to publish</a
-            >
-            <a
-              class="inline-flex h-8 items-center rounded-md border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
-              href={routes.backendDriver()}
-              target="_blank"
-              rel="noopener">The BackendDriver</a
-            >
-          </div>
-        {/snippet}
-      </EmptyState>
-    {:else if !opened}
-      <div class="flex flex-1 items-center justify-center text-sm text-muted" aria-busy="true">
-        <AppWindow size={16} class="mr-2" aria-hidden="true" /> Opening…
-      </div>
-    {:else}
-      <!--
+              <a
+                class="inline-flex h-8 items-center rounded-md border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
+                href={routes.backendDriver()}
+                target="_blank"
+                rel="noopener">The BackendDriver</a
+              >
+            </div>
+          {/snippet}
+        </EmptyState>
+      {:else if !opened}
+        <div class="flex flex-1 items-center justify-center text-sm text-muted" aria-busy="true">
+          <AppWindow size={16} class="mr-2" aria-hidden="true" /> Opening…
+        </div>
+      {:else}
+        <!--
         THE SANDBOX. No allow-same-origin, ever: with it the artifact would run
         on the usercontent origin proper and could keep state there across
         artifacts; without it the origin is opaque (§D1). The usercontent site
@@ -435,19 +476,20 @@
         no-referrer keeps this page's URL (and so the artifact id) out of the
         requests the artifact makes.
       -->
-      {#key generation}
-        <iframe
-          bind:this={frameEl}
-          title={art.name}
-          src={opened.contentUrl}
-          sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-modals"
-          referrerpolicy="no-referrer"
-          allow="fullscreen; clipboard-write; camera 'none'; microphone 'none'; geolocation 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; midi 'none'; clipboard-read 'none'; publickey-credentials-get 'none'"
-          class="min-h-0 w-full flex-1 border-0 bg-white"
-          data-build={opened.buildId}
-        ></iframe>
-      {/key}
-    {/if}
+        {#key generation}
+          <iframe
+            bind:this={frameEl}
+            title={art.name}
+            src={opened.contentUrl}
+            sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-modals"
+            referrerpolicy="no-referrer"
+            allow="fullscreen; clipboard-write; camera 'none'; microphone 'none'; geolocation 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; midi 'none'; clipboard-read 'none'; publickey-credentials-get 'none'"
+            class="min-h-0 w-full flex-1 border-0 bg-white"
+            data-build={opened.buildId}
+          ></iframe>
+        {/key}
+      {/if}
+    </div>
 
     {#if full}
       <!-- Esc cannot reach us while the artifact has focus, so there is always

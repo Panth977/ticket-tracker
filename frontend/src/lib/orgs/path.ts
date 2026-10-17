@@ -1,19 +1,20 @@
 /**
  * What an app URL names (agents.html §AC): the old /b/{KEY}, /x/{id},
- * /bucket/{id} and the owner-first /{handle}/b/{KEY}, /{handle}/x/{slug},
- * /{handle}/bucket/{slug}. `ref` is a KEY, an id or a slug.
+ * /bucket/{id}, /dictionary/{id} and the owner-first /{handle}/b/{KEY},
+ * /{handle}/x/{slug}, /{handle}/bucket/{slug}, /{handle}/dictionary/{slug}.
+ * `ref` is a KEY, an id or a slug.
  */
 import { RESERVED_HANDLES } from '@tm/shared';
 
 export interface ThingPath {
-  kind: 'board' | 'artifact' | 'bucket';
+  kind: 'board' | 'artifact' | 'bucket' | 'dictionary';
   ref: string;
   handle: string | null;
   /** Whatever follows (/settings/people, /{viewId} …), with a leading '/', or ''. */
   rest: string;
 }
 
-const KIND = { b: 'board', x: 'artifact', bucket: 'bucket' } as const;
+const KIND = { b: 'board', x: 'artifact', bucket: 'bucket', dictionary: 'dictionary' } as const;
 
 export function parseThingPath(pathname: string): ThingPath | null {
   const segs = pathname.split('/').filter(Boolean);

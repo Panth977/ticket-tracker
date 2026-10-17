@@ -20,6 +20,7 @@ import {
   API_KEY_EXPIRY_DAYS,
   ARTIFACT_SCOPES,
   BUCKET_SCOPES,
+  DICTIONARY_SCOPES,
   BOARD_TOKEN_PRESETS,
   isAccountScope,
   presetOf,
@@ -189,10 +190,16 @@ export const BUCKET_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
   title: 'Bucket',
   scopes: [...BUCKET_SCOPES],
 };
+/** Dictionaries (dictionary.html §C) — account tokens only, like buckets. */
+export const DICTIONARY_SCOPE_SECTION: { title: string; scopes: Scope[] } = {
+  title: 'Dictionaries',
+  scopes: [...DICTIONARY_SCOPES],
+};
 /** Not a board scope: dropped when an account token becomes a board token. */
 const isArtifactScope = (s: string): boolean =>
   (ARTIFACT_SCOPES as readonly string[]).includes(s) ||
-  (BUCKET_SCOPES as readonly string[]).includes(s);
+  (BUCKET_SCOPES as readonly string[]).includes(s) ||
+  (DICTIONARY_SCOPES as readonly string[]).includes(s);
 /** May this kind of token carry artifacts:* at all? */
 export const artifactScopesFit = (d: Pick<TokenDraft, 'kind'>): boolean => d.kind === 'account';
 

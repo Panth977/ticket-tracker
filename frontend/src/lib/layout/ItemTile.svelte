@@ -1,5 +1,5 @@
 <!--
-  A card for an artifact or a bucket, drawn exactly like a board's
+  A card for an artifact, a bucket or a dictionary, drawn exactly like a board's
   (account/BoardTile) so an owner's page reads the same throughout: its
   indicator, a badge, the name, a line about it, small facts at the bottom.
 -->
@@ -24,8 +24,8 @@
     meta?: Snippet;
     /** The left stripe; default: the indicator's colour. */
     color?: string;
-    /** data-artifact / data-bucket = the id, for the e2e suites. */
-    dataKind: 'artifact' | 'bucket';
+    /** data-artifact / data-bucket / data-dictionary = the id, for the e2e suites. */
+    dataKind: 'artifact' | 'bucket' | 'dictionary';
     id: string;
   }
   let {

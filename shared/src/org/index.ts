@@ -37,6 +37,8 @@ export const RESERVED_HANDLES = new Set([
   'me',
   'bucket',
   'buckets',
+  'dictionary',
+  'dictionaries',
   'inbox',
   'login',
   'logout',
@@ -258,7 +260,7 @@ export const orgMemberSet = defineCommand({
   res: OkResSchema,
 });
 
-export const THING_KINDS = ['board', 'artifact', 'bucket'] as const;
+export const THING_KINDS = ['board', 'artifact', 'bucket', 'dictionary'] as const;
 export type ThingKind = (typeof THING_KINDS)[number];
 export const ThingRefSchema = z.object({
   kind: z.enum(THING_KINDS),

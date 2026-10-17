@@ -98,7 +98,16 @@
   import UploadTray from './UploadTray.svelte';
   import { filesFromDrop, filesFromInput, bucketUploads } from './upload.svelte';
 
-  let { bucketId }: { bucketId: string } = $props();
+  interface Props {
+    bucketId: string;
+    /**
+     * Where ?path= lives. The bucket's own page by default; an artifact's
+     * Bucket tab passes its own URL, so browsing never leaves the artifact
+     * (and the host keeps the page title).
+     */
+    link?: (path: string | null) => string;
+  }
+  let { bucketId, link }: Props = $props();
 
   const uid = $derived(auth.uid);
   const docQ = $derived(bucketDoc(bucketId));
@@ -144,7 +153,7 @@
 
   function go(p: string, opts: { mode?: FileMode; replace?: boolean } = {}) {
     if (opts.mode) mode = opts.mode;
-    void goto(routes.bucket(bucketId, p || null), {
+    void goto((link ?? ((x) => routes.bucket(bucketId, x)))(p || null), {
       keepFocus: true,
       noScroll: true,
       replaceState: !!opts.replace,
@@ -472,7 +481,9 @@
 </script>
 
 <svelte:window onresize={measure} />
-<svelte:head><title>{mem?.name ?? 'Bucket'} · {APP_NAME}</title></svelte:head>
+<svelte:head>
+  {#if !link}<title>{mem?.name ?? 'Bucket'} · {APP_NAME}</title>{/if}
+</svelte:head>
 
 {#if $docQ.error || (!$docQ.loading && !mem)}
   <EmptyState

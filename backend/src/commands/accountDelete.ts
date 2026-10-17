@@ -26,6 +26,12 @@ import { applyAccess } from './boardAccessSet.js';
 import { adminCount, afterBoardDeleted, deleteBoardTx, loadBoard } from './boardShared.js';
 import { newUserDoc, userRef } from './profileShared.js';
 import { bucketsCol, bucketRef, withMembers } from '../bucket/shared.js';
+import {
+  contentRef,
+  dictionariesCol,
+  dictionaryRef,
+  withMembers as dictionaryMembers,
+} from '../dictionary/shared.js';
 
 export default defineCommand('accountDelete', async (ctx) => {
   const uid = ctx.actor;
@@ -81,6 +87,21 @@ export default defineCommand('accountDelete', async (ctx) => {
       const access = { ...m.access };
       delete access[uid];
       await bucketRef(d.id).update({ ...withMembers(access), updatedAt: ctx.now });
+    }
+  }
+
+  // dictionary.html: the dictionaries they own themselves go; an org's stay
+  // with the org. Their role on anyone else's is taken away.
+  const dicts = await dictionariesCol().where('memberUids', 'array-contains', uid).get();
+  for (const s of dicts.docs) {
+    const d = s.data();
+    if (d.ownerUid === uid && d.owner?.kind !== 'org') {
+      await contentRef(s.id).delete();
+      await dictionaryRef(s.id).delete();
+    } else {
+      const access = { ...d.access };
+      delete access[uid];
+      await dictionaryRef(s.id).update({ ...dictionaryMembers(access), updatedAt: ctx.now });
     }
   }
 

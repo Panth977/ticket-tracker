@@ -26,6 +26,7 @@
   import { registerNavProviders } from './navProviders';
   import { myOrgs } from '$lib/orgs/store';
   import { myBuckets } from '$lib/bucket/store';
+  import { myDictionaries } from '$lib/dictionary/store';
   import { routes } from './routes';
 
   let { children }: { children: Snippet } = $props();
@@ -38,6 +39,7 @@
   const artifacts = $derived(myArtifacts(auth.uid));
   const orgs = $derived(myOrgs(auth.uid));
   const buckets = $derived(myBuckets(auth.uid));
+  const dictionaries = $derived(myDictionaries(auth.uid));
 
   $effect(() =>
     registerNavProviders(
@@ -45,6 +47,7 @@
       () => artifacts,
       () => orgs,
       () => buckets,
+      () => dictionaries,
     ),
   );
   $effect(() =>

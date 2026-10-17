@@ -99,16 +99,16 @@ export async function subscribe(
 }
 
 /**
- * After creating an artifact or a bucket the app lands on its owner-first URL
- * (/{owner}/x/{slug}, /{owner}/bucket/{slug}; agents.html §AC). Wait for it
+ * After creating an artifact, a bucket or a dictionary the app lands on its owner-first URL
+ * (/{owner}/x/{slug}, /{owner}/bucket/{slug}, /{owner}/dictionary/{slug}; agents.html §AC). Wait for it
  * and name the thing's id, as its owner resolves it.
  */
 export async function thingIdAt(
   page: Page,
   who: Person,
-  kind: 'artifact' | 'bucket',
+  kind: 'artifact' | 'bucket' | 'dictionary',
 ): Promise<string> {
-  const seg = kind === 'bucket' ? 'bucket' : 'x';
+  const seg = kind === 'artifact' ? 'x' : kind;
   await page.waitForURL((u) => new RegExp(`^/[^/]+/${seg}/[^/]+$`).test(u.pathname));
   const [, handle, , slug] = new URL(page.url()).pathname.split('/');
   const r = await call(who, 'pathResolve', { handle: handle!, kind, slug: slug! });

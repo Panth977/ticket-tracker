@@ -6,14 +6,15 @@
     — Users: ▸ ◯ Name  [+]      me first, then whoever shares things with me
   A row opens the owner's page (/{handle}); ▸ unfolds what it owns right here.
   The + (my own space, and orgs I am an owner or admin of) makes a board,
-  artifact or bucket owned there. Groups come from ownerGroups (lib/orgs/owners).
+  artifact, bucket or dictionary owned there. Groups come from ownerGroups
+  (lib/orgs/owners).
 -->
 <script lang="ts">
   // hrefs are built by lib/layout/routes; the SPA has no base path, so resolve() would be the identity.
   /* eslint-disable svelte/no-navigation-without-resolve */
-  import { AppWindow, Brain, ChevronRight, LayoutGrid, Plus } from 'lucide-svelte';
-  import type { Artifact, Board, BoardPref, Bucket } from '@tm/shared';
-  import { BUCKET_DEFAULT_INDICATOR } from '@tm/shared';
+  import { AppWindow, BookA, Brain, ChevronRight, LayoutGrid, Plus } from 'lucide-svelte';
+  import type { Artifact, Board, BoardPref, Bucket, Dictionary } from '@tm/shared';
+  import { BUCKET_DEFAULT_INDICATOR, DICTIONARY_DEFAULT_INDICATOR } from '@tm/shared';
   import Indicator from '$lib/ui/Indicator.svelte';
   import Menu from '$lib/ui/Menu.svelte';
   import type { MenuItem } from '$lib/ui/types';
@@ -22,11 +23,12 @@
   import PersonName from '$lib/orgs/PersonName.svelte';
   import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
   import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
+  import NewDictionaryDialog from '$lib/dictionary/NewDictionaryDialog.svelte';
   import type { OwnerGroup } from '$lib/orgs/owners';
   import SidebarBoard from './SidebarBoard.svelte';
   import { routes } from './routes';
 
-  type Group = OwnerGroup<WithId<Board>, WithId<Artifact>, WithId<Bucket>>;
+  type Group = OwnerGroup<WithId<Board>, WithId<Artifact>, WithId<Bucket>, WithId<Dictionary>>;
   interface Props {
     title: 'Orgs' | 'Users';
     groups: readonly Group[];
@@ -36,6 +38,7 @@
     currentKey: string | null;
     currentArtifact: string | null;
     currentBucket: string | null;
+    currentDictionary?: string | null;
     /** Orgs only: the header's + (a new org). */
     onNewOrg?: (() => void) | null;
   }
@@ -48,6 +51,7 @@
     currentKey,
     currentArtifact,
     currentBucket,
+    currentDictionary = null,
     onNewOrg = null,
   }: Props = $props();
 
@@ -82,7 +86,8 @@
   const holdsCurrent = (g: Group) =>
     g.boards.some((b) => b.key === currentKey) ||
     g.artifacts.some((a) => a.id === currentArtifact || a.slug === currentArtifact) ||
-    g.buckets.some((m) => m.id === currentBucket || m.slug === currentBucket);
+    g.buckets.some((m) => m.id === currentBucket || m.slug === currentBucket) ||
+    g.dictionaries.some((d) => d.id === currentDictionary || d.slug === currentDictionary);
   // My own space starts unfolded (remembered as folded with a leading '-').
   const isOpen = (g: Group) =>
     (g.me ? !unfolded.includes(`-${g.key}`) : unfolded.includes(g.key)) || holdsCurrent(g);
@@ -92,6 +97,8 @@
   let newArtifact = $state(false);
   let newBucketFor = $state('');
   let newBucket = $state(false);
+  let newDictionaryFor = $state('');
+  let newDictionary = $state(false);
   const createItems = (g: Group): MenuItem[] => [
     { label: 'New board', icon: LayoutGrid, href: `${routes.newBoard()}?owner=${g.key}` },
     {
@@ -108,6 +115,14 @@
       onSelect: () => {
         newBucketFor = g.key;
         newBucket = true;
+      },
+    },
+    {
+      label: 'New dictionary',
+      icon: BookA,
+      onSelect: () => {
+        newDictionaryFor = g.key;
+        newDictionary = true;
       },
     },
   ];
@@ -173,7 +188,7 @@
               type="button"
               class="mr-1 grid size-5 shrink-0 place-items-center rounded text-subtle opacity-60 hover:bg-surface-3 hover:text-text hover:opacity-100"
               aria-label="Create in {label ?? 'your space'}"
-              title="New board, artifact or bucket here"><Plus size={13} /></button
+              title="New board, artifact, bucket or dictionary here"><Plus size={13} /></button
             >
           {/snippet}
         </Menu>
@@ -220,7 +235,22 @@
           <span class="flex-1 truncate">{m.name}</span>
         </a>
       {/each}
-      {#if !g.boards.length && !g.artifacts.length && !g.buckets.length}
+      {#each byName(g.dictionaries) as d (d.id)}
+        {@const current = d.id === currentDictionary || d.slug === currentDictionary}
+        <a
+          href={routes.dictionary(d.id)}
+          aria-current={current ? 'page' : undefined}
+          data-dictionary={d.id}
+          class="flex h-7 min-w-0 items-center gap-2 rounded-md pr-2 pl-7 text-sm
+            {current
+            ? 'bg-surface-3 font-medium text-text'
+            : 'text-muted hover:bg-surface-2 hover:text-text'}"
+        >
+          <Indicator of={d} seed={d.id} fallback={DICTIONARY_DEFAULT_INDICATOR} size="sm" />
+          <span class="flex-1 truncate">{d.name}</span>
+        </a>
+      {/each}
+      {#if !g.boards.length && !g.artifacts.length && !g.buckets.length && !g.dictionaries.length}
         <span class="flex h-7 items-center pl-7 text-xs text-subtle"
           >{g.canCreate ? 'Empty — use + to create here' : 'Nothing here you can open'}</span
         >
@@ -241,3 +271,4 @@
 
 <NewArtifactDialog bind:open={newArtifact} owner={newArtifactFor} />
 <NewBucketDialog bind:open={newBucket} owner={newBucketFor} />
+<NewDictionaryDialog bind:open={newDictionary} owner={newDictionaryFor} />

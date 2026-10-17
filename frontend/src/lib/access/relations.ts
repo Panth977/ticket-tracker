@@ -20,16 +20,18 @@ import {
   type ArtifactAgentAccess,
   type ArtifactBoardAccess,
   type BucketGrant,
+  type DictionaryGrant,
   type Stage,
   type StageGrant,
 } from '@tm/shared';
 
-export type EntityKind = 'board' | 'artifact' | 'bucket' | 'agent';
+export type EntityKind = 'board' | 'artifact' | 'bucket' | 'dictionary' | 'agent';
 
 export const KIND_LABEL: Record<EntityKind, string> = {
   board: 'Board',
   artifact: 'Artifact',
   bucket: 'Bucket',
+  dictionary: 'Dictionary',
   agent: 'Agent',
 };
 /** "A board you are not on" — what a row says for an entity the viewer cannot open. */
@@ -37,6 +39,7 @@ export const HIDDEN_LABEL: Record<EntityKind, string> = {
   board: 'A board you are not on',
   artifact: 'An artifact not shared with you',
   bucket: 'A bucket not shared with you',
+  dictionary: 'A dictionary not shared with you',
   agent: 'Someone else’s agent',
 };
 
@@ -74,6 +77,9 @@ export interface Relation<V> {
 export type RelationId =
   | 'board-bucket'
   | 'artifact-bucket'
+  | 'board-dictionary'
+  | 'artifact-dictionary'
+  | 'agent-dictionary'
   | 'artifact-board'
   | 'agent-board'
   | 'agent-artifact'
@@ -169,6 +175,24 @@ export const ARTIFACT_BUCKET: Relation<BucketGrant> = readWrite('artifact-bucket
 export const ARTIFACT_BOARD: Relation<ArtifactBoardAccess> = readWrite('artifact-board', {
   read: 'The page reads the board’s tickets through BackendDriver.tickets',
   write: 'The page can also change tickets (needs you to be an editor or admin there)',
+});
+
+/** A board subscribes to a dictionary (dictionary.html §D). */
+export const BOARD_DICTIONARY: Relation<DictionaryGrant> = readWrite('board-dictionary', {
+  read: 'Everyone on the board and its agents can read it; orchestrators hand it to agents as environment',
+  write: 'Editors, admins and agents with write can change entries',
+});
+
+/** An artifact subscribes to a dictionary (dictionary.html §D, BackendDriver.dictionary). */
+export const ARTIFACT_DICTIONARY: Relation<DictionaryGrant> = readWrite('artifact-dictionary', {
+  read: 'The page reads its entries through BackendDriver.dictionary',
+  write: 'The page can also change entries (for viewers who may change them)',
+});
+
+/** An agent subscribes to a dictionary (dictionary.html §D): wherever it works. */
+export const AGENT_DICTIONARY: Relation<DictionaryGrant> = readWrite('agent-dictionary', {
+  read: 'The agent reads it on every board; its orchestrator hands it over as environment',
+  write: 'The agent can also change entries',
 });
 
 // ───────────────────────────────────────────────────────────── agent on a board
@@ -342,6 +366,39 @@ export const can = {
     o.ownsBucket || o.ownsArtifact
       ? true
       : 'Only the bucket’s owner or the artifact’s owner can remove it',
+  /**
+   * dictionaryGrantSet grant/change: the dictionary's owner, who also manages
+   * the other side (board admin / artifact owner / agent owner).
+   */
+  grantDictionary: (o: {
+    ownsDictionary: boolean;
+    managesOther: boolean;
+    other: 'board' | 'artifact' | 'agent';
+  }): Allowed =>
+    !o.ownsDictionary
+      ? 'Only the dictionary’s owner can change what it grants'
+      : !o.managesOther
+        ? o.other === 'board'
+          ? 'Only a board admin can choose the board’s dictionaries'
+          : o.other === 'artifact'
+            ? 'Only the artifact’s owner can choose its dictionaries'
+            : 'Only the agent’s owner can choose its dictionaries'
+        : true,
+  /** dictionaryGrantSet null: either side — the dictionary's owner, or the other side's manager. */
+  revokeDictionary: (o: {
+    ownsDictionary: boolean;
+    managesOther: boolean;
+    other: 'board' | 'artifact' | 'agent';
+  }): Allowed =>
+    o.ownsDictionary || o.managesOther
+      ? true
+      : `Only the dictionary’s owner or ${
+          o.other === 'board'
+            ? 'a board admin'
+            : o.other === 'artifact'
+              ? 'the artifact’s owner'
+              : 'the agent’s owner'
+        } can remove it`,
   /** artifactBoardAccessSet grant: the artifact's owner, on the board. */
   grantBoardToArtifact: (o: { ownsArtifact: boolean; onBoard: boolean }): Allowed =>
     !o.ownsArtifact

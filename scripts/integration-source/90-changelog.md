@@ -17,6 +17,20 @@ new MCP tools, new event types and new scopes may appear within `v1`, so parse p
 what you do not recognise rather than failing. A breaking change gets `/v2` alongside, and `/lib/v1`
 keeps working. The SDK's own patch releases do not change the wire format.
 
+### 2.2.0 — 2026-10-17
+
+- **Dictionaries** (docs/plan/dictionary.html). A fourth thing beside boards, artifacts and buckets: a named set
+  of key → value entries, values any JSON, owned by a person or an org, used by boards, artifacts and agents
+  through `read` / `write` grants. New scopes `dictionary:read` / `dictionary:write` (every agent token carries
+  them); commands and MCP tools `dictionary_create / update / delete / share / grant_set / list / get / set`;
+  REST `GET /v1/dictionaries`, `GET /v1/dictionaries/{id}`, `PATCH /v1/dictionaries/{id}/entries`.
+- **Env is gone.** Boards, artifacts, buckets, agents and orgs no longer carry key/value pairs: the `envGet` /
+  `envSet` commands and the MCP tool `env_get` are removed; every pair moved into a dictionary granted where it
+  applied. `GET /v1/env` stays, same `env` field: it now merges the dictionaries granted to the board, then those
+  granted to the calling agent (env-style keys; non-string values as JSON text), and says where each came from
+  in `dictionaries`.
+- The app's artifact page has tabs: Website, DB, JSON, Bucket and Dictionary.
+
 ### 2.1.0 — 2026-10-16
 
 - **Templates** (§9, docs/plan/templates.html). A board's admins write its own forms and cards as a little
@@ -49,7 +63,7 @@ Breaking: memories are now **buckets**, and everything has an owner (docs/plan/a
 - **Owners and orgs.** Every board, artifact and bucket belongs to a user or an org, like GitHub
   repos. Web URLs are `/{owner}/b/{KEY}`, `/{owner}/x/{slug}`, `/{owner}/bucket/{slug}`; the old
   ones still open and are rewritten. Workspaces are gone — each became an org owned by its creator.
-- **Env.** Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
+- **Env** (replaced by dictionaries in 2.2.0). Boards, artifacts, buckets, agents and orgs carry plain-text key/value pairs (settings ›
   Env), inherited org → thing. `GET /v1/env` returns the effective env of the token's board merged
   with its agent's: `{ board, agent, env }` (`env` merged, the agent winning). Not for secrets.
 

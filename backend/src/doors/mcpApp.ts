@@ -130,6 +130,21 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
     'Wipe an artifact’s data (Firestore, RTDB and files) — builds stay. Confirm first.',
   artifactBoardAccessSet:
     'Let an artifact’s page read (or read and write) a board’s tickets through BackendDriver.tickets, or take that away (access null). Viewers still only see what their own board role allows.',
+  // Dictionary (docs/plan/dictionary.html): named key → JSON entries, granted to boards, artifacts, agents.
+  dictionaryCreate:
+    'Create a dictionary: a named set of key → value entries (any JSON: text, numbers, objects, lists) you own — settings, prompts, config. Optionally start it with `entries`.',
+  dictionaryUpdate:
+    'Rename a dictionary, change its description or indicator (its mark), archive or restore it.',
+  dictionaryDelete: 'Delete a dictionary with every entry in it — confirm first.',
+  dictionaryShare:
+    'Give a person a role on a dictionary by email (editor / viewer), or take it away (null).',
+  dictionaryGrantSet:
+    'Let a board (its members and agents), an artifact’s page or an agent use a dictionary: read, or read and write; null removes. An orchestrator hands its agents every dictionary granted to their board and to the agent as environment (GET /v1/env).',
+  dictionaryList:
+    'The dictionaries you can reach — yours, those granted to boards you are on and (an agent) to you; or one board’s / artifact’s / agent’s.',
+  dictionaryGet: 'Read a dictionary’s entries (all, or some `keys`), in order; values are JSON.',
+  dictionarySet:
+    'Change a dictionary’s entries: `set` some (null removes a key) or `replace` them all. Values are any JSON. expectedUpdatedAt guards against overwriting a newer change.',
   // Bucket (docs/plan/bucket.html): buckets of files. Nodes are named by PATH ('docs/brand/logo.svg').
   bucketCreate:
     'Create a bucket: an online bucket of files and folders (notes, images, video, APKs …) you own.',
@@ -301,7 +316,8 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
           readOnlyHint:
             name === 'userList' ||
             /^artifact(Open|File(List|Url))$/.test(name) ||
-            /^bucket(List|Tree|FileRead)$/.test(name),
+            /^bucket(List|Tree|FileRead)$/.test(name) ||
+            /^dictionary(List|Get)$/.test(name),
           destructiveHint: DESTRUCTIVE.test(name) || name === 'boardArchive',
         },
       },

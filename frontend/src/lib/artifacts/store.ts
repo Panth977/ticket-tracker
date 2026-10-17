@@ -107,8 +107,8 @@ export const ARTIFACT_SETTINGS_SECTIONS = [
   { id: 'subscribers', label: 'Subscribers', owner: true },
   { id: 'builds', label: 'Builds', owner: false },
   { id: 'data', label: 'Data', owner: false },
-  /** shared/src/env: key/value pairs (editors read, the owner writes). */
-  { id: 'env', label: 'Env', owner: false },
+  /** lib/access: the dictionaries the page uses (BackendDriver.dictionary). */
+  { id: 'dictionaries', label: 'Dictionaries', owner: false },
 ] as const;
 export type ArtifactSettingsSection = (typeof ARTIFACT_SETTINGS_SECTIONS)[number]['id'];
 
