@@ -5,7 +5,7 @@
  *
  *   signed out            → /login?next=<where you were going>
  *   signed in, not allowed → /welcome/access   (§X: "ask for access")
- *   signed in, no profile → /welcome   (right after sign-up)
+ *   signed in, no profile → /welcome   (right after sign-up; never on a read error)
  *   signed in on /login   → next ?? /
  *
  * §X (the allow list): this app is private. An account that is signed in but
@@ -25,8 +25,12 @@
  * lands on /login exactly as it did before.
  */
 export type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
-/** 'missing' = users/{uid} does not exist (yet); 'new' = first sign-in, Welcome not finished. */
-export type ProfileStatus = 'loading' | 'missing' | 'new' | 'ready';
+/**
+ * 'missing' = users/{uid} does not exist (yet); 'new' = first sign-in, Welcome not finished;
+ * 'unreadable' = the listener failed (denied, offline) before any copy arrived. That is NOT
+ * 'missing': only a snapshot that says "no such document" sends anyone to /welcome.
+ */
+export type ProfileStatus = 'loading' | 'missing' | 'new' | 'ready' | 'unreadable';
 
 export interface GuardState {
   status: AuthStatus;

@@ -38,6 +38,14 @@ class FakeSocket {
     this.readyState = FakeSocket.OPEN;
     this.onopen?.();
   }
+  /** The server answers the last auth frame (ok, or refused). */
+  answerAuth(ok = true) {
+    const m = this.sent.filter((x) => x.op === 'auth').at(-1)!;
+    const frame = ok
+      ? { id: m.id, ok: true, result: { uid: m.token ? 'u1' : null } }
+      : { id: m.id, ok: false, error: { code: 'unauthenticated', message: 'expired' } };
+    this.onmessage?.({ data: JSON.stringify(frame) });
+  }
   /** The server answers every request it got. */
   answerAll(result: unknown = { ok: 1 }) {
     for (const m of this.sent)
@@ -85,6 +93,8 @@ describe('vm/live: the socket', () => {
     expect(second).toBeDefined();
     second.open();
     await flush();
+    second.answerAuth();
+    await flush();
     const ops = second.sent.map((m) => m.op);
     expect(ops).toEqual(['auth', 'listen', 'get']);
     second.answerAll({ exists: true });
@@ -100,8 +110,67 @@ describe('vm/live: the socket', () => {
     live.setLiveToken('tok-1'); // signed in while connecting
     expect(s.readyState).toBe(FakeSocket.CONNECTING);
     s.open();
+    await flush();
     expect(s.sent[0]).toMatchObject({ op: 'auth', token: 'tok-1' });
     expect(FakeSocket.all).toHaveLength(1);
+  });
+});
+
+describe('vm/live: never signed out by a stale token', () => {
+  it('a reconnect asks auth for the token NOW, and holds listeners until the server accepts it', async () => {
+    const live = await import('./live');
+    live.setLiveToken('tok-expired'); // what the page held when the laptop slept
+    const source = vi.fn(async () => 'tok-fresh');
+    live.setLiveTokenSource(source);
+    live.subscribe({ op: 'listen', path: 'users/u1' }, () => {});
+    await flush();
+    const s = FakeSocket.all[0]!;
+    s.open();
+    await flush();
+    expect(s.sent.map((m) => m.op)).toEqual(['auth']);
+    expect(s.sent[0]).toMatchObject({ token: 'tok-fresh' });
+    s.answerAuth();
+    await flush();
+    expect(s.sent.map((m) => m.op)).toEqual(['auth', 'listen']);
+  });
+
+  it('a refused token: refresh it and retry; listeners never go out unauthenticated', async () => {
+    const live = await import('./live');
+    const source = vi.fn(async (force: boolean) => (force ? 'tok-new' : 'tok-old'));
+    live.setLiveTokenSource(source);
+    live.subscribe({ op: 'listen', path: 'users/u1' }, () => {});
+    await flush();
+    const s = FakeSocket.all[0]!;
+    s.open();
+    await flush();
+    s.answerAuth(false);
+    await flush();
+    expect(source).toHaveBeenLastCalledWith(true);
+    expect(s.sent.map((m) => [m.op, m.token])).toEqual([
+      ['auth', 'tok-old'],
+      ['auth', 'tok-new'],
+    ]);
+    s.answerAuth();
+    await flush();
+    expect(s.sent.map((m) => m.op)).toEqual(['auth', 'auth', 'listen']);
+  });
+
+  it('refused twice: drop the socket and come back later, still without sending listeners', async () => {
+    const live = await import('./live');
+    live.setLiveTokenSource(async () => 'tok-bad');
+    live.subscribe({ op: 'listen', path: 'users/u1' }, () => {});
+    await flush();
+    const s = FakeSocket.all[0]!;
+    s.open();
+    await flush();
+    s.answerAuth(false);
+    await flush();
+    s.answerAuth(false);
+    await flush();
+    expect(s.sent.map((m) => m.op)).toEqual(['auth', 'auth']);
+    expect(s.readyState).toBe(FakeSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeSocket.all).toHaveLength(2);
   });
 });
 

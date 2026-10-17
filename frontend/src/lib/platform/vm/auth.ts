@@ -12,7 +12,7 @@
  * the callback page posts the session back to this origin and closes. Email
  * links carry ?tm_link=<token> back to the app's own /login.
  */
-import { holdLiveUntil, LiveError, setLiveToken } from './live';
+import { holdLiveUntil, LiveError, setLiveToken, setLiveTokenSource } from './live';
 
 // ─── types the app reads ─────────────────────────────────────────────────────
 
@@ -279,6 +279,9 @@ if (typeof window !== 'undefined')
   });
 
 if (typeof window !== 'undefined') holdLiveUntil(restore());
+// Every new /live socket signs in with the token as of NOW — a socket that
+// reconnects after the laptop slept must not offer the expired one it held.
+setLiveTokenSource((force) => (refreshToken ? tokenNow(force) : Promise.resolve(null)));
 
 // ─── the API ─────────────────────────────────────────────────────────────────
 

@@ -32,6 +32,14 @@ describe('guardRedirect', () => {
     ).toBeNull();
     expect(guardRedirect({ status: 'signedIn', profile: 'ready' }, u('/inbox'))).toBeNull();
   });
+  it('a profile that could not be READ is not a missing one: no /welcome, no splash', () => {
+    // The VM socket once read users/{uid} signed out after a laptop slept;
+    // "permission-denied" sent a fully set-up person back to /welcome.
+    const s = { status: 'signedIn', profile: 'unreadable', remembered: false } as const;
+    expect(guardRedirect(s, u('/inbox'))).toBeNull();
+    expect(guardRedirect(s, u('/'))).toBeNull();
+    expect(guardPending(s, u('/inbox'))).toBe(false);
+  });
   // §X — the allow list: one screen, and nothing else.
   it('sends an account that is not allowed to /welcome/access, from anywhere', () => {
     const refused = { status: 'signedIn', profile: 'ready', allowed: false } as const;
