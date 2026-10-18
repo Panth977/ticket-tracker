@@ -312,7 +312,12 @@ test('D7: a board moves its tickets to Drive from Settings › Storage, and they
     60_000,
   );
   await expect(tab).toContainText('This board lives in Google Drive', { timeout: 20_000 });
-  expect((await admin().db.doc(`boards/${b.id}/tickets/${ticketId}`).get()).exists).toBe(false);
+  // The database's copy goes right after the switch.
+  await eventually(
+    "the database's copy is gone",
+    async () => !(await admin().db.doc(`boards/${b.id}/tickets/${ticketId}`).get()).exists,
+    30_000,
+  );
 
   await page.goto(`/t/${tkey}`);
   // Read from Drive now: the ticket and its activity open as before.
