@@ -149,6 +149,12 @@ export function driveConsentUrl(
   const mode = driveMode();
   if (mode === 'off') throw errors.unavailable(NOT_CONFIGURED);
   const state = signDriveState({ uid, returnTo, nonce: base62(12), exp: now + STATE_TTL_MS });
+  // §K1: Google's popup code flow, served from an origin the OAuth client
+  // already allows (Firebase's own *.firebaseapp.com) — no redirect URI to
+  // register in the console. See doors/drive.ts /drive/connect.
+  const popup = drivePopupOrigin();
+  if (mode === 'google' && popup)
+    return `${popup}/integrations/drive/connect?state=${encodeURIComponent(state)}${loginHint ? `&hint=${encodeURIComponent(loginHint)}` : ''}`;
   const cb = driveCallbackUrl();
   if (mode === 'fake') return `${cb}?state=${encodeURIComponent(state)}&code=fake_${base62(12)}`;
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -199,7 +205,30 @@ function emailOf(idToken: string | undefined): string | null {
 }
 
 /** The callback: code → refresh token → _driveLinks/{uid}. */
-export async function completeDriveConnect(uid: string, code: string, now: number): Promise<void> {
+/**
+ * TM_DRIVE_POPUP_ORIGIN: an origin the Google OAuth client already lists under
+ * "Authorized JavaScript origins" and that serves this API (Hosting's
+ * *.firebaseapp.com does both). Connecting then runs Google's popup code flow
+ * there (redirect_uri 'postmessage') instead of a registered redirect URI.
+ */
+export const drivePopupOrigin = (): string =>
+  (process.env.TM_DRIVE_POPUP_ORIGIN ?? '').trim().replace(/\/$/, '');
+
+/** The public bits the popup page needs. */
+export const drivePopupConfig = () => ({
+  clientId: clientId(),
+  scope: `openid email ${DRIVE_SCOPE}`,
+});
+
+/** No refresh token (the person had granted before): revoke so the next consent hands one over. */
+export class DriveRegrant extends Error {}
+
+export async function completeDriveConnect(
+  uid: string,
+  code: string,
+  now: number,
+  redirectUri?: string,
+): Promise<void> {
   const mode = driveMode();
   if (mode === 'off') throw errors.unavailable(NOT_CONFIGURED);
   let link: DriveLink;
@@ -217,8 +246,19 @@ export async function completeDriveConnect(uid: string, code: string, now: numbe
     const t = await tokenCall({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: driveCallbackUrl(),
+      redirect_uri: redirectUri ?? driveCallbackUrl(),
     });
+    if (!t.refresh_token && t.access_token && redirectUri === 'postmessage') {
+      // Google hands a refresh token only on a consent it showed; the popup
+      // flow cannot force one. Drop the old grant and ask once more.
+      await fetch(
+        `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(t.access_token)}`,
+        {
+          method: 'POST',
+        },
+      ).catch(() => {});
+      throw new DriveRegrant('Google needs one more consent');
+    }
     if (!t.refresh_token)
       throw errors.forbidden(
         `Google did not hand over Drive access (${t.error_description ?? t.error ?? 'no refresh token'})`,
