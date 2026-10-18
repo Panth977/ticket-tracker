@@ -55,7 +55,8 @@ import type { ServerCtx } from '../runtime/context.js';
 import { loadBoard } from '../tickets/access.js';
 import { bucketRef, reachFor } from '../bucket/shared.js';
 import { nodeById } from '../bucket/lookup.js';
-import { safeEqual, serverMac } from './crypto.js';
+import { safeEqual } from './crypto.js';
+import { blobSig, fileDoorPath } from './blobUrl.js';
 
 /** boards/{boardId}/tickets/{ticketId}/{fileId}/{fileName} — the thumbnail too. */
 const ATTACHMENT = /^boards\/([^/]+)\/tickets\/([^/]+)\/([^/]+)\/([^/]+)$/;
@@ -66,7 +67,6 @@ const AVATAR = /^users\/([^/]+)\/avatar\/[^/]+$/;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 
 /** The capability in `bytesUrl`: we minted it after checking, exactly like a signed URL. */
-const blobSig = (path: string, exp: number): string => serverMac('file-blob', `${path}\n${exp}`);
 
 /**
  * May `ctx.actor` read this object — and WHICH object is it? Answers the
@@ -132,7 +132,7 @@ export async function signedAccess(
   if (!stored) throw errors.not_found('File not found');
 
   const expiresAt = ctx.now + SIGNED_URL_TTL_MS;
-  const bytesUrl = `${FILE_BYTES_ROUTE}?path=${encodeURIComponent(path)}&exp=${expiresAt}&sig=${encodeURIComponent(blobSig(path, expiresAt))}`;
+  const bytesUrl = fileDoorPath(path, expiresAt);
   let url = bytesUrl;
   // A Drive bucket's file (§K3) has no URL of ours to sign: always the file door.
   if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST && !parseDriveStoragePath(path)) {

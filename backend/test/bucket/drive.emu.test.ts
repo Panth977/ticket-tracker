@@ -507,4 +507,21 @@ describe('moving a bucket between storages (§K6)', () => {
     const none = await callRaw(owner, 'bucketStorageMove', { bucketId, resume: true });
     expect(none.status).toBe(409);
   });
+
+  inProcess(
+    'agents, REST and MCP get a signed link for a Drive file too (the file door)',
+    async () => {
+      const { owner } = await people('owner');
+      await connect(owner);
+      const bucketId = await driveBucket(owner, 'Links');
+      const w = await call(owner, 'bucketFileWrite', { bucketId, path: 'r.md', text: 'report' });
+      const read = await call(owner, 'bucketFileRead', { bucketId, nodeId: w.nodeId });
+      const drivePath = decodeURIComponent(/path=([^&]+)/.exec(read.bytesUrl)![1]!);
+      expect(drivePath.startsWith(`drive/${bucketId}/`)).toBe(true);
+      const url = await ports().files.signedDownloadUrl(drivePath, Date.now() + 60_000);
+      const res = await request(url.replace(/^https?:\/\/[^/]+/, ''));
+      expect(res.status).toBe(200);
+      expect(res.body).toBe('report');
+    },
+  );
 });

@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { StorageFiles, StoredObject } from '@tm/shared';
 import { blobKind, storageBucket } from '../blob/index.js';
+import { fileDoorUrl } from '../platform/blobUrl.js';
 import {
   driveObjectDelete,
   driveObjectRead,
@@ -116,8 +117,9 @@ export function adminFiles(): StorageFiles {
       return url;
     },
     async signedDownloadUrl(path, expiresAt) {
-      // A Drive file has no URL of ours to sign: callers fall back to the file door.
-      if (isDrivePath(path)) throw new Error('A Drive file is served through the file door');
+      // A Drive file has no object of ours to sign: the file door's own signed
+      // link serves it (it streams from Drive). Agents, REST and MCP get this.
+      if (isDrivePath(path)) return fileDoorUrl(path, expiresAt);
       const host = emu();
       if (host)
         return `http://${host}/v0/b/${bucket().name}/o/${encodeURIComponent(path)}?alt=media`;
