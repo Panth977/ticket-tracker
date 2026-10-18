@@ -356,6 +356,41 @@ export const bucketNodeDelete = defineCommand({
 
 // ─── Google Drive (§K) ───────────────────────────────────────────────────────
 
+/**
+ * §K4: open an upload the browser sends straight to Google Drive (a Drive
+ * bucket only — nothing goes through our object store). `put`: the bucket's
+ * own file at path / nodeId (write reach), confirmed after with bucketFilePut.
+ * `attach`: a ticket file for `boardId` (the bucket granted write there),
+ * named in bucketUploads after. PUT the whole body to `uploadUrl`.
+ */
+export const bucketDriveUpload = defineCommand({
+  name: 'bucketDriveUpload',
+  source: 'extra',
+  permission:
+    'put: write reach. attach: may upload on the board, and the bucket is granted write to it. The bucket must be a Drive bucket.',
+  errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'too_large', 'unavailable'],
+  req: req({
+    bucketId: BucketIdSchema,
+    purpose: z.enum(['put', 'attach']),
+    path: PathInput.optional(),
+    nodeId: BucketNodeIdSchema.optional(),
+    boardId: BoardIdSchema.optional(),
+    name: z.string().min(1).max(255),
+    mime: z.string().max(255),
+    size: z.number().int().nonnegative(),
+    expectedFileId: z.string().max(64).nullable().optional(),
+    /** The app's origin: Drive answers the browser's PUT with CORS for it. */
+    origin: z.string().url().max(255).optional(),
+  }),
+  res: z.object({
+    uploadUrl: z.string(),
+    driveId: z.string(),
+    path: z.string(),
+    storagePath: z.string(),
+    expiresAt: MillisSchema,
+  }),
+});
+
 /** Is my Google Drive connected (and can this server talk to Drive at all)? */
 export const driveStatus = defineCommand({
   name: 'driveStatus',

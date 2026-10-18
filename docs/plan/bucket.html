@@ -570,7 +570,8 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
             <code>bucketFolderCreate</code>, <code>bucketMove</code>,
             <code>bucketNodeDelete</code> — and REST's raw PUT answer from Drive in the same shapes.
             A delete goes to Drive's trash (restorable there for 30 days). A tree is read one Drive
-            query per level; the bucket's counters follow the last full listing.
+            query per level. Nothing is written to Firestore by any of them: the bucket's
+            counters stay as created, and the app counts what Drive showed.
           </li>
           <li>
             Names Drive allows and a path cannot hold (<code>/</code>, control characters,
@@ -595,21 +596,41 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           door, <code>signedAccess</code> and ticket references work unchanged; there is no URL of
           ours to sign, so it is always the file door's <code>bytesUrl</code>.
         </p>
-        <h3 id="k4">K4 · Uploads</h3>
+        <h3 id="k4">K4 · Uploads: straight to Drive</h3>
+        <p>
+          A Drive bucket <b>never touches our object store</b>: Firebase holds where the data is
+          (the bucket document), Drive holds the data.
+        </p>
         <ul>
           <li>
-            The app uploads every file the same way, whatever the storage: straight to
-            <code>buckets/{bucketId}/{fileId}/{name}</code>. For a Drive bucket that object is a
-            <b>staging copy</b>: <code>bucketFilePut</code> streams it into Drive in 8 MB chunks
-            (a resumable upload) and deletes it. No Google token in the browser, one upload path.
+            <b>From the app</b>: <code>bucketDriveUpload</code> opens a resumable upload session in
+            Drive with the owner's token (a new file under a <b>reserved</b> id, its folders made
+            first; or a new version of an existing file, with the <code>expectedFileId</code>
+            guard) and answers the session URL. The browser PUTs the whole body there, with
+            progress; the request carries the app's origin, so Drive answers with CORS. Then
+            <code>bucketFilePut</code> with the answered
+            <code>drive/{bucketId}/{driveId}/{name}</code> only confirms the file is in the bucket.
+            The session URL is a capability for one upload; no Google token reaches the browser.
           </li>
           <li>
-            Ticket files (§J) into a Drive bucket are planned in the command's transaction like any
-            other — the ticket row points at a Drive file id <b>reserved</b> there
-            (<code>generateIds</code>) — and placed right after the commit: folders made, a free
-            name found, the staged bytes streamed in under that id, the staging copy deleted. A
-            refused or failed command leaves nothing in Drive; a placement that fails after the
-            commit leaves a row that reads as gone (logged; the staged copy stays).
+            <b>Ticket files</b> (§J, <code>purpose: 'attach'</code> — the bucket granted
+            <code>write</code> to the board, the caller may upload there): the file lands in the
+            bucket's hidden staging folder <code>.tm-incoming</code> (never shown in the tree). The
+            post's <code>bucketUploads</code> names it; the command plans it in its transaction like
+            any other (the ticket row points at the Drive id) and right after the commit moves it to
+            its path, a taken name getting <code>' (2)'</code>. A refused or failed command trashes
+            the staged file; a move that fails after the commit leaves a row that reads as gone
+            (logged; the file stays staged).
+          </li>
+          <li>
+            <b>Bytes the server holds</b> (REST / MCP upload, intake widget, inbound e-mail) go the
+            same way: straight into the staging folder, then placed by the command.
+          </li>
+          <li>
+            Firestore per operation: the bucket document (and, for a member through a board, that
+            board's) to answer "who may" and "where". The Drive connection is read at most once a
+            minute per server instance. Reading a file streams it from Drive through the file door
+            (access is ours to check; viewers have no Drive token).
           </li>
         </ul>
         <h3 id="k5">K5 · Asking where files live</h3>

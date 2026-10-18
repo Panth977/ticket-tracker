@@ -143,6 +143,7 @@ export const COMMANDS = {
   bucketMove: bucket.bucketMove,
   bucketNodeDelete: bucket.bucketNodeDelete,
   // Google Drive as a bucket's storage (bucket.html §K)
+  bucketDriveUpload: bucket.bucketDriveUpload,
   driveStatus: bucket.driveStatus,
   driveConnect: bucket.driveConnect,
   driveDisconnect: bucket.driveDisconnect,

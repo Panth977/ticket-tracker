@@ -11,7 +11,7 @@
  *   people reach it through the server — a viewer needs no Drive of their own
  */
 import { describe, expect, it } from 'vitest';
-import { paths, type Bucket } from '@tm/shared';
+import { paths, type Board, type Bucket } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
 import { fakeDriveTouch } from '../../src/bucket/drive/api.js';
 import {
@@ -23,7 +23,7 @@ import {
   uniq,
   type TestUser,
 } from '../harness/index.js';
-import { doc, people, putBucketObject, seedBoard } from '../tickets/helpers.js';
+import { doc, people, seedBoard } from '../tickets/helpers.js';
 
 setupEmulators();
 
@@ -87,8 +87,8 @@ describe('Drive bucket: Drive is the truth (§K2)', () => {
     const tree = await call(owner, 'bucketTree', { bucketId });
     expect(paths_(tree.nodes)).toEqual(['empty', 'empty/inner', 'notes', 'notes/hello.md']);
     expect(await firestoreNodes(bucketId)).toBe(0);
-    // The counters follow the last full listing.
-    expect((await memDoc(bucketId))!.stats).toEqual({ files: 1, folders: 3, bytes: 7 });
+    // Firebase holds only where the data is: the bucket document never changed.
+    expect(await memDoc(bucketId)).toEqual(m);
 
     const read = await call(owner, 'bucketFileRead', { bucketId, path: 'notes/hello.md' });
     expect(read.text).toBe('# Hello');
@@ -186,27 +186,81 @@ describe('Drive bucket: Drive is the truth (§K2)', () => {
   });
 });
 
+/** The browser's side of §K4: open a Drive upload, PUT the bytes to it. */
+async function driveUpload(
+  u: TestUser,
+  input: Record<string, unknown>,
+  bytes: Uint8Array,
+): Promise<{ storagePath: string; driveId: string; path: string }> {
+  const r = await call(u, 'bucketDriveUpload', {
+    mime: 'image/png',
+    size: bytes.byteLength,
+    ...input,
+  } as never);
+  const put = await request(r.uploadUrl, { method: 'PUT', body: bytes });
+  expect(put.status).toBe(200);
+  return r;
+}
+
+/** Every object under a prefix of our own store (there must be none for Drive buckets). */
+const ourObjects = async (bucketId: string) =>
+  (await ports().files.list(`buckets/${bucketId}/`)).length;
+
 describe('Drive bucket files on tickets (§K3, §K4)', () => {
-  inProcess('an app upload is staged, then moved into Drive; the staging copy goes', async () => {
-    const { owner } = await people('owner');
-    await connect(owner);
-    const bucketId = await driveBucket(owner);
-    const files = ports().files;
-    const up = await putBucketObject(files, bucketId, 'pic.png', new Uint8Array([9, 8, 7]));
-    const put = await call(owner, 'bucketFilePut', {
-      bucketId,
-      path: 'img/pic.png',
-      storagePath: up.storagePath,
-    });
-    expect(await files.stat(up.storagePath)).toBeNull();
-    const read = await call(owner, 'bucketFileRead', { bucketId, nodeId: put.nodeId });
-    expect(read.node.file).toMatchObject({ mime: 'image/png', size: 3 });
-    const bytes = await request(read.bytesUrl.replace(/^\/api/, '/api'));
-    expect(bytes.status).toBe(200);
-  });
+  inProcess(
+    'an app upload goes straight into Drive; our object store is never touched',
+    async () => {
+      const { owner } = await people('owner');
+      await connect(owner);
+      const bucketId = await driveBucket(owner);
+      const before = await memDoc(bucketId);
+      const up = await driveUpload(
+        owner,
+        { bucketId, purpose: 'put', path: 'img/pic.png', name: 'pic.png' },
+        new Uint8Array([9, 8, 7]),
+      );
+      const put = await call(owner, 'bucketFilePut', {
+        bucketId,
+        path: 'img/pic.png',
+        storagePath: up.storagePath,
+      });
+      expect(put.nodeId).toBe(up.driveId);
+      expect(put.path).toBe('img/pic.png');
+      const read = await call(owner, 'bucketFileRead', { bucketId, nodeId: put.nodeId });
+      expect(read.node.file).toMatchObject({ mime: 'image/png', size: 3 });
+      expect((await request(read.bytesUrl)).status).toBe(200);
+
+      // A new version of the same file, with the stale guard.
+      const v2 = await driveUpload(
+        owner,
+        {
+          bucketId,
+          purpose: 'put',
+          nodeId: put.nodeId,
+          name: 'pic.png',
+          expectedFileId: put.fileId,
+        },
+        new Uint8Array([1, 2, 3, 4]),
+      );
+      expect(v2.driveId).toBe(put.nodeId);
+      const stale = await callRaw(owner, 'bucketDriveUpload', {
+        bucketId,
+        purpose: 'put',
+        nodeId: put.nodeId,
+        name: 'pic.png',
+        mime: 'image/png',
+        size: 1,
+        expectedFileId: put.fileId,
+      });
+      expect(stale.status).toBe(409);
+
+      expect(await ourObjects(bucketId)).toBe(0);
+      expect(await memDoc(bucketId)).toEqual(before);
+    },
+  );
 
   inProcess(
-    "ticket files: planned in the transaction, placed in Drive after it; '<ticketId>' filled",
+    "ticket files: uploaded into Drive's staging, placed after the commit; '<ticketId>' filled",
     async () => {
       const { owner, com } = await people('owner', 'com');
       await connect(owner);
@@ -217,9 +271,19 @@ describe('Drive bucket files on tickets (§K3, §K4)', () => {
         boardId: b.id,
         title: 'Shots',
       });
-      const files = ports().files;
-      const s1 = await putBucketObject(files, bucketId, 'shot.png');
-      const s2 = await putBucketObject(files, bucketId, 'shot.png');
+      // A commenter has no role on the bucket, yet may put a NEW file in through the board.
+      const s1 = await driveUpload(
+        com,
+        { bucketId, purpose: 'attach', boardId: b.id, name: 'shot.png' },
+        new Uint8Array([1]),
+      );
+      const s2 = await driveUpload(
+        com,
+        { bucketId, purpose: 'attach', boardId: b.id, name: 'shot.png' },
+        new Uint8Array([2]),
+      );
+      // Staged files are not in the bucket yet.
+      expect((await call(owner, 'bucketTree', { bucketId })).nodes).toEqual([]);
       await call(com, 'messagePost', {
         boardId: b.id,
         ticketId,
@@ -237,26 +301,92 @@ describe('Drive bucket files on tickets (§K3, §K4)', () => {
         `tickets/${key}/shot (2).png`,
         `tickets/${key}/shot.png`,
       ]);
-      expect(await files.stat(s1.storagePath)).toBeNull();
+      expect(await ourObjects(bucketId)).toBe(0);
 
       // The ticket's reference opens through the file door, and follows a move.
       const ticket = (await db().doc(paths.ticket(b.id, ticketId)).get()).data() as {
         files: { path: string; bucket?: { nodeId: string } }[];
       };
       const ref = ticket.files.find((f) => f.bucket)!;
-      const open = await request(`/api/files/url?path=${encodeURIComponent(ref.path)}`, {
-        headers: { authorization: `Bearer ${com.token}` },
-      });
-      expect(open.status).toBe(200);
+      expect([s1.driveId, s2.driveId]).toContain(ref.bucket!.nodeId);
+      const fileUrl = (p: string) =>
+        request(`/api/files/url?path=${encodeURIComponent(p)}`, {
+          headers: { authorization: `Bearer ${com.token}` },
+        });
+      expect((await fileUrl(ref.path)).status).toBe(200);
       await call(owner, 'bucketMove', {
         bucketId,
         nodeId: ref.bucket!.nodeId,
         toPath: 'moved.png',
       });
-      const again = await request(`/api/files/url?path=${encodeURIComponent(ref.path)}`, {
-        headers: { authorization: `Bearer ${com.token}` },
-      });
-      expect(again.status).toBe(200);
+      expect((await fileUrl(ref.path)).status).toBe(200);
     },
   );
+
+  inProcess('a refused post trashes its staged Drive file', async () => {
+    const { owner, view } = await people('owner', 'view');
+    await connect(owner);
+    const b = await seedBoard({ admin: owner, commenters: [view] });
+    const bucketId = await driveBucket(owner, 'Ticket files');
+    await call(owner, 'bucketGrantSet', { bucketId, boardId: b.id, access: 'write' });
+    const { ticketId } = await call(owner, 'ticketCreate', { boardId: b.id, title: 'T' });
+    const s = await driveUpload(
+      owner,
+      { bucketId, purpose: 'attach', boardId: b.id, name: 'x.png' },
+      new Uint8Array([1]),
+    );
+    const bad = await callRaw(owner, 'messagePost', {
+      boardId: b.id,
+      ticketId,
+      clientId: uniq('c'),
+      body: doc('files'),
+      bucketUploads: [{ bucketId, path: '../nope', storagePath: s.storagePath }],
+    });
+    expect(bad.status).toBe(400);
+    expect(await ports().files.stat(s.storagePath)).toBeNull();
+  });
+
+  inProcess('server-side bytes (the API upload) go straight to Drive too', async () => {
+    const { owner } = await people('owner');
+    await connect(owner);
+    const b = await seedBoard({ admin: owner });
+    const bucketId = await driveBucket(owner, 'Ticket files');
+    await call(owner, 'bucketGrantSet', { bucketId, boardId: b.id, access: 'write' });
+    await call(owner, 'boardAttachBucketSet', {
+      boardId: b.id,
+      attachBucket: { bucketId, template: 'tickets/<ticketId>/<filename>' },
+    });
+    const { ticketId, key } = await call(owner, 'ticketCreate', { boardId: b.id, title: 'T' });
+    const board = (await db().doc(paths.board(b.id)).get()).data() as Board;
+    const { storeBoardFile, withUploads, planBucketUploads, stageBucketUploads } =
+      await import('../../src/bucket/attach.js');
+    const { runTx } = await import('../../src/runtime/tx.js');
+    const up = await storeBoardFile(
+      { ids: ports().ids, now: Date.now(), actor: owner.uid },
+      { ...board, id: b.id },
+      key,
+      { name: 'log.txt', mime: 'text/plain', bytes: new TextEncoder().encode('hi') },
+    );
+    expect(up.storagePath.startsWith(`drive/${bucketId}/`)).toBe(true);
+    const staged = await stageBucketUploads([up]);
+    await withUploads(staged, () =>
+      runTx(async (tx) => {
+        const plan = await planBucketUploads(
+          tx,
+          { actor: owner.uid, ids: ports().ids, now: Date.now() },
+          staged,
+          b.id,
+          key,
+        );
+        plan.write(tx);
+      }),
+    );
+    expect(paths_((await call(owner, 'bucketTree', { bucketId })).nodes)).toEqual([
+      'tickets',
+      `tickets/${key}`,
+      `tickets/${key}/log.txt`,
+    ]);
+    expect(ticketId).toBeTruthy();
+    expect(await ourObjects(bucketId)).toBe(0);
+  });
 });

@@ -8,7 +8,8 @@
  */
 import { errors } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { completeDriveConnect, verifyDriveState } from '../bucket/drive/link.js';
+import { completeFakeUpload } from '../bucket/drive/api.js';
+import { completeDriveConnect, driveMode, verifyDriveState } from '../bucket/drive/link.js';
 import { door } from '../http/mounts.js';
 import { appBaseUrl } from '../platform/auth.js';
 import { toAppError } from '../runtime/runner.js';
@@ -33,4 +34,16 @@ r.get('/drive/callback', async (c) => {
     return back(`drive=error&reason=${encodeURIComponent(err.message)}`);
   }
   return back('drive=connected');
+});
+
+/**
+ * PUT /integrations/drive/fake-upload/{token} — the fake Drive's upload session
+ * (emulators / TM_DRIVE=fake only): what Google's session URL is for a real
+ * Drive. The browser PUTs the whole body here exactly as it would to Google.
+ */
+r.put('/drive/fake-upload/:token', async (c) => {
+  if (driveMode() !== 'fake') throw errors.not_found('Not found');
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  const f = await completeFakeUpload(c.req.param('token'), bytes);
+  return c.json({ id: f.id, name: f.name, mimeType: f.mimeType, size: String(f.size) });
 });

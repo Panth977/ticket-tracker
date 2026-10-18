@@ -135,16 +135,16 @@
       {#if m.storage?.kind === 'drive'}
         Stored in Google Drive{m.storage.email ? ` (${m.storage.email})` : ''}, folder
         <span class="font-medium text-text">{m.storage.folderName}</span>. Drive is the source of
-        truth: what you change there shows here.
+        truth: what you change there shows here, and this app keeps only where it is.
       {:else}
         Stored by this app (managed).
       {/if}
     </p>
-    <p class="text-sm text-muted">
-      {m.stats.files}
-      {m.stats.files === 1 ? 'file' : 'files'} in {m.stats.folders}
-      {m.stats.folders === 1 ? 'folder' : 'folders'} · {formatBytes(m.stats.bytes)}
-    </p>
+    {#if m.storage?.kind !== 'drive'}<p class="text-sm text-muted">
+        {m.stats.files}
+        {m.stats.files === 1 ? 'file' : 'files'} in {m.stats.folders}
+        {m.stats.folders === 1 ? 'folder' : 'folders'} · {formatBytes(m.stats.bytes)}
+      </p>{/if}
   </div>
 </Section>
 

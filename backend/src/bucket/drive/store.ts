@@ -43,7 +43,6 @@ import {
   type PrincipalId,
 } from '@tm/shared';
 import type { Readable } from 'node:stream';
-import { rawBucketRef } from '../shared.js';
 import type { Found } from '../nodes.js';
 import { isFolder, type ByteSource, type DriveApi, type DriveItem } from './api.js';
 import { driveFor } from './link.js';
@@ -126,12 +125,15 @@ export function toFound(
 
 /** Name the children of one folder: segments, with ' (2)' for a repeat (folders first, then oldest). */
 function named(items: DriveItem[]): { item: DriveItem; seg: string }[] {
-  const sorted = [...items].sort(
-    (a, b) =>
-      Number(isFolder(b)) - Number(isFolder(a)) ||
-      a.createdTime - b.createdTime ||
-      (a.id < b.id ? -1 : 1),
-  );
+  // The staging folder (§K4) is the app's own, never part of the bucket.
+  const sorted = items
+    .filter((i) => !(i.name === INCOMING && isFolder(i)))
+    .sort(
+      (a, b) =>
+        Number(isFolder(b)) - Number(isFolder(a)) ||
+        a.createdTime - b.createdTime ||
+        (a.id < b.id ? -1 : 1),
+    );
   const taken = new Set<string>();
   return sorted.map((item) => {
     const base = segmentOf(item.name);
@@ -416,25 +418,6 @@ export async function driveDelete(d: DriveBucket, targets: Found[]): Promise<num
   return count;
 }
 
-/** Keep the bucket document's counters near the truth (they are a label, not a limit). */
-export async function driveStatsFrom(
-  bucketId: string,
-  bucket: Pick<Bucket, 'stats'>,
-  rows: Found[],
-  now: number,
-): Promise<void> {
-  const stats = {
-    files: rows.filter((r) => r.node.kind === 'file').length,
-    folders: rows.filter((r) => r.node.kind === 'folder').length,
-    bytes: rows.reduce((n, r) => n + (r.node.file?.size ?? 0), 0),
-  };
-  const s = bucket.stats;
-  if (s.files === stats.files && s.folders === stats.folders && s.bytes === stats.bytes) return;
-  await rawBucketRef(bucketId)
-    .update({ stats, updatedAt: now })
-    .catch((e) => console.warn('[drive] could not update stats', bucketId, e));
-}
-
 // ─── the bucket's folder, at create ──────────────────────────────────────────
 
 /**
@@ -472,4 +455,150 @@ export async function driveBucketFolder(
     parent = last.id;
   }
   return { folderId: last!.id, folderName: last!.name };
+}
+
+// ─── uploads straight from the browser (§K4) ─────────────────────────────────
+
+/**
+ * Files on their way into a ticket (§J) wait here, in the bucket's own folder,
+ * until the command that posts them commits — then they move to their path.
+ * Hidden from the tree. Made on first use.
+ */
+export const INCOMING = '.tm-incoming';
+
+export async function driveIncoming(d: DriveBucket): Promise<string> {
+  const hit = (await d.api.children([d.rootId])).find((k) => k.name === INCOMING && isFolder(k));
+  if (hit) return hit.id;
+  return (await d.api.createFolder(d.rootId, INCOMING, { [BY]: d.storage.uid })).id;
+}
+
+/**
+ * Open a Drive upload the browser completes (no copy in our store):
+ *   'put'     a bucket file at `path` / `nodeId` — a new version of an existing
+ *             file, else a new file (its folders made now, the id reserved)
+ *   'attach'  a ticket file (§J): a new file in the staging folder, placed at
+ *             its path by the command that posts it
+ * Answers the session URL, the Drive id and the file's storagePath.
+ */
+export async function driveOpenUpload(
+  d: DriveBucket,
+  o: {
+    purpose: 'put' | 'attach';
+    path?: string | undefined;
+    nodeId?: string | undefined;
+    name: string;
+    mime: string;
+    size: number;
+    expectedFileId?: string | null | undefined;
+    origin?: string | undefined;
+    actor: PrincipalId;
+  },
+): Promise<{ uploadUrl: string; driveId: string; path: string; storagePath: string }> {
+  const mime = o.mime || fileInfo(null, o.name).mime || 'application/octet-stream';
+  if (o.purpose === 'attach') {
+    const parentId = await driveIncoming(d);
+    const [driveId] = await d.api.generateIds(1);
+    if (!driveId) throw errors.unavailable('Google Drive did not reserve a file id');
+    const name = segmentOf(o.name);
+    const uploadUrl = await d.api.openUpload({
+      create: { id: driveId, parentId, name },
+      mime,
+      size: o.size,
+      props: props(o.actor, true),
+      origin: o.origin,
+    });
+    return {
+      uploadUrl,
+      driveId,
+      path: '',
+      storagePath: driveStoragePath(d.bucketId, driveId, encodeURIComponent(name)),
+    };
+  }
+  let existing: Found | null;
+  let path: string;
+  if (o.nodeId) {
+    existing = await driveTarget(d, { nodeId: o.nodeId });
+    path = existing.node.path;
+  } else {
+    path = cleanDrivePath(o.path ?? '');
+    existing = await driveAt(d, path);
+  }
+  if (existing && existing.node.kind !== 'file')
+    throw errors.conflict(`${path} is a folder`, { path });
+  const current = existing?.node.file?.fileId ?? null;
+  if (o.expectedFileId !== undefined && o.expectedFileId !== current)
+    throw errors.conflict('This file changed since you opened it', {
+      reason: 'stale',
+      currentFileId: current,
+    });
+  const name = bucketBaseName(path);
+  if (existing) {
+    const uploadUrl = await d.api.openUpload({
+      replaceId: existing.id,
+      mime,
+      size: o.size,
+      props: props(o.actor),
+      origin: o.origin,
+    });
+    return {
+      uploadUrl,
+      driveId: existing.id,
+      path,
+      storagePath: driveStoragePath(d.bucketId, existing.id, encodeURIComponent(name)),
+    };
+  }
+  const parentId = await driveMkdirp(d, bucketParentPath(path), o.actor);
+  const [driveId] = await d.api.generateIds(1);
+  if (!driveId) throw errors.unavailable('Google Drive did not reserve a file id');
+  const uploadUrl = await d.api.openUpload({
+    create: { id: driveId, parentId, name },
+    mime,
+    size: o.size,
+    props: props(o.actor, true),
+    origin: o.origin,
+  });
+  return {
+    uploadUrl,
+    driveId,
+    path,
+    storagePath: driveStoragePath(d.bucketId, driveId, encodeURIComponent(name)),
+  };
+}
+
+/** A staged ticket file (§K4) moved to its final folder and name. */
+export async function drivePlace(
+  d: DriveBucket,
+  driveId: string,
+  path: string,
+  actor: PrincipalId,
+): Promise<void> {
+  const item = await d.api.get(driveId);
+  if (!item || item.trashed) throw errors.not_found('The upload is not in Drive');
+  const parent = await driveMkdirp(d, bucketParentPath(path), actor);
+  const name = await driveFreeName(d, parent, bucketBaseName(path));
+  const from = item.parents[0];
+  await d.api.update(driveId, {
+    name,
+    ...(from !== parent ? { addParent: parent, ...(from ? { removeParent: from } : {}) } : {}),
+    props: { [BY]: actor },
+  });
+}
+
+/** Bytes the SERVER holds (REST / MCP / intake / e-mail) → a staged ticket file in Drive. */
+export async function driveStageBytes(
+  d: DriveBucket,
+  name: string,
+  mime: string,
+  source: ByteSource,
+  actor: PrincipalId,
+): Promise<string> {
+  const parentId = await driveIncoming(d);
+  const f = await d.api.create({
+    parentId,
+    name: segmentOf(name),
+    mime,
+    source,
+    props: props(actor, true),
+  });
+  return driveStoragePath(d.bucketId, f.id, encodeURIComponent(segmentOf(name)));
 }

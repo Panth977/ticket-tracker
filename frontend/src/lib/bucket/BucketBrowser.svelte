@@ -120,6 +120,17 @@
   );
   const nodes = $derived($nodesQ.data as Node[]);
   const reach = $derived(myReach(mem ?? null, uid));
+  // §K2: a Drive bucket keeps no counters in Firestore — count what Drive showed.
+  const stats = $derived(
+    mem?.storage?.kind === 'drive'
+      ? {
+          files: nodes.filter((n) => n.kind === 'file').length,
+          bytes: nodes.reduce((t, n) => t + (n.file?.size ?? 0), 0),
+        }
+      : { files: mem?.stats.files ?? 0, bytes: mem?.stats.bytes ?? 0 },
+  );
+  // §K4: uploads into a Drive bucket go straight to Drive.
+  $effect(() => bucketUploads.inDrive(bucketId, mem?.storage?.kind === 'drive'));
   // Archived = read-only for everyone, the owner included, until restored.
   const writable = $derived(canWrite(reach) && mem?.archivedAt == null);
   const role = $derived(bucketRoleIn(mem, uid));
@@ -541,8 +552,8 @@
         >
       {/if}
       <span class="hidden shrink-0 text-xs text-subtle md:inline"
-        >{mem.stats.files}
-        {mem.stats.files === 1 ? 'file' : 'files'} · {formatBytes(mem.stats.bytes)}</span
+        >{stats.files}
+        {stats.files === 1 ? 'file' : 'files'} · {formatBytes(stats.bytes)}</span
       >
       <span class="flex-1"></span>
       {#if selectedNodes.length && writable}

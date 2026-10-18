@@ -117,4 +117,30 @@ describe('httpDrive', () => {
     expect(seen[1]!.method).toBe('PATCH');
     expect(seen[1]!.body).toBe('{"trashed":true}');
   });
+
+  it('openUpload: a resumable session for the browser, with its origin and the reserved id', async () => {
+    let init: RequestInit = {};
+    let url = '';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (u: string, i: RequestInit = {}) => {
+        url = u;
+        init = i;
+        return new Response(null, { status: 200, headers: { location: 'https://up/s1' } });
+      }),
+    );
+    const session = await httpDrive(async () => 't').openUpload({
+      create: { id: 'res1abc', parentId: 'p1', name: 'a.png' },
+      mime: 'image/png',
+      size: 10,
+      origin: 'https://app.example',
+    });
+    expect(session).toBe('https://up/s1');
+    expect(url).toContain('uploadType=resumable');
+    expect(init.method).toBe('POST');
+    const h = init.headers as Record<string, string>;
+    expect(h.origin).toBe('https://app.example');
+    expect(h['x-upload-content-length']).toBe('10');
+    expect(JSON.parse(init.body as string)).toMatchObject({ id: 'res1abc', parents: ['p1'] });
+  });
 });

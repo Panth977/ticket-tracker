@@ -28,6 +28,23 @@ import { DriveAuthError, fakeDrive, httpDrive, type DriveApi } from './api.js';
 export const DRIVE_LINKS = '_driveLinks';
 const linkRef = (uid: string) => db().collection(DRIVE_LINKS).doc(uid);
 
+/**
+ * The connection, read at most once a minute per instance: a Drive bucket's
+ * reads and writes should cost Firestore nothing beyond the bucket document.
+ * Connect / disconnect / a broken refresh drop it here at once; another
+ * instance notices within LINK_TTL_MS (and Google refuses a revoked token anyway).
+ */
+const LINK_TTL_MS = 60_000;
+const links = new Map<string, { link: DriveLink | undefined; at: number }>();
+async function readLink(uid: string): Promise<DriveLink | undefined> {
+  const hit = links.get(uid);
+  if (hit && Date.now() - hit.at < LINK_TTL_MS) return hit.link;
+  const link = (await linkRef(uid).get()).data() as DriveLink | undefined;
+  links.set(uid, { link, at: Date.now() });
+  return link;
+}
+const forgetLink = (uid: string) => links.delete(uid);
+
 interface DriveLink {
   email: string | null;
   /** v1.{iv}.{tag}.{ciphertext}, base64url. */
@@ -223,6 +240,7 @@ export async function completeDriveConnect(uid: string, code: string, now: numbe
       tokens.set(uid, { token: t.access_token, exp: now + (t.expires_in ?? 3600) * 1000 - 60_000 });
   }
   await linkRef(uid).set(link);
+  forgetLink(uid);
 }
 
 /** Forget a connection (and revoke it at Google, best effort). */
@@ -239,6 +257,7 @@ export async function disconnectDrive(uid: string): Promise<void> {
       },
     ).catch(() => {});
   await linkRef(uid).delete();
+  forgetLink(uid);
 }
 
 export async function driveStatusOf(uid: string): Promise<DriveStatus> {
@@ -257,7 +276,7 @@ export async function driveStatusOf(uid: string): Promise<DriveStatus> {
 
 /** The account's address, for bucket.storage.email. */
 export async function driveEmail(uid: string): Promise<string | null> {
-  return ((await linkRef(uid).get()).data() as DriveLink | undefined)?.email ?? null;
+  return (await readLink(uid))?.email ?? null;
 }
 
 // ─── access tokens and the client ────────────────────────────────────────────
@@ -267,13 +286,14 @@ const tokens = new Map<string, { token: string; exp: number }>();
 async function accessToken(uid: string): Promise<string> {
   const hit = tokens.get(uid);
   if (hit && hit.exp > Date.now()) return hit.token;
-  const link = (await linkRef(uid).get()).data() as DriveLink | undefined;
+  const link = await readLink(uid);
   if (!link) throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
   if (link.brokenAt) throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
   const t = await tokenCall({ grant_type: 'refresh_token', refresh_token: unseal(link.refresh) });
   if (!t.access_token) {
     if (t.error === 'invalid_grant') {
       await linkRef(uid).update({ brokenAt: Date.now(), updatedAt: Date.now() });
+      forgetLink(uid);
       throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
     }
     throw errors.unavailable(
@@ -313,7 +333,7 @@ export async function pickerToken(uid: string): Promise<{
 export async function driveFor(uid: string): Promise<DriveApi> {
   const mode = driveMode();
   if (mode === 'off') throw errors.unavailable(NOT_CONFIGURED);
-  const link = (await linkRef(uid).get()).data() as DriveLink | undefined;
+  const link = await readLink(uid);
   if (!link || link.brokenAt) throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
   if (link.fake) return fakeDrive(uid);
   const api = httpDrive(() => accessToken(uid));

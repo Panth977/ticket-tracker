@@ -90,6 +90,20 @@ export interface DriveApi {
   download(id: string, range?: { start: number; end: number }): Promise<Readable>;
   /** File ids reserved for create(), so a reference can be written before the bytes. */
   generateIds(count: number): Promise<string[]>;
+  /**
+   * Open a resumable upload the BROWSER finishes (§K4): a new file (`id`
+   * reserved, in `parentId`, named `name`) or a new version of `replaceId`.
+   * Answers the session URL; one PUT of the whole body completes it. `origin`
+   * is the app's origin, so Drive answers the browser's PUT with CORS headers.
+   */
+  openUpload(opts: {
+    create?: { id: string; parentId: string; name: string };
+    replaceId?: string;
+    mime: string;
+    size: number;
+    props?: Record<string, string>;
+    origin?: string | undefined;
+  }): Promise<string>;
 }
 
 // ─── Drive API v3 ────────────────────────────────────────────────────────────
@@ -326,6 +340,31 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
       if (!res.body) return Readable.from([]);
       return Readable.fromWeb(res.body as NodeReadableStream);
     },
+    async openUpload({ create, replaceId, mime, size, props, origin }) {
+      const url = create
+        ? `${UPLOAD}/files?uploadType=resumable&fields=${FIELDS}`
+        : `${UPLOAD}/files/${encodeURIComponent(replaceId!)}?uploadType=resumable&fields=${FIELDS}`;
+      const meta = create
+        ? { id: create.id, name: create.name, mimeType: mime, parents: [create.parentId] }
+        : { mimeType: mime };
+      const res = await call(
+        url,
+        {
+          method: create ? 'POST' : 'PATCH',
+          headers: {
+            'content-type': 'application/json; charset=UTF-8',
+            'x-upload-content-type': mime,
+            'x-upload-content-length': String(size),
+            ...(origin ? { origin } : {}),
+          },
+          body: JSON.stringify({ ...meta, ...(props ? { appProperties: props } : {}) }),
+        },
+        'upload',
+      );
+      const session = res.headers.get('location');
+      if (!session) throw errors.unavailable('Google Drive did not open an upload');
+      return session;
+    },
     async generateIds(count) {
       const r = await json<{ ids: string[] }>(
         `${API}/files/generateIds?count=${count}&space=drive&type=files`,
@@ -460,7 +499,37 @@ export function fakeDrive(account: string): DriveApi {
     async generateIds(count) {
       return Array.from({ length: count }, fakeId);
     },
+    async openUpload({ create, replaceId, mime, size, props }) {
+      if (create) must(create.parentId);
+      else must(replaceId!);
+      const token = `fu${fakeId()}`;
+      fakeSessions.set(token, { account, create, replaceId, mime, size, props });
+      return `/integrations/drive/fake-upload/${token}`;
+    },
   };
+}
+
+interface FakeSession {
+  account: string;
+  create?: { id: string; parentId: string; name: string } | undefined;
+  replaceId?: string | undefined;
+  mime: string;
+  size: number;
+  props?: Record<string, string> | undefined;
+}
+/** Open fake upload sessions: the dev door (doors/drive.ts) completes them. */
+const fakeSessions = new Map<string, FakeSession>();
+
+/** The fake Drive's answer to the browser's PUT of a session's bytes. */
+export async function completeFakeUpload(token: string, bytes: Uint8Array): Promise<DriveItem> {
+  const s = fakeSessions.get(token);
+  if (!s) throw errors.not_found('No such upload');
+  fakeSessions.delete(token);
+  if (bytes.byteLength !== s.size) throw errors.invalid('The upload is not the announced size');
+  const d = fakeDrive(s.account);
+  return s.create
+    ? d.create({ ...s.create, mime: s.mime, source: bytesSource(bytes), props: s.props ?? {} })
+    : d.replace(s.replaceId!, s.mime, bytesSource(bytes), s.props);
 }
 
 /** Tests and dev: put a file straight into a fake Drive, as if made in Drive's own UI. */
