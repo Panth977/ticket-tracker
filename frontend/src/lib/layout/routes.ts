@@ -48,6 +48,8 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'subscriptions', label: 'Subscriptions' },
   /** lib/access: what uses this board (artifacts §K, agents §AA2). */
   { id: 'subscribers', label: 'Subscribers' },
+  /** bucket.html §K6: where its ticket files live (its buckets' storage), and moving them. */
+  { id: 'storage', label: 'Storage' },
   /** aggregates.html: the numbers the board adds up (Cost, Time…). */
   { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
@@ -118,8 +120,10 @@ export const routes = {
   buckets: () => '/bucket',
   bucket: (bucketId: string, path?: string | null) =>
     `/bucket/${bucketId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  bucketSettings: (bucketId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
-    `/bucket/${bucketId}/settings/${section}`,
+  bucketSettings: (
+    bucketId: string,
+    section: 'general' | 'people' | 'storage' | 'subscribers' = 'general',
+  ) => `/bucket/${bucketId}/settings/${section}`,
   /** Dictionary (docs/plan/dictionary.html): the list (my own page), one dictionary, its settings. */
   dictionaries: () => '/dictionary',
   dictionary: (dictionaryId: string) => `/dictionary/${dictionaryId}`,
@@ -130,7 +134,14 @@ export const routes = {
   artifactSettings: (
     artifactId: string,
     section:
-      'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'dictionaries',
+      | 'general'
+      | 'people'
+      | 'subscriptions'
+      | 'subscribers'
+      | 'storage'
+      | 'builds'
+      | 'data'
+      | 'dictionaries',
   ) => `/x/${artifactId}/settings/${section}`,
   /** §AC: an owner's page — a person or an org (/{handle}). */
   owner: (handle: string) => `/${handle}`,

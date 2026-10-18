@@ -8,6 +8,8 @@
   import GeneralSection from '$lib/bucket/settings/GeneralSection.svelte';
   import PeopleSection from '$lib/bucket/settings/PeopleSection.svelte';
   import SubscribersSection from '$lib/bucket/settings/SubscribersSection.svelte';
+  import Section from '$lib/board/settings/Section.svelte';
+  import StorageMove from '$lib/drive/StorageMove.svelte';
   import { useBucketSettings } from '$lib/bucket/settings/context.svelte';
   import { bucketSettingsFor } from '$lib/bucket/store';
   import { routes } from '$lib/layout/routes';
@@ -43,5 +45,12 @@
     <PeopleSection />
   {:else if section === 'subscribers'}
     <SubscribersSection />
+  {:else if section === 'storage'}
+    <Section
+      title="Storage"
+      description="Where this bucket's files live — managed by this app, or a folder in your Google Drive — and moving them from one to the other."
+    >
+      <StorageMove bucketId={s.bucket.id} />
+    </Section>
   {/if}
 {/key}

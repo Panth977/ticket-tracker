@@ -68,18 +68,16 @@ export const TemplateInputSchema = TemplateSchema.pick({
 export type TemplateInput = z.infer<typeof TemplateInputSchema>;
 
 /** JSON a message template attaches; size-checked (TEMPLATE_DATA_MAX) where it is accepted. */
-export const TemplateDataSchema = z
-  .unknown()
-  .refine(
-    (v) => {
-      try {
-        return JSON.stringify(v ?? null).length <= TEMPLATE_DATA_MAX;
-      } catch {
-        return false;
-      }
-    },
-    { message: `Template data is JSON of at most ${TEMPLATE_DATA_MAX} characters` },
-  );
+export const TemplateDataSchema = z.unknown().refine(
+  (v) => {
+    try {
+      return JSON.stringify(v ?? null).length <= TEMPLATE_DATA_MAX;
+    } catch {
+      return false;
+    }
+  },
+  { message: `Template data is JSON of at most ${TEMPLATE_DATA_MAX} characters` },
+);
 
 /** Message.template — which template wrote the message, and what its form held. */
 export const MessageTemplateSchema = z.object({

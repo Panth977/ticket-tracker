@@ -13,6 +13,9 @@
  * (a 1 GB file never sits in memory), and come down as a stream, optionally
  * one byte range.
  */
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { DRIVE_FOLDER_MIME, errors } from '@tm/shared';
@@ -90,6 +93,8 @@ export interface DriveApi {
   download(id: string, range?: { start: number; end: number }): Promise<Readable>;
   /** File ids reserved for create(), so a reference can be written before the bytes. */
   generateIds(count: number): Promise<string[]>;
+  /** Untrashed items carrying this private appProperty (§K6: a node moved from managed). */
+  findByProp(key: string, value: string): Promise<DriveItem[]>;
   /**
    * Open a resumable upload the BROWSER finishes (§K4): a new file (`id`
    * reserved, in `parentId`, named `name`) or a new version of `replaceId`.
@@ -365,6 +370,17 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
       if (!session) throw errors.unavailable('Google Drive did not open an upload');
       return session;
     },
+    async findByProp(key, value) {
+      const u = new URL(`${API}/files`);
+      u.searchParams.set(
+        'q',
+        `appProperties has { key=${lit(key)} and value=${lit(value)} } and trashed = false`,
+      );
+      u.searchParams.set('spaces', 'drive');
+      u.searchParams.set('fields', `files(${FIELDS})`);
+      const r = await json<{ files?: RawFile[] }>(u.toString(), {}, 'find');
+      return (r.files ?? []).map(toItem);
+    },
     async generateIds(count) {
       const r = await json<{ ids: string[] }>(
         `${API}/files/generateIds?count=${count}&space=drive&type=files`,
@@ -383,16 +399,65 @@ interface FakeFile extends DriveItem {
   version: number;
 }
 
-/** Every fake Drive in this process, by account (the connected person's uid). */
+/**
+ * Every fake Drive, by account (the connected person's uid) — kept ON DISK
+ * (TM_FAKE_DRIVE_DIR, default a temp folder) as well as here: under the
+ * Functions emulator the api and the queue run in different processes, and a
+ * queued job (a storage move, §K6) must see the same Drive the api wrote.
+ */
 const fakes = new Map<string, Map<string, FakeFile>>();
+const fakeDir = () => process.env.TM_FAKE_DRIVE_DIR || join(tmpdir(), 'tm-fake-drive');
+const fakeFile = (account: string) => join(fakeDir(), `${account.replace(/[^\w-]/g, '_')}.json`);
+
+type FakeRow = Omit<FakeFile, 'bytes'> & { bytes: string };
+function fakeLoad(account: string, into: Map<string, FakeFile>): void {
+  let rows: FakeRow[];
+  try {
+    rows = JSON.parse(readFileSync(fakeFile(account), 'utf8')) as FakeRow[];
+  } catch {
+    return; // nothing on disk yet: keep what is in memory
+  }
+  into.clear();
+  for (const r of rows)
+    into.set(r.id, { ...r, bytes: new Uint8Array(Buffer.from(r.bytes, 'base64')) });
+}
+function fakeSave(account: string, from: Map<string, FakeFile>): void {
+  mkdirSync(fakeDir(), { recursive: true });
+  const rows: FakeRow[] = [...from.values()].map((f) => ({
+    ...f,
+    bytes: Buffer.from(f.bytes).toString('base64'),
+  }));
+  writeFileSync(fakeFile(account), JSON.stringify(rows));
+}
 
 /** Tests: forget every fake Drive. */
-export const resetFakeDrives = (): void => fakes.clear();
+export const resetFakeDrives = (): void => {
+  fakes.clear();
+  rmSync(fakeDir(), { recursive: true, force: true });
+};
 
 let fakeSeq = 0;
 const fakeId = () => `fake${Date.now().toString(36)}${(fakeSeq++).toString(36).padStart(4, '0')}x`;
 
 export function fakeDrive(account: string): DriveApi {
+  const api = fakeDriveIn(account);
+  const files = fakes.get(account)!;
+  // Every call sees what any process wrote, and writes back what it changed.
+  const synced = {} as DriveApi;
+  for (const [name, fn] of Object.entries(api) as [
+    keyof DriveApi,
+    (...a: unknown[]) => Promise<unknown>,
+  ][])
+    (synced as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
+      fakeLoad(account, files);
+      const out = await fn.apply(api, args);
+      fakeSave(account, files);
+      return out;
+    };
+  return synced;
+}
+
+function fakeDriveIn(account: string): DriveApi {
   let files = fakes.get(account);
   if (!files) fakes.set(account, (files = new Map()));
   const store = files;
@@ -499,6 +564,11 @@ export function fakeDrive(account: string): DriveApi {
     async generateIds(count) {
       return Array.from({ length: count }, fakeId);
     },
+    async findByProp(key, value) {
+      return [...store.values()]
+        .filter((f) => !trashedUp(f) && f.appProperties[key] === value)
+        .map(pub);
+    },
     async openUpload({ create, replaceId, mime, size, props }) {
       if (create) must(create.parentId);
       else must(replaceId!);
@@ -534,6 +604,10 @@ export async function completeFakeUpload(token: string, bytes: Uint8Array): Prom
 
 /** Tests and dev: put a file straight into a fake Drive, as if made in Drive's own UI. */
 export function fakeDriveTouch(account: string, id: string, patch: Partial<DriveItem>): void {
-  const f = fakes.get(account)?.get(id);
+  let files = fakes.get(account);
+  if (!files) fakes.set(account, (files = new Map()));
+  fakeLoad(account, files);
+  const f = files.get(id);
   if (f) Object.assign(f, patch);
+  fakeSave(account, files);
 }

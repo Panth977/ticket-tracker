@@ -96,3 +96,21 @@ export const DriveStatusSchema = z.object({
   picker: z.boolean(),
 });
 export type DriveStatus = z.infer<typeof DriveStatusSchema>;
+
+/**
+ * §K6: a storage MOVE in progress (bucketStorageMove). While `state` is
+ * 'running' the bucket is read-only and is read from where it was; the queued
+ * job copies node by node and flips `bucket.storage` only at the very end.
+ */
+export const BucketMoveSchema = z.object({
+  to: BucketStorageKindSchema,
+  /** For a move to Drive: the folder it goes to, in the mover's Drive. */
+  target: BucketDriveStorageSchema.nullable(),
+  state: z.enum(['running', 'failed']),
+  total: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  by: UidSchema,
+  startedAt: MillisSchema,
+  error: z.string().max(500).nullable(),
+});
+export type BucketMove = z.infer<typeof BucketMoveSchema>;

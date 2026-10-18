@@ -31,6 +31,10 @@ export default defineCommand('bucketDriveUpload', async (ctx, input) => {
       );
     if (bucket.archivedAt != null)
       throw errors.conflict('That bucket is archived — restore it first');
+    if (bucket.move?.state === 'running')
+      throw errors.conflict(
+        'That bucket is moving to another storage — try again when the move finishes',
+      );
   } else bucket = (await loadBucket(null, bucketId, ctx, 'write')).bucket;
   if (!isDriveBucket(bucket))
     throw errors.invalid('This bucket is not in Google Drive — upload to Storage', {

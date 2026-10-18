@@ -205,6 +205,11 @@ function requireBoardWrite(bucket: Bucket | undefined, bucketId: string, boardId
     );
   if (bucket.archivedAt != null)
     throw errors.conflict('That bucket is archived — restore it first', { bucketId });
+  if (bucket.move?.state === 'running')
+    throw errors.conflict(
+      'That bucket is moving to another storage — try again when the move finishes',
+      { bucketId, reason: 'bucket_moving' },
+    );
   return bucket;
 }
 

@@ -220,6 +220,21 @@ export async function driveAt(d: DriveBucket, path: string): Promise<Found | nul
  * folder and not trashed: its path is found by walking up its parents.
  */
 export async function driveById(d: DriveBucket, id: string): Promise<Found | null> {
+  const direct = await driveByIdDirect(d, id);
+  if (direct) return direct;
+  // §K6: a node that lived in Firestore before the bucket moved to Drive keeps
+  // answering to its old id (ticket links) — the moved file carries it.
+  for (const f of await d.api.findByProp(NODE_ID, id).catch(() => [])) {
+    const hit = await driveByIdDirect(d, f.id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** The private appProperty a moved node keeps its old (managed) id in. */
+export const NODE_ID = 'tmNodeId';
+
+async function driveByIdDirect(d: DriveBucket, id: string): Promise<Found | null> {
   if (id === d.rootId) return null;
   const item = await d.api.get(id).catch((e: { code?: string }) => {
     if (e?.code === 'not_found') return null;

@@ -391,6 +391,23 @@ export const bucketDriveUpload = defineCommand({
   }),
 });
 
+/**
+ * §K6: move a bucket's files to the other storage — managed → a folder in MY
+ * Google Drive, or Drive → managed. Owner only. A queued job copies every file
+ * (the bucket is read-only meanwhile; progress on bucket.move), then the
+ * bucket switches over. Ticket links keep working. The old copy: managed
+ * objects are deleted after a move to Drive; a Drive folder is left as it was
+ * after a move back (nothing in a person's Drive is ever deleted).
+ */
+export const bucketStorageMove = defineCommand({
+  name: 'bucketStorageMove',
+  source: 'extra',
+  permission: 'Owner of the bucket, in the app. A move to Drive needs MY Drive connected.',
+  errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'unavailable'],
+  req: req({ bucketId: BucketIdSchema, to: BucketStorageInputSchema }),
+  res: z.object({ ok: z.literal(true), total: z.number().int() }),
+});
+
 /** Is my Google Drive connected (and can this server talk to Drive at all)? */
 export const driveStatus = defineCommand({
   name: 'driveStatus',

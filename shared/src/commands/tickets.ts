@@ -275,9 +275,7 @@ export const messagePost = defineCommand({
     .strict()
     .refine(
       (r) =>
-        (r.attachments?.length ?? 0) +
-          (r.fileIds?.length ?? 0) +
-          (r.bucketUploads?.length ?? 0) <=
+        (r.attachments?.length ?? 0) + (r.fileIds?.length ?? 0) + (r.bucketUploads?.length ?? 0) <=
         MAX_ATTACHMENTS_PER_CALL,
       {
         message: `At most ${MAX_ATTACHMENTS_PER_CALL} files per message`,

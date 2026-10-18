@@ -647,6 +647,44 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           the bucket here and leaves its folder in Drive untouched; moving a Drive bucket to an org
           keeps it in its creator's Drive.
         </p>
+      <h3 id="k6">K6 · Moving between storages</h3>
+        <p>
+          A bucket's storage is chosen at create and can be <b>moved</b> later, both ways:
+          managed → a folder in the mover's Google Drive, or Drive → managed. Every entity that
+          keeps files has a <b>Storage</b> tab in its settings: a bucket's (its own storage and the
+          move), a board's (its buckets — the ticket-file one first — each with the move for its
+          owner, or "make one" when it has none) and an artifact's (the buckets granted to it).
+          Dictionaries hold no files and stay where they are.
+        </p>
+        <ul>
+          <li>
+            <code>bucketStorageMove { bucketId, to }</code> — owner only, in the app. A move to Drive
+            finds or makes the folder (picked, or a path) in the mover's Drive. It stamps
+            <code>bucket.move { to, target, state: 'running', total, done }</code> and queues the
+            job.
+          </li>
+          <li>
+            While it runs the bucket is <b>read-only</b> (writes answer
+            <code>409 bucket_moving</code>) and is read from where it was; the tab shows
+            <i>n of total</i> live. The job copies node by node in slices of a few minutes, each
+            queuing the next; every slice is safe to repeat (a copied node is skipped). The last one
+            flips <code>bucket.storage</code> in one write.
+          </li>
+          <li>
+            <b>Ticket links keep working.</b> To Drive: each copied file keeps its old id in the
+            private appProperty <code>tmNodeId</code>, and an old id finds it. To managed: the new
+            Firestore nodes take the Drive ids.
+          </li>
+          <li>
+            <b>The old copy.</b> After a move to Drive the managed objects and node documents are
+            deleted. After a move back to managed the Drive folder is left exactly as it was —
+            nothing in a person's Drive is ever deleted by the app.
+          </li>
+          <li>
+            A failed slice sets <code>state: 'failed'</code> with the error; nothing is lost (the
+            bucket still reads from where it was) and the owner starts the move again.
+          </li>
+        </ul>
       </article>
     </div>
     <script type="module">

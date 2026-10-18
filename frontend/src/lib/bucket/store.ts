@@ -150,6 +150,8 @@ export function splitBuckets<T extends Pick<Bucket, 'name' | 'archivedAt'>>(
 export const BUCKET_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General', owner: true },
   { id: 'people', label: 'People', owner: true },
+  /** bucket.html §K6: where its files live, and moving them. */
+  { id: 'storage', label: 'Storage', owner: true },
   /** lib/access: the boards and artifacts that use it. */
   { id: 'subscribers', label: 'Subscribers', owner: false },
 ] as const;

@@ -137,6 +137,8 @@ export interface QueuePayloads {
   artifactDelete: { artifactId: string; actor: Uid; dataOnly?: boolean };
   /** bucketDelete (bucket.html §G): Storage prefix, nodes, then the document. */
   bucketDelete: { bucketId: string; actor: Uid };
+  /** bucketStorageMove (bucket.html §K6): copy a slice, then re-enqueue until done. */
+  bucketStorageMove: { bucketId: string; round: number };
   /** accountExport. */
   export: { jobId: string; uid: Uid };
   /** Generic e-mail outside notify (invites, export ready …). */

@@ -18,6 +18,7 @@ import {
   call,
   callRaw,
   ports,
+  queue,
   request,
   setupEmulators,
   uniq,
@@ -388,5 +389,90 @@ describe('Drive bucket files on tickets (§K3, §K4)', () => {
     ]);
     expect(ticketId).toBeTruthy();
     expect(await ourObjects(bucketId)).toBe(0);
+  });
+});
+
+describe('moving a bucket between storages (§K6)', () => {
+  inProcess(
+    'managed → Drive: files copied, managed copy gone, old ids still open, read-only meanwhile',
+    async () => {
+      const { owner } = await people('owner');
+      await connect(owner);
+      const { bucketId } = await call(owner, 'bucketCreate', { name: 'Moving' });
+      const a = await call(owner, 'bucketFileWrite', { bucketId, path: 'docs/a.md', text: '# A' });
+      await call(owner, 'bucketFileWrite', { bucketId, path: 'b.txt', text: 'bee' });
+      expect(await firestoreNodes(bucketId)).toBe(3);
+
+      const started = await call(owner, 'bucketStorageMove', {
+        bucketId,
+        to: { kind: 'drive', folderPath: 'Moves/Moving' },
+      });
+      expect(started.total).toBe(3);
+      expect((await memDoc(bucketId))!.move).toMatchObject({ state: 'running', to: 'drive' });
+      const refused = await callRaw(owner, 'bucketFileWrite', {
+        bucketId,
+        path: 'c.txt',
+        text: 'x',
+      });
+      expect(refused.status).toBe(409);
+      // Reads still work, from where it was.
+      expect((await call(owner, 'bucketFileRead', { bucketId, path: 'b.txt' })).text).toBe('bee');
+
+      await queue().drain({ queue: 'bucketStorageMove' });
+      const m = (await memDoc(bucketId))!;
+      expect(m.move).toBeUndefined();
+      expect(m.storage).toMatchObject({ kind: 'drive', folderName: 'Moving' });
+      expect(await firestoreNodes(bucketId)).toBe(0);
+      expect(await ourObjects(bucketId)).toBe(0);
+      expect(paths_((await call(owner, 'bucketTree', { bucketId })).nodes)).toEqual([
+        'b.txt',
+        'docs',
+        'docs/a.md',
+      ]);
+      // The old (managed) node id still opens the file — ticket links keep working.
+      const byOld = await call(owner, 'bucketFileRead', { bucketId, nodeId: a.nodeId });
+      expect(byOld.text).toBe('# A');
+      // Writable again, now in Drive.
+      await call(owner, 'bucketFileWrite', { bucketId, path: 'c.txt', text: 'sea' });
+    },
+  );
+
+  inProcess(
+    'Drive → managed: nodes keep the Drive ids, bytes are ours, the Drive folder stays',
+    async () => {
+      const { owner } = await people('owner');
+      await connect(owner);
+      const bucketId = await driveBucket(owner, 'Back home');
+      const w = await call(owner, 'bucketFileWrite', {
+        bucketId,
+        path: 'notes/n.md',
+        text: 'note',
+      });
+      await call(owner, 'bucketStorageMove', { bucketId, to: { kind: 'managed' } });
+      await queue().drain({ queue: 'bucketStorageMove' });
+      const m = (await memDoc(bucketId))!;
+      expect(m.storage).toBeUndefined();
+      expect(m.move).toBeUndefined();
+      expect(m.stats).toEqual({ files: 1, folders: 1, bytes: 4 });
+      expect(await firestoreNodes(bucketId)).toBe(2);
+      const read = await call(owner, 'bucketFileRead', { bucketId, nodeId: w.nodeId });
+      expect(read.text).toBe('note');
+      expect(await ourObjects(bucketId)).toBe(1);
+      const again = await callRaw(owner, 'bucketStorageMove', {
+        bucketId,
+        to: { kind: 'managed' },
+      });
+      expect(again.status).toBe(400);
+    },
+  );
+
+  inProcess('only the owner moves; an editor is refused', async () => {
+    const { owner, ed } = await people('owner', 'ed');
+    await connect(owner);
+    await connect(ed);
+    const { bucketId } = await call(owner, 'bucketCreate', { name: 'Mine' });
+    await call(owner, 'bucketShare', { bucketId, email: ed.email, role: 'editor' });
+    const r = await callRaw(ed, 'bucketStorageMove', { bucketId, to: { kind: 'drive' } });
+    expect(r.status).toBe(403);
   });
 });
