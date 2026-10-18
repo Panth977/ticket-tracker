@@ -10,6 +10,8 @@ export const ACCOUNT_SECTIONS = [
   { id: 'channels', label: 'Channels' },
   { id: 'security', label: 'Security' },
   { id: 'connected-apps', label: 'Connected apps' },
+  // bucket.html §K1: buckets in your own Google Drive.
+  { id: 'drive', label: 'Google Drive' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'data', label: 'Data & deletion' },
   // §X — whose app this is. Only the admin sees it (the menus filter on

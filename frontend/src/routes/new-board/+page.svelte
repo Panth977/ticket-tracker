@@ -37,6 +37,9 @@
   import { myBoards } from '$lib/stores';
   import { Button, Input, Select, Textarea, toast } from '$lib/ui';
   import IndicatorField from '$lib/ui/IndicatorField.svelte';
+  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import { driveState } from '$lib/drive/drive.svelte';
+  import { storageFor } from '$lib/drive/storageFor';
 
   type Chip = 'blank' | 'kanban' | 'bugs' | 'support' | 'sprint' | 'copy';
   const CHIPS: { id: Chip; label: string; hint: string }[] = [
@@ -67,6 +70,16 @@
   let inviteError = $state<string | null>(null);
 
   let creating = $state(false);
+  /** bucket.html §K5: where its ticket files live — a new bucket made with it, or none yet. */
+  let storage = $state<StorageChoice>({ kind: 'managed' });
+  const storageOk = $derived(storage.kind !== 'drive' || !!driveState.status?.connected);
+  // Back from Google's consent page (Connect Google Drive, below): pick Drive
+  // again (the root layout's DriveReturn says how it went).
+  if (
+    typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('drive') === 'connected'
+  )
+    storage = { kind: 'drive', folderPath: '' };
 
   const boardsQ = $derived(myBoards(auth.uid));
   const copyOptions = $derived(
@@ -115,6 +128,7 @@
       !keyShapeError(key) &&
       keyStatus !== 'taken' &&
       keyStatus !== 'checking' &&
+      storageOk &&
       (chip !== 'copy' || !!copyFrom),
   );
 
@@ -138,6 +152,20 @@
         },
         { toast: false },
       );
+      if (storage.kind !== 'none') {
+        try {
+          await storageFor(
+            storage,
+            { boardId },
+            { name: `${key} ticket files`, owner: ownerOf(owner) },
+          );
+        } catch (e) {
+          toast.error(
+            'Board created, but its file bucket was not — set one in board settings › Bucket',
+            (e as Error).message,
+          );
+        }
+      }
       if (invites.length) {
         try {
           const r = await command(
@@ -262,6 +290,14 @@
           </p>
         </div>
         <OwnerSelect bind:value={owner} />
+        <StorageField
+          bind:value={storage}
+          allowNone
+          name="{key || 'Board'} ticket files"
+          label="Where its ticket files live"
+          managedHint="A new bucket, kept by this app"
+          noneHint="Pick a bucket later in settings"
+        />
         <div class="flex flex-col gap-1.5">
           <span class="text-sm font-medium">Indicator</span>
           <IndicatorField

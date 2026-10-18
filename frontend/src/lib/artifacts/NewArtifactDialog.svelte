@@ -23,6 +23,10 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
+  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import { driveState } from '$lib/drive/drive.svelte';
+  import { storageFor } from '$lib/drive/storageFor';
+  import { toast } from '$lib/ui/toast.svelte';
 
   let { open = $bindable(false), owner: initialOwner = '' }: { open: boolean; owner?: string } =
     $props();
@@ -34,6 +38,9 @@
   const indicator = $derived(picked ?? defaultIndicator(name.trim() || 'artifact'));
   let busy = $state(false);
   let owner = $state('');
+  /** bucket.html §K5: a bucket for its files, made with it — or none. */
+  let storage = $state<StorageChoice>({ kind: 'none' });
+  const storageOk = $derived(storage.kind !== 'drive' || !!driveState.status?.connected);
 
   // A fresh form each time it opens.
   $effect(() => {
@@ -42,12 +49,13 @@
       name = '';
       description = '';
       picked = null;
+      storage = { kind: 'none' };
     }
   });
 
   async function create() {
     const n = name.trim();
-    if (!n || busy) return;
+    if (!n || busy || !storageOk) return;
     busy = true;
     try {
       const { artifactId } = await command(
@@ -60,6 +68,12 @@
         },
         { toast: 'Could not create the artifact' },
       );
+      if (storage.kind !== 'none')
+        await storageFor(
+          storage,
+          { artifactId },
+          { name: `${n} files`, owner: ownerOf(owner) },
+        ).catch((e: Error) => toast.error('Artifact created, but its bucket was not', e.message));
       open = false;
       await goto(routes.artifact(artifactId));
     } catch {
@@ -97,6 +111,14 @@
       placeholder="What it is for (optional)"
     />
     <OwnerSelect bind:value={owner} />
+    <StorageField
+      bind:value={storage}
+      allowNone
+      name="{name.trim() || 'Artifact'} files"
+      label="A bucket for its files"
+      managedHint="A new bucket, kept by this app"
+      noneHint="Grant one later"
+    />
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium">Indicator</span>
       <IndicatorField
@@ -113,7 +135,7 @@
       variant="primary"
       type="submit"
       form="new-artifact"
-      disabled={!name.trim()}
+      disabled={!name.trim() || !storageOk}
       loading={busy}>Create</Button
     >
   {/snippet}

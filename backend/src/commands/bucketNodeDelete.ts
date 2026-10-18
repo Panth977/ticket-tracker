@@ -10,11 +10,21 @@ import { ports } from '../adapters/index.js';
 import { db } from '../runtime/firebase.js';
 import { bumpStats, readSubtree, readTarget, type Found } from '../bucket/nodes.js';
 import { loadBucket, nodeRef } from '../bucket/shared.js';
+import { driveDelete, driveTarget, isDriveBucket, openDrive } from '../bucket/drive/store.js';
 import { defineCommand } from './_registry.js';
 
 export default defineCommand('bucketNodeDelete', async (ctx, input) => {
   const { bucketId } = input;
-  await loadBucket(null, bucketId, ctx, 'write');
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'write');
+  if (isDriveBucket(bucket)) {
+    // §K2: to Drive's trash (restorable there for 30 days).
+    const d = await openDrive(bucketId, bucket);
+    const found: Found[] = [];
+    for (const path of input.paths ?? []) found.push(await driveTarget(d, { path }));
+    for (const nodeId of input.nodeIds ?? []) found.push(await driveTarget(d, { nodeId }));
+    if (!found.length) throw errors.invalid('Nothing to delete', { field: 'paths' });
+    return { deleted: await driveDelete(d, found) };
+  }
   const targets: Found[] = [];
   for (const path of input.paths ?? []) targets.push(await readTarget(null, bucketId, { path }));
   for (const nodeId of input.nodeIds ?? [])

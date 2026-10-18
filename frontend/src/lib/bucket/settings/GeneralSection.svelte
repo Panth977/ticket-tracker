@@ -131,6 +131,15 @@
         onchange={(i) => (draft.value = { ...d, indicator: i })}
       />
     </div>
+    <p class="text-sm text-muted" data-testid="bucket-storage">
+      {#if m.storage?.kind === 'drive'}
+        Stored in Google Drive{m.storage.email ? ` (${m.storage.email})` : ''}, folder
+        <span class="font-medium text-text">{m.storage.folderName}</span>. Drive is the source of
+        truth: what you change there shows here.
+      {:else}
+        Stored by this app (managed).
+      {/if}
+    </p>
     <p class="text-sm text-muted">
       {m.stats.files}
       {m.stats.files === 1 ? 'file' : 'files'} in {m.stats.folders}
@@ -164,8 +173,13 @@
       <div class="min-w-0 flex-1">
         <h3 class="font-medium">Delete this bucket</h3>
         <p class="text-sm text-muted">
-          Every file and folder is deleted for good, for everyone it is shared with. Tickets that
-          point at its files show them as no longer in memory.
+          {#if m.storage?.kind === 'drive'}
+            The bucket goes for everyone it is shared with; its Drive folder stays in your Drive,
+            untouched. Tickets that point at its files show them as no longer in memory.
+          {:else}
+            Every file and folder is deleted for good, for everyone it is shared with. Tickets that
+            point at its files show them as no longer in memory.
+          {/if}
         </p>
       </div>
       <Button variant="danger" onclick={() => ((confirmName = ''), (deleteOpen = true))}

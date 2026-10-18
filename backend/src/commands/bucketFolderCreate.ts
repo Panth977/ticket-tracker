@@ -12,11 +12,15 @@ import {
 } from '../bucket/nodes.js';
 import { loadBucket, nodeRef } from '../bucket/shared.js';
 import { runTx } from '../runtime/tx.js';
+import { driveFolderCreate, isDriveBucket, openDrive } from '../bucket/drive/store.js';
 import { defineCommand } from './_registry.js';
 
 export default defineCommand('bucketFolderCreate', async (ctx, input) => {
   const { bucketId } = input;
   const path = cleanPath(input.path);
+  const pre = await loadBucket(null, bucketId, ctx, 'write');
+  if (isDriveBucket(pre.bucket))
+    return driveFolderCreate(await openDrive(bucketId, pre.bucket), path, ctx.actor);
   return runTx(async (tx) => {
     const { bucket } = await loadBucket(tx, bucketId, ctx, 'write');
     const here = await nodeAt(bucketId, path, tx);

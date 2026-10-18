@@ -30,6 +30,7 @@
     Eye,
     FilePlus,
     FolderInput,
+    FolderOpen,
     FolderPlus,
     FolderTree,
     FolderUp,
@@ -60,6 +61,7 @@
   } from '$lib/ui';
   import type { MenuItem } from '$lib/ui/types';
   import { switcherFor } from '$lib/orgs/switcherStore';
+  import { connectDrive } from '$lib/drive/drive.svelte';
   import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
   import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
   import { copyPath, createFile, createFolder, deleteNodes, moveNode } from './actions';
@@ -112,7 +114,10 @@
   const uid = $derived(auth.uid);
   const docQ = $derived(bucketDoc(bucketId));
   const mem = $derived($docQ.data);
-  const nodesQ = $derived(bucketNodes(bucketId));
+  // §K2: a Drive bucket's tree comes from Drive (bucketTree), not Firestore.
+  const nodesQ = $derived(
+    bucketNodes(bucketId, mem?.storage?.kind === 'drive' ? 'drive' : 'managed'),
+  );
   const nodes = $derived($nodesQ.data as Node[]);
   const reach = $derived(myReach(mem ?? null, uid));
   // Archived = read-only for everyone, the owner included, until restored.
@@ -526,6 +531,15 @@
           ><Lock size={12} aria-hidden="true" /> Read only</span
         >
       {/if}
+      {#if mem.storage?.kind === 'drive'}
+        <span
+          class="flex shrink-0 items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-muted"
+          title="Stored in {mem.storage.email ?? 'a'} Google Drive, folder {mem.storage
+            .folderName}. Drive is the source of truth."
+          data-testid="bucket-drive-badge"
+          ><FolderOpen size={12} aria-hidden="true" /> Google Drive</span
+        >
+      {/if}
       <span class="hidden shrink-0 text-xs text-subtle md:inline"
         >{mem.stats.files}
         {mem.stats.files === 1 ? 'file' : 'files'} · {formatBytes(mem.stats.bytes)}</span
@@ -623,6 +637,25 @@
 
     {#if $nodesQ.loading}
       <div class="flex flex-col gap-2 p-6"><Skeleton lines={6} /></div>
+    {:else if $nodesQ.error && mem.storage?.kind === 'drive'}
+      <!-- §K: Drive is the truth — without the connection there is nothing to show. -->
+      <EmptyState
+        icon={FolderOpen}
+        title={/disconnected|reconnect/i.test($nodesQ.error.message)
+          ? 'Google Drive is disconnected'
+          : 'Could not read Google Drive'}
+        description={mem.storage.uid === uid
+          ? `${$nodesQ.error.message}`
+          : `${$nodesQ.error.message} The files are safe in Drive; the bucket's owner can reconnect it.`}
+      >
+        {#snippet action()}
+          {#if mem?.storage?.uid === uid}<Button
+              variant="primary"
+              icon={FolderOpen}
+              onclick={() => connectDrive()}>Reconnect Google Drive</Button
+            >{/if}
+        {/snippet}
+      </EmptyState>
     {:else if missing}
       <EmptyState
         icon={SearchX}

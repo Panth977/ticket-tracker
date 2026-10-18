@@ -23,6 +23,7 @@ import {
 } from '../bucket/nodes.js';
 import { loadBucket, nodeRef } from '../bucket/shared.js';
 import { runTx } from '../runtime/tx.js';
+import { driveMove, isDriveBucket, openDrive } from '../bucket/drive/store.js';
 import { defineCommand } from './_registry.js';
 
 const SUBTREE_IN_TX = 400;
@@ -30,6 +31,9 @@ const SUBTREE_IN_TX = 400;
 export default defineCommand('bucketMove', async (ctx, input) => {
   const { bucketId } = input;
   const toPath = cleanPath(input.toPath, 'toPath');
+  const pre = await loadBucket(null, bucketId, ctx, 'write');
+  if (isDriveBucket(pre.bucket))
+    return driveMove(await openDrive(bucketId, pre.bucket), input, toPath, ctx.actor);
   const res = await runTx(async (tx) => {
     const { bucket } = await loadBucket(tx, bucketId, ctx, 'write');
     const node = await readTarget(tx, bucketId, input);

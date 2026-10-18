@@ -7,6 +7,7 @@ import { errors, isBucketTextFile, BUCKET_READ_TEXT_MAX_BYTES } from '@tm/shared
 import { readStream } from '../adapters/files.js';
 import { readTarget } from '../bucket/nodes.js';
 import { loadBucket, toNodeOut } from '../bucket/shared.js';
+import { driveTarget, isDriveBucket, openDrive } from '../bucket/drive/store.js';
 import { signedAccess } from '../platform/fileAccess.js';
 import { defineCommand } from './_registry.js';
 
@@ -28,8 +29,10 @@ async function readPrefix(
 
 export default defineCommand('bucketFileRead', async (ctx, input) => {
   const { bucketId } = input;
-  await loadBucket(null, bucketId, ctx, 'read');
-  const found = await readTarget(null, bucketId, input);
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'read');
+  const found = isDriveBucket(bucket)
+    ? await driveTarget(await openDrive(bucketId, bucket), input)
+    : await readTarget(null, bucketId, input);
   const file = found.node.file;
   if (found.node.kind !== 'file' || !file)
     throw errors.invalid(`${found.node.path} is a folder — list it with bucketTree`, {

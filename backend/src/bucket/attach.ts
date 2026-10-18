@@ -19,6 +19,14 @@
  *   storeBoardFile       server-side bytes (REST / MCP upload, intake, email)
  *                        → the board's default bucket, as a BucketUpload
  *
+ * A DRIVE BUCKET (§K4) cannot take part in a Firestore transaction. Its
+ * uploads are planned there all the same — the ticket row gets a reference to
+ * a Drive file id RESERVED in the plan (Drive's generateIds) — and placed
+ * right after the commit by withUploads: folders made, a free name found, the
+ * staged bytes streamed into Drive under that id, the staging copy deleted.
+ * A refused or failed command therefore leaves nothing in Drive; a placement
+ * that fails after the commit leaves a row that reads as gone (logged).
+ *
  * WHY INSIDE THE COMMAND'S TRANSACTION: ticketCreate only knows the ticket's
  * key once it has read the board's counter in its transaction, and the path
  * may hold '<ticketId>'. Planning in that same transaction (the key is
@@ -61,6 +69,8 @@ import { runTx, txGet, type Tx } from '../runtime/tx.js';
 import { writeBytes } from './files.js';
 import { assertRoom, bumpStats, cleanPath, folderNode, nodeAt } from './nodes.js';
 import { bucketRef, nodeRef, nodesCol } from './shared.js';
+import { driveFreeName, driveMkdirp, isDriveBucket, openDrive } from './drive/store.js';
+import { dropStaged, stagedSource } from './drive/staging.js';
 
 const FIELD = 'bucketUploads';
 
@@ -184,6 +194,9 @@ export async function planBucketUploads(
   const buckets = new Map<string, Bucket>();
   for (const id of new Set(staged.map((s) => s.bucketId)))
     buckets.set(id, requireBoardWrite(await txGet(tx, bucketRef(id)), id, boardId));
+  // §K4: what goes to Drive after the commit. A retried transaction plans afresh.
+  const placements: DrivePlacement[] = [];
+  drivePlans.set(staged, placements);
 
   // What this batch has already claimed, per bucket: path → node.
   const claimed = new Map<string, Map<string, Planned>>();
@@ -197,6 +210,15 @@ export async function planBucketUploads(
 
   for (const s of staged) {
     const { bucketId, file } = s;
+    const bucket = buckets.get(bucketId)!;
+    if (isDriveBucket(bucket)) {
+      const path = cleanPath(fillTicketKey(s.path, ticketKey), FIELD);
+      const [driveId] = await (await openDrive(bucketId, bucket)).api.generateIds(1);
+      if (!driveId) throw errors.unavailable('Google Drive did not reserve a file id');
+      placements.push({ bucketId, bucket, driveId, path, staged: s, actor: ctx.actor });
+      attachments.push(attachmentOf(ctx, bucketId, driveId, s.label, file));
+      continue;
+    }
     // A retry: the object is a node already (this request's first attempt).
     const backing = await tx.get(
       nodesCol(bucketId).where('file.fileId', '==', file.fileId).limit(1),
@@ -260,7 +282,8 @@ export async function planBucketUploads(
   }
 
   for (const [bucketId, bucket] of buckets)
-    assertRoom(bucket, creates.filter((c) => c.bucketId === bucketId).length);
+    if (!isDriveBucket(bucket))
+      assertRoom(bucket, creates.filter((c) => c.bucketId === bucketId).length);
 
   return {
     attachments,
@@ -334,13 +357,62 @@ export async function withUploads<T>(
   staged: readonly StagedUpload[],
   fn: () => Promise<T>,
 ): Promise<T> {
+  let out: T;
   try {
-    return await fn();
+    out = await fn();
   } catch (e) {
+    drivePlans.delete(staged);
     if (staged.length) await discardUnplaced(staged);
     throw e;
   }
+  await placeInDrive(drivePlans.get(staged) ?? []);
+  drivePlans.delete(staged);
+  return out;
 }
+
+// ─── §K4: Drive buckets, placed after the commit ─────────────────────────────
+
+interface DrivePlacement {
+  bucketId: string;
+  bucket: Bucket;
+  /** Reserved in the plan; the ticket row already points at it. */
+  driveId: string;
+  /** Final path ('<ticketId>' filled); a taken name gets ' (2)' at placement. */
+  path: string;
+  staged: StagedUpload;
+  actor: string;
+}
+
+/** The placements the LAST plan of a batch made (a retried transaction replans). */
+const drivePlans = new WeakMap<readonly StagedUpload[], DrivePlacement[]>();
+
+async function placeInDrive(list: readonly DrivePlacement[]): Promise<void> {
+  for (const p of list) {
+    try {
+      const d = await openDrive(
+        p.bucketId,
+        p.bucket as Bucket & { storage: NonNullable<Bucket['storage']> },
+      );
+      const parent = await driveMkdirp(d, bucketParentPathOf(p.path), p.actor);
+      const name = await driveFreeName(d, parent, bucketBaseName(p.path));
+      await d.api.create({
+        id: p.driveId,
+        parentId: parent,
+        name,
+        mime: p.staged.file.mime,
+        source: stagedSource(p.staged.file.storagePath, p.staged.file.size),
+        props: { tmBy: p.actor, tmCreatedBy: p.actor },
+      });
+      await dropStaged(p.staged.file.storagePath);
+    } catch (e) {
+      // The ticket row stays and reads as gone; the staged copy stays for a retry by hand.
+      console.error('[drive] could not place a ticket file in Drive', p.bucketId, p.path, e);
+    }
+  }
+}
+
+const bucketParentPathOf = (p: string): string =>
+  p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
 
 /**
  * bucket.html §E/§J (spec name): uploads → Attachments, each in a transaction
@@ -417,14 +489,7 @@ export async function storeBoardFile(
   // writeBytes enforces its own limit; the doors have checked theirs already.
   // The OBJECT is named after the file as uploaded: that is the label the ticket
   // shows (stageBucketUploads); the node gets the templated name.
-  const file = await writeBytes(
-    ctx,
-    bucketId,
-    name,
-    input.bytes,
-    mime,
-    BUCKET_UPLOAD_MAX_BYTES,
-  );
+  const file = await writeBytes(ctx, bucketId, name, input.bytes, mime, BUCKET_UPLOAD_MAX_BYTES);
   return { bucketId, path, storagePath: file.storagePath };
 }
 

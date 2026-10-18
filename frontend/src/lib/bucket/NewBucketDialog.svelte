@@ -1,5 +1,6 @@
 <!--
-  + New bucket (bucket.html §F): a name, a line about it and an indicator
+  + New bucket (bucket.html §F): a name, a line about it, an indicator and
+  where its files live (§K: managed, or a folder in my Google Drive)
   → bucketCreate → the (empty) bucket, ready for its first upload.
 -->
 <script lang="ts">
@@ -21,6 +22,8 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
+  import StorageField, { storageInput, type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import { driveState } from '$lib/drive/drive.svelte';
 
   let { open = $bindable(false), owner: initialOwner = '' }: { open: boolean; owner?: string } =
     $props();
@@ -32,6 +35,8 @@
   const indicator = $derived(picked ?? BUCKET_DEFAULT_INDICATOR);
   let busy = $state(false);
   let owner = $state('');
+  let storage = $state<StorageChoice>({ kind: 'managed' });
+  const storageOk = $derived(storage.kind !== 'drive' || !!driveState.status?.connected);
 
   $effect(() => {
     if (open) {
@@ -39,20 +44,23 @@
       name = '';
       description = '';
       picked = null;
+      storage = { kind: 'managed' };
     }
   });
 
   async function create() {
     const n = name.trim();
-    if (!n || busy) return;
+    if (!n || busy || !storageOk) return;
     busy = true;
     try {
+      const st = storageInput(storage);
       const { bucketId } = await command(
         'bucketCreate',
         {
           name: n,
           description: description.trim() || null,
           indicator,
+          ...(st && st.kind === 'drive' ? { storage: st } : {}),
           ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
         },
         { toast: 'Could not create the bucket' },
@@ -94,6 +102,7 @@
       placeholder="What it is for (optional)"
     />
     <OwnerSelect bind:value={owner} />
+    <StorageField bind:value={storage} {name} label="Where its files live" />
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium">Indicator</span>
       <IndicatorField
@@ -106,8 +115,12 @@
   </form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    <Button variant="primary" type="submit" form="new-bucket" disabled={!name.trim()} loading={busy}
-      >Create</Button
+    <Button
+      variant="primary"
+      type="submit"
+      form="new-bucket"
+      disabled={!name.trim() || !storageOk}
+      loading={busy}>Create</Button
     >
   {/snippet}
 </Dialog>

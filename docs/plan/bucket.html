@@ -60,7 +60,9 @@
           read (or write) one, and an agent can work in one over MCP. Files kept in a bucket are
           managed — edited, moved, replaced, deleted — in one place, and every ticket that points at
           them sees the current version. Since <a href="#j">§J</a> a board takes no files of its
-          own: every file put on a ticket goes into one of the board's buckets.
+          own: every file put on a ticket goes into one of the board's buckets. Since
+          <a href="#k">§K</a> a bucket can also live in its creator's Google Drive, Drive being
+          the source of truth.
         </p>
 
         <h2 id="a">A · What a bucket is</h2>
@@ -505,6 +507,124 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           leaves its fresh copies as objects no node points at; nothing sweeps
           <code>buckets/</code> for those yet. A board-scoped token acting as a person reaches no
           bucket (§G), so it cannot read back a ticket file that lives in one.
+        </p>
+        <h2 id="k">K · Buckets in Google Drive</h2>
+        <p>
+          A bucket's <b>storage</b> is chosen when it is created and never changes.
+          <b>Managed</b> (the default, no <code>storage</code> field) is everything §A–§J say:
+          nodes in Firestore, bytes in our object store. <b>Google Drive</b> makes the bucket a
+          folder in its creator's Drive, and <b>Drive is the single source of truth</b>: there is
+          nothing to sync because nothing is copied. Firestore keeps only the bucket document —
+          its people, its grants and the folder it points at
+          (<code>bucket.storage = { kind: 'drive', uid, folderId, folderName, email }</code>).
+          People reach it exactly as any other bucket (§B, §D): the server talks to Drive with the
+          connected person's token, so nobody else needs a Drive share.
+        </p>
+        <h3 id="k1">K1 · The connection</h3>
+        <ul>
+          <li>
+            Signing in with Google gives the browser an access token for an hour, never the server.
+            So connecting Drive is its own step (Account › Google Drive, or the bucket form):
+            <code>driveConnect</code> → Google's consent page (<code>access_type=offline</code>,
+            scope <code>drive.file</code> only) → <code>GET /integrations/drive/callback</code>
+            exchanges the code for a refresh token → back where the person started with
+            <code>?drive=connected</code>.
+          </li>
+          <li>
+            The refresh token is kept in <code>_driveLinks/{uid}</code>, sealed with AES-256-GCM
+            under a key derived from the server's signing key. Rules deny every <code>_</code>
+            collection; no command returns it. Access tokens live in memory. A refused refresh
+            (revoked at Google) marks the link broken: every Drive bucket of that person answers
+            <code>409 drive_disconnected</code> until they reconnect.
+          </li>
+          <li>
+            <b>Scope <code>drive.file</code>.</b> The app sees only what it created, or folders the
+            person picked with Google's picker (<code>drivePickerToken</code> hands their own
+            browser a short-lived token for it). Files someone adds to the folder by hand in Drive's
+            own UI stay invisible; renames, moves and deletes of the app's files there are seen.
+            The broader <code>drive</code> scope would see everything but is a restricted scope
+            (Google's security assessment).
+          </li>
+          <li>
+            Configuration: <code>TM_GOOGLE_CLIENT_ID</code> + <code>TM_GOOGLE_CLIENT_SECRET</code>
+            (a Web OAuth client whose redirect URI is
+            <code>{API_URL}/integrations/drive/callback</code>); the picker also needs
+            <code>TM_GOOGLE_API_KEY</code> and <code>TM_GOOGLE_APP_ID</code> (the project number).
+            Without a client the option is shown as not set up. Under the emulators (or
+            <code>TM_DRIVE=fake</code>) every connection is an in-memory fake Drive — the whole
+            round trip still runs, tests included.
+          </li>
+        </ul>
+        <h3 id="k2">K2 · Drive is the truth</h3>
+        <ul>
+          <li>
+            A node's <b>id is the Drive file id</b> (stable across renames and moves: a ticket's
+            reference follows the file wherever it goes inside the bucket). Its <b>path</b> is the
+            names from the bucket's folder down, computed on every read. <code>file.fileId</code> is
+            Drive's head revision, so <code>expectedFileId</code> guards a save as in D-M2. Who made
+            or changed a file is kept in its private <code>appProperties</code>.
+          </li>
+          <li>
+            Every bucket command — <code>bucketTree</code>, <code>bucketFileRead</code>,
+            <code>bucketFileWrite</code>, <code>bucketFilePut</code>,
+            <code>bucketFolderCreate</code>, <code>bucketMove</code>,
+            <code>bucketNodeDelete</code> — and REST's raw PUT answer from Drive in the same shapes.
+            A delete goes to Drive's trash (restorable there for 30 days). A tree is read one Drive
+            query per level; the bucket's counters follow the last full listing.
+          </li>
+          <li>
+            Names Drive allows and a path cannot hold (<code>/</code>, control characters,
+            <code>.</code>, <code>..</code>) are shown with a stand-in (<code>a∕b.txt</code>); two
+            items with one name in a folder are told apart with <code>' (2)'</code>.
+          </li>
+          <li>
+            Drive has no transactions: each write checks, then acts. Two writers racing for one new
+            path can both win (the reader numbers the second). The managed store remains the one with
+            atomic guarantees.
+          </li>
+          <li>
+            The app reads a Drive bucket's tree with <code>bucketTree</code> (there are no nodes to
+            listen to): on open, after each of its own writes, when the tab comes back, and every 20
+            seconds while it is in front.
+          </li>
+        </ul>
+        <h3 id="k3">K3 · Bytes</h3>
+        <p>
+          A Drive file's bytes are addressed as <code>drive/{bucketId}/{driveId}/{name}</code>. The
+          object-store port routes that prefix to Drive (stat, read, stream with ranges), so the file
+          door, <code>signedAccess</code> and ticket references work unchanged; there is no URL of
+          ours to sign, so it is always the file door's <code>bytesUrl</code>.
+        </p>
+        <h3 id="k4">K4 · Uploads</h3>
+        <ul>
+          <li>
+            The app uploads every file the same way, whatever the storage: straight to
+            <code>buckets/{bucketId}/{fileId}/{name}</code>. For a Drive bucket that object is a
+            <b>staging copy</b>: <code>bucketFilePut</code> streams it into Drive in 8 MB chunks
+            (a resumable upload) and deletes it. No Google token in the browser, one upload path.
+          </li>
+          <li>
+            Ticket files (§J) into a Drive bucket are planned in the command's transaction like any
+            other — the ticket row points at a Drive file id <b>reserved</b> there
+            (<code>generateIds</code>) — and placed right after the commit: folders made, a free
+            name found, the staged bytes streamed in under that id, the staging copy deleted. A
+            refused or failed command leaves nothing in Drive; a placement that fails after the
+            commit leaves a row that reads as gone (logged; the staged copy stays).
+          </li>
+        </ul>
+        <h3 id="k5">K5 · Asking where files live</h3>
+        <p>
+          The new-bucket form asks <i>Managed</i> or <i>Google Drive</i> (a folder picked in Drive,
+          else a path made in the Drive's top level, default <code>TaskManager/{name}</code>). The
+          new-board form asks where its <b>ticket files</b> live — a new managed bucket (the
+          default), a new Drive bucket, or none yet — and makes that bucket, grants it
+          <code>write</code> and sets it as the board's attachment bucket (§J). The new-artifact
+          form asks the same (default none) and grants the new bucket to the artifact (§H).
+        </p>
+        <p>
+          Not in this phase: changing an existing bucket's storage; deleting a Drive bucket removes
+          the bucket here and leaves its folder in Drive untouched; moving a Drive bucket to an org
+          keeps it in its creator's Drive.
         </p>
       </article>
     </div>

@@ -8,11 +8,13 @@ import { errors, BUCKET_UPLOAD_MAX_BYTES, parseMemoryStoragePath } from '@tm/sha
 import { ports } from '../adapters/index.js';
 import { putVersion } from '../bucket/files.js';
 import { loadBucket } from '../bucket/shared.js';
+import { drivePut, isDriveBucket, openDrive } from '../bucket/drive/store.js';
+import { dropStaged, stagedSource } from '../bucket/drive/staging.js';
 import { defineCommand } from './_registry.js';
 
 export default defineCommand('bucketFilePut', async (ctx, input) => {
   const { bucketId, storagePath } = input;
-  await loadBucket(null, bucketId, ctx, 'write');
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'write');
   const p = parseMemoryStoragePath(storagePath);
   if (!p || p.bucketId !== bucketId)
     throw errors.invalid("Upload under this bucket's folder: buckets/{bucketId}/{fileId}/{name}", {
@@ -22,6 +24,22 @@ export default defineCommand('bucketFilePut', async (ctx, input) => {
   if (!obj) throw errors.invalid('Upload not found — upload it first', { field: 'storagePath' });
   if (obj.size > BUCKET_UPLOAD_MAX_BYTES)
     throw errors.too_large('A bucket file is limited to 1 GB', { size: obj.size });
+  if (isDriveBucket(bucket)) {
+    // §K4: the upload was a staging copy — into Drive with it, then gone.
+    const d = await openDrive(bucketId, bucket);
+    try {
+      return await drivePut(
+        d,
+        input,
+        stagedSource(storagePath, obj.size),
+        obj.contentType,
+        ctx.actor,
+        input.expectedFileId,
+      );
+    } finally {
+      await dropStaged(storagePath);
+    }
+  }
   const dim = (v: string | undefined) => {
     const n = Number(v);
     return Number.isInteger(n) && n > 0 ? n : undefined;

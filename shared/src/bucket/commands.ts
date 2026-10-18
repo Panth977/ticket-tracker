@@ -27,6 +27,7 @@ import {
   BucketFileSchema,
 } from './schema.js';
 import { BoardAttachBucketSchema } from './attach.js';
+import { BucketStorageInputSchema, BucketStorageKindSchema, DriveStatusSchema } from './drive.js';
 import { IndicatorSchema } from '../types/indicator.js';
 
 const Name = z.string().trim().min(1).max(BUCKET_NAME_MAX);
@@ -73,6 +74,14 @@ export const BucketOutSchema = z.object({
   archived: z.boolean(),
   stats: z.object({ files: z.number(), folders: z.number(), bytes: z.number() }),
   updatedAt: MillisSchema,
+  /** §K: where its files live; for Drive, the folder's name and whose Drive. */
+  storage: z
+    .object({
+      kind: BucketStorageKindSchema,
+      folderName: z.string().nullable(),
+      email: z.string().nullable(),
+    })
+    .optional(),
   /**
    * bucketList({ boardId }) only: THAT board's grant (§D). It tells the attach
    * dialog which buckets a ticket file may go into (§J: 'write') — which the
@@ -100,6 +109,11 @@ export const bucketCreate = defineCommand({
     indicator: IndicatorSchema.optional(),
     /** §AC: who owns it — you (default) or an org you belong to. */
     owner: OwnerRefSchema.optional(),
+    /**
+     * §K: where its files live — managed (default) or a folder in YOUR Google
+     * Drive (connect it first: driveConnect). Fixed for the bucket's life.
+     */
+    storage: BucketStorageInputSchema.optional(),
   }),
   res: z.object({ bucketId: BucketIdSchema }),
 });
@@ -338,4 +352,63 @@ export const bucketNodeDelete = defineCommand({
       ctx.addIssue({ code: 'custom', path: ['paths'], message: 'Give paths or nodeIds' });
   }),
   res: z.object({ deleted: z.number().int().nonnegative() }),
+});
+
+// ─── Google Drive (§K) ───────────────────────────────────────────────────────
+
+/** Is my Google Drive connected (and can this server talk to Drive at all)? */
+export const driveStatus = defineCommand({
+  name: 'driveStatus',
+  source: 'extra',
+  permission: 'Any signed-in person, about their own connection. Never an agent.',
+  errors: ['forbidden'],
+  req: req({}),
+  res: DriveStatusSchema,
+});
+
+/**
+ * Start connecting my Google Drive: the consent page's URL (offline access,
+ * scope drive.file). Google sends the person back to /integrations/drive/callback,
+ * which stores the connection and returns to `returnTo` (an app path).
+ */
+export const driveConnect = defineCommand({
+  name: 'driveConnect',
+  source: 'extra',
+  permission: 'Any signed-in person, for themselves. Never an agent or a token.',
+  errors: ['forbidden', 'unavailable'],
+  req: req({ returnTo: z.string().max(512).startsWith('/').optional() }),
+  res: z.object({ url: z.string() }),
+});
+
+/**
+ * Forget my Drive connection (and revoke it at Google). Drive buckets that use
+ * it stay — their files are still in Drive — but cannot be opened until I
+ * connect again.
+ */
+export const driveDisconnect = defineCommand({
+  name: 'driveDisconnect',
+  source: 'extra',
+  permission: 'Any signed-in person, their own connection. Never an agent or a token.',
+  errors: ['forbidden'],
+  req: req({}),
+  res: OkResSchema,
+});
+
+/**
+ * A short-lived access token for Google's folder picker, in the browser of the
+ * person whose Drive it is (scope drive.file only: the picker GRANTS the app
+ * the folder picked). With the picker's public API key and app id.
+ */
+export const drivePickerToken = defineCommand({
+  name: 'drivePickerToken',
+  source: 'extra',
+  permission: 'Any signed-in person with a connected Drive, for their own Drive. Never a token.',
+  errors: ['forbidden', 'conflict', 'unavailable'],
+  req: req({}),
+  res: z.object({
+    accessToken: z.string(),
+    apiKey: z.string(),
+    appId: z.string(),
+    expiresAt: MillisSchema,
+  }),
 });

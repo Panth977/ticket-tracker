@@ -22,14 +22,22 @@ import {
 import { Outbox, type OutboxEntry } from './outbox.svelte';
 import { createOutboxStorage } from './outboxStore';
 import { saving } from './saving.svelte';
+import { BUCKET_WRITES, bucketChanged } from '$lib/bucket/changes';
 
-export const command = createCommandClient({
+const client = createCommandClient({
   getToken: (force) => auth.idToken(force),
   fetch: (...args) => fetch(...args),
   isOnline,
   toastError: (m, d) => toast.error(m, d),
   onSaving: (d) => saving.bump(d),
 });
+
+/** The client, telling a Drive bucket's tree (bucket.html §K2) when one of its writes landed. */
+export const command: typeof client = async (name, input, opts) => {
+  const res = await client(name, input, opts);
+  if (BUCKET_WRITES.has(name)) bucketChanged((input as { bucketId?: string }).bucketId);
+  return res;
+};
 
 /** The outbox sends quietly: its own indicator and toasts say what is going on. */
 const quiet = createCommandClient({

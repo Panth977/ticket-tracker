@@ -186,6 +186,10 @@ export const toBucketOut = (
   archived: m.archivedAt !== null,
   stats: m.stats,
   updatedAt: m.updatedAt,
+  storage:
+    m.storage?.kind === 'drive'
+      ? { kind: 'drive', folderName: m.storage.folderName, email: m.storage.email }
+      : { kind: 'managed', folderName: null, email: null },
 });
 
 export function toNodeOut(id: string, n: BucketNode): BucketNodeOut {
