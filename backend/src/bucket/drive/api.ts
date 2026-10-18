@@ -495,7 +495,11 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
       let page: string | undefined;
       do {
         if (page) u.searchParams.set('pageToken', page);
-        const r = await json<{ files?: RawFile[]; nextPageToken?: string }>(u.toString(), {}, 'find');
+        const r = await json<{ files?: RawFile[]; nextPageToken?: string }>(
+          u.toString(),
+          {},
+          'find',
+        );
         for (const f of r.files ?? []) out.push(toItem(f));
         page = r.nextPageToken;
       } while (page);
@@ -580,7 +584,10 @@ export function fakeDrive(account: string): DriveApi {
         return out;
       };
       const next = (fakeQueues.get(account) ?? Promise.resolve()).then(run, run);
-      fakeQueues.set(account, next.catch(() => undefined));
+      fakeQueues.set(
+        account,
+        next.catch(() => undefined),
+      );
       return next;
     };
   return synced;

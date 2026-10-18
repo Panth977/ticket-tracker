@@ -47,7 +47,11 @@ export function pointersOf(r: Rev | undefined): TicketPointers | undefined {
     : undefined;
 }
 
-export async function readRev(base: Db, boardId: string, ticketId: string): Promise<Rev | undefined> {
+export async function readRev(
+  base: Db,
+  boardId: string,
+  ticketId: string,
+): Promise<Rev | undefined> {
   const s = await base.doc(revPath(boardId, ticketId)).get();
   return s.exists ? (s.data() as Rev) : undefined;
 }
@@ -70,9 +74,13 @@ export async function acquire(
       const now = Date.now();
       if (cur?.lease && cur.lease.holder !== holder && cur.lease.until > now)
         return { busy: true as const };
-      tx.set(ref, { v: cur?.v ?? 0, at: cur?.at ?? now, lease: { holder, until: now + LEASE_MS } }, {
-        merge: true,
-      });
+      tx.set(
+        ref,
+        { v: cur?.v ?? 0, at: cur?.at ?? now, lease: { holder, until: now + LEASE_MS } },
+        {
+          merge: true,
+        },
+      );
       return { busy: false as const, rev: cur };
     });
     if (!got.busy) return got.rev;
@@ -101,7 +109,12 @@ export async function release(
         if (mine) tx.set(ref, { lease: null }, { merge: true });
         return;
       }
-      const next: Rev = { ...cur, v: (cur.v ?? 0) + 1, at: Date.now(), lease: mine ? null : cur.lease ?? null };
+      const next: Rev = {
+        ...cur,
+        v: (cur.v ?? 0) + 1,
+        at: Date.now(),
+        lease: mine ? null : (cur.lease ?? null),
+      };
       if (bump.deleted) {
         next.folderId = null;
         next.messagesId = null;

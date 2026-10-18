@@ -40,7 +40,9 @@ export default defineCommand('ticketDocs', async (ctx, input) => {
       )
     ).filter((x): x is string => !!x);
     const docs = (
-      await Promise.all(boards.map(async (b) => (await shape(db().collection(`boards/${b}/tickets`)).get()).docs))
+      await Promise.all(
+        boards.map(async (b) => (await shape(db().collection(`boards/${b}/tickets`)).get()).docs),
+      )
     ).flat();
     return {
       docs: docs.map((d) => ({ path: d.ref.path, id: d.id, data: plain(d.data()) })),

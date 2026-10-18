@@ -33,8 +33,7 @@ async function load(base: Db, boardId: string): Promise<Entry> {
   const snap = await base.doc(`boards/${boardId}`).get();
   const d = snap.exists ? (snap.data() as Record<string, unknown>) : undefined;
   const s = d?.storage as
-    | { kind?: string; uid?: string; folderId?: string; ticketsFolderId?: string | null }
-    | undefined;
+    { kind?: string; uid?: string; folderId?: string; ticketsFolderId?: string | null } | undefined;
   const board: DriveBoard | null =
     s?.kind === 'drive' && s.uid && s.folderId
       ? { boardId, uid: s.uid, folderId: s.folderId, ticketsFolderId: s.ticketsFolderId ?? null }

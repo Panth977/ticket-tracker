@@ -133,7 +133,11 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   let storage: Board['storage'];
   let filesFolderId: string | null = null;
   if (input.storage?.kind === 'drive') {
-    if (await typedDoc('boardKeys', paths.boardKey(input.key)).get().then((s) => s.exists))
+    if (
+      await typedDoc('boardKeys', paths.boardKey(input.key))
+        .get()
+        .then((s) => s.exists)
+    )
       throw errors.conflict(`The key ${input.key} is taken`, { key: input.key });
     const api = await driveFor(ctx.actor);
     const folder = await driveBucketFolder(api, input.storage, input.name, ctx.actor);

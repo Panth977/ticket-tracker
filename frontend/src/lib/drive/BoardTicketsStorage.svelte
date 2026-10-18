@@ -47,7 +47,11 @@
     if (!to || busy) return;
     busy = true;
     try {
-      const r = await command('boardStorageMove', { boardId, to }, { toast: 'Could not start the move' });
+      const r = await command(
+        'boardStorageMove',
+        { boardId, to },
+        { toast: 'Could not start the move' },
+      );
       confirmOpen = false;
       toast.success(`Moving ${r.total} ${r.total === 1 ? 'ticket' : 'tickets'}`);
     } catch {
@@ -80,8 +84,8 @@
         <p class="text-muted">
           Folder <span class="text-text">{b?.storage?.folderName}</span>{b?.storage?.email
             ? ` in ${b.storage.email}`
-            : ''}: <span class="font-mono text-xs">tickets/&lt;id&gt;/meta.json</span> and one file
-          per message. Drive is the source of truth; this app keeps only where they are.
+            : ''}: <span class="font-mono text-xs">tickets/&lt;id&gt;/meta.json</span> and one file per
+          message. Drive is the source of truth; this app keeps only where they are.
         </p>
       </div>
     {:else}
@@ -126,8 +130,11 @@
             'unknown error'}. Nothing was lost — the tickets still read from where they were.
         </p>
         <div>
-          <Button variant="primary" loading={busy} onclick={resume} data-testid="board-storage-resume"
-            >Resume the move</Button
+          <Button
+            variant="primary"
+            loading={busy}
+            onclick={resume}
+            data-testid="board-storage-resume">Resume the move</Button
           >
         </div>
       </div>

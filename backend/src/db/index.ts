@@ -54,6 +54,9 @@ let routed: { base: Db; db: RoutedDb } | undefined;
  */
 export function db(): Db {
   const base = adapter.db();
+  // Emergency switch: TM_NO_TICKET_ROUTER=1 serves every path from the adapter
+  // (Drive boards then read as empty — for diagnosing, never for running).
+  if (process.env.TM_NO_TICKET_ROUTER === '1') return base;
   if (routed?.base !== base) routed = { base, db: new RoutedDb(base, adapter.Timestamp) };
   return routed.db;
 }

@@ -266,7 +266,10 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
     boardId: board.id,
     ticketId,
     clientId: `c${Date.now().toString(36)}`,
-    body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From the API' }] }] },
+    body: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From the API' }] }],
+    },
   });
   await expect(thread.getByText('From the API')).toBeVisible({ timeout: 20_000 });
 
@@ -284,7 +287,10 @@ test('D7: a board moves its tickets to Drive from Settings › Storage, and they
   await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
 
   const b = await newBoard(fy, { name: 'Moving tickets' });
-  const { key: tkey, ticketId } = await call(fy, 'ticketCreate', { boardId: b.id, title: 'Comes along' });
+  const { key: tkey, ticketId } = await call(fy, 'ticketCreate', {
+    boardId: b.id,
+    title: 'Comes along',
+  });
 
   await page.goto(`/b/${b.key}/settings/storage`);
   const tab = page.getByTestId('board-storage');

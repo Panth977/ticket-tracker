@@ -37,10 +37,7 @@
   import { myBoards } from '$lib/stores';
   import { Button, Input, Select, Textarea, toast } from '$lib/ui';
   import IndicatorField from '$lib/ui/IndicatorField.svelte';
-  import StorageField, {
-    storageInput,
-    type StorageChoice,
-  } from '$lib/drive/StorageField.svelte';
+  import StorageField, { storageInput, type StorageChoice } from '$lib/drive/StorageField.svelte';
   import { driveState } from '$lib/drive/drive.svelte';
   import { storageFor } from '$lib/drive/storageFor';
 

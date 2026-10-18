@@ -62,8 +62,13 @@ describe('a Drive board (§L)', () => {
     expect(meta.recentMessages).toBeUndefined();
     const msgs = await kids(drive, inside.find((k) => isFolder(k))!.id);
     expect(msgs).toHaveLength(1);
-    expect(msgs[0]!.name).toMatch(new RegExp(`^\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z_${messageId}\\.json$`));
-    expect(await readJson(drive, msgs[0]!.id)).toMatchObject({ id: messageId, body: { text: 'first' } });
+    expect(msgs[0]!.name).toMatch(
+      new RegExp(`^\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z_${messageId}\\.json$`),
+    );
+    expect(await readJson(drive, msgs[0]!.id)).toMatchObject({
+      id: messageId,
+      body: { text: 'first' },
+    });
 
     // Firestore: no ticket document; the rev says where the files are and has moved.
     expect((await baseDb().doc(paths.ticket(b.id, ticketId)).get()).exists).toBe(false);
@@ -105,7 +110,12 @@ describe('a Drive board (§L)', () => {
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'busy' });
     const posted = await Promise.all(
       Array.from({ length: 6 }, (_, i) =>
-        call(asha, 'messagePost', { boardId: b.id, ticketId, clientId: uniq('c'), body: doc(`m${i}`) }),
+        call(asha, 'messagePost', {
+          boardId: b.id,
+          ticketId,
+          clientId: uniq('c'),
+          body: doc(`m${i}`),
+        }),
       ),
     );
     const t = (await db().doc(paths.ticket(b.id, ticketId)).get()).data() as Ticket;
@@ -121,7 +131,12 @@ describe('a Drive board (§L)', () => {
     const drive = fakeDrive(asha.uid);
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'chatty' });
     for (let i = 0; i <= DRIVE_INLINE_MESSAGES.max; i++)
-      await call(asha, 'messagePost', { boardId: b.id, ticketId, clientId: uniq('c'), body: doc(`n${i}`) });
+      await call(asha, 'messagePost', {
+        boardId: b.id,
+        ticketId,
+        clientId: uniq('c'),
+        body: doc(`n${i}`),
+      });
     const t = (await db().doc(paths.ticket(b.id, ticketId)).get()).data() as Ticket;
     expect(t.pageCount).toBe(1);
     expect(t.recentMessages!.length).toBeLessThanOrEqual(DRIVE_INLINE_MESSAGES.max);
@@ -132,7 +147,11 @@ describe('a Drive board (§L)', () => {
     const msgFiles = await kids(drive, inside.find((k) => k.name === 'messages')!.id);
     expect(msgFiles).toHaveLength(t.recentMessages!.length);
     // The whole thread still reads back, in order.
-    const page = (await db().doc(paths.ticketPage(b.id, ticketId, 0)).get()).data() as {
+    const page = (
+      await db()
+        .doc(paths.ticketPage(b.id, ticketId, 0))
+        .get()
+    ).data() as {
       messages: { body: { text: string } }[];
     };
     const all = [...page.messages, ...t.recentMessages!].map((m) => m.body.text);
@@ -145,12 +164,23 @@ describe('a Drive board (§L)', () => {
     const { asha } = await people('asha');
     const b = await seedBoard({ admin: asha, drive: true });
     const m = await seedBoard({ admin: asha, drive: false });
-    const one = await call(asha, 'ticketCreate', { boardId: b.id, title: 'alpha drive', assigneeUids: [asha.uid] });
+    const one = await call(asha, 'ticketCreate', {
+      boardId: b.id,
+      title: 'alpha drive',
+      assigneeUids: [asha.uid],
+    });
     await call(asha, 'ticketCreate', { boardId: b.id, title: 'beta drive' });
-    const three = await call(asha, 'ticketCreate', { boardId: m.id, title: 'gamma managed', assigneeUids: [asha.uid] });
+    const three = await call(asha, 'ticketCreate', {
+      boardId: m.id,
+      title: 'gamma managed',
+      assigneeUids: [asha.uid],
+    });
 
     const board = await db().collection(paths.tickets(b.id)).where('state', '==', 'active').get();
-    expect(board.docs.map((d) => (d.data() as Ticket).title).sort()).toEqual(['alpha drive', 'beta drive']);
+    expect(board.docs.map((d) => (d.data() as Ticket).title).sort()).toEqual([
+      'alpha drive',
+      'beta drive',
+    ]);
 
     const mine = await db()
       .collectionGroup('tickets')
@@ -167,31 +197,40 @@ describe('a Drive board (§L)', () => {
     if (found) expect(found.map((t) => t.id)).toEqual([one.ticketId]);
   });
 
-  inProcess('ticketDocs answers the browser: a ticket, a board query, the group share', async () => {
-    const { asha, out } = await people('asha', 'out');
-    const b = await seedBoard({ admin: asha, drive: true });
-    const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'for the browser', assigneeUids: [asha.uid] });
+  inProcess(
+    'ticketDocs answers the browser: a ticket, a board query, the group share',
+    async () => {
+      const { asha, out } = await people('asha', 'out');
+      const b = await seedBoard({ admin: asha, drive: true });
+      const { ticketId } = await call(asha, 'ticketCreate', {
+        boardId: b.id,
+        title: 'for the browser',
+        assigneeUids: [asha.uid],
+      });
 
-    const one = await call(asha, 'ticketDocs', { target: { kind: 'doc', path: paths.ticket(b.id, ticketId) } });
-    expect(one).toMatchObject({ exists: true, boards: [b.id] });
-    expect(one.docs[0]!.data).toMatchObject({ title: 'for the browser' });
+      const one = await call(asha, 'ticketDocs', {
+        target: { kind: 'doc', path: paths.ticket(b.id, ticketId) },
+      });
+      expect(one).toMatchObject({ exists: true, boards: [b.id] });
+      expect(one.docs[0]!.data).toMatchObject({ title: 'for the browser' });
 
-    const list = await call(asha, 'ticketDocs', {
-      target: { kind: 'query', path: paths.tickets(b.id) },
-      where: [['state', '==', 'active']],
-    });
-    expect(list.docs.map((d) => d.id)).toEqual([ticketId]);
+      const list = await call(asha, 'ticketDocs', {
+        target: { kind: 'query', path: paths.tickets(b.id) },
+        where: [['state', '==', 'active']],
+      });
+      expect(list.docs.map((d) => d.id)).toEqual([ticketId]);
 
-    const group = await call(asha, 'ticketDocs', {
-      target: { kind: 'group' },
-      where: [['assigneeUids', 'array-contains', asha.uid]],
-    });
-    expect(group.boards).toContain(b.id);
-    expect(group.docs.map((d) => d.id)).toContain(ticketId);
+      const group = await call(asha, 'ticketDocs', {
+        target: { kind: 'group' },
+        where: [['assigneeUids', 'array-contains', asha.uid]],
+      });
+      expect(group.boards).toContain(b.id);
+      expect(group.docs.map((d) => d.id)).toContain(ticketId);
 
-    const theirs = await call(out, 'ticketDocs', { target: { kind: 'group' } });
-    expect(theirs.boards).not.toContain(b.id);
-  });
+      const theirs = await call(out, 'ticketDocs', { target: { kind: 'group' } });
+      expect(theirs.boards).not.toContain(b.id);
+    },
+  );
 
   inProcess('deleting a ticket puts its folder in Drive’s trash', async () => {
     const { asha } = await people('asha');
@@ -206,45 +245,58 @@ describe('a Drive board (§L)', () => {
     expect(list.docs.map((d) => d.id)).not.toContain(ticketId);
   });
 
-  inProcess('a board moves to Drive and back (§L4): read-only while it moves, nothing lost', async () => {
-    const { asha } = await people('asha');
-    const b = await seedBoard({ admin: asha, drive: false });
-    const one = await call(asha, 'ticketCreate', { boardId: b.id, title: 'one' });
-    const two = await call(asha, 'ticketCreate', { boardId: b.id, title: 'two' });
-    await call(asha, 'messagePost', { boardId: b.id, ticketId: one.ticketId, clientId: uniq('c'), body: doc('hi') });
-    await connectFakeDrive(asha);
+  inProcess(
+    'a board moves to Drive and back (§L4): read-only while it moves, nothing lost',
+    async () => {
+      const { asha } = await people('asha');
+      const b = await seedBoard({ admin: asha, drive: false });
+      const one = await call(asha, 'ticketCreate', { boardId: b.id, title: 'one' });
+      const two = await call(asha, 'ticketCreate', { boardId: b.id, title: 'two' });
+      await call(asha, 'messagePost', {
+        boardId: b.id,
+        ticketId: one.ticketId,
+        clientId: uniq('c'),
+        body: doc('hi'),
+      });
+      await connectFakeDrive(asha);
 
-    const started = await call(asha, 'boardStorageMove', {
-      boardId: b.id,
-      to: { kind: 'drive', folderPath: 'Moves/Board' },
-    });
-    expect(started.total).toBe(2);
-    const refused = await callRaw(asha, 'ticketUpdate', {
-      boardId: b.id,
-      ticketId: one.ticketId,
-      patch: { estimate: 1 },
-    });
-    expect(refused.status).toBe(409);
-    await queue().drain({ queue: 'boardStorageMove' });
+      const started = await call(asha, 'boardStorageMove', {
+        boardId: b.id,
+        to: { kind: 'drive', folderPath: 'Moves/Board' },
+      });
+      expect(started.total).toBe(2);
+      const refused = await callRaw(asha, 'ticketUpdate', {
+        boardId: b.id,
+        ticketId: one.ticketId,
+        patch: { estimate: 1 },
+      });
+      expect(refused.status).toBe(409);
+      await queue().drain({ queue: 'boardStorageMove' });
 
-    const board = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
-    expect(board.storage).toMatchObject({ kind: 'drive', folderName: 'Board' });
-    expect(board.move ?? null).toBeNull();
-    expect((await baseDb().collection(paths.tickets(b.id)).get()).size).toBe(0);
-    const t1 = (await db().doc(paths.ticket(b.id, one.ticketId)).get()).data() as Ticket;
-    expect(t1.recentMessages?.map((m) => m.body.text)).toEqual(['hi']);
-    // Writes go to Drive now.
-    await call(asha, 'ticketUpdate', { boardId: b.id, ticketId: two.ticketId, patch: { estimate: 5 } });
+      const board = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
+      expect(board.storage).toMatchObject({ kind: 'drive', folderName: 'Board' });
+      expect(board.move ?? null).toBeNull();
+      expect((await baseDb().collection(paths.tickets(b.id)).get()).size).toBe(0);
+      const t1 = (await db().doc(paths.ticket(b.id, one.ticketId)).get()).data() as Ticket;
+      expect(t1.recentMessages?.map((m) => m.body.text)).toEqual(['hi']);
+      // Writes go to Drive now.
+      await call(asha, 'ticketUpdate', {
+        boardId: b.id,
+        ticketId: two.ticketId,
+        patch: { estimate: 5 },
+      });
 
-    await call(asha, 'boardStorageMove', { boardId: b.id, to: { kind: 'managed' } });
-    await queue().drain({ queue: 'boardStorageMove' });
-    const back = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
-    expect(back.storage).toBeUndefined();
-    const rows = await baseDb().collection(paths.tickets(b.id)).get();
-    expect(rows.docs.map((d) => (d.data() as Ticket).title).sort()).toEqual(['one', 'two']);
-    expect((rows.docs.find((d) => d.id === two.ticketId)!.data() as Ticket).estimate).toBe(5);
-    // Drive keeps its copy.
-    const drive = fakeDrive(asha.uid);
-    expect((await drive.get(board.storage!.ticketsFolderId!))!.trashed).toBe(false);
-  }, 60_000);
+      await call(asha, 'boardStorageMove', { boardId: b.id, to: { kind: 'managed' } });
+      await queue().drain({ queue: 'boardStorageMove' });
+      const back = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
+      expect(back.storage).toBeUndefined();
+      const rows = await baseDb().collection(paths.tickets(b.id)).get();
+      expect(rows.docs.map((d) => (d.data() as Ticket).title).sort()).toEqual(['one', 'two']);
+      expect((rows.docs.find((d) => d.id === two.ticketId)!.data() as Ticket).estimate).toBe(5);
+      // Drive keeps its copy.
+      const drive = fakeDrive(asha.uid);
+      expect((await drive.get(board.storage!.ticketsFolderId!))!.trashed).toBe(false);
+    },
+    60_000,
+  );
 });

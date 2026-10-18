@@ -62,7 +62,7 @@
           them sees the current version. Since <a href="#j">§J</a> a board takes no files of its
           own: every file put on a ticket goes into one of the board's buckets. Since
           <a href="#k">§K</a> a bucket can also live in its creator's Google Drive, Drive being
-          the source of truth.
+          the source of truth; since <a href="#l">§L</a> a board's tickets can too.
         </p>
 
         <h2 id="a">A · What a bucket is</h2>
@@ -683,6 +683,71 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           <li>
             A failed slice sets <code>state: 'failed'</code> with the error; nothing is lost (the
             bucket still reads from where it was) and the owner starts the move again.
+          </li>
+        </ul>
+
+        <h2 id="l">L · A board's tickets in Google Drive</h2>
+        <p>
+          A board can keep its <b>tickets</b> — fields, task lists, messages, activity — in a
+          folder of its creator's Google Drive, not just its files. Drive is the single source of
+          truth; the database keeps only where they are. Notifications, unread marks, agent events,
+          aggregates and the board's own settings stay in the database (they belong to a person or
+          to the board, not to a ticket).
+        </p>
+        <h3 id="l1">L1 · The files</h3>
+        <pre><code>&lt;board folder&gt;/tickets/&lt;ticketId&gt;/meta.json          the ticket document, minus its messages
+&lt;board folder&gt;/tickets/&lt;ticketId&gt;/messages/&lt;ISO time&gt;_&lt;messageId&gt;.json   one file per inline message
+&lt;board folder&gt;/tickets/&lt;ticketId&gt;/pages/&lt;NNN&gt;.json    older messages and activity, packed (agents.html §W)
+&lt;board folder&gt;/files/                               the board's attachment bucket (§J, §K)</code></pre>
+        <p>
+          A Drive ticket keeps at most 40 messages inline (20 after a spill) — a cold read downloads
+          each file, so its thread packs into pages sooner than a database ticket's (200/100). Every
+          meta.json carries the private appProperties <code>tmBoard</code>, <code>tmTicket</code>:
+          one Drive search lists a board's tickets. A file edited by hand in Drive is what the next
+          read sees (a file that is not JSON reads as empty, never as an error).
+        </p>
+        <h3 id="l2">L2 · Behind the database port</h3>
+        <p>
+          Nothing above the database changes. <code>backend/src/db/drive/router.ts</code> wraps
+          the adapter: every path under <code>boards/{b}/tickets/</code> of a board whose
+          <code>storage.kind</code> is <code>'drive'</code> goes to Drive; every other call is
+          the adapter's own. Queries on a Drive board run in memory with the SQLite adapter's exact
+          Firestore semantics (a list carries meta.json — no thread);
+          <code>collectionGroup('tickets')</code> merges the database's answer with every Drive
+          board's and orders and limits them as one. A Drive board is not in the search index: its
+          tickets are matched in memory. <code>onTicketWritten</code> runs after each Drive write
+          (board counts), as Firestore would have run it.
+        </p>
+        <h3 id="l3">L3 · Writes take turns</h3>
+        <p>
+          Drive cannot refuse a stale write, so the database keeps one small document per ticket,
+          <code>boards/{b}/driveRev/{t} { v, at, lease, folderId, messagesId, pagesId, metaId }</code>.
+          A transaction reads Drive freely; before the database commits, it takes the lease of every
+          Drive ticket it changes (in path order) and checks <code>v</code> is still what it read —
+          changed, and the whole transaction runs again. Then the database commits, the files are
+          written, and the lease is given back with <code>v + 1</code>. A lease runs out after a
+          minute if its writer dies.
+        </p>
+        <p>
+          <b>Live.</b> The browser reads a Drive board's tickets through the <code>ticketDocs</code>
+          command (<code>frontend/src/lib/firebase/routedFirestore.ts</code> answers the app's
+          Firestore reads with it). It listens to the board's <code>driveRev</code> documents: when
+          one moves — the ping after every write — it reads again; and it reads again once a minute
+          regardless, for edits made in Drive by hand.
+        </p>
+        <h3 id="l4">L4 · Choosing and moving</h3>
+        <ul>
+          <li>
+            <b>New board › Google Drive</b>: <code>boardCreate { storage }</code> finds or makes the
+            folder (picked, or <code>TaskManager/&lt;name&gt;</code>) with <code>tickets/</code> and
+            <code>files/</code> in it; the board's file bucket is made in <code>files/</code>.
+          </li>
+          <li>
+            <b>Board settings › Storage › Tickets</b>: <code>boardStorageMove { boardId, to }</code>
+            — a board admin, in the app. Like a bucket's move (§K6): <code>board.move</code>, a
+            queued job in slices, every ticket read-only meanwhile (<code>409 board_moving</code>),
+            resumable. To Drive: the database's tickets are deleted after the switch. Back to the
+            database: nothing in Drive is deleted. The board's file bucket moves on its own.
           </li>
         </ul>
       </article>

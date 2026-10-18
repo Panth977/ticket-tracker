@@ -26,7 +26,7 @@ import { artifactHousekeeping } from '../artifacts/housekeeping.js';
 import { db } from '../runtime/firebase.js';
 import { storageBucket } from '../blob/index.js';
 import { typedCol } from '../runtime/index.js';
-import { batchWriter } from '../tickets/doc.js';
+import { batchWriter, wholeTickets } from '../tickets/doc.js';
 import { readFiles } from '../tickets/read.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -125,8 +125,12 @@ export async function autoArchive(now: number): Promise<number> {
       .where('stageCategory', '==', 'done')
       .get();
     for (const t of done.docs) {
-      const ticket = t.data();
-      if (ticket.completedAt === null || ticket.completedAt > cutoff) continue;
+      const listed = t.data();
+      if (listed.completedAt === null || listed.completedAt > cutoff) continue;
+      // §L: a Drive board's query answer has no thread — the writer needs the whole ticket.
+      const [whole] = await wholeTickets(b.id, [{ ref: t.ref, ticket: listed }]);
+      if (!whole) continue;
+      const ticket = whole.ticket;
       // §W: the change and its activity row are the same document — one write.
       const activity: StoredActivity = {
         id: db().collection('_').doc().id,

@@ -300,13 +300,23 @@ export const boardStorageMove = defineCommand({
  */
 const TicketDocsFilterSchema = z.tuple([
   z.string().min(1).max(300),
-  z.enum(['<', '<=', '==', '!=', '>=', '>', 'array-contains', 'in', 'not-in', 'array-contains-any']),
+  z.enum([
+    '<',
+    '<=',
+    '==',
+    '!=',
+    '>=',
+    '>',
+    'array-contains',
+    'in',
+    'not-in',
+    'array-contains-any',
+  ]),
   z.unknown(),
 ]);
 export const ticketDocs = defineCommand({
   name: 'ticketDocs',
-  source: 'app',
-  scopes: ['tickets:read'],
+  source: 'extra',
   permission: 'can(read) on the board (a group query: the Drive boards you can read).',
   errors: ['not_found', 'invalid'],
   req: req({
@@ -316,11 +326,16 @@ export const ticketDocs = defineCommand({
       z.object({ kind: z.literal('group') }),
     ]),
     where: z.array(TicketDocsFilterSchema).max(10).optional(),
-    orderBy: z.array(z.tuple([z.string().min(1).max(300), z.enum(['asc', 'desc'])])).max(4).optional(),
+    orderBy: z
+      .array(z.tuple([z.string().min(1).max(300), z.enum(['asc', 'desc'])]))
+      .max(4)
+      .optional(),
     limit: z.number().int().positive().max(5000).optional(),
   }),
   res: z.object({
-    docs: z.array(z.object({ path: z.string(), id: z.string(), data: z.record(z.string(), z.unknown()) })),
+    docs: z.array(
+      z.object({ path: z.string(), id: z.string(), data: z.record(z.string(), z.unknown()) }),
+    ),
     /** A doc read: false when it does not exist. */
     exists: z.boolean().optional(),
     /** The Drive boards the answer covers (what to listen to for changes). */

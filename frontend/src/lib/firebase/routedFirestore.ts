@@ -123,7 +123,9 @@ export function isDriveBoard(db: Firestore, boardId: string): Promise<boolean> {
   const hit = kinds.get(boardId);
   if (hit && Date.now() - hit.at < 30_000) return hit.drive;
   const drive = R.getDoc(R.doc(db, `boards/${boardId}`))
-    .then((s) => (s.data() as { storage?: { kind?: string } } | undefined)?.storage?.kind === 'drive')
+    .then(
+      (s) => (s.data() as { storage?: { kind?: string } } | undefined)?.storage?.kind === 'drive',
+    )
     .catch(() => false);
   kinds.set(boardId, { at: Date.now(), drive });
   return drive;
@@ -177,11 +179,14 @@ async function ask(t: Target): Promise<Answer> {
           ...(t.spec.orderBy.length && !t.spec.loose ? { orderBy: t.spec.orderBy } : {}),
           ...(t.spec.limit && !t.spec.loose ? { limit: t.spec.limit } : {}),
         };
-  const target =
-    t.kind === 'group' ? { kind: 'group' as const } : { kind: t.kind, path: t.path };
-  return (await command('ticketDocs', { target, ...shape } as never, {
-    toast: false,
-  } as never)) as unknown as Answer;
+  const target = t.kind === 'group' ? { kind: 'group' as const } : { kind: t.kind, path: t.path };
+  return (await command(
+    'ticketDocs',
+    { target, ...shape } as never,
+    {
+      toast: false,
+    } as never,
+  )) as unknown as Answer;
 }
 
 const META = { fromCache: false, hasPendingWrites: false, isEqual: () => false } as const;
@@ -241,7 +246,8 @@ function compare(a: Row, b: Row, order: [string, 'asc' | 'desc'][]): number {
     const x = f === '__name__' ? a.path : getAt(a.data, f);
     const y = f === '__name__' ? b.path : getAt(b.data, f);
     if (x === y) continue;
-    const c = x === undefined || x === null ? -1 : y === undefined || y === null ? 1 : x < y ? -1 : 1;
+    const c =
+      x === undefined || x === null ? -1 : y === undefined || y === null ? 1 : x < y ? -1 : 1;
     return d === 'asc' ? c : -c;
   }
   return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
@@ -258,7 +264,8 @@ function querySnap(db: Firestore, q: unknown, rows: Row[], prev: Map<string, str
     else if (before !== now.get(r.path)) changes.push({ type: 'modified', doc: docs[i]! });
   }
   for (const p of prev?.keys() ?? [])
-    if (!now.has(p)) changes.push({ type: 'removed', doc: new FakeDoc(R.doc(db, p) as DocumentReference, null) });
+    if (!now.has(p))
+      changes.push({ type: 'removed', doc: new FakeDoc(R.doc(db, p) as DocumentReference, null) });
   return { snap: new FakeQuerySnap(q, docs, changes) as unknown as QuerySnapshot, seen: now };
 }
 
@@ -283,7 +290,10 @@ export async function getDocFromCache<T>(ref: DocumentReference<T>): Promise<Doc
 }
 
 /** The Drive boards' rows of a target (the group share, or the board's). */
-async function driveRows(db: Firestore, t: Target): Promise<{ rows: Row[]; boards: string[] } | null> {
+async function driveRows(
+  db: Firestore,
+  t: Target,
+): Promise<{ rows: Row[]; boards: string[] } | null> {
   if (t.kind !== 'group' && !(await isDriveBoard(db, t.board))) return null;
   const a = await ask(t);
   return { rows: a.docs, boards: a.boards };
@@ -331,9 +341,9 @@ type Fail = (e: Error) => void;
 
 function observerOf(args: unknown[]): { next: Next; error: Fail } {
   const fns = args.filter((a) => typeof a === 'function') as ((x: unknown) => void)[];
-  const obj = args.find((a) => a && typeof a === 'object' && ('next' in (a as object) || 'error' in (a as object))) as
-    | { next?: Next; error?: Fail }
-    | undefined;
+  const obj = args.find(
+    (a) => a && typeof a === 'object' && ('next' in (a as object) || 'error' in (a as object)),
+  ) as { next?: Next; error?: Fail } | undefined;
   return {
     next: (obj?.next ?? fns[0] ?? (() => {})) as Next,
     error: (obj?.error ?? fns[1] ?? ((e: Error) => console.error(e))) as Fail,
@@ -388,16 +398,23 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
       const revs =
         t.kind === 'doc'
           ? R.doc(db, `boards/${board}/driveRev/${t.path.split('/')[3]}`)
-          : R.query(R.collection(db, `boards/${board}/driveRev`), R.where('at', '>', Date.now() - 5_000));
+          : R.query(
+              R.collection(db, `boards/${board}/driveRev`),
+              R.where('at', '>', Date.now() - 5_000),
+            );
       let first = true;
       offs.push(
-        real(revs, () => {
-          if (first) {
-            first = false;
-            return;
-          }
-          refetch();
-        }, () => {}),
+        real(
+          revs,
+          () => {
+            if (first) {
+              first = false;
+              return;
+            }
+            refetch();
+          },
+          () => {},
+        ),
       );
     };
 

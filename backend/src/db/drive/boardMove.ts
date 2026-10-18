@@ -89,7 +89,9 @@ export async function startBoardMove(
   const from = board.storage?.kind === 'drive' ? 'drive' : 'managed';
   if (to.kind === from)
     throw errors.invalid(
-      from === 'drive' ? 'Its tickets are already in Google Drive' : 'Its tickets are already in the app',
+      from === 'drive'
+        ? 'Its tickets are already in Google Drive'
+        : 'Its tickets are already in the app',
       { field: 'to' },
     );
 
@@ -127,7 +129,11 @@ export async function startBoardMove(
   };
   await boardDoc(boardId).update({ move });
   forgetBoardStorage(boardId);
-  await ports().queue.enqueue('boardStorageMove', { boardId, round: 0 }, { name: sliceName(boardId, move, 0) });
+  await ports().queue.enqueue(
+    'boardStorageMove',
+    { boardId, round: 0 },
+    { name: sliceName(boardId, move, 0) },
+  );
   return { total };
 }
 
@@ -135,10 +141,19 @@ export async function resumeBoardMove(ctx: ServerCtx, boardId: string): Promise<
   const board = await loadAdmin(ctx, boardId);
   const move = board.move;
   if (!move || move.state !== 'failed') throw errors.conflict('There is no stopped move to resume');
-  const next: BoardMove = { ...move, state: 'running', error: null, resumes: (move.resumes ?? 0) + 1 };
+  const next: BoardMove = {
+    ...move,
+    state: 'running',
+    error: null,
+    resumes: (move.resumes ?? 0) + 1,
+  };
   await boardDoc(boardId).update({ move: next });
   forgetBoardStorage(boardId);
-  await ports().queue.enqueue('boardStorageMove', { boardId, round: 0 }, { name: sliceName(boardId, next, 0) });
+  await ports().queue.enqueue(
+    'boardStorageMove',
+    { boardId, round: 0 },
+    { name: sliceName(boardId, next, 0) },
+  );
   return { total: move.total };
 }
 
@@ -146,7 +161,11 @@ export async function resumeBoardMove(ctx: ServerCtx, boardId: string): Promise<
 
 const MAX_ATTEMPTS = 5;
 
-export async function runBoardMoveSlice(boardId: string, round: number, retryCount = 0): Promise<void> {
+export async function runBoardMoveSlice(
+  boardId: string,
+  round: number,
+  retryCount = 0,
+): Promise<void> {
   const snap = await boardDoc(boardId).get();
   const board = snap.exists ? (snap.data() as Board) : undefined;
   if (!board || !isBoardMoving(board)) return;

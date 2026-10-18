@@ -110,7 +110,11 @@ function remember(f: DriveItem, json: Json): void {
 }
 
 /** Run `fn` over `items`, at most `n` at a time. */
-export async function pool<T, R>(items: readonly T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+export async function pool<T, R>(
+  items: readonly T[],
+  n: number,
+  fn: (x: T) => Promise<R>,
+): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   await Promise.all(
@@ -165,7 +169,12 @@ export async function ticketFolder(
   if (!folder && !create) return null;
   const folderId = folder
     ? folder.id
-    : (await drive.createFolder(parent, ticketId, { [PROP_BOARD]: b.boardId, [PROP_TICKET]: ticketId })).id;
+    : (
+        await drive.createFolder(parent, ticketId, {
+          [PROP_BOARD]: b.boardId,
+          [PROP_TICKET]: ticketId,
+        })
+      ).id;
   const ptr: TicketPointers = { folderId, messagesId: null, pagesId: null, metaId: null };
   if (folder) {
     const inside = await drive.children([folderId]);
@@ -213,7 +222,9 @@ export async function readTicket(
   ptr.metaId = meta?.id ?? null;
   rememberPointers(b.boardId, ticketId, ptr);
   if (!meta) return { ptr, doc: undefined, messageFiles: new Map() };
-  const files = msgFiles.filter((f) => !isFolder(f) && f.name.endsWith('.json')).sort((a, z) => (a.name < z.name ? -1 : 1));
+  const files = msgFiles
+    .filter((f) => !isFolder(f) && f.name.endsWith('.json'))
+    .sort((a, z) => (a.name < z.name ? -1 : 1));
   const [doc, ...msgs] = await pool([meta, ...files], 12, (f) => readJson(drive, f));
   const messageFiles = new Map<string, { id: string; name: string }>();
   const recent: Json[] = [];

@@ -30,12 +30,7 @@ import { applyWrite, updatePairs, type WriteOp } from '../sqlite/mutate.js';
 import { Plan, type QueryState } from '../sqlite/query.js';
 import { DOC_ID, Timestamp as SqlTimestamp } from '../sqlite/values.js';
 import type * as P from '../types.js';
-import {
-  assertNotMoving,
-  driveBoardIds,
-  driveBoardOf,
-  driveOf,
-} from './board.js';
+import { assertNotMoving, driveBoardIds, driveBoardOf, driveOf } from './board.js';
 import {
   listTickets,
   readMeta,
@@ -77,7 +72,9 @@ export function docLoc(path: string): DocLoc | null {
 }
 
 /** boards/{b}/tickets, or boards/{b}/tickets/{t}/{sub} */
-function colLoc(path: string): { boardId: string; ticketId: string | null; sub: string | null } | null {
+function colLoc(
+  path: string,
+): { boardId: string; ticketId: string | null; sub: string | null } | null {
   const s = path.split('/');
   if (s[0] !== 'boards' || s[2] !== 'tickets' || s.length % 2 !== 1) return null;
   if (s.length === 3) return { boardId: s[1]!, ticketId: null, sub: null };
@@ -200,7 +197,10 @@ function toOp(ref: RDocRef<any>, method: Method, args: unknown[]): WriteOp {
       return { kind: 'update', pairs, ...(precondition ? { precondition } : {}) };
     }
     case 'delete':
-      return { kind: 'delete', ...(args[0] ? { precondition: args[0] as { exists?: boolean } } : {}) };
+      return {
+        kind: 'delete',
+        ...(args[0] ? { precondition: args[0] as { exists?: boolean } } : {}),
+      };
   }
 }
 
@@ -225,6 +225,34 @@ interface Prepared {
   pages: { id: string; doc: Json | undefined }[];
 }
 
+/**
+ * A Drive ticket's inline thread only ever loses a message to a page written
+ * in the same write (agents.html §W's spill). A writer that built its thread
+ * from a list answer (meta.json only, no thread) would drop the rest — so
+ * any message that vanishes without landing in a page is put back. The
+ * callers that write from lists read whole tickets first (tickets/doc.ts
+ * wholeTickets); this is the net under them.
+ */
+function keepThread(
+  before: Json | undefined,
+  after: Json | undefined,
+  pages: { doc: Json | undefined }[],
+  key: string,
+): Json | undefined {
+  const was = before?.recentMessages;
+  const now = after?.recentMessages;
+  if (!after || !Array.isArray(was) || !Array.isArray(now)) return after;
+  const kept = new Set((now as Json[]).map((m) => String(m.id)));
+  const paged = new Set(
+    pages.flatMap((p) => ((p.doc?.messages as Json[] | undefined) ?? []).map((m) => String(m.id))),
+  );
+  const lost = (was as Json[]).filter((m) => !kept.has(String(m.id)) && !paged.has(String(m.id)));
+  if (!lost.length) return after;
+  console.warn(`[drive] ${key}: a write would have dropped ${lost.length} message(s); kept`);
+  const at = (m: Json) => (typeof m.createdAt === 'number' ? m.createdAt : 0);
+  return { ...after, recentMessages: [...(now as Json[]), ...lost].sort((a, z) => at(a) - at(z)) };
+}
+
 // ─── the database ────────────────────────────────────────────────────────────
 
 export class RoutedDb implements P.Db {
@@ -244,11 +272,17 @@ export class RoutedDb implements P.Db {
     return colLoc(path) ? new RColRef(this, path, null) : this.base.collection(path);
   }
   collectionGroup(id: string): P.CollectionGroup<P.DocumentData> {
-    return id === 'tickets' ? new RQuery(this, { group: 'tickets' }, [], null) : this.base.collectionGroup(id);
+    return id === 'tickets'
+      ? new RQuery(this, { group: 'tickets' }, [], null)
+      : this.base.collectionGroup(id);
   }
 
-  async getAll<T>(...args: Array<P.DocumentReference<T> | P.ReadOptions>): Promise<P.DocumentSnapshot<T>[]> {
-    const refs = args.filter((a): a is P.DocumentReference<T> => typeof (a as any)?.path === 'string');
+  async getAll<T>(
+    ...args: Array<P.DocumentReference<T> | P.ReadOptions>
+  ): Promise<P.DocumentSnapshot<T>[]> {
+    const refs = args.filter(
+      (a): a is P.DocumentReference<T> => typeof (a as any)?.path === 'string',
+    );
     const opts = args.filter((a) => typeof (a as any)?.path !== 'string') as P.ReadOptions[];
     const baseRefs = refs.filter((r) => !(r instanceof RDocRef));
     const baseSnaps = baseRefs.length ? await this.base.getAll<T>(...baseRefs, ...opts) : [];
@@ -342,7 +376,8 @@ export class RoutedDb implements P.Db {
     if (l.sub !== null && l.sub !== 'data') return { doc: undefined, v, files: null };
     const drive = await driveOf(b);
     if (l.sub === 'data') {
-      const doc = rev && !rev.folderId && rev.v ? undefined : await readPage(drive, b, l.ticketId, l.subId!);
+      const doc =
+        rev && !rev.folderId && rev.v ? undefined : await readPage(drive, b, l.ticketId, l.subId!);
       return { doc, v, files: null };
     }
     if (rev && !rev.folderId && rev.v) return { doc: undefined, v, files: null }; // deleted
@@ -351,7 +386,10 @@ export class RoutedDb implements P.Db {
   }
 
   /** Rows of a routed collection of a Drive board, for the in-memory planner. */
-  async driveRows(b: DriveBoard, colPath: string): Promise<{ id: string; path: string; data: Json }[]> {
+  async driveRows(
+    b: DriveBoard,
+    colPath: string,
+  ): Promise<{ id: string; path: string; data: Json }[]> {
     const l = colLoc(colPath)!;
     const drive = await driveOf(b);
     if (l.ticketId === null) {
@@ -365,14 +403,15 @@ export class RoutedDb implements P.Db {
         .get();
       const missing = recent.docs.filter((d) => !seen.has(d.id) && (d.data() as any).metaId);
       const extra = await Promise.all(
-        missing.map(async (d) => ({ id: d.id, doc: await readMeta(drive, (d.data() as any).metaId) })),
+        missing.map(async (d) => ({
+          id: d.id,
+          doc: await readMeta(drive, (d.data() as any).metaId),
+        })),
       );
       for (const x of extra)
         if (x.doc) rows.push({ id: x.id, path: `${colPath}/${x.id}`, data: x.doc });
       // …and a ticket deleted a moment ago may still be found: its rev says so.
-      const gone = new Set(
-        recent.docs.filter((d) => !(d.data() as any).folderId).map((d) => d.id),
-      );
+      const gone = new Set(recent.docs.filter((d) => !(d.data() as any).folderId).map((d) => d.id));
       return rows.filter((r) => !gone.has(r.id));
     }
     if (l.sub === 'data') {
@@ -416,11 +455,10 @@ export class RoutedDb implements P.Db {
       const drive = await driveOf(w.b);
       const deleted = !!rev && !rev.folderId && !!rev.v;
       const before =
-        w.read?.files ?? (deleted ? null : await readTicket(drive, w.b, w.ticketId, pointersOf(rev)));
+        w.read?.files ??
+        (deleted ? null : await readTicket(drive, w.b, w.ticketId, pointersOf(rev)));
       const beforeDoc = before?.doc;
       const now = SqlTimestamp.now();
-      let doc = beforeDoc;
-      for (const { path, op } of w.ticketOps) doc = applyWrite(path, doc, op, now, isRefValue);
       const pages: Prepared['pages'] = [];
       for (const [id, ops] of w.pageOps) {
         let page = deleted ? undefined : await readPage(drive, w.b, w.ticketId, id);
@@ -428,6 +466,9 @@ export class RoutedDb implements P.Db {
         for (const op of ops) page = applyWrite(path, page, op, now, isRefValue);
         pages.push({ id, doc: page });
       }
+      let doc = beforeDoc;
+      for (const { path, op } of w.ticketOps) doc = applyWrite(path, doc, op, now, isRefValue);
+      doc = keepThread(beforeDoc, doc, pages, keyOf(w));
       out.push({
         work: w,
         before,
@@ -460,7 +501,11 @@ export class RoutedDb implements P.Db {
             boardId,
             ticketId,
             holder,
-            changed ? (p.ticketChanged && p.afterDoc === undefined ? { deleted: true } : { ptr }) : null,
+            changed
+              ? p.ticketChanged && p.afterDoc === undefined
+                ? { deleted: true }
+                : { ptr }
+              : null,
           );
           if (p.ticketChanged) void this.fire(boardId, ticketId, p.beforeDoc, p.afterDoc);
         } catch (e) {
@@ -697,7 +742,11 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
     return st;
   }
 
-  private plan(rows: { id: string; path: string; data: Json }[], collectionId: string, parent: string | null) {
+  private plan(
+    rows: { id: string; path: string; data: Json }[],
+    collectionId: string,
+    parent: string | null,
+  ) {
     const st = this.state(collectionId, parent);
     const plan = new Plan(st, isRefValue, true);
     const loaded = rows.map((r) => ({
@@ -742,7 +791,10 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
       }
       const rows = await this.db.driveRows(b, this.target.path);
       const out = this.plan(rows, lastSeg(this.target.path), parentOf(this.target.path));
-      return new RQuerySnap(out.map((r) => this.snapOf(r.path, r.data)), this.db.Ts);
+      return new RQuerySnap(
+        out.map((r) => this.snapOf(r.path, r.data)),
+        this.db.Ts,
+      );
     }
     // collectionGroup('tickets'): the database's answer + every Drive board's, as one.
     const ids = await driveBoardIds(this.db.base);
@@ -774,7 +826,10 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
       )
     ).flat();
     const out = this.plan([...baseRows, ...driveRows], 'tickets', null);
-    return new RQuerySnap(out.map((r) => this.snapOf(r.path, r.data)), this.db.Ts);
+    return new RQuerySnap(
+      out.map((r) => this.snapOf(r.path, r.data)),
+      this.db.Ts,
+    );
   }
 
   get(): Promise<P.QuerySnapshot<T>> {
@@ -791,7 +846,11 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
 }
 
 export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.CollectionReference<T> {
-  constructor(db: RoutedDb, readonly path: string, conv: Conv) {
+  constructor(
+    db: RoutedDb,
+    readonly path: string,
+    conv: Conv,
+  ) {
     super(db, { path }, [], conv);
   }
   get id(): string {
@@ -801,7 +860,11 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
     return this.db.doc(parentOf(this.path));
   }
   doc(id?: string): P.DocumentReference<T> {
-    return new RDocRef<T>(this.db, `${this.path}/${id ?? this.db.base.collection('_').doc().id}`, this.conv);
+    return new RDocRef<T>(
+      this.db,
+      `${this.path}/${id ?? this.db.base.collection('_').doc().id}`,
+      this.conv,
+    );
   }
   async add(data: P.WithFieldValue<T>): Promise<P.DocumentReference<T>> {
     const ref = this.doc();
@@ -811,7 +874,10 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
   async listDocuments(): Promise<P.DocumentReference<T>[]> {
     const l = colLoc(this.path)!;
     const b = await this.db.mode(l.boardId);
-    if (!b) return this.db.base.collection(this.path).listDocuments() as Promise<P.DocumentReference<T>[]>;
+    if (!b)
+      return this.db.base.collection(this.path).listDocuments() as Promise<
+        P.DocumentReference<T>[]
+      >;
     return (await this.db.driveRows(b, this.path)).map((r) => this.doc(r.id));
   }
   override withConverter<U>(converter: P.FirestoreDataConverter<U> | null): any {
@@ -837,7 +903,10 @@ class RTx implements P.Transaction {
       const r = await this.db.readDrive(b, l);
       const key = keyOf(l);
       if (!this.reads.has(key) || l.sub === null)
-        this.reads.set(key, { v: r.v, files: l.sub === null ? r.files : this.reads.get(key)?.files ?? null });
+        this.reads.set(key, {
+          v: r.v,
+          files: l.sub === null ? r.files : (this.reads.get(key)?.files ?? null),
+        });
       return new RDocSnap(target, r.doc);
     }
     if (target instanceof RQuery) return target.run(this.btx);
@@ -853,9 +922,7 @@ class RTx implements P.Transaction {
     const plain = [...baseRefs, ...managed.map((r) => r.baseRef())];
     const snaps = plain.length ? await this.btx.getAll(...plain, ...opts) : [];
     const byPath = new Map(snaps.map((s: any) => [s.ref.path, s]));
-    return Promise.all(
-      refs.map((r) => (byPath.has(r.path) ? byPath.get(r.path) : this.get(r))),
-    );
+    return Promise.all(refs.map((r) => (byPath.has(r.path) ? byPath.get(r.path) : this.get(r))));
   }
   private stage(ref: any, method: Method, args: unknown[]): this {
     if (ref instanceof RDocRef) this.staged.push([ref, method, args]);

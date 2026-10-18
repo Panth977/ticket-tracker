@@ -54,7 +54,11 @@ const isForeignTimestamp = (v: unknown): v is { seconds: number; nanoseconds: nu
 /** A FieldPath of any adapter → its segments (null when it is not one). */
 export function foreignSegments(v: unknown): string[] | null {
   if (v instanceof SqlFieldPath) return [...v.segments];
-  if (typeof v !== 'object' || v === null || typeof (v as { isEqual?: unknown }).isEqual !== 'function')
+  if (
+    typeof v !== 'object' ||
+    v === null ||
+    typeof (v as { isEqual?: unknown }).isEqual !== 'function'
+  )
     return null;
   const segs = (v as { segments?: unknown; _segments?: unknown }).segments;
   return Array.isArray(segs) && segs.every((s) => typeof s === 'string') ? [...segs] : null;
@@ -63,7 +67,8 @@ export function foreignSegments(v: unknown): string[] | null {
 /** Anything coming from code above the port → the SQLite value classes. */
 export function toLocal(v: unknown): unknown {
   if (v === null || typeof v !== 'object') return v;
-  if (v instanceof SqlFieldValue || v instanceof SqlTimestamp || v instanceof SqlFieldPath) return v;
+  if (v instanceof SqlFieldValue || v instanceof SqlTimestamp || v instanceof SqlFieldPath)
+    return v;
   if (isForeignSentinel(v)) {
     const kind = ADMIN_KINDS[v.methodName]!;
     if (kind === 'increment') return new SqlFieldValue(kind, v.operand);

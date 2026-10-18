@@ -203,4 +203,41 @@ describe('httpDrive', () => {
       `bytes ${8 * 1024 * 1024}-${size - 1}/${size}`,
     ]);
   }, 20_000);
+
+  it('putSmall: one multipart request — metadata then the JSON — to create or to replace', async () => {
+    const seen: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        seen.push({ url, init });
+        return json(file({ name: 'meta.json', mimeType: 'application/json' }));
+      }),
+    );
+    const d = httpDrive(async () => 't');
+    const bytes = new TextEncoder().encode('{"a":1}');
+    await d.putSmall({
+      create: { parentId: 'p1', name: 'meta.json' },
+      mime: 'application/json',
+      bytes,
+      props: { tmBoard: 'b1' },
+    });
+    await d.putSmall({ fileId: 'f1abcdef', mime: 'application/json', bytes });
+    expect(seen).toHaveLength(2);
+    expect(seen[0]!.url).toContain('/upload/drive/v3/files?uploadType=multipart');
+    expect(seen[0]!.init.method).toBe('POST');
+    const ct = (seen[0]!.init.headers as Record<string, string>)['content-type']!;
+    const boundary = /boundary=(\S+)/.exec(ct)![1]!;
+    const body = Buffer.from(seen[0]!.init.body as Uint8Array).toString('utf8');
+    const parts = body.split(`--${boundary}`);
+    expect(JSON.parse(parts[1]!.split('\r\n\r\n')[1]!)).toEqual({
+      name: 'meta.json',
+      mimeType: 'application/json',
+      parents: ['p1'],
+      appProperties: { tmBoard: 'b1' },
+    });
+    expect(parts[2]).toContain('{"a":1}');
+    expect(body.endsWith(`--${boundary}--`)).toBe(true);
+    expect(seen[1]!.url).toContain('/upload/drive/v3/files/f1abcdef?uploadType=multipart');
+    expect(seen[1]!.init.method).toBe('PATCH');
+  });
 });

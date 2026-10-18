@@ -206,7 +206,8 @@ export async function seedBoard(o: SeedOptions): Promise<SeededBoard> {
   };
   // bucket.html §L: TM_TEST_DRIVE_BOARDS=1 runs every ticket test against a
   // board whose tickets live in (the fake) Google Drive.
-  if (o.drive ?? process.env.TM_TEST_DRIVE_BOARDS === '1') board.storage = await fakeDriveBoard(o.admin, key);
+  if (o.drive ?? process.env.TM_TEST_DRIVE_BOARDS === '1')
+    board.storage = await fakeDriveBoard(o.admin, key);
   const batch = db().batch();
   batch.set(db().doc(paths.board(id)), board);
   for (const [u, role] of people) {
@@ -245,7 +246,10 @@ export async function connectFakeDrive(u: TestUser): Promise<void> {
 }
 
 /** A connected fake Drive for `owner` and a board folder in it. */
-export async function fakeDriveBoard(owner: TestUser, name: string): Promise<NonNullable<Board['storage']>> {
+export async function fakeDriveBoard(
+  owner: TestUser,
+  name: string,
+): Promise<NonNullable<Board['storage']>> {
   await connectFakeDrive(owner);
   const drive = fakeDrive(owner.uid);
   const folder = await drive.createFolder(null, `Board ${name}`);
