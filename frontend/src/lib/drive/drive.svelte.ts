@@ -124,7 +124,9 @@ function loadPicker(): Promise<GooglePicker> {
 }
 
 /** Pick a folder in my Drive. null when cancelled. */
-export async function pickDriveFolder(): Promise<{ id: string; name: string } | null> {
+export async function pickDriveFolder(
+  title = 'Choose the folder for this bucket',
+): Promise<{ id: string; name: string } | null> {
   const [picker, tok] = await Promise.all([
     loadPicker(),
     command('drivePickerToken', {}, { toast: 'Could not open the Drive picker' }),
@@ -139,7 +141,7 @@ export async function pickDriveFolder(): Promise<{ id: string; name: string } | 
       .setOAuthToken(tok.accessToken)
       .setDeveloperKey(tok.apiKey)
       .setAppId(tok.appId)
-      .setTitle('Choose the folder for this bucket')
+      .setTitle(title)
       .setCallback((data) => {
         if (data.action === picker.Action.PICKED && data.docs?.[0])
           resolve({ id: data.docs[0].id, name: data.docs[0].name });

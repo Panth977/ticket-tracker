@@ -34,6 +34,7 @@ import {
 import { typedDoc } from '../runtime/converters.js';
 import { freeSlug, ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
+import { newDriveFolder } from '../db/drive/create.js';
 import { markOnCreate } from './indicatorShared.js';
 
 export default defineCommand('artifactCreate', async (ctx, input) => {
@@ -50,6 +51,13 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
   const own = await ownerForCreate(ownerUid, input.owner);
   const slug = await freeSlug('artifact', own.fields.owner, input.name);
   const artifactId = ctx.ids.id();
+  // §L5: Google Drive — the artifact's folder (settings, data) and files/ for its bucket.
+  if (input.storage?.kind === 'drive' && agentId)
+    throw errors.forbidden('An agent cannot make an artifact in a Google Drive — its person can');
+  const drive =
+    input.storage?.kind === 'drive'
+      ? await newDriveFolder(ctx.actor, input.storage, input.name, ['files'])
+      : null;
   const artifact: Artifact = {
     name: input.name,
     description: input.description || null,
@@ -65,6 +73,7 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
     currentBuild: null,
     createdAt: ctx.now,
     updatedAt: ctx.now,
+    ...(drive ? { storage: drive.storage } : {}),
   };
   await artifactRef(artifactId).create(artifact);
   await syncArtifactMirror(artifactId, artifact);
@@ -83,5 +92,5 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
       )
       .catch((e) => console.warn('[artifactCreate] inbox row failed', e));
   }
-  return { artifactId };
+  return { artifactId, ...(drive ? { filesFolderId: drive.sub.files! } : {}) };
 });

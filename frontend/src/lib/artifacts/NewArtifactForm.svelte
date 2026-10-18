@@ -23,7 +23,7 @@
   import CreatePage from '$lib/ui/CreatePage.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
-  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import StorageField, { storageInput, type StorageChoice } from '$lib/drive/StorageField.svelte';
   import { driveState } from '$lib/drive/drive.svelte';
   import { storageFor } from '$lib/drive/storageFor';
   import { toast } from '$lib/ui/toast.svelte';
@@ -59,19 +59,23 @@
     if (!n || busy || !storageOk) return;
     busy = true;
     try {
-      const { artifactId } = await command(
+      // bucket.html §L5: Google Drive = the artifact (its data) in that folder,
+      // and its file bucket in <folder>/files.
+      const drive = storage.kind === 'drive' ? storageInput(storage) : null;
+      const { artifactId, filesFolderId } = await command(
         'artifactCreate',
         {
           name: n,
           description: description.trim() || null,
           indicator,
           ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
+          ...(drive ? { storage: drive } : {}),
         },
         { toast: 'Could not create the artifact' },
       );
       if (storage.kind !== 'none')
         await storageFor(
-          storage,
+          filesFolderId ? { kind: 'drive', folderId: filesFolderId } : storage,
           { artifactId },
           { name: `${n} files`, owner: ownerOf(owner) },
         ).catch((e: Error) => toast.error('Artifact created, but its bucket was not', e.message));
@@ -113,10 +117,11 @@
     <StorageField
       bind:value={storage}
       allowNone
-      name="{name.trim() || 'Artifact'} files"
-      label="A bucket for its files"
-      managedHint="A new bucket, kept by this app"
-      noneHint="Grant one later"
+      name={name.trim() || 'Artifact'}
+      label="Where it lives"
+      managedHint="Data in the app, files in a new bucket"
+      noneHint="Data in the app; grant a bucket later"
+      driveHint="Its data and files: a folder in your Drive"
     />
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium">Indicator</span>

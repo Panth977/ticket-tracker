@@ -251,7 +251,7 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
   await eventually(
     'the reply is a message file in Drive',
     async () => {
-      const t = await call(ed, 'ticketDocs', {
+      const t = await call(ed, 'driveDocs', {
         target: { kind: 'doc', path: `boards/${board.id}/tickets/${ticketId}` },
       });
       const msgs = (t.docs[0]?.data.recentMessages ?? []) as { body: { text: string } }[];

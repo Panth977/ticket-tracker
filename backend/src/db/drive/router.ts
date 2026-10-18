@@ -30,13 +30,7 @@ import { applyWrite, type WriteOp } from '../sqlite/mutate.js';
 import { Plan, type QueryState } from '../sqlite/query.js';
 import { DOC_ID, Timestamp as SqlTimestamp } from '../sqlite/values.js';
 import type * as P from '../types.js';
-import {
-  assertNotMoving,
-  driveBoardIds,
-  driveBoardOf,
-  driveEntityOf,
-  driveOf,
-} from './board.js';
+import { assertNotMoving, driveBoardIds, driveBoardOf, driveEntityOf, driveOf } from './board.js';
 import {
   listTickets,
   readMeta,
@@ -86,7 +80,6 @@ import {
   type Json,
   type Method,
 } from './snap.js';
-
 
 // ─── paths ───────────────────────────────────────────────────────────────────
 
@@ -239,9 +232,7 @@ export class RoutedDb implements P.Db {
         await this.finishAll(prepared, holder, leased);
         return result;
       } catch (e) {
-        await Promise.all(
-          [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
-        );
+        await Promise.all([...leased.values()].map((p) => releaseAt(this.base, p, holder, null)));
         leased.clear();
         if (e instanceof DriveRetry && attempt < 6) continue;
         if (e instanceof DriveRetry)
@@ -342,11 +333,12 @@ export class RoutedDb implements P.Db {
   async driveRows(
     b: DriveBoard,
     colPath: string,
+    opts: { activeOnly?: boolean } = {},
   ): Promise<{ id: string; path: string; data: Json }[]> {
     const l = colLoc(colPath)!;
     const drive = await driveOf(b);
     if (l.ticketId === null) {
-      const listed = await listTickets(drive, b);
+      const listed = await listTickets(drive, b, opts);
       const seen = new Set(listed.map((t) => t.id));
       const rows = listed.map((t) => ({ id: t.id, path: `${colPath}/${t.id}`, data: t.doc }));
       // Drive's search can trail a just-made file by a little: the revs written lately fill the gap.
@@ -471,9 +463,7 @@ export class RoutedDb implements P.Db {
       }),
     );
     // Leased but nothing to write (read in the tx, unchanged): just give back.
-    await Promise.all(
-      [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
-    );
+    await Promise.all([...leased.values()].map((p) => releaseAt(this.base, p, holder, null)));
     leased.clear();
     if (failed)
       throw errors.unavailable(
@@ -507,7 +497,12 @@ export class RoutedDb implements P.Db {
     ][];
     const calls = all.filter((c) => !((c[0] as unknown) instanceof EDocRef));
     if (ecalls.length) {
-      const { works: ew, manifests } = await planEntityWrites(this, ecalls, { kind: 'direct' }, null);
+      const { works: ew, manifests } = await planEntityWrites(
+        this,
+        ecalls,
+        { kind: 'direct' },
+        null,
+      );
       const holder = randomUUID();
       const leased = new Map<string, string>();
       try {
@@ -536,16 +531,13 @@ export class RoutedDb implements P.Db {
       const prepared = await this.prepare([...works.values()], holder, leased);
       await this.finish(prepared, holder, leased);
     } catch (e) {
-      await Promise.all(
-        [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
-      );
+      await Promise.all([...leased.values()].map((p) => releaseAt(this.base, p, holder, null)));
       throw e;
     }
   }
 }
 
 // ─── references ──────────────────────────────────────────────────────────────
-
 
 export class RDocRef<T = P.DocumentData> implements P.DocumentReference<T> {
   constructor(
@@ -784,7 +776,7 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
         const q = this.baseQuery();
         return (btx ? btx.get(q) : q.get()) as Promise<P.QuerySnapshot<T>>;
       }
-      const rows = await this.db.driveRows(b, this.target.path);
+      const rows = await this.db.driveRows(b, this.target.path, { activeOnly: this.activeOnly() });
       const out = this.plan(rows, lastSeg(this.target.path), parentOf(this.target.path));
       return new RQuerySnap(
         out.map((r) => this.snapOf(r.path, r.data)),
@@ -811,7 +803,9 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
           const b = await this.db.mode(id);
           if (!b) return [];
           try {
-            return await this.db.driveRows(b, `boards/${id}/tickets`);
+            return await this.db.driveRows(b, `boards/${id}/tickets`, {
+              activeOnly: this.activeOnly(),
+            });
           } catch (e) {
             // One board's Drive being unreachable must not take every list down.
             console.warn(`[drive] board ${id} skipped in a collection-group query`, e);
@@ -829,6 +823,12 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
 
   get(): Promise<P.QuerySnapshot<T>> {
     return this.run(null);
+  }
+  /** Asks only for active tickets (the board, My work): archived files are not read at all. */
+  activeOnly(): boolean {
+    return this.ops.some(
+      ([m, a]) => m === 'where' && a[0] === 'state' && a[1] === '==' && a[2] === 'active',
+    );
   }
   count(): P.AggregateQuery {
     return {
@@ -867,7 +867,9 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
     if (el) {
       const rows = el.t === 'files' ? await entityRows(this.db, el, this.path) : null;
       if (!rows)
-        return this.db.base.collection(this.path).listDocuments() as Promise<P.DocumentReference<T>[]>;
+        return this.db.base.collection(this.path).listDocuments() as Promise<
+          P.DocumentReference<T>[]
+        >;
       return rows.map((r) => this.doc(r.id));
     }
     const l = colLoc(this.path)!;

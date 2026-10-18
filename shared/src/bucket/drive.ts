@@ -62,6 +62,8 @@ export type BucketStorageInput = z.infer<typeof BucketStorageInputSchema>;
 
 /** The scope the app asks Google for — nothing broader (§K1). */
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+/** §L7: the whole Drive — an instance's opt-in (TM_DRIVE_SCOPE=drive) to import folders another app wrote. */
+export const DRIVE_FULL_SCOPE = 'https://www.googleapis.com/auth/drive';
 /** Where a Drive bucket lives when the person names no folder. */
 export const DRIVE_DEFAULT_PARENT = 'TaskManager';
 

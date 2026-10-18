@@ -50,7 +50,8 @@ export function encodeCode(seed: Buffer): string {
   let bits = '';
   for (const b of seed) bits += b.toString(2).padStart(8, '0');
   let out = '';
-  for (let i = 0; i < bits.length; i += 5) out += B32[parseInt(bits.slice(i, i + 5).padEnd(5, '0'), 2)];
+  for (let i = 0; i < bits.length; i += 5)
+    out += B32[parseInt(bits.slice(i, i + 5).padEnd(5, '0'), 2)];
   return out.match(/.{1,4}/g)!.join('-');
 }
 
@@ -67,8 +68,10 @@ export function decodeCode(code: string): Buffer {
     bits += v.toString(2).padStart(5, '0');
   }
   const bytes: number[] = [];
-  for (let i = 0; i + 8 <= bits.length && bytes.length < 32; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  if (bytes.length !== 32) throw errors.invalid('That recovery code is too short', { field: 'recoveryCode' });
+  for (let i = 0; i + 8 <= bits.length && bytes.length < 32; i += 8)
+    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  if (bytes.length !== 32)
+    throw errors.invalid('That recovery code is too short', { field: 'recoveryCode' });
   return Buffer.from(bytes);
 }
 
@@ -84,7 +87,8 @@ const rawPub = (k: KeyObject): Buffer =>
 const pubFromRaw = (raw: Buffer): KeyObject =>
   createPublicKey({ key: Buffer.concat([SPKI, raw]), format: 'der', type: 'spki' });
 
-export const publicKeyOfSeed = (seed: Buffer): string => rawPub(privFromSeed(seed)).toString('base64url');
+export const publicKeyOfSeed = (seed: Buffer): string =>
+  rawPub(privFromSeed(seed)).toString('base64url');
 
 const kekOf = (shared: Buffer, eph: Buffer) =>
   Buffer.from(hkdfSync('sha256', shared, eph, 'tm-drive-recovery', 32));
@@ -93,7 +97,11 @@ function gcm(key: Buffer, plain: Buffer): { iv: string; ct: string; tag: string 
   const iv = randomBytes(12);
   const c = createCipheriv('aes-256-gcm', key, iv);
   const ct = Buffer.concat([c.update(plain), c.final()]);
-  return { iv: iv.toString('base64url'), ct: ct.toString('base64url'), tag: c.getAuthTag().toString('base64url') };
+  return {
+    iv: iv.toString('base64url'),
+    ct: ct.toString('base64url'),
+    tag: c.getAuthTag().toString('base64url'),
+  };
 }
 function ungcm(key: Buffer, b: { iv: string; ct: string; tag: string }): Buffer {
   const d = createDecipheriv('aes-256-gcm', key, Buffer.from(b.iv, 'base64url'));
@@ -105,8 +113,15 @@ function ungcm(key: Buffer, b: { iv: string; ct: string; tag: string }): Buffer 
 export function wrapToRecovery(pub: string, dek: Buffer): Json {
   const eph = generateKeyPairSync('x25519');
   const ephRaw = rawPub(eph.privateKey);
-  const shared = diffieHellman({ privateKey: eph.privateKey, publicKey: pubFromRaw(Buffer.from(pub, 'base64url')) });
-  return { alg: 'x25519-hkdf-aesgcm', eph: ephRaw.toString('base64url'), ...gcm(kekOf(shared, ephRaw), dek) };
+  const shared = diffieHellman({
+    privateKey: eph.privateKey,
+    publicKey: pubFromRaw(Buffer.from(pub, 'base64url')),
+  });
+  return {
+    alg: 'x25519-hkdf-aesgcm',
+    eph: ephRaw.toString('base64url'),
+    ...gcm(kekOf(shared, ephRaw), dek),
+  };
 }
 
 /** Open a recovery wrap with the recovery code's seed. */
@@ -156,7 +171,9 @@ export async function takeRecoveryCode(uid: string): Promise<string | null> {
 
 export async function vaultStatus(uid: string): Promise<{ has: boolean; pending: boolean }> {
   const snap = await (await db()).doc(`${VAULTS}/${uid}`).get();
-  const cur = snap.exists ? (snap.data() as { pub?: string; pendingCode?: string | null }) : undefined;
+  const cur = snap.exists
+    ? (snap.data() as { pub?: string; pendingCode?: string | null })
+    : undefined;
   return { has: !!cur?.pub, pending: !!cur?.pendingCode };
 }
 
@@ -202,7 +219,13 @@ export async function dataKeyOf(e: DriveEntity, recoverySeed?: Buffer): Promise<
         );
       opened = unwrapWithRecovery(recoverySeed, doc.recovery as Json);
       // Re-seal for this instance: from now on it opens without the code.
-      await writeDocFile(drive, e.folderId, [KEYS_FILE], { ...doc, instance: seal(opened.toString('base64url')) }, null);
+      await writeDocFile(
+        drive,
+        e.folderId,
+        [KEYS_FILE],
+        { ...doc, instance: seal(opened.toString('base64url')) },
+        null,
+      );
     }
     dek = opened;
   }
@@ -222,7 +245,9 @@ export async function sealerFor(e: DriveEntity): Promise<Sealer> {
     async open(json) {
       if (json.$tm !== SEALED) return json;
       const dek = await dataKeyOf(e);
-      return JSON.parse(ungcm(dek, json as { iv: string; ct: string; tag: string }).toString('utf8')) as Json;
+      return JSON.parse(
+        ungcm(dek, json as { iv: string; ct: string; tag: string }).toString('utf8'),
+      ) as Json;
     },
   };
 }

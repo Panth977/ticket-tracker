@@ -115,7 +115,9 @@ export async function writeDocFile(
   const body = sealer ? await sealer.seal(doc) : doc;
   const f = await drive.putSmall({
     fileId: file?.id,
-    create: file ? undefined : { parentId: folder!, name: fileName(rel[rel.length - 1]!, !!sealer) },
+    create: file
+      ? undefined
+      : { parentId: folder!, name: fileName(rel[rel.length - 1]!, !!sealer) },
     mime: JSON_MIME,
     bytes: new TextEncoder().encode(`${JSON.stringify(body, null, 2)}\n`),
   });
@@ -152,6 +154,18 @@ export async function trashFolder(
 ): Promise<void> {
   const folder = await folderAt(drive, root, rel, false);
   if (folder) await drive.trash(folder).catch(() => undefined);
-  for (const k of [...folders.keys()])
-    if (k.startsWith(folderKey(root, rel))) folders.delete(k);
+  for (const k of [...folders.keys()]) if (k.startsWith(folderKey(root, rel))) folders.delete(k);
+}
+
+/** The names of the folders directly in the folder at `rel` (a document's subcollections, or a collection's documents). */
+export async function childFolders(
+  drive: DriveApi,
+  root: string,
+  rel: readonly string[],
+): Promise<string[]> {
+  const folder = await folderAt(drive, root, rel, false);
+  if (!folder) return [];
+  return (await drive.children([folder]))
+    .filter((k) => isFolder(k) && !k.name.startsWith('.'))
+    .map((k) => k.name);
 }

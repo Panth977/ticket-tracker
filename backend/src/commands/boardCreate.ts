@@ -28,9 +28,7 @@ import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
 import { ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
-import { isFolder } from '../bucket/drive/api.js';
-import { driveEmail, driveFor } from '../bucket/drive/link.js';
-import { driveBucketFolder } from '../bucket/drive/store.js';
+import { newDriveFolder } from '../db/drive/create.js';
 import { forgetDriveBoardIds } from '../db/drive/board.js';
 import {
   BOARD_CREATES_PER_DAY,
@@ -139,21 +137,9 @@ export default defineCommand('boardCreate', async (ctx, input) => {
         .then((s) => s.exists)
     )
       throw errors.conflict(`The key ${input.key} is taken`, { key: input.key });
-    const api = await driveFor(ctx.actor);
-    const folder = await driveBucketFolder(api, input.storage, input.name, ctx.actor);
-    const kids = await api.children([folder.folderId]);
-    const sub = async (name: string) =>
-      kids.find((k) => isFolder(k) && k.name === name)?.id ??
-      (await api.createFolder(folder.folderId, name)).id;
-    const ticketsFolderId = await sub('tickets');
-    filesFolderId = await sub('files');
-    storage = {
-      kind: 'drive',
-      uid: ctx.actor,
-      ...folder,
-      email: await driveEmail(ctx.actor),
-      ticketsFolderId,
-    };
+    const made = await newDriveFolder(ctx.actor, input.storage, input.name, ['tickets', 'files']);
+    storage = made.storage;
+    filesFolderId = made.sub.files!;
   }
   const access = { [ctx.actor]: 'admin' as const };
   // indicators.html: every new board (and each of its stages) gets an indicator.

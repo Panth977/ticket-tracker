@@ -24,17 +24,26 @@ export interface EntitySpec {
   /** Where they are, in the entity's folder. */
   settingsFile: string;
   /** Collections under the entity kept as files: name → secret? */
-  subtrees: Readonly<Record<string, { secret: boolean }>>;
+  subtrees: Readonly<Record<string, { secret: boolean; depth?: number }>>;
 }
 
 export const ENTITY_SPECS: Readonly<Record<EntityKind, EntitySpec>> = {
   boards: {
-    settingsFields: ['stages', 'priorities', 'tags', 'fields', 'aggFields', 'defaultViewId', 'settings'],
+    settingsFields: [
+      'stages',
+      'priorities',
+      'tags',
+      'fields',
+      'aggFields',
+      'defaultViewId',
+      'settings',
+    ],
     settingsFile: 'settings',
     subtrees: {
       views: { secret: false },
       templates: { secret: false },
-      webhooks: { secret: true },
+      // A webhook's deliveries/ log stays in the database: only the webhook itself moves.
+      webhooks: { secret: true, depth: 2 },
       integrations: { secret: true },
     },
   },
@@ -49,7 +58,8 @@ export const ENTITY_SPECS: Readonly<Record<EntityKind, EntitySpec>> = {
     subtrees: {},
   },
   artifacts: {
-    settingsFields: ['readOnly'],
+    // readOnly is who-may-write: access, so it stays in the database (the rules read it).
+    settingsFields: [],
     settingsFile: 'settings',
     subtrees: { db: { secret: false } },
   },
@@ -72,7 +82,8 @@ export function entityLoc(path: string): EntityLoc | null {
   if (s.length === 2) return { t: 'entity', kind: s[0], id: s[1] };
   if (s.length % 2 !== 0) return null;
   const sub = ENTITY_SPECS[s[0]].subtrees[s[2]!];
-  return sub ? { t: 'file', kind: s[0], id: s[1], rel: s.slice(2), secret: sub.secret } : null;
+  if (!sub || (sub.depth && s.length - 2 > sub.depth)) return null;
+  return { t: 'file', kind: s[0], id: s[1], rel: s.slice(2), secret: sub.secret };
 }
 
 /** A routed collection that is not tickets: a subtree folder, or the entity collection itself. */
@@ -86,11 +97,13 @@ export function entityColLoc(path: string): EntityColLoc | null {
   if (s.length === 1) return { t: 'entities', kind: s[0] };
   if (s.length % 2 !== 1 || s.length < 3) return null;
   const sub = ENTITY_SPECS[s[0]].subtrees[s[2]!];
-  return sub ? { t: 'files', kind: s[0], id: s[1]!, rel: s.slice(2), secret: sub.secret } : null;
+  if (!sub || (sub.depth && s.length - 2 > sub.depth)) return null;
+  return { t: 'files', kind: s[0], id: s[1]!, rel: s.slice(2), secret: sub.secret };
 }
 
 /** The rev key of a routed document (driveRev/{key}). */
-export const entityRevKey = (l: EntityLoc): string => (l.t === 'entity' ? '_entity' : l.rel.join('~'));
+export const entityRevKey = (l: EntityLoc): string =>
+  l.t === 'entity' ? '_entity' : l.rel.join('~');
 
 /** Split a plain object's top-level fields: [settings, the rest]. */
 export function splitFields(

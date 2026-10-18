@@ -29,6 +29,10 @@ export const META = 'meta.json';
 export const MESSAGES = 'messages';
 export const PAGES = 'pages';
 export const TICKETS = 'tickets';
+/** §L4: archived tickets live here, out of the way of every list of active ones. */
+export const ARCHIVE = 'archive';
+/** appProperty on meta.json: the ticket's state, so a list of active ones skips the rest unread. */
+export const PROP_STATE = 'tmState';
 export const JSON_MIME = 'application/json';
 /** appProperties on every meta.json: what a board's listing searches by. */
 export const PROP_BOARD = 'tmBoard';
@@ -161,6 +165,18 @@ export async function ticketsFolder(drive: DriveApi, b: DriveBoard): Promise<str
 }
 
 /** A ticket's folder: from what we know, else found by name, else (create) made. */
+const archives = new Map<string, string>();
+/** The board's archive/ folder (made on first use). */
+export async function archiveFolder(drive: DriveApi, b: DriveBoard): Promise<string> {
+  const hit = archives.get(b.folderId);
+  if (hit) return hit;
+  const kids = await drive.children([b.folderId]);
+  const found = kids.find((k) => isFolder(k) && k.name === ARCHIVE);
+  const id = found ? found.id : (await drive.createFolder(b.folderId, ARCHIVE)).id;
+  archives.set(b.folderId, id);
+  return id;
+}
+
 export async function ticketFolder(
   drive: DriveApi,
   b: DriveBoard,
@@ -171,8 +187,14 @@ export async function ticketFolder(
   const hit = known ?? knownPointers(b.boardId, ticketId);
   if (hit) return hit;
   const parent = await ticketsFolder(drive, b);
-  const kids = await drive.children([parent]);
-  const folder = kids.find((k) => isFolder(k) && k.name === ticketId);
+  let folder = (await drive.children([parent])).find((k) => isFolder(k) && k.name === ticketId);
+  if (!folder) {
+    const arch =
+      archives.get(b.folderId) ??
+      (await drive.children([b.folderId])).find((k) => isFolder(k) && k.name === ARCHIVE)?.id;
+    if (arch)
+      folder = (await drive.children([arch])).find((k) => isFolder(k) && k.name === ticketId);
+  }
   if (!folder && !create) return null;
   const folderId = folder
     ? folder.id
@@ -269,7 +291,21 @@ export async function writeTicket(
     ptr.messagesId = (await drive.createFolder(ptr.folderId, MESSAGES)).id;
 
   const jobs: (() => Promise<unknown>)[] = [];
-  const props = { [PROP_BOARD]: b.boardId, [PROP_TICKET]: ticketId };
+  const props = {
+    [PROP_BOARD]: b.boardId,
+    [PROP_TICKET]: ticketId,
+    [PROP_STATE]: String(meta.state ?? ''),
+  };
+  // §L4: archived ↔ active moves the ticket's folder between archive/ and tickets/.
+  const wasArchived = before?.doc ? before.doc.state === 'archived' : false;
+  const isArchived = meta.state === 'archived';
+  if (wasArchived !== isArchived || (!before?.doc && isArchived)) {
+    const to = isArchived ? await archiveFolder(drive, b) : await ticketsFolder(drive, b);
+    const from = isArchived ? await ticketsFolder(drive, b) : await archiveFolder(drive, b);
+    await drive.update(ptr.folderId, { addParent: to, removeParent: from }).catch((e) => {
+      console.warn(`[drive] ${b.boardId}/${ticketId}: folder not moved`, e);
+    });
+  }
   jobs.push(async () => {
     const f = await drive.putSmall({
       fileId: ptr.metaId ?? undefined,
@@ -394,9 +430,15 @@ export async function readPages(
 export async function listTickets(
   drive: DriveApi,
   b: DriveBoard,
+  opts: { activeOnly?: boolean } = {},
 ): Promise<{ id: string; doc: Json; file: DriveItem }[]> {
   const metas = (await drive.findByProp(PROP_BOARD, b.boardId)).filter(
-    (f) => !isFolder(f) && f.name === META && f.appProperties[PROP_TICKET],
+    (f) =>
+      !isFolder(f) &&
+      f.name === META &&
+      f.appProperties[PROP_TICKET] &&
+      // A list of active tickets never downloads an archived one (§L4).
+      !(opts.activeOnly && f.appProperties[PROP_STATE] && f.appProperties[PROP_STATE] !== 'active'),
   );
   const docs = await pool(metas, 16, (f) => readJson(drive, f));
   return metas.map((f, i) => ({

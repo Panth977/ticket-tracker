@@ -49,10 +49,17 @@ function entryOf(kind: EntityKind, id: string, d: Record<string, unknown> | unde
   const s = d?.storage as
     { kind?: string; uid?: string; folderId?: string; ticketsFolderId?: string | null } | undefined;
   const drive: DriveEntity | null =
-    s?.kind === 'drive' && s.uid && s.folderId ? { kind, id, uid: s.uid, folderId: s.folderId } : null;
+    s?.kind === 'drive' && s.uid && s.folderId
+      ? { kind, id, uid: s.uid, folderId: s.folderId }
+      : null;
   const board: DriveBoard | null =
     kind === 'boards' && drive
-      ? { boardId: id, uid: drive.uid, folderId: drive.folderId, ticketsFolderId: s?.ticketsFolderId ?? null }
+      ? {
+          boardId: id,
+          uid: drive.uid,
+          folderId: drive.folderId,
+          ticketsFolderId: s?.ticketsFolderId ?? null,
+        }
       : null;
   const move = d?.move as { state?: string } | undefined;
   return { at: Date.now(), drive, board, moving: move?.state === 'running' };
@@ -64,7 +71,11 @@ async function load(base: Db, kind: EntityKind, id: string): Promise<Entry> {
 }
 
 /** The router read the entity's document anyway: remember what it says. */
-export function noteEntity(kind: EntityKind, id: string, data: Record<string, unknown> | undefined): void {
+export function noteEntity(
+  kind: EntityKind,
+  id: string,
+  data: Record<string, unknown> | undefined,
+): void {
   cache.set(ck(kind, id), entryOf(kind, id, data));
 }
 

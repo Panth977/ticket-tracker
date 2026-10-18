@@ -1,22 +1,24 @@
 /**
- * 'firebase/firestore', with the tickets of DRIVE BOARDS answered by the api
- * (docs/plan/bucket.html §L). vite.config.ts aliases every import of
+ * 'firebase/firestore', with what is KEPT IN GOOGLE DRIVE answered by the api
+ * (docs/plan/bucket.html §L, §L5). vite.config.ts aliases every import of
  * 'firebase/firestore' here; this module re-exports the real SDK (or the VM
- * shim) and wraps only the reads.
+ * shim) and wraps the reads — and an artifact's data writes.
  *
- * A board whose `storage.kind` is 'drive' keeps its tickets in Google Drive,
- * so Firestore has none to give. For any read under boards/{b}/tickets/ of
- * such a board — a live listener, a one-off get, or the Drive boards' share
- * of collectionGroup('tickets') — this asks the `ticketDocs` command instead,
- * and answers with snapshots of the same shape the SDK's would have:
+ * A board, dictionary or artifact whose `storage.kind` is 'drive' keeps its
+ * tickets / views / templates / webhooks / integrations / entries / data in
+ * Drive, and a board its settings (merged into the board document). Firestore
+ * has none of that to give, so for those paths this asks the `driveDocs`
+ * command instead and answers with snapshots of the SDK's shape:
  *
- *   live          refetched when the ticket's boards/{b}/driveRev/{t} moves
- *                 (the server's ping after every write, any board query on
- *                 any rev of the board), and once a minute regardless (an
+ *   live          refetched when a driveRev of the entity moves (the server's
+ *                 ping after every write), and once a minute regardless (an
  *                 edit made by hand in Drive)
  *   from cache    nothing is cached: an empty answer (a cache miss)
+ *   writes        an artifact's data (setDoc / updateDoc / deleteDoc / addDoc)
+ *                 go through `driveDocWrite`; everything else is written by
+ *                 commands already
  *
- * Every other read is the SDK's own call, untouched.
+ * Every other read and write is the SDK's own call, untouched.
  */
 import * as R from 'tm-real-firestore';
 import type {
@@ -41,13 +43,16 @@ interface Spec {
   where: Filter[];
   orderBy: [string, 'asc' | 'desc'][];
   limit?: number;
-  /** A constraint this layer cannot replay (cursors…): answered as a full list. */
+  startAfter?: unknown[];
+  /** A constraint this layer cannot replay: answered as a full list. */
   loose?: boolean;
 }
 type Part =
   | { k: 'where'; f: Filter }
   | { k: 'orderBy'; f: string; d: 'asc' | 'desc' }
   | { k: 'limit'; n: number }
+  | { k: 'startAfter'; values: unknown[] }
+  | { k: 'startAfterSnap'; snap: { id: string; data(): unknown } }
   | { k: 'loose' };
 
 const specs = new WeakMap<object, Spec>();
@@ -79,6 +84,22 @@ export function limit(n: number) {
   parts.set(c, { k: 'limit', n });
   return c;
 }
+export function startAfter(...args: unknown[]) {
+  const c = (R.startAfter as (...a: unknown[]) => QueryConstraint)(...args);
+  const [first] = args;
+  const isSnap =
+    args.length === 1 &&
+    !!first &&
+    typeof first === 'object' &&
+    typeof (first as { data?: unknown }).data === 'function';
+  parts.set(
+    c,
+    isSnap
+      ? { k: 'startAfterSnap', snap: first as { id: string; data(): unknown } }
+      : { k: 'startAfter', values: args },
+  );
+  return c;
+}
 export function collectionGroup(db: Firestore, id: string): Query<DocumentData> {
   const q = R.collectionGroup(db, id);
   specs.set(q, { group: id, where: [], orderBy: [] });
@@ -92,6 +113,16 @@ function specOf(target: unknown): Spec | null {
     return { path: t.path, where: [], orderBy: [] };
   return null;
 }
+
+function getAt(o: unknown, field: string): unknown {
+  let cur = o;
+  for (const s of field.split('.')) {
+    if (!cur || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[s];
+  }
+  return cur;
+}
+
 export function query<T>(base: Query<T>, ...cs: (QueryConstraint | unknown)[]): Query<T> {
   const q = (R.query as (b: Query<T>, ...c: unknown[]) => Query<T>)(base, ...cs);
   const from = specOf(base);
@@ -103,6 +134,11 @@ export function query<T>(base: Query<T>, ...cs: (QueryConstraint | unknown)[]): 
       else if (p.k === 'where') s.where.push(p.f);
       else if (p.k === 'orderBy') s.orderBy.push([p.f, p.d]);
       else if (p.k === 'limit') s.limit = p.n;
+      else if (p.k === 'startAfter') s.startAfter = p.values;
+      else if (p.k === 'startAfterSnap')
+        s.startAfter = s.orderBy.length
+          ? s.orderBy.map(([f]) => (f === '__name__' ? p.snap.id : getAt(p.snap.data(), f)))
+          : [p.snap.id];
       else s.loose = true;
     }
     specs.set(q, s);
@@ -110,48 +146,78 @@ export function query<T>(base: Query<T>, ...cs: (QueryConstraint | unknown)[]): 
   return q;
 }
 
-// ─── which reads are a Drive board's ────────────────────────────────────────
+// ─── which paths are kept in Drive ──────────────────────────────────────────
 
-const ticketBoard = (path: string): string | null => {
-  const s = path.split('/');
-  return s[0] === 'boards' && s[2] === 'tickets' && s[1] ? s[1] : null;
+type EntityKind = 'boards' | 'dictionaries' | 'artifacts';
+interface Ent {
+  kind: EntityKind;
+  id: string;
+}
+/** Subtrees kept as files (backend db/drive/entities.ts), and how deep they go. */
+const SUBTREES: Record<EntityKind, Record<string, number>> = {
+  boards: { tickets: 99, views: 2, templates: 2, webhooks: 2, integrations: 2 },
+  dictionaries: { content: 2 },
+  artifacts: { db: 99 },
 };
 
+/** The Drive-able entity a path belongs to, when it is one of its kept paths. */
+function entityOf(
+  path: string,
+  isDoc: boolean,
+): (Ent & { merge?: boolean; ticket?: string }) | null {
+  const s = path.split('/');
+  const kind = s[0] as EntityKind;
+  if (!(kind in SUBTREES) || !s[1]) return null;
+  if (isDoc && s.length === 2) return kind === 'boards' ? { kind, id: s[1], merge: true } : null;
+  if (s.length < 3 || s.length % 2 !== (isDoc ? 0 : 1)) return null;
+  const depth = SUBTREES[kind][s[2]!];
+  if (!depth || s.length - 2 > depth) return null;
+  return {
+    kind,
+    id: s[1],
+    ...(kind === 'boards' && s[2] === 'tickets' && isDoc && s.length === 4 ? { ticket: s[3] } : {}),
+  };
+}
+
 const kinds = new Map<string, { at: number; drive: Promise<boolean> }>();
-/** Is this board's ticket store Drive? (its board document says; cached briefly) */
-export function isDriveBoard(db: Firestore, boardId: string): Promise<boolean> {
-  const hit = kinds.get(boardId);
+/** Is this entity kept in Drive? (its document says; cached briefly) */
+export function isDriveEntity(db: Firestore, e: Ent): Promise<boolean> {
+  const key = `${e.kind}/${e.id}`;
+  const hit = kinds.get(key);
   if (hit && Date.now() - hit.at < 30_000) return hit.drive;
-  const drive = R.getDoc(R.doc(db, `boards/${boardId}`))
+  const drive = R.getDoc(R.doc(db, key))
     .then(
       (s) => (s.data() as { storage?: { kind?: string } } | undefined)?.storage?.kind === 'drive',
     )
     .catch(() => false);
-  kinds.set(boardId, { at: Date.now(), drive });
+  kinds.set(key, { at: Date.now(), drive });
   return drive;
 }
-/** After a storage move: ask again. */
-export function forgetBoardKind(boardId: string): void {
-  kinds.delete(boardId);
+/** Is this board's ticket store Drive? */
+export const isDriveBoard = (db: Firestore, boardId: string) =>
+  isDriveEntity(db, { kind: 'boards', id: boardId });
+/** After a storage move: ask again. A board id, or 'kind/id'. */
+export function forgetBoardKind(key: string): void {
+  kinds.delete(key.includes('/') ? key : `boards/${key}`);
 }
 
 type Target =
-  | { kind: 'doc'; path: string; board: string }
-  | { kind: 'query'; path: string; board: string; spec: Spec }
+  | { kind: 'doc'; path: string; ent: Ent & { merge?: boolean; ticket?: string } }
+  | { kind: 'query'; path: string; ent: Ent; spec: Spec }
   | { kind: 'group'; spec: Spec };
 
 function targetOf(t: unknown): Target | null {
   const r = t as { type?: string; path?: string };
   if (r?.type === 'document' && typeof r.path === 'string') {
-    const board = ticketBoard(r.path);
-    return board ? { kind: 'doc', path: r.path, board } : null;
+    const ent = entityOf(r.path, true);
+    return ent ? { kind: 'doc', path: r.path, ent } : null;
   }
   const s = specOf(t);
   if (!s) return null;
   if (s.group === 'tickets') return { kind: 'group', spec: s };
   if (s.path) {
-    const board = ticketBoard(s.path);
-    return board ? { kind: 'query', path: s.path, board, spec: s } : null;
+    const ent = entityOf(s.path, false);
+    return ent ? { kind: 'query', path: s.path, ent, spec: s } : null;
   }
   return null;
 }
@@ -169,36 +235,62 @@ interface Answer {
   boards: string[];
 }
 
+/** The api's encoding → the SDK's values (a Timestamp travels as { __ts: ms }). */
+function decode(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(decode);
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (keys.length === 1 && keys[0] === '__ts' && typeof o.__ts === 'number')
+      return R.Timestamp.fromMillis(o.__ts);
+    const out: Record<string, unknown> = {};
+    for (const k of keys) out[k] = decode(o[k]);
+    return out;
+  }
+  return v;
+}
+
+/** The SDK's values → the api's encoding (and the server's time as { __sv: 'now' }). */
+function encode(v: unknown): unknown {
+  if (v instanceof R.Timestamp) return { __ts: v.toMillis() };
+  if (v instanceof Date) return { __ts: v.getTime() };
+  if (Array.isArray(v)) return v.map(encode);
+  if (v && typeof v === 'object') {
+    const name = (v as { _methodName?: string })._methodName;
+    if (name === 'serverTimestamp') return { __sv: 'now' };
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = encode(x);
+    return out;
+  }
+  return v;
+}
+
 async function ask(t: Target): Promise<Answer> {
   const { command } = await import('$lib/api');
   const shape =
-    t.kind === 'doc'
+    t.kind === 'doc' || t.spec.loose
       ? {}
       : {
-          ...(t.spec.where.length && !t.spec.loose ? { where: t.spec.where } : {}),
-          ...(t.spec.orderBy.length && !t.spec.loose ? { orderBy: t.spec.orderBy } : {}),
-          ...(t.spec.limit && !t.spec.loose ? { limit: t.spec.limit } : {}),
+          ...(t.spec.where.length ? { where: t.spec.where } : {}),
+          ...(t.spec.orderBy.length ? { orderBy: t.spec.orderBy } : {}),
+          ...(t.spec.limit ? { limit: t.spec.limit } : {}),
+          ...(t.spec.startAfter ? { startAfter: t.spec.startAfter } : {}),
         };
   const target = t.kind === 'group' ? { kind: 'group' as const } : { kind: t.kind, path: t.path };
-  return (await command(
-    'ticketDocs',
+  const a = (await command(
+    'driveDocs',
     { target, ...shape } as never,
     {
       toast: false,
     } as never,
   )) as unknown as Answer;
+  return {
+    ...a,
+    docs: a.docs.map((d) => ({ ...d, data: decode(d.data) as Record<string, unknown> })),
+  };
 }
 
 const META = { fromCache: false, hasPendingWrites: false, isEqual: () => false } as const;
-
-function getAt(o: unknown, field: string): unknown {
-  let cur = o;
-  for (const s of field.split('.')) {
-    if (!cur || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[s];
-  }
-  return cur;
-}
 
 class FakeDoc {
   readonly metadata = META;
@@ -213,7 +305,7 @@ class FakeDoc {
     return this.row !== null;
   }
   data() {
-    return this.row ? (structuredClone(this.row.data) as DocumentData) : undefined;
+    return this.row ? (decode(this.row.data) as DocumentData) : undefined;
   }
   get(field: string) {
     return this.row ? getAt(this.row.data, field) : undefined;
@@ -265,7 +357,10 @@ function querySnap(db: Firestore, q: unknown, rows: Row[], prev: Map<string, str
   }
   for (const p of prev?.keys() ?? [])
     if (!now.has(p))
-      changes.push({ type: 'removed', doc: new FakeDoc(R.doc(db, p) as DocumentReference, null) });
+      changes.push({
+        type: 'removed',
+        doc: new FakeDoc(R.doc(db, p) as DocumentReference, null),
+      });
   return { snap: new FakeQuerySnap(q, docs, changes) as unknown as QuerySnapshot, seen: now };
 }
 
@@ -275,7 +370,7 @@ const firestoreOf = (t: unknown) => (t as { firestore: Firestore }).firestore;
 
 export async function getDoc<T>(ref: DocumentReference<T>): Promise<DocumentSnapshot<T>> {
   const t = targetOf(ref);
-  if (!t || !(await isDriveBoard(firestoreOf(ref), (t as { board: string }).board)))
+  if (!t || t.kind !== 'doc' || !(await isDriveEntity(firestoreOf(ref), t.ent)))
     return R.getDoc(ref);
   const a = await ask(t);
   return new FakeDoc(ref as DocumentReference, a.docs[0] ?? null) as unknown as DocumentSnapshot<T>;
@@ -284,17 +379,17 @@ export const getDocFromServer = getDoc;
 
 export async function getDocFromCache<T>(ref: DocumentReference<T>): Promise<DocumentSnapshot<T>> {
   const t = targetOf(ref);
-  if (t && (await isDriveBoard(firestoreOf(ref), (t as { board: string }).board)))
-    throw new Error('Failed to get document from cache (a Drive board is never cached)');
+  if (t && t.kind === 'doc' && (await isDriveEntity(firestoreOf(ref), t.ent)))
+    throw new Error('Failed to get document from cache (Drive is never cached here)');
   return R.getDocFromCache(ref);
 }
 
-/** The Drive boards' rows of a target (the group share, or the board's). */
+/** The Drive share of a target (null: it is kept in the database). */
 async function driveRows(
   db: Firestore,
   t: Target,
 ): Promise<{ rows: Row[]; boards: string[] } | null> {
-  if (t.kind !== 'group' && !(await isDriveBoard(db, t.board))) return null;
+  if (t.kind !== 'group' && !(await isDriveEntity(db, t.ent))) return null;
   const a = await ask(t);
   return { rows: a.docs, boards: a.boards };
 }
@@ -326,9 +421,55 @@ export const getDocsFromServer = getDocs;
 
 export async function getDocsFromCache<T>(q: Query<T>): Promise<QuerySnapshot<T>> {
   const t = targetOf(q);
-  if (t && t.kind !== 'group' && (await isDriveBoard(firestoreOf(q), t.board)))
+  if (t && t.kind !== 'group' && (await isDriveEntity(firestoreOf(q), t.ent)))
     return querySnap(firestoreOf(q), q, [], null).snap as QuerySnapshot<T>;
   return R.getDocsFromCache(q);
+}
+
+// ─── writes: a Drive artifact's data ────────────────────────────────────────
+
+async function driveWrite(
+  ref: { path: string; firestore: Firestore },
+  method: 'set' | 'update' | 'delete' | 'add',
+  data?: unknown,
+  merge?: boolean,
+): Promise<string | null> {
+  const ent = entityOf(method === 'add' ? `${ref.path}/_` : ref.path, true);
+  if (!ent || ent.kind !== 'artifacts' || !(await isDriveEntity(ref.firestore, ent))) return null;
+  const { command } = await import('$lib/api');
+  const r = (await command(
+    'driveDocWrite',
+    {
+      path: ref.path,
+      method,
+      ...(data !== undefined ? { data: encode(data) } : {}),
+      ...(merge ? { merge: true } : {}),
+    } as never,
+    { toast: false } as never,
+  )) as unknown as { id: string };
+  return r.id;
+}
+
+export async function setDoc(
+  ref: DocumentReference<any>,
+  data: any,
+  options?: { merge?: boolean },
+) {
+  const done = await driveWrite(ref as never, 'set', data, !!options?.merge);
+  if (done === null) return options ? R.setDoc(ref, data, options as never) : R.setDoc(ref, data);
+}
+export async function updateDoc(ref: DocumentReference<any>, ...args: any[]) {
+  const done = args.length === 1 ? await driveWrite(ref as never, 'update', args[0]) : null;
+  if (done === null) return (R.updateDoc as (...a: unknown[]) => Promise<void>)(ref, ...args);
+}
+export async function deleteDoc(ref: DocumentReference<any>) {
+  const done = await driveWrite(ref as never, 'delete');
+  if (done === null) return R.deleteDoc(ref);
+}
+export async function addDoc(col: R.CollectionReference<any>, data: any) {
+  const id = await driveWrite(col as never, 'add', data);
+  if (id === null) return R.addDoc(col, data);
+  return R.doc(col, id);
 }
 
 // ─── live ───────────────────────────────────────────────────────────────────
@@ -365,7 +506,7 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
   };
 
   void (async () => {
-    const drive = t.kind === 'group' ? true : await isDriveBoard(db, t.board);
+    const drive = t.kind === 'group' ? true : await isDriveEntity(db, t.ent);
     if (stopped) return;
     if (!drive) {
       offs.push(real(target, ...args));
@@ -391,17 +532,17 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
       next(out.snap);
     };
 
-    // Each Drive board's revs: any move → look again.
-    const watch = (board: string) => {
-      if (watched.has(board)) return;
-      watched.add(board);
-      const revs =
-        t.kind === 'doc'
-          ? R.doc(db, `boards/${board}/driveRev/${t.path.split('/')[3]}`)
-          : R.query(
-              R.collection(db, `boards/${board}/driveRev`),
-              R.where('at', '>', Date.now() - 5_000),
-            );
+    // The entity's revs: any that moves → look again.
+    const watch = (ent: Ent, one?: string) => {
+      const key = `${ent.kind}/${ent.id}/${one ?? '*'}`;
+      if (watched.has(key)) return;
+      watched.add(key);
+      const revs = one
+        ? R.doc(db, `${ent.kind}/${ent.id}/driveRev/${one}`)
+        : R.query(
+            R.collection(db, `${ent.kind}/${ent.id}/driveRev`),
+            R.where('at', '>', Date.now() - 5_000),
+          );
       let first = true;
       offs.push(
         real(
@@ -431,7 +572,7 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
         const a = await ask(t);
         driveRowsNow = a.docs;
         driveReady = true;
-        for (const b of a.boards) watch(b);
+        for (const b of a.boards) watch({ kind: 'boards', id: b });
         emit();
       } catch (e) {
         if (!stopped) error(e instanceof Error ? e : new Error(String(e)));
@@ -463,7 +604,18 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
           (e: Error) => error(e),
         ),
       );
-    else watch(t.board);
+    else if (t.kind === 'doc' && t.ent.merge) {
+      // A Drive board's document: the database's fields live, settings from Drive.
+      watch(t.ent, '_entity');
+      offs.push(
+        real(
+          R.doc(db, t.path),
+          () => refetch(),
+          () => {},
+        ),
+      );
+    } else if (t.kind === 'doc' && t.ent.ticket) watch(t.ent, t.ent.ticket);
+    else watch(t.ent);
     await fetchNow();
   })();
 

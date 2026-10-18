@@ -8,7 +8,7 @@
  *   Drive is truth  an edit made in Drive is what the next read sees
  *   writes take turns   parallel posts on one ticket all land (the lease)
  *   lists           a board query, collectionGroup('tickets') and search find Drive tickets
- *   the browser     ticketDocs answers what Firestore would have
+ *   the browser     driveDocs answers what Firestore would have
  */
 import { describe, expect, it } from 'vitest';
 import { DRIVE_INLINE_MESSAGES, paths, type Board, type Ticket } from '@tm/shared';
@@ -197,40 +197,37 @@ describe('a Drive board (§L)', () => {
     if (found) expect(found.map((t) => t.id)).toEqual([one.ticketId]);
   });
 
-  inProcess(
-    'ticketDocs answers the browser: a ticket, a board query, the group share',
-    async () => {
-      const { asha, out } = await people('asha', 'out');
-      const b = await seedBoard({ admin: asha, drive: true });
-      const { ticketId } = await call(asha, 'ticketCreate', {
-        boardId: b.id,
-        title: 'for the browser',
-        assigneeUids: [asha.uid],
-      });
+  inProcess('driveDocs answers the browser: a ticket, a board query, the group share', async () => {
+    const { asha, out } = await people('asha', 'out');
+    const b = await seedBoard({ admin: asha, drive: true });
+    const { ticketId } = await call(asha, 'ticketCreate', {
+      boardId: b.id,
+      title: 'for the browser',
+      assigneeUids: [asha.uid],
+    });
 
-      const one = await call(asha, 'ticketDocs', {
-        target: { kind: 'doc', path: paths.ticket(b.id, ticketId) },
-      });
-      expect(one).toMatchObject({ exists: true, boards: [b.id] });
-      expect(one.docs[0]!.data).toMatchObject({ title: 'for the browser' });
+    const one = await call(asha, 'driveDocs', {
+      target: { kind: 'doc', path: paths.ticket(b.id, ticketId) },
+    });
+    expect(one).toMatchObject({ exists: true, boards: [b.id] });
+    expect(one.docs[0]!.data).toMatchObject({ title: 'for the browser' });
 
-      const list = await call(asha, 'ticketDocs', {
-        target: { kind: 'query', path: paths.tickets(b.id) },
-        where: [['state', '==', 'active']],
-      });
-      expect(list.docs.map((d) => d.id)).toEqual([ticketId]);
+    const list = await call(asha, 'driveDocs', {
+      target: { kind: 'query', path: paths.tickets(b.id) },
+      where: [['state', '==', 'active']],
+    });
+    expect(list.docs.map((d) => d.id)).toEqual([ticketId]);
 
-      const group = await call(asha, 'ticketDocs', {
-        target: { kind: 'group' },
-        where: [['assigneeUids', 'array-contains', asha.uid]],
-      });
-      expect(group.boards).toContain(b.id);
-      expect(group.docs.map((d) => d.id)).toContain(ticketId);
+    const group = await call(asha, 'driveDocs', {
+      target: { kind: 'group' },
+      where: [['assigneeUids', 'array-contains', asha.uid]],
+    });
+    expect(group.boards).toContain(b.id);
+    expect(group.docs.map((d) => d.id)).toContain(ticketId);
 
-      const theirs = await call(out, 'ticketDocs', { target: { kind: 'group' } });
-      expect(theirs.boards).not.toContain(b.id);
-    },
-  );
+    const theirs = await call(out, 'driveDocs', { target: { kind: 'group' } });
+    expect(theirs.boards).not.toContain(b.id);
+  });
 
   inProcess('deleting a ticket puts its folder in Drive’s trash', async () => {
     const { asha } = await people('asha');
@@ -260,18 +257,19 @@ describe('a Drive board (§L)', () => {
       });
       await connectFakeDrive(asha);
 
-      const started = await call(asha, 'boardStorageMove', {
-        boardId: b.id,
+      const started = await call(asha, 'entityStorageMove', {
+        kind: 'boards',
+        id: b.id,
         to: { kind: 'drive', folderPath: 'Moves/Board' },
       });
-      expect(started.total).toBe(2);
+      expect(started.total).toBe(3); // two tickets + settings and subtrees
       const refused = await callRaw(asha, 'ticketUpdate', {
         boardId: b.id,
         ticketId: one.ticketId,
         patch: { estimate: 1 },
       });
       expect(refused.status).toBe(409);
-      await queue().drain({ queue: 'boardStorageMove' });
+      await queue().drain({ queue: 'entityStorageMove' });
 
       const board = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
       expect(board.storage).toMatchObject({ kind: 'drive', folderName: 'Board' });
@@ -286,8 +284,8 @@ describe('a Drive board (§L)', () => {
         patch: { estimate: 5 },
       });
 
-      await call(asha, 'boardStorageMove', { boardId: b.id, to: { kind: 'managed' } });
-      await queue().drain({ queue: 'boardStorageMove' });
+      await call(asha, 'entityStorageMove', { kind: 'boards', id: b.id, to: { kind: 'managed' } });
+      await queue().drain({ queue: 'entityStorageMove' });
       const back = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
       expect(back.storage).toBeUndefined();
       const rows = await baseDb().collection(paths.tickets(b.id)).get();

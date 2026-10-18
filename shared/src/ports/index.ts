@@ -139,8 +139,8 @@ export interface QueuePayloads {
   bucketDelete: { bucketId: string; actor: Uid };
   /** bucketStorageMove (bucket.html §K6): copy a slice, then re-enqueue until done. */
   bucketStorageMove: { bucketId: string; round: number };
-  /** boardStorageMove (bucket.html §L): copy a slice of a board's tickets, then re-enqueue until done. */
-  boardStorageMove: { boardId: string; round: number };
+  /** entityStorageMove (bucket.html §L4): copy a slice of a board / dictionary / artifact, then re-enqueue until done. */
+  entityStorageMove: { kind: 'boards' | 'dictionaries' | 'artifacts'; id: string; round: number };
   /** accountExport. */
   export: { jobId: string; uid: Uid };
   /** Generic e-mail outside notify (invites, export ready …). */

@@ -154,13 +154,21 @@ export async function readEntityRef(
     const { doc: settings } = await readDocFile(await driveOf(e), e.folderId, settingsRel(l), null);
     reads?.set(revOf(l), { v: rev?.v ?? null, doc: settings });
     // Settings from the file; a field the file does not have yet falls back to the database's.
-    const merged = { ...(plain.data() as Json), ...(decodeJson(pickSettings(l.kind, settings), db.Ts) as Json) };
+    const merged = {
+      ...(plain.data() as Json),
+      ...(decodeJson(pickSettings(l.kind, settings), db.Ts) as Json),
+    };
     return new RDocSnap(ref as any, encodeJson(merged) as Json);
   }
   const e = await driveEntityOf(db.base, l.kind, l.id);
   if (!e) return btx ? btx.get(ref.baseRef()) : ref.baseRef().get();
   const rev = await readRevAt(db.base, revOf(l));
-  const { doc } = await readDocFile(await driveOf(e), e.folderId, l.rel, await sealerOf(e, l.secret));
+  const { doc } = await readDocFile(
+    await driveOf(e),
+    e.folderId,
+    l.rel,
+    await sealerOf(e, l.secret),
+  );
   reads?.set(revOf(l), { v: rev?.v ?? null, doc });
   return new RDocSnap(ref as any, doc);
 }
@@ -198,7 +206,12 @@ export async function mergeEntityRows(
       const plain = d.data() as Json;
       if (!e) return { id: d.id, path: d.ref.path, data: encodeJson(plain) as Json };
       try {
-        const { doc } = await readDocFile(await driveOf(e), e.folderId, [ENTITY_SPECS[kind].settingsFile], null);
+        const { doc } = await readDocFile(
+          await driveOf(e),
+          e.folderId,
+          [ENTITY_SPECS[kind].settingsFile],
+          null,
+        );
         const merged = { ...plain, ...(decodeJson(pickSettings(kind, doc), db.Ts) as Json) };
         return { id: d.id, path: d.ref.path, data: encodeJson(merged) as Json };
       } catch (err) {
@@ -230,27 +243,35 @@ export interface EPrepared {
 
 /** Where the database's half of a write goes. */
 export type BaseSink =
-  | { kind: 'tx'; btx: P.Transaction }
-  | { kind: 'batch'; bb: P.WriteBatch }
-  | { kind: 'direct' };
+  { kind: 'tx'; btx: P.Transaction } | { kind: 'batch'; bb: P.WriteBatch } | { kind: 'direct' };
 
-async function toBase(sink: BaseSink, ref: P.DocumentReference<any>, method: Method, args: unknown[]) {
+async function toBase(
+  sink: BaseSink,
+  ref: P.DocumentReference<any>,
+  method: Method,
+  args: unknown[],
+) {
   if (sink.kind === 'tx') (sink.btx as any)[method](ref, ...args);
   else if (sink.kind === 'batch') (sink.bb as any)[method](ref, ...args);
   else await (ref as any)[method](...args);
 }
 
 /** update()'s arguments → [settings pairs, the rest] as update() arguments again. */
-function splitUpdate(kind: EntityLoc['kind'], args: unknown[]): [unknown[] | null, unknown[] | null] {
+function splitUpdate(
+  kind: EntityLoc['kind'],
+  args: unknown[],
+): [unknown[] | null, unknown[] | null] {
   const keep = new Set(ENTITY_SPECS[kind].settingsFields);
-  const top = (f: unknown) => (typeof f === 'string' ? f.split('.')[0]! : (foreignSegments(f) ?? [''])[0]!);
+  const top = (f: unknown) =>
+    typeof f === 'string' ? f.split('.')[0]! : (foreignSegments(f) ?? [''])[0]!;
   const [first, ...rest] = args;
   if (typeof first === 'string' || foreignSegments(first)) {
     const list = [first, ...rest];
     const pre = list.length % 2 === 1 ? list.pop() : undefined;
     const d: unknown[] = [];
     const b: unknown[] = [];
-    for (let i = 0; i < list.length; i += 2) (keep.has(top(list[i])) ? d : b).push(list[i], list[i + 1]);
+    for (let i = 0; i < list.length; i += 2)
+      (keep.has(top(list[i])) ? d : b).push(list[i], list[i + 1]);
     return [d.length ? d : null, b.length ? (pre ? [...b, pre] : b) : null];
   }
   const obj = first as Json;
@@ -287,10 +308,17 @@ export async function planEntityWrites(
     return w;
   };
 
+  // An entity made (or re-pointed) in this same write: its subtree writes follow it.
+  const fresh = new Map<string, DriveEntity>();
+  for (const [ref, method, args] of calls) {
+    if (ref.loc.t !== 'entity' || (method !== 'create' && method !== 'set')) continue;
+    const e = driveFromStorage(ref.loc, (args[0] as any)?.storage);
+    if (e) fresh.set(`${ref.loc.kind}/${ref.loc.id}`, e);
+  }
   for (const [ref, method, args] of calls) {
     const l = ref.loc;
     if (l.t === 'file') {
-      const e = await driveEntityOf(db.base, l.kind, l.id);
+      const e = fresh.get(`${l.kind}/${l.id}`) ?? (await driveEntityOf(db.base, l.kind, l.id));
       if (!e) {
         await assertEntityNotMoving(db.base, l.kind, l.id);
         await toBase(sink, ref.baseRef(), method, args);
@@ -303,7 +331,8 @@ export async function planEntityWrites(
     let data: any = args[0];
     if ((method === 'create' || method === 'set') && ref.conv)
       data = args[1] ? ref.conv.toFirestore(data, args[1] as any) : ref.conv.toFirestore(data);
-    const fromData = method === 'create' || method === 'set' ? driveFromStorage(l, data?.storage) : null;
+    const fromData =
+      method === 'create' || method === 'set' ? driveFromStorage(l, data?.storage) : null;
     const e = fromData ?? (await driveEntityOf(db.base, l.kind, l.id));
     if (fromData || method === 'delete') forgetEntityStorage(l.kind, l.id);
     if (!e) {
@@ -392,10 +421,15 @@ export async function finishEntityWorks(
         await releaseAt(db.base, w.rev, holder, null);
       } finally {
         leased.delete(w.rev);
+        // Its document was read (moving?) before it existed or changed: read it afresh next time.
+        if (w.loc.t === 'entity') forgetEntityStorage(w.loc.kind, w.loc.id);
       }
     }),
   );
-  for (const e of manifests) void refreshManifest(db.base, e);
+  for (const e of manifests) {
+    forgetEntityStorage(e.kind, e.id);
+    void refreshManifest(db.base, e);
+  }
   return failed;
 }
 

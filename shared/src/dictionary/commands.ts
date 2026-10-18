@@ -7,6 +7,7 @@
  * dictionaries granted to the agent and to a board it is on.
  */
 import { z } from 'zod';
+import { BucketStorageInputSchema } from '../bucket/drive.js';
 import { OwnerRefSchema } from '../org/owner.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
 import { defineCommand, OkResSchema, req } from '../commands/define.js';
@@ -69,6 +70,8 @@ export const dictionaryCreate = defineCommand({
     owner: OwnerRefSchema.optional(),
     /** Entries to start with. */
     entries: z.array(DictionaryEntrySchema).max(DICTIONARY_ENTRIES_MAX).optional(),
+    /** bucket.html §L5: where it lives — default the database; Drive = a folder of your Drive (its entries sealed). */
+    storage: BucketStorageInputSchema.optional(),
   }),
   res: z.object({ dictionaryId: DictionaryIdSchema }),
 });

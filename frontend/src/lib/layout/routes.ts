@@ -129,7 +129,7 @@ export const routes = {
   dictionary: (dictionaryId: string) => `/dictionary/${dictionaryId}`,
   dictionarySettings: (
     dictionaryId: string,
-    section: 'general' | 'people' | 'subscribers' = 'general',
+    section: 'general' | 'people' | 'subscribers' | 'storage' = 'general',
   ) => `/dictionary/${dictionaryId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
