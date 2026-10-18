@@ -378,20 +378,24 @@ export async function driveFor(uid: string): Promise<DriveApi> {
   if (link.fake) return fakeDrive(uid);
   const api = httpDrive(() => accessToken(uid));
   // A 401 means the token we hold is dead: drop it, so the next call refreshes.
-  return new Proxy(api, {
-    get(target, prop: keyof DriveApi) {
-      const fn = target[prop];
-      return async (...args: unknown[]) => {
-        try {
-          return await (fn as (...a: unknown[]) => Promise<unknown>).apply(target, args);
-        } catch (e) {
-          if (e instanceof DriveAuthError) {
-            tokens.delete(uid);
-            throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
-          }
-          throw e;
+  // A plain object of wrapped methods — NOT a Proxy: the caller awaits this
+  // client, and `await` asks any object for `.then`; a catch-all Proxy answered
+  // with a function and broke every real-Google call (ORCH-14).
+  const wrapped = {} as DriveApi;
+  for (const [name, fn] of Object.entries(api) as [
+    keyof DriveApi,
+    (...a: unknown[]) => Promise<unknown>,
+  ][])
+    (wrapped as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
+      try {
+        return await fn.apply(api, args);
+      } catch (e) {
+        if (e instanceof DriveAuthError) {
+          tokens.delete(uid);
+          throw errors.conflict(RECONNECT, { reason: 'drive_disconnected' });
         }
-      };
-    },
-  });
+        throw e;
+      }
+    };
+  return wrapped;
 }
