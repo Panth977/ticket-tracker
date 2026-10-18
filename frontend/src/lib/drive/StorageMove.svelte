@@ -55,6 +55,18 @@
       busy = false;
     }
   }
+  async function resume() {
+    if (busy) return;
+    busy = true;
+    try {
+      await command('bucketStorageMove', { bucketId, resume: true }, { toast: 'Could not resume' });
+      toast.success('Move resumed');
+    } catch {
+      /* toasted */
+    } finally {
+      busy = false;
+    }
+  }
   const label = (k: 'managed' | 'drive' | 'none') =>
     k === 'drive' ? 'Google Drive' : 'managed storage';
 </script>
@@ -102,16 +114,32 @@
       <p class="text-xs text-muted">
         The bucket is read-only until it finishes. You can leave this page.
       </p>
+      {#if move.error}<p class="text-xs text-warning">{move.error}</p>{/if}
     </div>
   {:else if b && !isOwner}
     <p class="text-sm text-muted">Only the bucket's owner can move its files.</p>
   {:else if b}
     {#if move?.state === 'failed'}
-      <p class="flex items-start gap-2 text-sm text-danger" role="alert">
-        <TriangleAlert size={16} class="mt-0.5 shrink-0" aria-hidden="true" />
-        The last move stopped: {move.error ?? 'unknown error'}. Nothing was lost — the files are
-        still where they were. You can start it again.
-      </p>
+      <div class="flex flex-col gap-2 rounded-lg border border-danger/40 p-4" role="alert">
+        <p class="flex items-start gap-2 text-sm text-danger">
+          <TriangleAlert size={16} class="mt-0.5 shrink-0" aria-hidden="true" />
+          The move to {label(move.to)} stopped at {move.done} of {move.total}: {move.error ??
+            'unknown error'}. Nothing was lost — the bucket still reads from where it was.
+        </p>
+        <div>
+          <Button
+            variant="primary"
+            loading={busy}
+            onclick={resume}
+            data-testid="storage-move-resume">Resume the move</Button
+          >
+        </div>
+        <p class="text-xs text-muted">
+          Resuming keeps what was already copied{move.target
+            ? ` to “${move.target.folderName}”`
+            : ''}. Or pick a new destination below.
+        </p>
+      </div>
     {/if}
     <StorageField
       bind:value={choice}

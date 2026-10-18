@@ -177,12 +177,51 @@ async function fail(res: Response, what: string): Promise<never> {
 /** A 401 from Drive: link.ts marks the connection as needing a reconnect. */
 export class DriveAuthError extends Error {}
 
+/**
+ * Google answers a long run of calls with the odd dropped connection
+ * (ECONNRESET, undici's "terminated") or a 429 / 5xx; a storage move of a
+ * thousand files met one and stopped (ORCH-14). Retried with backoff.
+ */
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const MAX_TRIES = 6;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const backoff = (attempt: number) => Math.min(16_000, 500 * 2 ** attempt) + Math.random() * 250;
+
+/** A network failure (not an HTTP answer): worth another try. */
+export function isTransient(e: unknown): boolean {
+  const err = e as { name?: string; message?: string; code?: string; cause?: { code?: string } };
+  const code = err?.cause?.code ?? err?.code ?? '';
+  return (
+    err?.name === 'TypeError' ||
+    /terminated|fetch failed|socket hang up|other side closed/i.test(err?.message ?? '') ||
+    /ECONNRESET|ETIMEDOUT|EPIPE|ECONNREFUSED|EAI_AGAIN|UND_ERR/.test(code)
+  );
+}
+
+/** fetch, again on a dropped connection or a 429 / 5xx (the last answer is returned). */
+export async function fetchRetrying(
+  url: string,
+  init: () => Promise<RequestInit> | RequestInit,
+  tries = MAX_TRIES,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, await init());
+      if (!RETRY_STATUS.has(res.status) || attempt >= tries - 1) return res;
+      await res.body?.cancel().catch(() => {});
+    } catch (e) {
+      if (!isTransient(e) || attempt >= tries - 1) throw e;
+    }
+    await sleep(backoff(attempt));
+  }
+}
+
 export function httpDrive(token: () => Promise<string>): DriveApi {
   async function call(url: string, init: RequestInit = {}, what = 'request'): Promise<Response> {
-    const res = await fetch(url, {
+    const res = await fetchRetrying(url, async () => ({
       ...init,
       headers: { authorization: `Bearer ${await token()}`, ...(init.headers ?? {}) },
-    });
+    }));
     if (!res.ok && res.status !== 308) await fail(res, what);
     return res;
   }
@@ -216,27 +255,58 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
       if (!r.ok) await fail(r, 'upload');
       return toItem((await r.json()) as RawFile);
     }
-    for (let at = 0; at < source.size; at += CHUNK) {
+    // Where the session stands after a dropped chunk: Drive says how much it has.
+    const ask = async (): Promise<number | DriveItem> => {
+      const r = await fetchRetrying(session, () => ({
+        method: 'PUT',
+        headers: { 'content-range': `bytes */${source.size}` },
+      }));
+      if (r.ok) return toItem((await r.json()) as RawFile);
+      if (r.status !== 308) await fail(r, 'upload');
+      const range = r.headers.get('range');
+      return range ? Number(range.split('-')[1]) + 1 : 0;
+    };
+    let at = 0;
+    for (let misses = 0; at < source.size;) {
       const end = Math.min(source.size, at + CHUNK);
       const body = await source.read(at, end);
-      const r = await fetch(session, {
-        method: 'PUT',
-        headers: { 'content-range': `bytes ${at}-${end - 1}/${source.size}` },
-        // A copy on its own ArrayBuffer: what fetch's BodyInit accepts in every lib.
-        body: body.slice(),
-      });
-      if (r.status === 308) continue;
-      if (!r.ok) await fail(r, 'upload');
-      return toItem((await r.json()) as RawFile);
+      let r: Response | null = null;
+      try {
+        r = await fetch(session, {
+          method: 'PUT',
+          headers: { 'content-range': `bytes ${at}-${end - 1}/${source.size}` },
+          // A copy on its own ArrayBuffer: what fetch's BodyInit accepts in every lib.
+          body: body.slice(),
+        });
+      } catch (e) {
+        if (!isTransient(e)) throw e;
+      }
+      if (r && r.status === 308) {
+        const range = r.headers.get('range');
+        at = range ? Number(range.split('-')[1]) + 1 : end;
+        misses = 0;
+        continue;
+      }
+      if (r && r.ok) return toItem((await r.json()) as RawFile);
+      if (r && !RETRY_STATUS.has(r.status)) await fail(r, 'upload');
+      // Dropped or a 5xx: resume from what Drive has.
+      if (++misses >= MAX_TRIES) throw errors.unavailable('Google Drive kept dropping the upload');
+      await sleep(backoff(misses));
+      const now = await ask();
+      if (typeof now !== 'number') return now;
+      at = now;
     }
     throw errors.unavailable('Google Drive did not finish the upload');
   }
 
   return {
     async get(id) {
-      const res = await fetch(`${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}`, {
-        headers: { authorization: `Bearer ${await token()}` },
-      });
+      const res = await fetchRetrying(
+        `${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}`,
+        async () => ({
+          headers: { authorization: `Bearer ${await token()}` },
+        }),
+      );
       if (res.status === 404) return null;
       if (!res.ok) await fail(res, 'read');
       return toItem((await res.json()) as RawFile);

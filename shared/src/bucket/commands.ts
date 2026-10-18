@@ -404,7 +404,16 @@ export const bucketStorageMove = defineCommand({
   source: 'extra',
   permission: 'Owner of the bucket, in the app. A move to Drive needs MY Drive connected.',
   errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'unavailable'],
-  req: req({ bucketId: BucketIdSchema, to: BucketStorageInputSchema }),
+  req: req({
+    bucketId: BucketIdSchema,
+    /** Where to. Omit with `resume` to pick a stopped move up where it stopped. */
+    to: BucketStorageInputSchema.optional(),
+    /** Resume a move that stopped (bucket.move.state 'failed'): same target, copied files kept. */
+    resume: z.boolean().optional(),
+  }).superRefine((r, ctx) => {
+    if (!r.to && !r.resume)
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'Say where to, or resume' });
+  }),
   res: z.object({ ok: z.literal(true), total: z.number().int() }),
 });
 

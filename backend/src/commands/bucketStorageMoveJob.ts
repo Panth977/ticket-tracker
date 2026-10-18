@@ -2,6 +2,6 @@
 import { runMoveSlice } from '../bucket/drive/move.js';
 import { defineTask } from '../runtime/functions.js';
 
-defineTask('bucketStorageMove', async ({ bucketId, round }) => {
-  await runMoveSlice(bucketId, round);
+defineTask('bucketStorageMove', async ({ bucketId, round }, meta) => {
+  await runMoveSlice(bucketId, round, meta?.retryCount ?? 0);
 });

@@ -23,7 +23,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { DRIVE_SCOPE, errors, type DriveStatus } from '@tm/shared';
 import { db, isEmulated } from '../../runtime/firebase.js';
 import { base62, safeEqual, serverMac, signingKey } from '../../platform/crypto.js';
-import { DriveAuthError, fakeDrive, httpDrive, type DriveApi } from './api.js';
+import { DriveAuthError, fakeDrive, fetchRetrying, httpDrive, type DriveApi } from './api.js';
 
 export const DRIVE_LINKS = '_driveLinks';
 const linkRef = (uid: string) => db().collection(DRIVE_LINKS).doc(uid);
@@ -182,11 +182,11 @@ interface TokenRes {
 }
 
 async function tokenCall(params: Record<string, string>): Promise<TokenRes> {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await fetchRetrying('https://oauth2.googleapis.com/token', () => ({
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: clientId(), client_secret: clientSecret(), ...params }),
-  });
+  }));
   return (await res.json().catch(() => ({ error: `http_${res.status}` }))) as TokenRes;
 }
 

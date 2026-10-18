@@ -143,4 +143,64 @@ describe('httpDrive', () => {
     expect(h['x-upload-content-length']).toBe('10');
     expect(JSON.parse(init.body as string)).toMatchObject({ id: 'res1abc', parents: ['p1'] });
   });
+
+  it('a dropped connection or a 503 is tried again', async () => {
+    let n = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        n += 1;
+        if (n === 1)
+          throw Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } });
+        if (n === 2) return new Response('busy', { status: 503 });
+        return json({ files: [file()] });
+      }),
+    );
+    const out = await httpDrive(async () => 't').children(['root1']);
+    expect(out).toHaveLength(1);
+    expect(n).toBe(3);
+  }, 20_000);
+
+  it('an upload whose chunk is dropped resumes from what Drive has', async () => {
+    const size = 8 * 1024 * 1024 + 10;
+    const ranges: string[] = [];
+    let dropped = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url.includes('uploadType=resumable'))
+          return new Response(null, { status: 200, headers: { location: 'https://up/s' } });
+        const range = (init.headers as Record<string, string>)['content-range']!;
+        ranges.push(range);
+        if (range === `bytes */${size}`)
+          return new Response(null, {
+            status: 308,
+            headers: { range: `bytes=0-${8 * 1024 * 1024 - 1}` },
+          });
+        if (range.startsWith(`bytes ${8 * 1024 * 1024}-`) && !dropped) {
+          dropped = true;
+          throw Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } });
+        }
+        return range.endsWith(`-${size - 1}/${size}`)
+          ? json(file({ size: String(size) }))
+          : new Response(null, {
+              status: 308,
+              headers: { range: `bytes=0-${8 * 1024 * 1024 - 1}` },
+            });
+      }),
+    );
+    const f = await httpDrive(async () => 't').create({
+      parentId: 'p',
+      name: 'big.bin',
+      mime: 'application/octet-stream',
+      source: bytesSource(new Uint8Array(size)),
+    });
+    expect(f.size).toBe(size);
+    expect(ranges).toEqual([
+      `bytes 0-${8 * 1024 * 1024 - 1}/${size}`,
+      `bytes ${8 * 1024 * 1024}-${size - 1}/${size}`,
+      `bytes */${size}`,
+      `bytes ${8 * 1024 * 1024}-${size - 1}/${size}`,
+    ]);
+  }, 20_000);
 });

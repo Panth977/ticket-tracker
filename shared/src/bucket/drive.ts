@@ -112,5 +112,7 @@ export const BucketMoveSchema = z.object({
   by: UidSchema,
   startedAt: MillisSchema,
   error: z.string().max(500).nullable(),
+  /** How many times a stopped move was resumed (names its queued slices apart). */
+  resumes: z.number().int().nonnegative().optional(),
 });
 export type BucketMove = z.infer<typeof BucketMoveSchema>;

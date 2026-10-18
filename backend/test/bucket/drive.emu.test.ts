@@ -475,4 +475,36 @@ describe('moving a bucket between storages (§K6)', () => {
     const r = await callRaw(ed, 'bucketStorageMove', { bucketId, to: { kind: 'drive' } });
     expect(r.status).toBe(403);
   });
+
+  inProcess('a stopped move resumes: same target, nothing copied twice', async () => {
+    const { owner } = await people('owner');
+    await connect(owner);
+    const { bucketId } = await call(owner, 'bucketCreate', { name: 'Stops' });
+    for (const n of ['a', 'b', 'c'])
+      await call(owner, 'bucketFileWrite', { bucketId, path: `x/${n}.txt`, text: n });
+    await call(owner, 'bucketStorageMove', {
+      bucketId,
+      to: { kind: 'drive', folderPath: 'Stops' },
+    });
+    // As if a slice had died for good (the queue gave up).
+    await db()
+      .doc(paths.bucket(bucketId))
+      .update({ 'move.state': 'failed', 'move.error': 'terminated' });
+    await queue().drain({ queue: 'bucketStorageMove' }); // nothing runs for a stopped move
+    expect((await memDoc(bucketId))!.move).toMatchObject({ state: 'failed' });
+    const r = await call(owner, 'bucketStorageMove', { bucketId, resume: true });
+    expect(r.total).toBe(4);
+    await queue().drain({ queue: 'bucketStorageMove' });
+    const m = (await memDoc(bucketId))!;
+    expect(m.move).toBeUndefined();
+    expect(m.storage).toMatchObject({ kind: 'drive', folderName: 'Stops' });
+    expect(paths_((await call(owner, 'bucketTree', { bucketId })).nodes)).toEqual([
+      'x',
+      'x/a.txt',
+      'x/b.txt',
+      'x/c.txt',
+    ]);
+    const none = await callRaw(owner, 'bucketStorageMove', { bucketId, resume: true });
+    expect(none.status).toBe(409);
+  });
 });

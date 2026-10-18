@@ -30,6 +30,7 @@ import {
   bucketStoragePrefix,
   errors,
   isAgentId,
+  joinBucketPath,
   type Bucket,
   type BucketDriveStorage,
   type BucketMove,
@@ -43,15 +44,16 @@ import type { ServerCtx } from '../../runtime/context.js';
 import { db } from '../../runtime/firebase.js';
 import { readSubtree, type Found } from '../nodes.js';
 import { bucketRef, loadBucket, nodeRef, nodesCol, nodesPath, rawBucketRef } from '../shared.js';
-import type { ByteSource } from './api.js';
+import { isFolder, type ByteSource } from './api.js';
 import { driveEmail, driveFor } from './link.js';
 import {
   driveBucketFolder,
-  driveMkdirp,
   driveTree,
+  INCOMING,
   isDriveBucket,
   NODE_ID,
   openDrive,
+  segmentOf,
 } from './store.js';
 
 /** How long one queued slice copies before handing over to the next. */
@@ -110,7 +112,7 @@ export async function startMove(
   await ports().queue.enqueue(
     'bucketStorageMove',
     { bucketId, round: 0 },
-    { name: `bucketStorageMove-${bucketId}-${ctx.now}-0` },
+    { name: sliceName(bucketId, move, 0) },
   );
   return { total };
 }
@@ -119,7 +121,13 @@ type DriveBucketDoc = Bucket & { storage: BucketDriveStorage };
 
 // ─── the job ─────────────────────────────────────────────────────────────────
 
-export async function runMoveSlice(bucketId: string, round: number): Promise<void> {
+/** Attempts Cloud Tasks makes (QUEUE_POLICY): the last one records the failure. */
+const MAX_ATTEMPTS = 5;
+
+const sliceName = (bucketId: string, move: BucketMove, round: number) =>
+  `bucketStorageMove-${bucketId}-${move.startedAt}-${move.resumes ?? 0}-${round}`;
+
+export async function runMoveSlice(bucketId: string, round: number, retryCount = 0): Promise<void> {
   const bucket = (await bucketRef(bucketId).get()).data();
   if (!bucket || bucket.deletingAt || !isMoving(bucket)) return;
   const move = bucket.move!;
@@ -132,7 +140,12 @@ export async function runMoveSlice(bucketId: string, round: number): Promise<voi
         : await sliceToManaged(bucketId, bucket as DriveBucketDoc, deadline);
   } catch (e) {
     const message = (e as Error).message?.slice(0, 500) || 'The move failed';
-    console.error('[drive] bucket move failed', bucketId, e);
+    console.error('[drive] bucket move slice failed', bucketId, `attempt ${retryCount + 1}`, e);
+    if (retryCount + 1 < MAX_ATTEMPTS) {
+      // The queue tries this slice again; it skips what is already copied.
+      await rawBucketRef(bucketId).update({ 'move.error': `Retrying after: ${message}` });
+      throw e;
+    }
     await rawBucketRef(bucketId).update({
       'move.state': 'failed',
       'move.error': message,
@@ -144,13 +157,70 @@ export async function runMoveSlice(bucketId: string, round: number): Promise<voi
     await ports().queue.enqueue(
       'bucketStorageMove',
       { bucketId, round: round + 1 },
-      { name: `bucketStorageMove-${bucketId}-${move.startedAt}-${round + 1}` },
+      { name: sliceName(bucketId, move, round + 1) },
     );
   }
 }
 
+/** Pick a stopped move up: same target, nothing copied twice. Owner, in the app. */
+export async function resumeMove(ctx: ServerCtx, bucketId: string): Promise<{ total: number }> {
+  if (isAgentId(ctx.actor) || ctx.keyId || ctx.via !== 'app')
+    throw errors.forbidden('Resume a move from the app (bucket settings › Storage)');
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'manage');
+  const move = bucket.move;
+  if (!move || move.state !== 'failed') throw errors.conflict('There is no stopped move to resume');
+  const next: BucketMove = {
+    ...move,
+    state: 'running',
+    error: null,
+    resumes: (move.resumes ?? 0) + 1,
+  };
+  await bucketRef(bucketId).update({ move: next, updatedAt: ctx.now });
+  await ports().queue.enqueue(
+    'bucketStorageMove',
+    { bucketId, round: 0 },
+    { name: sliceName(bucketId, next, 0) },
+  );
+  return { total: move.total };
+}
+
 const progress = (bucketId: string, done: number) =>
   rawBucketRef(bucketId).update({ 'move.done': done });
+
+/**
+ * What is already in the target folder, read ONCE per slice (a level per Drive
+ * query): every folder by path, and the old ids already copied. Looking each
+ * node up on its own cost ~9 s a file on real Drive (ORCH-14).
+ */
+async function indexTarget(d: DriveBucketHandle): Promise<{
+  folders: Map<string, string>;
+  moved: Set<string>;
+}> {
+  const folders = new Map<string, string>([['', d.rootId]]);
+  const moved = new Set<string>();
+  let level: { id: string; path: string }[] = [{ id: d.rootId, path: '' }];
+  while (level.length) {
+    const kids = await d.api.children(level.map((l) => l.id));
+    const pathOf = new Map(level.map((l) => [l.id, l.path]));
+    const next: { id: string; path: string }[] = [];
+    for (const k of kids) {
+      if (k.name === INCOMING && isFolder(k)) continue;
+      const old = k.appProperties[NODE_ID];
+      if (old) moved.add(old);
+      if (!isFolder(k)) continue;
+      const parent = pathOf.get(k.parents[0] ?? '');
+      if (parent === undefined) continue;
+      const path = joinBucketPath(parent, segmentOf(k.name));
+      if (folders.has(path)) continue; // the first of two same-named folders wins
+      folders.set(path, k.id);
+      next.push({ id: k.id, path });
+    }
+    level = next;
+  }
+  return { folders, moved };
+}
+
+type DriveBucketHandle = Awaited<ReturnType<typeof openDrive>>;
 
 /** Managed → Drive. Answers true when the bucket has switched over. */
 async function sliceToDrive(
@@ -165,16 +235,54 @@ async function sliceToDrive(
   const rows = (await readSubtree(bucketId, '')).sort((a, b) =>
     a.node.path < b.node.path ? -1 : a.node.path > b.node.path ? 1 : 0,
   );
+  const { folders, moved } = await indexTarget(d);
+  const ensureFolder = async (path: string, by: string): Promise<string> => {
+    const hit = folders.get(path);
+    if (hit) return hit;
+    const parent = await ensureFolder(bucketParentPath(path), by);
+    const made = await d.api.createFolder(parent, bucketBaseName(path), {
+      tmBy: by,
+      tmCreatedBy: by,
+    });
+    folders.set(path, made.id);
+    return made.id;
+  };
+
   let done = 0;
   for (const r of rows) {
     if (Date.now() > deadline) {
       await progress(bucketId, done);
       return false;
     }
-    const there = await d.api.findByProp(NODE_ID, r.id);
-    if (!there.length) await copyToDrive(d, r);
+    if (!moved.has(r.id)) {
+      const by = r.node.updatedBy;
+      if (r.node.kind === 'folder') {
+        const id = await ensureFolder(r.node.path, by);
+        await d.api.update(id, { props: { [NODE_ID]: r.id } });
+      } else if (r.node.file) {
+        const file = r.node.file;
+        await d.api.create({
+          parentId: await ensureFolder(bucketParentPath(r.node.path), by),
+          name: bucketBaseName(r.node.path),
+          mime: file.mime,
+          source: objectSource(file.storagePath, file.size),
+          props: { tmBy: by, tmCreatedBy: r.node.createdBy, [NODE_ID]: r.id },
+        });
+      }
+      moved.add(r.id);
+    }
     done += 1;
     if (done % PROGRESS_EVERY === 0) await progress(bucketId, done);
+  }
+  // Check before switching: every node must be in Drive (read again, not trusted).
+  const check = await indexTarget(d);
+  const missing = rows.filter(
+    (r) => (r.node.kind === 'folder' || r.node.file) && !check.moved.has(r.id),
+  );
+  if (missing.length) {
+    console.warn('[drive] move not complete yet', bucketId, `${missing.length} missing`);
+    await progress(bucketId, rows.length - missing.length);
+    return false;
   }
   // Switch over in one write, then remove the managed copy.
   await rawBucketRef(bucketId).update({
@@ -187,25 +295,6 @@ async function sliceToDrive(
     .files.deletePrefix(bucketStoragePrefix(bucketId))
     .catch((e) => console.warn('[drive] could not delete moved objects', bucketId, e));
   return true;
-}
-
-async function copyToDrive(d: Awaited<ReturnType<typeof openDrive>>, r: Found): Promise<void> {
-  const by = r.node.updatedBy;
-  if (r.node.kind === 'folder') {
-    const id = await driveMkdirp(d, r.node.path, by);
-    await d.api.update(id, { props: { [NODE_ID]: r.id } });
-    return;
-  }
-  const file = r.node.file;
-  if (!file) return;
-  const parentId = await driveMkdirp(d, bucketParentPath(r.node.path), by);
-  await d.api.create({
-    parentId,
-    name: bucketBaseName(r.node.path),
-    mime: file.mime,
-    source: objectSource(file.storagePath, file.size),
-    props: { tmBy: by, tmCreatedBy: r.node.createdBy, [NODE_ID]: r.id },
-  });
 }
 
 /** Drive → managed. Answers true when the bucket has switched over. */
