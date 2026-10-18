@@ -26,6 +26,7 @@
   import { useSettings } from '$lib/board/settings/draft.svelte';
   import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
   import StoragePanel from '$lib/drive/StoragePanel.svelte';
+  import BoardTicketsStorage from '$lib/drive/BoardTicketsStorage.svelte';
 
   const s = useSettings();
   const section = $derived(page.params.section ?? 'general');
@@ -73,7 +74,13 @@
     <SubscribersSection />
   {:else if section === 'storage'}
     <Section
-      title="Storage"
+      title="Tickets"
+      description="Where this board's tickets, messages and task lists live: this app's database, or a folder in Google Drive. A board admin can move them between the two."
+    >
+      <BoardTicketsStorage boardId={s.board.id} isAdmin={s.isAdmin} />
+    </Section>
+    <Section
+      title="Files"
       description="Where this board's ticket files live: its buckets, each managed by this app or a folder in Google Drive. The owner of a bucket can move its files between the two."
     >
       <StoragePanel

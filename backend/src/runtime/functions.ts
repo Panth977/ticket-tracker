@@ -45,6 +45,7 @@ export const QUEUE_FUNCTIONS: Record<QueueName, string> = {
   artifactDelete: 'queueArtifactDelete',
   bucketDelete: 'queueBucketDelete',
   bucketStorageMove: 'queueBucketStorageMove',
+  boardStorageMove: 'queueBoardStorageMove',
   export: 'queueExport',
   email: 'queueEmail',
 };
@@ -82,6 +83,8 @@ export const QUEUE_POLICY: Record<QueueName, QueuePolicy> = {
   bucketDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
   // §K6: each run copies a slice and is safe to repeat (it skips what is there).
   bucketStorageMove: { maxAttempts: 5, minBackoffSeconds: 30 },
+  // §L: the same, for a board's tickets.
+  boardStorageMove: { maxAttempts: 5, minBackoffSeconds: 30 },
   export: { maxAttempts: 3, minBackoffSeconds: 60 },
   email: { maxAttempts: 5, minBackoffSeconds: 30, maxDispatchesPerSecond: 50 },
 };

@@ -67,11 +67,26 @@ const bypass = (req: { url?: string }) =>
 // swapped for src/lib/platform/vm — the same API over the VM server's /live
 // socket, /identity, /blob (backend src/server.ts). No call site knows.
 const VM = process.env.TM_PLATFORM === 'vm';
-const VM_SHIMS = ['app', 'auth', 'firestore', 'database', 'storage', 'messaging'];
+const VM_SHIMS = ['app', 'auth', 'database', 'storage', 'messaging'];
 const vmAlias = VM_SHIMS.map((m) => ({
   find: new RegExp(`^firebase/${m}$`),
   replacement: fileURLToPath(new URL(`./src/lib/platform/vm/${m}.ts`, import.meta.url)),
 }));
+// bucket.html §L: every 'firebase/firestore' import is the ticket-routing
+// wrapper (a Drive board's tickets come from the api); the wrapper reaches the
+// real SDK — or, on the VM, its shim — as 'tm-real-firestore'.
+const firestoreAlias = [
+  {
+    find: /^firebase\/firestore$/,
+    replacement: fileURLToPath(new URL('./src/lib/firebase/routedFirestore.ts', import.meta.url)),
+  },
+  {
+    find: /^tm-real-firestore$/,
+    replacement: VM
+      ? fileURLToPath(new URL('./src/lib/platform/vm/firestore.ts', import.meta.url))
+      : 'firebase/firestore',
+  },
+];
 if (VM) {
   // No Firebase project and no emulators; push keys come from the server.
   process.env.PUBLIC_USE_EMULATORS = 'false';
@@ -84,7 +99,7 @@ export default defineConfig({
   // "@tm/source" resolves @tm/shared to its TypeScript source: live HMR, no prebuild.
   resolve: {
     conditions: ['@tm/source', ...defaultClientConditions],
-    ...(VM ? { alias: vmAlias } : {}),
+    alias: [...firestoreAlias, ...(VM ? vmAlias : [])],
   },
   ssr: {
     resolve: {

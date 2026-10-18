@@ -37,7 +37,10 @@
   import { myBoards } from '$lib/stores';
   import { Button, Input, Select, Textarea, toast } from '$lib/ui';
   import IndicatorField from '$lib/ui/IndicatorField.svelte';
-  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import StorageField, {
+    storageInput,
+    type StorageChoice,
+  } from '$lib/drive/StorageField.svelte';
   import { driveState } from '$lib/drive/drive.svelte';
   import { storageFor } from '$lib/drive/storageFor';
 
@@ -140,7 +143,11 @@
     creating = true;
     const template: BoardTemplate = chip === 'copy' ? { fromBoardId: copyFrom! } : chip;
     try {
-      const { boardId } = await command(
+      // bucket.html §L: Google Drive = the board's tickets AND its files live
+      // in that folder (<folder>/tickets, <folder>/files); the board is made
+      // there first, then its file bucket in <folder>/files.
+      const tickets = storage.kind === 'drive' ? storageInput(storage) : null;
+      const { boardId, filesFolderId } = await command(
         'boardCreate',
         {
           name: name.trim(),
@@ -149,13 +156,14 @@
           indicator,
           ...(description.trim() ? { description: description.trim() } : {}),
           ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
+          ...(tickets ? { storage: tickets } : {}),
         },
         { toast: false },
       );
       if (storage.kind !== 'none') {
         try {
           await storageFor(
-            storage,
+            filesFolderId ? { kind: 'drive', folderId: filesFolderId } : storage,
             { boardId },
             { name: `${key} ticket files`, owner: ownerOf(owner) },
           );
@@ -293,10 +301,11 @@
         <StorageField
           bind:value={storage}
           allowNone
-          name="{key || 'Board'} ticket files"
-          label="Where its ticket files live"
-          managedHint="A new bucket, kept by this app"
-          noneHint="Pick a bucket later in settings"
+          name={name.trim() || 'Board'}
+          label="Where this board lives"
+          managedHint="Tickets in the app, files in a new bucket"
+          noneHint="Tickets in the app; pick a file bucket later"
+          driveHint="Tickets, messages and files: a folder in your Drive"
         />
         <div class="flex flex-col gap-1.5">
           <span class="text-sm font-medium">Indicator</span>

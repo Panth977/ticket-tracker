@@ -15,8 +15,8 @@ import { DRIVE_INLINE_MESSAGES, paths, type Board, type Ticket } from '@tm/share
 import { baseDb, db } from '../../src/db/index.js';
 import { fakeDrive, isFolder, type DriveApi } from '../../src/bucket/drive/api.js';
 import { searchTicketsIn } from '../../src/platform/ops.js';
-import { call, setupEmulators, uniq } from '../harness/index.js';
-import { doc, people, seedBoard } from '../tickets/helpers.js';
+import { call, callRaw, queue, setupEmulators, uniq } from '../harness/index.js';
+import { connectFakeDrive, doc, people, seedBoard } from '../tickets/helpers.js';
 
 setupEmulators();
 const inProcess = it.skipIf(!!process.env.TM_API_URL);
@@ -205,4 +205,46 @@ describe('a Drive board (§L)', () => {
     const list = await db().collection(paths.tickets(b.id)).get();
     expect(list.docs.map((d) => d.id)).not.toContain(ticketId);
   });
+
+  inProcess('a board moves to Drive and back (§L4): read-only while it moves, nothing lost', async () => {
+    const { asha } = await people('asha');
+    const b = await seedBoard({ admin: asha, drive: false });
+    const one = await call(asha, 'ticketCreate', { boardId: b.id, title: 'one' });
+    const two = await call(asha, 'ticketCreate', { boardId: b.id, title: 'two' });
+    await call(asha, 'messagePost', { boardId: b.id, ticketId: one.ticketId, clientId: uniq('c'), body: doc('hi') });
+    await connectFakeDrive(asha);
+
+    const started = await call(asha, 'boardStorageMove', {
+      boardId: b.id,
+      to: { kind: 'drive', folderPath: 'Moves/Board' },
+    });
+    expect(started.total).toBe(2);
+    const refused = await callRaw(asha, 'ticketUpdate', {
+      boardId: b.id,
+      ticketId: one.ticketId,
+      patch: { estimate: 1 },
+    });
+    expect(refused.status).toBe(409);
+    await queue().drain({ queue: 'boardStorageMove' });
+
+    const board = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
+    expect(board.storage).toMatchObject({ kind: 'drive', folderName: 'Board' });
+    expect(board.move ?? null).toBeNull();
+    expect((await baseDb().collection(paths.tickets(b.id)).get()).size).toBe(0);
+    const t1 = (await db().doc(paths.ticket(b.id, one.ticketId)).get()).data() as Ticket;
+    expect(t1.recentMessages?.map((m) => m.body.text)).toEqual(['hi']);
+    // Writes go to Drive now.
+    await call(asha, 'ticketUpdate', { boardId: b.id, ticketId: two.ticketId, patch: { estimate: 5 } });
+
+    await call(asha, 'boardStorageMove', { boardId: b.id, to: { kind: 'managed' } });
+    await queue().drain({ queue: 'boardStorageMove' });
+    const back = (await baseDb().doc(paths.board(b.id)).get()).data() as Board;
+    expect(back.storage).toBeUndefined();
+    const rows = await baseDb().collection(paths.tickets(b.id)).get();
+    expect(rows.docs.map((d) => (d.data() as Ticket).title).sort()).toEqual(['one', 'two']);
+    expect((rows.docs.find((d) => d.id === two.ticketId)!.data() as Ticket).estimate).toBe(5);
+    // Drive keeps its copy.
+    const drive = fakeDrive(asha.uid);
+    expect((await drive.get(board.storage!.ticketsFolderId!))!.trashed).toBe(false);
+  }, 60_000);
 });

@@ -509,7 +509,10 @@ export class RoutedDb implements P.Db {
       if (!b) managed.push([ref, method, args]);
       else this.workOf(b, ref, toOp(ref, method, args), works);
     }
-    for (const [ref, method, args] of managed) await (ref.baseRef() as any)[method](...args);
+    for (const [ref, method, args] of managed) {
+      await assertNotMoving(this.base, docLoc(ref.path)!.boardId);
+      await (ref.baseRef() as any)[method](...args);
+    }
     if (!works.size) return;
     const holder = randomUUID();
     const leased = new Map<string, Work>();
@@ -560,8 +563,12 @@ export class RDocRef<T = P.DocumentData> implements P.DocumentReference<T> {
     return new RDocSnap<T>(this, doc);
   }
   private async write(method: Method, args: unknown[]): Promise<P.WriteResult> {
-    const b = await this.db.mode(docLoc(this.path)!.boardId);
-    if (!b) return (this.baseRef() as any)[method](...args);
+    const boardId = docLoc(this.path)!.boardId;
+    const b = await this.db.mode(boardId);
+    if (!b) {
+      await assertNotMoving(this.db.base, boardId);
+      return (this.baseRef() as any)[method](...args);
+    }
     await this.db.writeNow([[this, method, args]]);
     return WRITE_RESULT(this.db.Ts);
   }
@@ -875,6 +882,7 @@ class RTx implements P.Transaction {
       const l = docLoc(ref.path)!;
       const b = await this.db.mode(l.boardId);
       if (!b) {
+        await assertNotMoving(this.db.base, l.boardId);
         (this.btx as any)[method](ref.baseRef(), ...args);
         continue;
       }
@@ -916,7 +924,10 @@ class RBatch implements P.WriteBatch {
     for (const s of this.staged) {
       const b = await this.db.mode(docLoc(s[0].path)!.boardId);
       if (b) drive.push(s);
-      else (this.bb as any)[s[1]](s[0].baseRef(), ...s[2]);
+      else {
+        await assertNotMoving(this.db.base, docLoc(s[0].path)!.boardId);
+        (this.bb as any)[s[1]](s[0].baseRef(), ...s[2]);
+      }
     }
     const out = await this.bb.commit();
     if (drive.length) await this.db.writeNow(drive);

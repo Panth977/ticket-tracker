@@ -267,6 +267,29 @@ export const viewDelete = defineCommand({
 });
 
 /**
+ * bucket.html §L — move a board's TICKETS to the other storage: the database
+ * ⇄ a folder of MY Google Drive. A queued job copies ticket by ticket; the
+ * board's tickets are read-only until it finishes (board.move). Its file
+ * bucket moves on its own (bucketStorageMove).
+ */
+export const boardStorageMove = defineCommand({
+  name: 'boardStorageMove',
+  source: 'extra',
+  permission: 'Board admin, in the app. A move to Drive needs MY Drive connected.',
+  errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'unavailable'],
+  req: req({
+    boardId: BoardIdSchema,
+    /** Where to. Omit with `resume` to pick a stopped move up where it stopped. */
+    to: BucketStorageInputSchema.optional(),
+    resume: z.boolean().optional(),
+  }).superRefine((r, ctx) => {
+    if (!r.to && !r.resume)
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'Say where to, or resume' });
+  }),
+  res: z.object({ ok: z.literal(true), total: z.number().int() }),
+});
+
+/**
  * bucket.html §L — the app's reads of a board whose TICKETS live in Google
  * Drive. Its browser cannot read them from Firestore (they are not there):
  * it asks here for what it would have asked Firestore for — one ticket

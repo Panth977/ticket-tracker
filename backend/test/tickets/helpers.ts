@@ -228,13 +228,13 @@ export async function seedBoard(o: SeedOptions): Promise<SeededBoard> {
   return { id, key, board };
 }
 
-/** A connected fake Drive for `owner` and a board folder in it. */
-export async function fakeDriveBoard(owner: TestUser, name: string): Promise<NonNullable<Board['storage']>> {
+/** `u`'s (fake) Google Drive, connected — as if they went through Account › Google Drive. */
+export async function connectFakeDrive(u: TestUser): Promise<void> {
   const now = Date.now();
-  const ref = db().doc(`${DRIVE_LINKS}/${owner.uid}`);
+  const ref = db().doc(`${DRIVE_LINKS}/${u.uid}`);
   if (!(await ref.get()).exists)
     await ref.set({
-      email: `${owner.uid.slice(0, 8).toLowerCase()}@drive.test`,
+      email: `${u.uid.slice(0, 8).toLowerCase()}@drive.test`,
       refresh: seal('fake:seed'),
       scope: DRIVE_SCOPE,
       fake: true,
@@ -242,6 +242,11 @@ export async function fakeDriveBoard(owner: TestUser, name: string): Promise<Non
       updatedAt: now,
       brokenAt: null,
     });
+}
+
+/** A connected fake Drive for `owner` and a board folder in it. */
+export async function fakeDriveBoard(owner: TestUser, name: string): Promise<NonNullable<Board['storage']>> {
+  await connectFakeDrive(owner);
   const drive = fakeDrive(owner.uid);
   const folder = await drive.createFolder(null, `Board ${name}`);
   const tickets = await drive.createFolder(folder.id, 'tickets');
