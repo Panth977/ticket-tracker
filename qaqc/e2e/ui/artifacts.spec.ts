@@ -182,10 +182,13 @@ test('the app: create from the sidebar, the list page, settings for the owner on
 }) => {
   const owner = await newPerson('Una');
   await signIn(page, owner.email);
-  await page.getByRole('button', { name: /new artifact/i }).click();
+  await page
+    .getByRole('link', { name: /new artifact/i })
+    .first()
+    .click();
   await page.getByLabel('Name').fill('Wall dashboard');
   await page
-    .getByRole('dialog')
+    .getByRole('main')
     .getByRole('button', { name: /^create/i })
     .click();
   const id = await thingIdAt(page, owner, 'artifact');

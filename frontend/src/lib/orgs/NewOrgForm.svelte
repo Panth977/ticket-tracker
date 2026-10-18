@@ -16,11 +16,12 @@
   import { command } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
-  import Dialog from '$lib/ui/Dialog.svelte';
+  import CreatePage from '$lib/ui/CreatePage.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Select from '$lib/ui/Select.svelte';
 
-  let { open = $bindable(false) }: { open: boolean } = $props();
+  /** A page opens once: the form starts fresh (the reset below runs once). */
+  let open = $state(true);
 
   let name = $state('');
   let handle = $state('');
@@ -77,8 +78,7 @@
   }
 </script>
 
-<Dialog
-  bind:open
+<CreatePage
   title="New org"
   description="An org owns boards, artifacts and buckets; its members reach all of them."
 >
@@ -100,7 +100,7 @@
     />
   </form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" onclick={() => history.back()}>Cancel</Button>
     <Button
       variant="primary"
       type="submit"
@@ -109,4 +109,4 @@
       loading={busy}>Create org</Button
     >
   {/snippet}
-</Dialog>
+</CreatePage>

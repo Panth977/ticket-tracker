@@ -69,8 +69,8 @@ test('agent loop: agent → board → token (UI) → MCP whoami, list, upload, p
   // ── 1. create the agent in the UI ──────────────────────────────────────────
   await signIn(page, ada.email, '/agents');
   await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'New agent' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New agent' });
+  await page.getByRole('link', { name: 'New agent' }).first().click();
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Builder');
   await dialog.getByLabel('Description').fill('Implements tickets and reports back');
   await dialog.getByRole('button', { name: 'Create agent' }).click();

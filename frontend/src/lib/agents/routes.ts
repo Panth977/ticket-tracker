@@ -8,4 +8,5 @@ import { routes } from '$lib/layout/routes';
 export const agentRoutes = {
   list: routes.agents,
   agent: routes.agent,
+  newAgent: routes.newAgent,
 };

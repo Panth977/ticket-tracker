@@ -74,6 +74,12 @@ export const routes = {
   invitations: () => '/inbox?tab=invitations',
   myWork: () => '/me',
   newBoard: () => '/new-board',
+  /** Every "New …" is a page of its own, like /new-board (lib/ui/CreatePage). */
+  newBucket: (owner?: string | null) => `/new-bucket${q({ owner })}`,
+  newArtifact: (owner?: string | null) => `/new-artifact${q({ owner })}`,
+  newDictionary: (owner?: string | null) => `/new-dictionary${q({ owner })}`,
+  newOrg: () => '/new-org',
+  newAgent: () => '/new-agent',
   /** A board, optionally a view, optionally with the ticket drawer open. */
   board: (boardKey: string, viewId?: string | null, ticketKey?: string | null) =>
     `/b/${boardKey}${viewId ? `/${viewId}` : ''}${q({ ticket: ticketKey })}`,
@@ -143,6 +149,11 @@ export const NO_SHELL_PREFIXES = [
   '/invite',
   '/oauth',
   '/new-board',
+  '/new-bucket',
+  '/new-artifact',
+  '/new-dictionary',
+  '/new-org',
+  '/new-agent',
   '/t',
   '/f',
 ];

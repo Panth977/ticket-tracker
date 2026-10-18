@@ -38,7 +38,6 @@
   import { myOrgs } from '$lib/orgs/store';
   import { ownerGroups } from '$lib/orgs/owners';
   import { parseThingPath } from '$lib/orgs/path';
-  import NewOrgDialog from '$lib/orgs/NewOrgDialog.svelte';
   import SidebarOwners from './SidebarOwners.svelte';
 
   const uid = $derived(auth.uid);
@@ -94,7 +93,6 @@
       dictionaries,
     }),
   );
-  let newOrg = $state(false);
 
   async function signOut() {
     await auth.signOut();
@@ -134,7 +132,7 @@
     {currentArtifact}
     {currentBucket}
     {currentDictionary}
-    onNewOrg={() => (newOrg = true)}
+    onNewOrg={() => goto(routes.newOrg())}
   />
   <SidebarOwners
     title="Users"
@@ -170,5 +168,3 @@
     <div class="pt-1"><SyncStatus /></div>
   </div>
 </nav>
-
-<NewOrgDialog bind:open={newOrg} />

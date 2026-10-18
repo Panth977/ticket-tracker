@@ -89,7 +89,9 @@ test('static files are served compressed', async ({ request }) => {
   const scripts = [...html.matchAll(/\/_app\/immutable\/[^"']+\.js/g)].map((m) => m[0]);
   const encodings = await Promise.all(
     scripts.map(async (js) => {
-      const res = await request.fetch(`${ORIGIN}${js}`, { headers: { 'accept-encoding': 'br, gzip' } });
+      const res = await request.fetch(`${ORIGIN}${js}`, {
+        headers: { 'accept-encoding': 'br, gzip' },
+      });
       expect(res.status()).toBe(200);
       return res.headers()['content-encoding'];
     }),

@@ -99,8 +99,8 @@ test('I1–I3: board icon + description, stage emoji + description, bucket image
 
   // ── I3: a bucket with an uploaded image indicator ─────────────────────────
   await page.goto('/bucket');
-  await page.getByRole('button', { name: 'New bucket' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New bucket' });
+  await page.getByRole('link', { name: 'New bucket' }).first().click();
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Launch photos');
   await dialog.getByTestId('indicator-field').click();
   await picker.getByTestId('indicator-tab-upload').click();

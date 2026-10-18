@@ -37,8 +37,8 @@ test('D1–D2: connect Drive from the bucket form, then a bucket that lives in D
   await signIn(page, ada.email, '/bucket');
 
   // ── D1: Drive is offered, but needs a connection ──────────────────────────
-  await page.getByRole('button', { name: 'New bucket' }).first().click();
-  let dialog = page.getByRole('dialog', { name: 'New bucket' });
+  await page.getByRole('link', { name: 'New bucket' }).first().click();
+  let dialog = page.getByRole('main');
   await dialog.getByTestId('storage-drive').click();
   await expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Connect Google Drive' }).click();
@@ -47,9 +47,9 @@ test('D1–D2: connect Drive from the bucket form, then a bucket that lives in D
   expect(new URL(page.url()).searchParams.get('drive')).toBeNull();
   expect((await call(ada, 'driveStatus', {})).connected).toBe(true);
 
-  // ── D2: the bucket ───────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'New bucket' }).first().click();
-  dialog = page.getByRole('dialog', { name: 'New bucket' });
+  // ── D2: the bucket — back on the same New bucket page, now connected ─────
+  await expect(page).toHaveURL(/\/new-bucket/);
+  dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Drive notes');
   await dialog.getByTestId('storage-drive').click();
   await expect(dialog.getByTestId('storage-drive-path')).toBeVisible();

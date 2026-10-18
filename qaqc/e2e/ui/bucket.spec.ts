@@ -51,8 +51,8 @@ test('M1–M4: a bucket — upload, preview, edit as code, views, rename / move 
   await signIn(page, ada.email, '/bucket');
 
   // ── M1: create it ──────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'New bucket' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New bucket' });
+  await page.getByRole('link', { name: 'New bucket' }).first().click();
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Brand kit');
   await dialog.getByRole('button', { name: 'Create' }).click();
   const bucketId = await thingIdAt(page, ada, 'bucket');

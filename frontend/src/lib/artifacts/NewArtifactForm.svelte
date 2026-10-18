@@ -20,7 +20,7 @@
   import { command } from '$lib/api';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
-  import Dialog from '$lib/ui/Dialog.svelte';
+  import CreatePage from '$lib/ui/CreatePage.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
   import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
@@ -28,8 +28,9 @@
   import { storageFor } from '$lib/drive/storageFor';
   import { toast } from '$lib/ui/toast.svelte';
 
-  let { open = $bindable(false), owner: initialOwner = '' }: { open: boolean; owner?: string } =
-    $props();
+  let { owner: initialOwner = '' }: { owner?: string } = $props();
+  /** A page opens once: the form starts fresh (the reset below runs once). */
+  let open = $state(true);
 
   let name = $state('');
   let description = $state('');
@@ -84,10 +85,8 @@
   }
 </script>
 
-<Dialog
-  bind:open
+<CreatePage
   title="New artifact"
-  size="sm"
   description="A small website that lives here: a dashboard, a tracker, a form. You publish its files next."
 >
   <form
@@ -130,7 +129,7 @@
     </div>
   </form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" onclick={() => history.back()}>Cancel</Button>
     <Button
       variant="primary"
       type="submit"
@@ -139,4 +138,4 @@
       loading={busy}>Create</Button
     >
   {/snippet}
-</Dialog>
+</CreatePage>

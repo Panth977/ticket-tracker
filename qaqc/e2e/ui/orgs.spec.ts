@@ -43,7 +43,7 @@ test('AC1: make an org, a board inside it, find it under the org and at /{handle
   await signIn(page, ada.email, '/me');
   const nav = sidebar(page);
   await nav.getByRole('button', { name: 'New org' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New org' });
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Freelance');
   await dialog.getByLabel('Handle').fill(handle);
   await dialog.getByRole('button', { name: 'Create org' }).click();
@@ -193,7 +193,7 @@ test('AC4: everything under its owner — me and who shares with me; no hiding; 
   // + in my space → a bucket that is mine.
   await me.getByRole('button', { name: /^Create in/ }).click();
   await page.getByRole('menuitem', { name: 'New bucket' }).click();
-  const dialog = page.getByRole('dialog', { name: 'New bucket' });
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Notes');
   await dialog.getByRole('button', { name: 'Create' }).click();
   const bucketId = await thingIdAt(page, ada, 'bucket');
