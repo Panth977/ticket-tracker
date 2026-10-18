@@ -47,15 +47,32 @@ export async function folderAt(
       parent = hit;
       continue;
     }
-    const kids = await drive.children([parent]);
-    const found = kids.find((k) => isFolder(k) && k.name === segs[i]);
-    if (!found && !create) return null;
-    const id = found ? found.id : (await drive.createFolder(parent, segs[i]!)).id;
+    // Writes run in parallel: the first to look for (or make) a folder makes it for all.
+    let id: string | null = null;
+    for (let tries = 0; tries < 2 && !id; tries++) {
+      let p = making.get(key);
+      if (!p) {
+        const at = parent;
+        const name = segs[i]!;
+        const make = create;
+        p = (async () => {
+          const kids = await drive.children([at]);
+          const found = kids.find((k) => isFolder(k) && k.name === name);
+          if (found) return found.id;
+          return make ? (await drive.createFolder(at, name)).id : null;
+        })().finally(() => making.delete(key));
+        making.set(key, p);
+      }
+      id = await p;
+      if (!id && !create) return null;
+    }
+    if (!id) return null;
     folders.set(key, id);
     parent = id;
   }
   return parent;
 }
+const making = new Map<string, Promise<string | null>>();
 
 const fileName = (id: string, secret: boolean) => `${id}${secret ? '.enc' : ''}.json`;
 const idOf = (name: string): string | null => {

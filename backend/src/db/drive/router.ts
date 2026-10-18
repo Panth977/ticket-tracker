@@ -1021,7 +1021,7 @@ class RBatch implements P.WriteBatch {
       : { works: [], manifests: [] };
     const holder = randomUUID();
     const leased = new Map<string, string>();
-    let entities: EPrepared[] = [];
+    let entities: EPrepared[];
     try {
       entities = ew.length ? await prepareEntityWorks(this.db, ew, holder, leased) : [];
     } catch (e) {

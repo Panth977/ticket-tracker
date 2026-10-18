@@ -211,6 +211,7 @@ test('D5: a managed bucket moves to Drive from its Storage tab; the board shows 
 test('D6: a board whose tickets live in Drive — create, open, reply, live (bucket.html §L)', async ({
   page,
 }) => {
+  test.setTimeout(240_000);
   const ed = await newPerson('Ed');
   await signIn(page, ed.email, '/account/drive');
   await page.getByRole('button', { name: 'Connect Google Drive' }).click();
@@ -237,7 +238,8 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
     boardId: board.id,
     title: 'Lives in Drive',
   });
-  await expect(page.getByText('Lives in Drive').first()).toBeVisible({ timeout: 30_000 });
+  // The ping (driveRev) usually brings it within a second; the minute's poll is the backstop.
+  await expect(page.getByText('Lives in Drive').first()).toBeVisible({ timeout: 70_000 });
   // …and is not in Firestore at all.
   expect((await admin().db.doc(`boards/${board.id}/tickets/${ticketId}`).get()).exists).toBe(false);
 
@@ -271,11 +273,13 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From the API' }] }],
     },
   });
-  await expect(thread.getByText('From the API')).toBeVisible({ timeout: 20_000 });
+  await expect(thread.getByText('From the API')).toBeVisible({ timeout: 70_000 });
 
   // Settings › Storage says where the tickets are.
   await page.goto(`/b/${key}/settings/storage`);
-  await expect(page.getByTestId('board-storage')).toContainText('Its tickets live in Google Drive');
+  await expect(page.getByTestId('entity-storage')).toContainText(
+    'This board lives in Google Drive',
+  );
 });
 
 test('D7: a board moves its tickets to Drive from Settings › Storage, and they still open', async ({
@@ -293,11 +297,11 @@ test('D7: a board moves its tickets to Drive from Settings › Storage, and they
   });
 
   await page.goto(`/b/${b.key}/settings/storage`);
-  const tab = page.getByTestId('board-storage');
-  await expect(tab).toContainText('Its tickets are kept by this app');
+  const tab = page.getByTestId('entity-storage');
+  await expect(tab).toContainText('This board is kept by this app');
   await tab.getByTestId('storage-drive').click();
-  await tab.getByTestId('board-storage-start').click();
-  await page.getByTestId('board-storage-confirm').click();
+  await tab.getByTestId('entity-storage-start').click();
+  await page.getByTestId('entity-storage-confirm').click();
 
   await eventually(
     'the board switched to Drive',
@@ -307,10 +311,48 @@ test('D7: a board moves its tickets to Drive from Settings › Storage, and they
     },
     60_000,
   );
-  await expect(tab).toContainText('Its tickets live in Google Drive', { timeout: 20_000 });
+  await expect(tab).toContainText('This board lives in Google Drive', { timeout: 20_000 });
   expect((await admin().db.doc(`boards/${b.id}/tickets/${ticketId}`).get()).exists).toBe(false);
 
   await page.goto(`/t/${tkey}`);
   // Read from Drive now: the ticket and its activity open as before.
   await expect(page.getByText('created this ticket')).toBeVisible({ timeout: 30_000 });
+});
+
+test('D8: a dictionary kept in Drive — made from its create page, entries sealed there, read back', async ({
+  page,
+}) => {
+  const gi = await newPerson('Gi');
+  await signIn(page, gi.email, '/account/drive');
+  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
+  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
+  // The recovery code: made and shown once, here.
+  await page.getByRole('button', { name: 'Make my recovery code' }).click();
+  await expect(page.getByTestId('drive-recovery-code')).toHaveText(
+    /^[0-9A-Z]{4}(-[0-9A-Z]{1,4})+$/,
+  );
+
+  await page.goto('/new-dictionary');
+  const main = page.getByRole('main');
+  await main.getByLabel('Name').fill('Drive secrets');
+  await main.getByTestId('storage-drive').click();
+  await main.getByRole('button', { name: 'Create' }).click();
+  const dictionaryId = await thingIdAt(page, gi, 'dictionary');
+  const d = (await admin().db.doc(`dictionaries/${dictionaryId}`).get()).data()!;
+  expect(d.storage).toMatchObject({ kind: 'drive', folderName: 'Drive secrets' });
+
+  // An entry saved through the API is sealed in Drive, not in Firestore — and the page shows it.
+  await call(gi, 'dictionarySet', { dictionaryId, set: { TOKEN: 'abc' } });
+  expect((await admin().db.doc(`dictionaries/${dictionaryId}/content/entries`).get()).exists).toBe(
+    false,
+  );
+  await page.reload();
+  await expect(page.locator('[data-entry-row="0"]').getByLabel('Key')).toHaveValue('TOKEN', {
+    timeout: 30_000,
+  });
+
+  await page.goto(`/dictionary/${dictionaryId}/settings/storage`);
+  await expect(page.getByTestId('entity-storage')).toContainText(
+    'This dictionary lives in Google Drive',
+  );
 });

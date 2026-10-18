@@ -8,6 +8,8 @@
     artifact in (it has .tm-entity.json) becomes one here again.
 -->
 <script lang="ts">
+  // hrefs are built by lib/layout/routes; the SPA has no base path.
+  /* eslint-disable svelte/no-navigation-without-resolve */
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { Copy, FolderInput, KeyRound } from 'lucide-svelte';

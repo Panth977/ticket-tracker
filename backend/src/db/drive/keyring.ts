@@ -205,7 +205,7 @@ export async function dataKeyOf(e: DriveEntity, recoverySeed?: Buffer): Promise<
     };
     await writeDocFile(drive, e.folderId, [KEYS_FILE], keys, null);
   } else {
-    let opened: Buffer | null = null;
+    let opened: Buffer | null;
     try {
       opened = Buffer.from(unseal(String(doc.instance)), 'base64url');
     } catch {

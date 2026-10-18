@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- the SDK's write signatures, passed through */
 /**
  * 'firebase/firestore', with what is KEPT IN GOOGLE DRIVE answered by the api
  * (docs/plan/bucket.html §L, §L5). vite.config.ts aliases every import of
@@ -364,6 +365,57 @@ function querySnap(db: Firestore, q: unknown, rows: Row[], prev: Map<string, str
   return { snap: new FakeQuerySnap(q, docs, changes) as unknown as QuerySnapshot, seen: now };
 }
 
+// ─── the boards collection: a Drive board's settings merged in ──────────────
+
+/** Fields a Drive board keeps in its settings.json (backend entities.ts). */
+const BOARD_SETTINGS = [
+  'stages',
+  'priorities',
+  'tags',
+  'fields',
+  'aggFields',
+  'defaultViewId',
+  'settings',
+];
+const boardSettings = new Map<
+  string,
+  { at: number; data: Promise<Record<string, unknown> | null> }
+>();
+
+/** A Drive board's settings, from the api (cached until its _entity rev moves). */
+function settingsOf(boardId: string, fresh = false): Promise<Record<string, unknown> | null> {
+  const hit = boardSettings.get(boardId);
+  if (hit && !fresh && Date.now() - hit.at < DRIVE_POLL_MS) return hit.data;
+  const data = ask({
+    kind: 'doc',
+    path: `boards/${boardId}`,
+    ent: { kind: 'boards', id: boardId, merge: true },
+  })
+    .then((a) => {
+      const d = a.docs[0]?.data;
+      if (!d) return null;
+      const out: Record<string, unknown> = {};
+      for (const f of BOARD_SETTINGS) if (d[f] !== undefined) out[f] = d[f];
+      return out;
+    })
+    .catch(() => null);
+  boardSettings.set(boardId, { at: Date.now(), data });
+  return data;
+}
+
+const isBoardsCollection = (q: unknown) => specOf(q)?.path === 'boards';
+const isDriveRow = (r: Row) => (r.data.storage as { kind?: string } | undefined)?.kind === 'drive';
+
+async function mergeBoards(rows: Row[]): Promise<Row[]> {
+  return Promise.all(
+    rows.map(async (r) => {
+      if (!isDriveRow(r)) return r;
+      const s = await settingsOf(r.id);
+      return s ? { ...r, data: { ...r.data, ...s } } : r;
+    }),
+  );
+}
+
 // ─── one-off reads ──────────────────────────────────────────────────────────
 
 const firestoreOf = (t: unknown) => (t as { firestore: Firestore }).firestore;
@@ -406,6 +458,12 @@ const rowsOf = (s: QuerySnapshot): Row[] =>
   s.docs.map((d) => ({ path: d.ref.path, id: d.id, data: d.data() as Record<string, unknown> }));
 
 export async function getDocs<T>(q: Query<T>): Promise<QuerySnapshot<T>> {
+  if (isBoardsCollection(q)) {
+    const snap = (await R.getDocs(q)) as unknown as QuerySnapshot;
+    const rows = rowsOf(snap);
+    if (!rows.some(isDriveRow)) return snap as QuerySnapshot<T>;
+    return querySnap(firestoreOf(q), q, await mergeBoards(rows), null).snap as QuerySnapshot<T>;
+  }
   const t = targetOf(q);
   if (!t) return R.getDocs(q);
   const db = firestoreOf(q);
@@ -492,8 +550,9 @@ function observerOf(args: unknown[]): { next: Next; error: Fail } {
 }
 
 export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
-  const t = targetOf(target);
   const real = R.onSnapshot as unknown as (t: unknown, ...a: unknown[]) => () => void;
+  if (isBoardsCollection(target)) return boardsListener(target, real, args);
+  const t = targetOf(target);
   if (!t) return real(target, ...args);
 
   const db = firestoreOf(target);
@@ -543,17 +602,12 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
             R.collection(db, `${ent.kind}/${ent.id}/driveRev`),
             R.where('at', '>', Date.now() - 5_000),
           );
-      let first = true;
+      // Every rev snapshot refetches — the first too: it may already carry a
+      // write made after the first fetch went out (a lost ping otherwise).
       offs.push(
         real(
           revs,
-          () => {
-            if (first) {
-              first = false;
-              return;
-            }
-            refetch();
-          },
+          () => refetch(),
           () => {},
         ),
       );
@@ -620,4 +674,60 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
   })();
 
   return stop;
+}
+
+/**
+ * A live query on `boards` (the sidebar, pickers): the SDK's own, with each
+ * Drive board's settings merged in — and merged again when its _entity rev moves.
+ */
+function boardsListener(
+  target: unknown,
+  real: (t: unknown, ...a: unknown[]) => () => void,
+  args: unknown[],
+): () => void {
+  const db = firestoreOf(target);
+  const { next, error } = observerOf(args);
+  let rows: Row[] = [];
+  let seen: Map<string, string> | null = null;
+  let stopped = false;
+  let snapAny: QuerySnapshot | null = null;
+  const watches = new Map<string, () => void>();
+  let gen = 0;
+
+  const emit = async () => {
+    const mine = ++gen;
+    if (!rows.some(isDriveRow)) {
+      if (snapAny && !stopped) next(snapAny);
+      return;
+    }
+    const merged = await mergeBoards(rows);
+    if (stopped || mine !== gen) return;
+    const out = querySnap(db, target, merged, seen);
+    seen = out.seen;
+    next(out.snap);
+  };
+  const off = real(
+    target,
+    (snap: QuerySnapshot) => {
+      snapAny = snap;
+      rows = rowsOf(snap);
+      for (const r of rows.filter(isDriveRow))
+        if (!watches.has(r.id))
+          watches.set(
+            r.id,
+            real(
+              R.doc(db, `boards/${r.id}/driveRev/_entity`),
+              () => void settingsOf(r.id, true).then(() => emit()),
+              () => {},
+            ),
+          );
+      void emit();
+    },
+    (e: Error) => error(e),
+  );
+  return () => {
+    stopped = true;
+    off();
+    for (const w of watches.values()) w();
+  };
 }

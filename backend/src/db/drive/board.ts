@@ -29,6 +29,8 @@ export interface DriveEntity {
 
 interface Entry {
   at: number;
+  /** The document was there (a missing one is never remembered: it may be about to be made). */
+  exists: boolean;
   drive: DriveEntity | null;
   board: DriveBoard | null;
   moving: boolean;
@@ -62,7 +64,7 @@ function entryOf(kind: EntityKind, id: string, d: Record<string, unknown> | unde
         }
       : null;
   const move = d?.move as { state?: string } | undefined;
-  return { at: Date.now(), drive, board, moving: move?.state === 'running' };
+  return { at: Date.now(), exists: !!d, drive, board, moving: move?.state === 'running' };
 }
 
 async function load(base: Db, kind: EntityKind, id: string): Promise<Entry> {
@@ -76,7 +78,8 @@ export function noteEntity(
   id: string,
   data: Record<string, unknown> | undefined,
 ): void {
-  cache.set(ck(kind, id), entryOf(kind, id, data));
+  if (data) cache.set(ck(kind, id), entryOf(kind, id, data));
+  else cache.delete(ck(kind, id));
 }
 
 async function entityEntry(base: Db, kind: EntityKind, id: string): Promise<Entry> {
@@ -89,7 +92,7 @@ async function entityEntry(base: Db, kind: EntityKind, id: string): Promise<Entr
     pending.set(key, p);
   }
   const e = await p;
-  cache.set(key, e);
+  if (e.exists) cache.set(key, e);
   return e;
 }
 const entry = (base: Db, boardId: string) => entityEntry(base, 'boards', boardId);

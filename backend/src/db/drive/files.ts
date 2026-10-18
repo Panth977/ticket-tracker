@@ -167,15 +167,24 @@ export async function ticketsFolder(drive: DriveApi, b: DriveBoard): Promise<str
 /** A ticket's folder: from what we know, else found by name, else (create) made. */
 const archives = new Map<string, string>();
 /** The board's archive/ folder (made on first use). */
-export async function archiveFolder(drive: DriveApi, b: DriveBoard): Promise<string> {
+export function archiveFolder(drive: DriveApi, b: DriveBoard): Promise<string> {
   const hit = archives.get(b.folderId);
-  if (hit) return hit;
-  const kids = await drive.children([b.folderId]);
-  const found = kids.find((k) => isFolder(k) && k.name === ARCHIVE);
-  const id = found ? found.id : (await drive.createFolder(b.folderId, ARCHIVE)).id;
-  archives.set(b.folderId, id);
-  return id;
+  if (hit) return Promise.resolve(hit);
+  // Tickets archived in parallel share one lookup (one archive/ folder, not one each).
+  let p = archiving.get(b.folderId);
+  if (!p) {
+    p = (async () => {
+      const kids = await drive.children([b.folderId]);
+      const found = kids.find((k) => isFolder(k) && k.name === ARCHIVE);
+      const id = found ? found.id : (await drive.createFolder(b.folderId, ARCHIVE)).id;
+      archives.set(b.folderId, id);
+      return id;
+    })().finally(() => archiving.delete(b.folderId));
+    archiving.set(b.folderId, p);
+  }
+  return p;
 }
+const archiving = new Map<string, Promise<string>>();
 
 export async function ticketFolder(
   drive: DriveApi,
