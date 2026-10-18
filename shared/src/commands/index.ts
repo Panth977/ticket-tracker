@@ -35,6 +35,7 @@ export const COMMANDS = {
   inviteAccept: boards.inviteAccept,
   inviteRevoke: boards.inviteRevoke,
   boardCreate: boards.boardCreate,
+  ticketDocs: boards.ticketDocs,
   boardUpdate: boards.boardUpdate,
   tagCreate: boards.tagCreate,
   boardAccessSet: boards.boardAccessSet,

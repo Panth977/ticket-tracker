@@ -116,3 +116,40 @@ export const BucketMoveSchema = z.object({
   resumes: z.number().int().nonnegative().optional(),
 });
 export type BucketMove = z.infer<typeof BucketMoveSchema>;
+
+// ─── §L: a board's TICKETS in Google Drive ───────────────────────────────────
+
+/**
+ * board.storage for a board whose tickets live in Drive (bucket.html §L).
+ * Absent = in the database. `ticketsFolderId` is its tickets/ folder, made
+ * on first use.
+ */
+export const BoardDriveStorageSchema = BucketDriveStorageSchema.extend({
+  ticketsFolderId: DriveIdSchema.nullable().optional(),
+});
+export type BoardDriveStorage = z.infer<typeof BoardDriveStorageSchema>;
+
+export const boardStorageKind = (b: { storage?: { kind: string } | null | undefined }) =>
+  (b.storage?.kind === 'drive' ? 'drive' : 'managed') as BucketStorageKind;
+
+/** board.move: a move of the board's tickets between the database and Drive (boardStorageMove). */
+export const BoardMoveSchema = BucketMoveSchema.extend({
+  target: BoardDriveStorageSchema.nullable(),
+});
+export type BoardMove = z.infer<typeof BoardMoveSchema>;
+
+/**
+ * boards/{b}/driveRev/{t} — all the database keeps about a Drive ticket: where
+ * its files are, a version that moves on every write (open screens refetch
+ * when it does) and the short write lease.
+ */
+export const DriveRevSchema = z.object({
+  v: z.number().int().nonnegative(),
+  at: MillisSchema,
+  lease: z.object({ holder: z.string(), until: MillisSchema }).nullable().optional(),
+  folderId: DriveIdSchema.nullable().optional(),
+  messagesId: DriveIdSchema.nullable().optional(),
+  pagesId: DriveIdSchema.nullable().optional(),
+  metaId: DriveIdSchema.nullable().optional(),
+});
+export type DriveRev = z.infer<typeof DriveRevSchema>;

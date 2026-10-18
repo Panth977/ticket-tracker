@@ -189,7 +189,7 @@ describe('the spill (§W)', () => {
   itFirestore('2,000 messages page correctly and read back in order', async () => {
     spyPorts();
     const { asha } = await people('asha');
-    const b = await seedBoard({ admin: asha });
+    const b = await seedBoard({ admin: asha, drive: false });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Long' });
 
     // Posting 2,000 through the command layer would be 2,000 transactions;
@@ -265,7 +265,7 @@ describe('the spill (§W)', () => {
   it('a new message spills the oldest chunk in the same write', async () => {
     spyPorts();
     const { asha } = await people('asha');
-    const b = await seedBoard({ admin: asha });
+    const b = await seedBoard({ admin: asha, drive: false });
     const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Grow' });
     // Right up to the edge, then one more through the command layer.
     const base = Date.now() - 500_000;
@@ -319,7 +319,7 @@ describe('scripts/migrate-ticket-doc.mjs', () => {
     async () => {
       spyPorts();
       const { asha } = await people('asha');
-      const b = await seedBoard({ admin: asha });
+      const b = await seedBoard({ admin: asha, drive: false });
       const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'Legacy' });
       const at = paths.ticket(b.id, ticketId);
       const now = Date.now() - 10_000;

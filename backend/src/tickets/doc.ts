@@ -26,6 +26,7 @@
 import { type Transaction, type WriteBatch } from '../db/index.js';
 import {
   byTime,
+  DRIVE_INLINE_MESSAGES,
   docBytes,
   errors,
   inlineActivity,
@@ -52,6 +53,7 @@ import {
   type WaitingOn,
 } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';
+import { cachedDriveBoard } from '../db/drive/board.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { ticketRef } from './access.js';
@@ -377,7 +379,15 @@ export class TicketWriter {
     // The budget is the WHOLE document's, so weigh everything but the two
     // arrays that can move out of it.
     const fixed = docBytes({ ...staged, recentMessages: [], recentActivity: [] });
-    const spill = planSpill(this.msgs, this.acts, fixed, this.before.pageCount ?? 0, this.ctx.now);
+    const spill = planSpill(
+      this.msgs,
+      this.acts,
+      fixed,
+      this.before.pageCount ?? 0,
+      this.ctx.now,
+      // §L: a Drive board's ticket keeps fewer messages inline (one file each).
+      cachedDriveBoard(this.boardId) ? DRIVE_INLINE_MESSAGES : undefined,
+    );
 
     const tasks = tasklistRollup(this.lists);
     const next: Ticket = {

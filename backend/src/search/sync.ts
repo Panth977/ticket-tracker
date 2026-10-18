@@ -13,6 +13,8 @@
  * on the present state, so a duplicate or reordered event is harmless.
  */
 import { FieldValue, Timestamp } from '../db/index.js';
+import { baseDb } from '../db/index.js';
+import { driveBoardOf } from '../db/drive/board.js';
 import { COLLECTIONS, paths, type SearchIndex } from '@tm/shared';
 import { ports } from '../adapters/index.js';
 import { typedDoc } from '../runtime/converters.js';
@@ -41,6 +43,11 @@ export async function reindexTicket(
   ticketId: string,
   { onMissing = 'delete' }: ReindexOptions = {},
 ): Promise<ReindexResult> {
+  // bucket.html §L: a Drive board's tickets are in Drive only — no copy in the search index.
+  if (await driveBoardOf(baseDb(), boardId)) {
+    await index().delete(ticketId);
+    return 'deleted';
+  }
   const snap = await typedDoc('tickets', paths.ticket(boardId, ticketId)).get();
   const ticket = snap.data();
   if (!ticket) {

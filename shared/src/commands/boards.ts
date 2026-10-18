@@ -21,6 +21,7 @@ import { defineCommand, OkResSchema, req } from './define.js';
 import { AGG_FIELDS_MAX, AggFieldDefSchema } from '../schema/aggregates.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
+import { BucketStorageInputSchema, DriveIdSchema } from '../bucket/drive.js';
 
 export const MAX_INVITES_PER_CALL = 50;
 
@@ -121,8 +122,17 @@ export const boardCreate = defineCommand({
     description: DescriptionSchema.optional(),
     /** §AC: who owns it — you (default) or an org you belong to. */
     owner: OwnerRefSchema.optional(),
+    /**
+     * bucket.html §L: where its TICKETS live. Drive = a folder of your Drive
+     * (picked, or a path made for it); default = the database.
+     */
+    storage: BucketStorageInputSchema.optional(),
   }),
-  res: z.object({ boardId: BoardIdSchema }),
+  res: z.object({
+    boardId: BoardIdSchema,
+    /** A Drive board: <folder>/files, for its attachment bucket. */
+    filesFolderId: DriveIdSchema.optional(),
+  }),
 });
 
 /** Patches are PER SECTION — never a whole settings blob. */
@@ -254,4 +264,43 @@ export const viewDelete = defineCommand({
   errors: ['forbidden', 'not_found', 'conflict'],
   req: req({ boardId: BoardIdSchema, viewId: z.string().min(1) }),
   res: OkResSchema,
+});
+
+/**
+ * bucket.html §L — the app's reads of a board whose TICKETS live in Google
+ * Drive. Its browser cannot read them from Firestore (they are not there):
+ * it asks here for what it would have asked Firestore for — one ticket
+ * document or page, a query on a board's tickets (or a ticket's pages), or
+ * the Drive boards' share of a collection-group query on tickets. Answers
+ * the documents as they are now; the browser refetches when the ticket's
+ * boards/{b}/driveRev/{t} moves (and every minute).
+ */
+const TicketDocsFilterSchema = z.tuple([
+  z.string().min(1).max(300),
+  z.enum(['<', '<=', '==', '!=', '>=', '>', 'array-contains', 'in', 'not-in', 'array-contains-any']),
+  z.unknown(),
+]);
+export const ticketDocs = defineCommand({
+  name: 'ticketDocs',
+  source: 'app',
+  scopes: ['tickets:read'],
+  permission: 'can(read) on the board (a group query: the Drive boards you can read).',
+  errors: ['not_found', 'invalid'],
+  req: req({
+    target: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('doc'), path: z.string().min(1).max(500) }),
+      z.object({ kind: z.literal('query'), path: z.string().min(1).max(500) }),
+      z.object({ kind: z.literal('group') }),
+    ]),
+    where: z.array(TicketDocsFilterSchema).max(10).optional(),
+    orderBy: z.array(z.tuple([z.string().min(1).max(300), z.enum(['asc', 'desc'])])).max(4).optional(),
+    limit: z.number().int().positive().max(5000).optional(),
+  }),
+  res: z.object({
+    docs: z.array(z.object({ path: z.string(), id: z.string(), data: z.record(z.string(), z.unknown()) })),
+    /** A doc read: false when it does not exist. */
+    exists: z.boolean().optional(),
+    /** The Drive boards the answer covers (what to listen to for changes). */
+    boards: z.array(BoardIdSchema),
+  }),
 });

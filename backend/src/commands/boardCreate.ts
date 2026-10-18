@@ -28,6 +28,10 @@ import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
 import { ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
+import { isFolder } from '../bucket/drive/api.js';
+import { driveEmail, driveFor } from '../bucket/drive/link.js';
+import { driveBucketFolder } from '../bucket/drive/store.js';
+import { forgetDriveBoardIds } from '../db/drive/board.js';
 import {
   BOARD_CREATES_PER_DAY,
   boardRef,
@@ -120,6 +124,33 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   );
 
   const own = await ownerForCreate(ctx.actor, input.owner);
+
+  // bucket.html §L: "Google Drive" — the board's tickets live in a folder of
+  // the creator's Drive: <folder>/tickets (the tickets) and <folder>/files
+  // (for the attachment bucket the app makes next). Made BEFORE the board, so
+  // a Drive that refuses leaves nothing behind; the key is checked first so a
+  // taken one leaves no folders.
+  let storage: Board['storage'];
+  let filesFolderId: string | null = null;
+  if (input.storage?.kind === 'drive') {
+    if (await typedDoc('boardKeys', paths.boardKey(input.key)).get().then((s) => s.exists))
+      throw errors.conflict(`The key ${input.key} is taken`, { key: input.key });
+    const api = await driveFor(ctx.actor);
+    const folder = await driveBucketFolder(api, input.storage, input.name, ctx.actor);
+    const kids = await api.children([folder.folderId]);
+    const sub = async (name: string) =>
+      kids.find((k) => isFolder(k) && k.name === name)?.id ??
+      (await api.createFolder(folder.folderId, name)).id;
+    const ticketsFolderId = await sub('tickets');
+    filesFolderId = await sub('files');
+    storage = {
+      kind: 'drive',
+      uid: ctx.actor,
+      ...folder,
+      email: await driveEmail(ctx.actor),
+      ticketsFolderId,
+    };
+  }
   const access = { [ctx.actor]: 'admin' as const };
   // indicators.html: every new board (and each of its stages) gets an indicator.
   const indicator =
@@ -148,6 +179,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     archivedAt: null,
     createdBy: ctx.actor,
     createdAt: ctx.now,
+    ...(storage ? { storage } : {}),
     ...own.fields,
   };
   const pref: BoardPref = { mode: 'mine', watching: [], starred: false, lastViewId: defaultViewId };
@@ -177,5 +209,6 @@ export default defineCommand('boardCreate', async (ctx, input) => {
 
   await syncReaders(boardId, board.readerUids);
   if (own.org) await syncThing('board', boardId, own.org);
-  return { boardId };
+  if (storage) forgetDriveBoardIds();
+  return { boardId, ...(filesFolderId ? { filesFolderId } : {}) };
 });

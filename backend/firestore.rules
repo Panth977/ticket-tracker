@@ -440,6 +440,15 @@ service cloud.firestore {
         allow write: if false; // agentHeartbeat, agentSilenceSweep
       }
 
+      // ------------------------------------------------ bucket.html §L
+      // boards/{b}/driveRev/{t} — a Drive board's ticket: where its files are,
+      // its version (open screens refetch when it moves) and the write lease.
+      // The tickets themselves are in Drive, read through the api.
+      match /driveRev/{ticketId} {
+        allow read: if canRead(boardId);
+        allow write: if false; // the ticket router (src/db/drive)
+      }
+
       // ------------------------------------------------ phase 17: cost per day
       // (docs/plan/agents.html §Y2) boards/{b}/stats/{yyyy-mm-dd} — the day's
       // turn receipts, summed. Written by messagePost in the same transaction
