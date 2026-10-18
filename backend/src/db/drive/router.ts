@@ -26,11 +26,17 @@
  */
 import { randomUUID } from 'node:crypto';
 import { errors } from '@tm/shared';
-import { applyWrite, updatePairs, type WriteOp } from '../sqlite/mutate.js';
+import { applyWrite, type WriteOp } from '../sqlite/mutate.js';
 import { Plan, type QueryState } from '../sqlite/query.js';
 import { DOC_ID, Timestamp as SqlTimestamp } from '../sqlite/values.js';
 import type * as P from '../types.js';
-import { assertNotMoving, driveBoardIds, driveBoardOf, driveOf } from './board.js';
+import {
+  assertNotMoving,
+  driveBoardIds,
+  driveBoardOf,
+  driveEntityOf,
+  driveOf,
+} from './board.js';
 import {
   listTickets,
   readMeta,
@@ -43,11 +49,44 @@ import {
   type DriveBoard,
   type TicketFiles,
 } from './files.js';
-import { acquire, pointersOf, readRev, release, REV_COLLECTION } from './lease.js';
-import { decodeJson, encodeJson, foreignSegments, isRefValue, toLocal } from './values.js';
+import {
+  acquire,
+  pointersOf,
+  readRev,
+  release,
+  releaseAt,
+  REV_COLLECTION,
+  revPath,
+} from './lease.js';
+import { encodeJson, isRefValue, toLocal } from './values.js';
+import { entityColLoc, entityLoc } from './entities.js';
+import {
+  EDocRef,
+  entityRows,
+  finishEntityWorks,
+  mergeEntityRows,
+  planEntityWrites,
+  prepareEntityWorks,
+  readEntityRef,
+  type EPrepared,
+  type EReads,
+} from './entityRouter.js';
+import type { DriveEntity } from './board.js';
+import {
+  DriveRetry,
+  getAt,
+  lastSeg,
+  parentOf,
+  RDocSnap,
+  RQuerySnap,
+  segsOf,
+  toOp,
+  WRITE_RESULT,
+  type Conv,
+  type Json,
+  type Method,
+} from './snap.js';
 
-type Json = Record<string, unknown>;
-type Conv = P.FirestoreDataConverter<any> | null;
 
 // ─── paths ───────────────────────────────────────────────────────────────────
 
@@ -82,127 +121,6 @@ function colLoc(
 }
 
 const keyOf = (l: { boardId: string; ticketId: string }) => `${l.boardId}/${l.ticketId}`;
-const lastSeg = (path: string) => path.slice(path.lastIndexOf('/') + 1);
-const parentOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
-
-function segsOf(field: unknown): string[] {
-  if (typeof field === 'string') return field.split('.');
-  const s = foreignSegments(field);
-  if (!s) throw errors.invalid('Invalid field path');
-  return s;
-}
-
-class DriveRetry extends Error {
-  constructor() {
-    super('A Drive ticket changed while this transaction ran');
-  }
-}
-
-function getAt(doc: unknown, segs: readonly string[]): unknown {
-  let cur = doc;
-  for (const s of segs) {
-    if (!cur || typeof cur !== 'object') return undefined;
-    cur = (cur as Json)[s];
-  }
-  return cur;
-}
-
-// ─── snapshots ───────────────────────────────────────────────────────────────
-
-class RDocSnap<T = P.DocumentData> implements P.QueryDocumentSnapshot<T> {
-  readonly exists: boolean;
-  readonly createTime: P.Timestamp;
-  readonly updateTime: P.Timestamp;
-  readonly readTime: P.Timestamp;
-  private decoded: Json | undefined;
-  constructor(
-    readonly ref: RDocRef<T>,
-    /** Encoded document; undefined = missing. */
-    readonly raw: Json | undefined,
-  ) {
-    this.exists = raw !== undefined;
-    const now = ref.db.Ts.now();
-    this.createTime = now;
-    this.updateTime = now;
-    this.readTime = now;
-  }
-  get id(): string {
-    return this.ref.id;
-  }
-  rawData(): Json | undefined {
-    if (this.raw === undefined) return undefined;
-    this.decoded ??= decodeJson(this.raw, this.ref.db.Ts) as Json;
-    return this.decoded;
-  }
-  data(): T {
-    if (!this.exists) return undefined as T;
-    if (this.ref.conv) {
-      const plain = new RDocSnap(this.ref.withConverter(null) as RDocRef<any>, this.raw);
-      return this.ref.conv.fromFirestore(plain as unknown as P.QueryDocumentSnapshot) as T;
-    }
-    return this.rawData() as T;
-  }
-  get(field: string | P.FieldPath): any {
-    const segs = segsOf(field);
-    return getAt(this.rawData(), segs);
-  }
-}
-
-class RQuerySnap<T> implements P.QuerySnapshot<T> {
-  readonly readTime: P.Timestamp;
-  constructor(
-    readonly docs: P.QueryDocumentSnapshot<T>[],
-    Ts: P.TimestampStatic,
-  ) {
-    this.readTime = Ts.now();
-  }
-  get size() {
-    return this.docs.length;
-  }
-  get empty() {
-    return this.docs.length === 0;
-  }
-  forEach(cb: (d: P.QueryDocumentSnapshot<T>) => void) {
-    this.docs.forEach(cb);
-  }
-}
-
-// ─── writes ──────────────────────────────────────────────────────────────────
-
-type Method = 'create' | 'set' | 'update' | 'delete';
-
-/** A write call on a routed ref → the SQLite adapter's WriteOp (local value classes). */
-function toOp(ref: RDocRef<any>, method: Method, args: unknown[]): WriteOp {
-  switch (method) {
-    case 'create': {
-      const data = ref.conv ? ref.conv.toFirestore(args[0] as any) : args[0];
-      return { kind: 'create', data: toLocal(data) as Json };
-    }
-    case 'set': {
-      const options = args[1] as P.SetOptions | undefined;
-      const data = ref.conv
-        ? options
-          ? ref.conv.toFirestore(args[0] as any, options)
-          : ref.conv.toFirestore(args[0] as any)
-        : args[0];
-      return {
-        kind: 'set',
-        data: toLocal(data) as Json,
-        ...(options?.merge ? { merge: true } : {}),
-        ...(options?.mergeFields ? { mergeFields: options.mergeFields.map(segsOf) } : {}),
-      };
-    }
-    case 'update': {
-      const { pairs, precondition } = updatePairs(args.map(toLocal));
-      return { kind: 'update', pairs, ...(precondition ? { precondition } : {}) };
-    }
-    case 'delete':
-      return {
-        kind: 'delete',
-        ...(args[0] ? { precondition: args[0] as { exists?: boolean } } : {}),
-      };
-  }
-}
 
 /** All the staged writes to ONE Drive ticket (its document and its pages). */
 interface Work {
@@ -266,10 +184,20 @@ export class RoutedDb implements P.Db {
   }
 
   doc(path: string): P.DocumentReference<P.DocumentData> {
-    return docLoc(path) ? new RDocRef(this, path, null) : this.base.doc(path);
+    return this.docAt(path, null);
+  }
+  /** A reference for `path`, routed or the adapter's own, with a converter. */
+  docAt(path: string, conv: Conv): P.DocumentReference<any> {
+    if (docLoc(path)) return new RDocRef(this, path, conv);
+    const el = entityLoc(path);
+    if (el) return new EDocRef(this, path, conv, el);
+    const r = this.base.doc(path);
+    return conv ? r.withConverter(conv) : r;
   }
   collection(path: string): P.CollectionReference<P.DocumentData> {
-    return colLoc(path) ? new RColRef(this, path, null) : this.base.collection(path);
+    return colLoc(path) || entityColLoc(path)
+      ? new RColRef(this, path, null)
+      : this.base.collection(path);
   }
   collectionGroup(id: string): P.CollectionGroup<P.DocumentData> {
     return id === 'tickets'
@@ -284,11 +212,12 @@ export class RoutedDb implements P.Db {
       (a): a is P.DocumentReference<T> => typeof (a as any)?.path === 'string',
     );
     const opts = args.filter((a) => typeof (a as any)?.path !== 'string') as P.ReadOptions[];
-    const baseRefs = refs.filter((r) => !(r instanceof RDocRef));
+    const routed = (r: unknown) => r instanceof RDocRef || r instanceof EDocRef;
+    const baseRefs = refs.filter((r) => !routed(r));
     const baseSnaps = baseRefs.length ? await this.base.getAll<T>(...baseRefs, ...opts) : [];
     const byPath = new Map(baseSnaps.map((s) => [s.ref.path, s]));
     return Promise.all(
-      refs.map(async (r) => (r instanceof RDocRef ? r.get() : byPath.get(r.path)!)),
+      refs.map(async (r) => (routed(r) ? (r as any).get() : byPath.get(r.path)!)),
     ) as Promise<P.DocumentSnapshot<T>[]>;
   }
 
@@ -297,9 +226,9 @@ export class RoutedDb implements P.Db {
     options?: { maxAttempts?: number } | { readOnly?: boolean },
   ): Promise<T> {
     const holder = randomUUID();
-    const leased = new Map<string, Work>();
+    const leased = new Map<string, string>();
     for (let attempt = 1; ; attempt++) {
-      let prepared: Prepared[] = [];
+      let prepared: Flushed = { tickets: [], entities: [], manifests: [] };
       try {
         const result = await this.base.runTransaction(async (btx) => {
           const rtx = new RTx(this, btx);
@@ -307,11 +236,11 @@ export class RoutedDb implements P.Db {
           prepared = await rtx.flush(holder, leased);
           return out;
         }, options as any);
-        await this.finish(prepared, holder, leased);
+        await this.finishAll(prepared, holder, leased);
         return result;
       } catch (e) {
         await Promise.all(
-          [...leased.values()].map((w) => release(this.base, w.boardId, w.ticketId, holder, null)),
+          [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
         );
         leased.clear();
         if (e instanceof DriveRetry && attempt < 6) continue;
@@ -320,6 +249,16 @@ export class RoutedDb implements P.Db {
         throw e;
       }
     }
+  }
+
+  /** Entities' files first (no ticket write depends on them), then the tickets. */
+  async finishAll(f: Flushed, holder: string, leased: Map<string, string>): Promise<void> {
+    const failed = await finishEntityWorks(this, f.entities, f.manifests, holder, leased);
+    await this.finish(f.tickets, holder, leased);
+    if (failed)
+      throw errors.unavailable(
+        'Google Drive did not take the change in full; reload and try again',
+      );
   }
 
   batch(): P.WriteBatch {
@@ -333,12 +272,26 @@ export class RoutedDb implements P.Db {
     ref: P.DocumentReference<unknown> | P.CollectionReference<unknown>,
     bulkWriter?: P.BulkWriter,
   ): Promise<void> {
+    if (ref instanceof EDocRef) {
+      if (ref.loc.t === 'file') return void (await this.writeNow([[ref as any, 'delete', []]]));
+      return this.base.recursiveDelete(ref.plainRef(), bulkWriter);
+    }
     if (ref instanceof RDocRef) {
       const l = docLoc(ref.path)!;
       const b = await this.mode(l.boardId);
       if (!b) return this.base.recursiveDelete(this.base.doc(ref.path), bulkWriter);
       if (l.sub === null) await this.writeNow([[ref, 'delete', []]]);
       else if (l.sub === 'data') await this.writeNow([[ref, 'delete', []]]);
+      return;
+    }
+    if (ref instanceof RColRef && entityColLoc(ref.path)) {
+      const el = entityColLoc(ref.path)!;
+      const e = el.t === 'files' ? await driveEntityOf(this.base, el.kind, el.id) : null;
+      if (el.t !== 'files' || !e)
+        return this.base.recursiveDelete(this.base.collection(ref.path), bulkWriter);
+      // A Drive subtree deleted whole: its folder goes to Drive's trash.
+      const { trashFolder } = await import('./docfiles.js');
+      await trashFolder(await driveOf(e), e.folderId, el.rel);
       return;
     }
     if (ref instanceof RColRef) {
@@ -443,13 +396,13 @@ export class RoutedDb implements P.Db {
   }
 
   /** Lease every ticket (path order), check what was read is current, compute the new files. */
-  async prepare(works: Work[], holder: string, leased: Map<string, Work>): Promise<Prepared[]> {
+  async prepare(works: Work[], holder: string, leased: Map<string, string>): Promise<Prepared[]> {
     const out: Prepared[] = [];
     const sorted = [...works].sort((a, z) => (keyOf(a) < keyOf(z) ? -1 : 1));
     for (const w of sorted) {
       await assertNotMoving(this.base, w.boardId);
       const rev = await acquire(this.base, w.boardId, w.ticketId, holder);
-      leased.set(keyOf(w), w);
+      leased.set(revPath(w.boardId, w.ticketId), revPath(w.boardId, w.ticketId));
       const v = rev?.v ?? null;
       if (w.read && w.read.v !== v) throw new DriveRetry();
       const drive = await driveOf(w.b);
@@ -482,7 +435,7 @@ export class RoutedDb implements P.Db {
   }
 
   /** After the database committed: write the files, give the leases back with a new version, fire onTicketWritten. */
-  async finish(prepared: Prepared[], holder: string, leased: Map<string, Work>): Promise<void> {
+  async finish(prepared: Prepared[], holder: string, leased: Map<string, string>): Promise<void> {
     let failed: unknown = null;
     await Promise.all(
       prepared.map(async (p) => {
@@ -513,13 +466,13 @@ export class RoutedDb implements P.Db {
           failed = e;
           await release(this.base, boardId, ticketId, holder, null);
         } finally {
-          leased.delete(`${boardId}/${ticketId}`);
+          leased.delete(revPath(boardId, ticketId));
         }
       }),
     );
     // Leased but nothing to write (read in the tx, unchanged): just give back.
     await Promise.all(
-      [...leased.values()].map((w) => release(this.base, w.boardId, w.ticketId, holder, null)),
+      [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
     );
     leased.clear();
     if (failed)
@@ -546,7 +499,25 @@ export class RoutedDb implements P.Db {
   }
 
   /** Writes outside a transaction (a ref's own set/update, a batch, a bulk writer): lease, read, write. */
-  async writeNow(calls: [RDocRef<any>, Method, unknown[]][]): Promise<void> {
+  async writeNow(all: [RDocRef<any>, Method, unknown[]][]): Promise<void> {
+    const ecalls = all.filter((c) => (c[0] as unknown) instanceof EDocRef) as unknown as [
+      EDocRef<any>,
+      Method,
+      unknown[],
+    ][];
+    const calls = all.filter((c) => !((c[0] as unknown) instanceof EDocRef));
+    if (ecalls.length) {
+      const { works: ew, manifests } = await planEntityWrites(this, ecalls, { kind: 'direct' }, null);
+      const holder = randomUUID();
+      const leased = new Map<string, string>();
+      try {
+        const prepared = await prepareEntityWorks(this, ew, holder, leased);
+        await this.finishAll({ tickets: [], entities: prepared, manifests }, holder, leased);
+      } catch (e) {
+        await Promise.all([...leased.values()].map((p) => releaseAt(this.base, p, holder, null)));
+        throw e;
+      }
+    }
     const works = new Map<string, Work>();
     const managed: [RDocRef<any>, Method, unknown[]][] = [];
     for (const [ref, method, args] of calls) {
@@ -560,13 +531,13 @@ export class RoutedDb implements P.Db {
     }
     if (!works.size) return;
     const holder = randomUUID();
-    const leased = new Map<string, Work>();
+    const leased = new Map<string, string>();
     try {
       const prepared = await this.prepare([...works.values()], holder, leased);
       await this.finish(prepared, holder, leased);
     } catch (e) {
       await Promise.all(
-        [...leased.values()].map((w) => release(this.base, w.boardId, w.ticketId, holder, null)),
+        [...leased.values()].map((p) => releaseAt(this.base, p, holder, null)),
       );
       throw e;
     }
@@ -575,7 +546,6 @@ export class RoutedDb implements P.Db {
 
 // ─── references ──────────────────────────────────────────────────────────────
 
-const WRITE_RESULT = (Ts: P.TimestampStatic): P.WriteResult => ({ writeTime: Ts.now() });
 
 export class RDocRef<T = P.DocumentData> implements P.DocumentReference<T> {
   constructor(
@@ -778,10 +748,35 @@ export class RQuery<T = P.DocumentData> implements P.Query<T> {
   }
 
   private snapOf(path: string, raw: Json): P.QueryDocumentSnapshot<T> {
-    return new RDocSnap<T>(new RDocRef<T>(this.db, path, this.conv), raw);
+    return new RDocSnap<T>(this.db.docAt(path, this.conv) as any, raw);
   }
 
   async run(btx: P.Transaction | null): Promise<P.QuerySnapshot<T>> {
+    const el = this.target.path ? entityColLoc(this.target.path) : null;
+    if (el && this.target.path) {
+      const path = this.target.path;
+      if (el.t === 'files') {
+        const rows = await entityRows(this.db, el, path);
+        if (!rows) {
+          const q = this.baseQuery();
+          return (btx ? btx.get(q) : q.get()) as Promise<P.QuerySnapshot<T>>;
+        }
+        const out = this.plan(rows, lastSeg(path), parentOf(path));
+        return new RQuerySnap(
+          out.map((r) => this.snapOf(r.path, r.data)),
+          this.db.Ts,
+        );
+      }
+      // An entity collection: the database's answer, Drive entities' settings merged in.
+      const q = this.baseQuery();
+      const snap = await (btx ? btx.get(q) : q.get());
+      const merged = await mergeEntityRows(this.db, el.kind, snap);
+      if (!merged) return snap as P.QuerySnapshot<T>;
+      return new RQuerySnap(
+        merged.map((r) => this.snapOf(r.path, r.data)),
+        this.db.Ts,
+      );
+    }
     if (this.target.path) {
       const l = colLoc(this.target.path)!;
       const b = await this.db.mode(l.boardId);
@@ -860,11 +855,7 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
     return this.db.doc(parentOf(this.path));
   }
   doc(id?: string): P.DocumentReference<T> {
-    return new RDocRef<T>(
-      this.db,
-      `${this.path}/${id ?? this.db.base.collection('_').doc().id}`,
-      this.conv,
-    );
+    return this.db.docAt(`${this.path}/${id ?? this.db.base.collection('_').doc().id}`, this.conv);
   }
   async add(data: P.WithFieldValue<T>): Promise<P.DocumentReference<T>> {
     const ref = this.doc();
@@ -872,6 +863,13 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
     return ref;
   }
   async listDocuments(): Promise<P.DocumentReference<T>[]> {
+    const el = entityColLoc(this.path);
+    if (el) {
+      const rows = el.t === 'files' ? await entityRows(this.db, el, this.path) : null;
+      if (!rows)
+        return this.db.base.collection(this.path).listDocuments() as Promise<P.DocumentReference<T>[]>;
+      return rows.map((r) => this.doc(r.id));
+    }
     const l = colLoc(this.path)!;
     const b = await this.db.mode(l.boardId);
     if (!b)
@@ -887,15 +885,24 @@ export class RColRef<T = P.DocumentData> extends RQuery<T> implements P.Collecti
 
 // ─── transactions, batches, bulk ─────────────────────────────────────────────
 
+interface Flushed {
+  tickets: Prepared[];
+  entities: EPrepared[];
+  manifests: DriveEntity[];
+}
+
 class RTx implements P.Transaction {
   private reads = new Map<string, { v: number | null; files: TicketFiles | null }>();
+  private ereads: EReads = new Map();
   private staged: [RDocRef<any>, Method, unknown[]][] = [];
+  private estaged: [EDocRef<any>, Method, unknown[]][] = [];
   constructor(
     private readonly db: RoutedDb,
     private readonly btx: P.Transaction,
   ) {}
 
   async get(target: any): Promise<any> {
+    if (target instanceof EDocRef) return readEntityRef(this.db, target, this.btx, this.ereads);
     if (target instanceof RDocRef) {
       const l = docLoc(target.path)!;
       const b = await this.db.mode(l.boardId);
@@ -915,7 +922,7 @@ class RTx implements P.Transaction {
   async getAll(...args: any[]): Promise<any[]> {
     const refs = args.filter((a) => typeof a?.path === 'string');
     const opts = args.filter((a) => typeof a?.path !== 'string');
-    const baseRefs = refs.filter((r) => !(r instanceof RDocRef));
+    const baseRefs = refs.filter((r) => !(r instanceof RDocRef) && !(r instanceof EDocRef));
     const managed: any[] = [];
     for (const r of refs)
       if (r instanceof RDocRef && !(await this.db.mode(docLoc(r.path)!.boardId))) managed.push(r);
@@ -925,7 +932,8 @@ class RTx implements P.Transaction {
     return Promise.all(refs.map((r) => (byPath.has(r.path) ? byPath.get(r.path) : this.get(r))));
   }
   private stage(ref: any, method: Method, args: unknown[]): this {
-    if (ref instanceof RDocRef) this.staged.push([ref, method, args]);
+    if (ref instanceof EDocRef) this.estaged.push([ref, method, args]);
+    else if (ref instanceof RDocRef) this.staged.push([ref, method, args]);
     else (this.btx as any)[method](ref, ...args);
     return this;
   }
@@ -942,8 +950,15 @@ class RTx implements P.Transaction {
     return this.stage(ref, 'delete', precondition ? [precondition] : []);
   }
 
-  /** Before the database commits: managed refs join it, Drive ones are leased and computed. */
-  async flush(holder: string, leased: Map<string, Work>): Promise<Prepared[]> {
+  /**
+   * Before the database commits: managed refs join it, Drive ones are leased
+   * and computed — entities' documents first, then tickets (one global order).
+   */
+  async flush(holder: string, leased: Map<string, string>): Promise<Flushed> {
+    const { works: ew, manifests } = this.estaged.length
+      ? await planEntityWrites(this.db, this.estaged, { kind: 'tx', btx: this.btx }, this.ereads)
+      : { works: [], manifests: [] };
+    const entities = ew.length ? await prepareEntityWorks(this.db, ew, holder, leased) : [];
     const works = new Map<string, Work>();
     for (const [ref, method, args] of this.staged) {
       const l = docLoc(ref.path)!;
@@ -958,8 +973,8 @@ class RTx implements P.Transaction {
       const read = this.reads.get(keyOf(l));
       if (read) w.read = read;
     }
-    if (!works.size) return [];
-    return this.db.prepare([...works.values()], holder, leased);
+    const tickets = works.size ? await this.db.prepare([...works.values()], holder, leased) : [];
+    return { tickets, entities, manifests };
   }
 }
 
@@ -969,8 +984,10 @@ class RBatch implements P.WriteBatch {
     private readonly db: RoutedDb,
     private readonly bb: P.WriteBatch,
   ) {}
+  private estaged: [EDocRef<any>, Method, unknown[]][] = [];
   private stage(ref: any, method: Method, args: unknown[]): this {
-    if (ref instanceof RDocRef) this.staged.push([ref, method, args]);
+    if (ref instanceof EDocRef) this.estaged.push([ref, method, args]);
+    else if (ref instanceof RDocRef) this.staged.push([ref, method, args]);
     else (this.bb as any)[method](ref, ...args);
     return this;
   }
@@ -996,7 +1013,22 @@ class RBatch implements P.WriteBatch {
         (this.bb as any)[s[1]](s[0].baseRef(), ...s[2]);
       }
     }
+    // Entities: the database's halves join the batch; the Drive halves are leased first.
+    const { works: ew, manifests } = this.estaged.length
+      ? await planEntityWrites(this.db, this.estaged, { kind: 'batch', bb: this.bb }, null)
+      : { works: [], manifests: [] };
+    const holder = randomUUID();
+    const leased = new Map<string, string>();
+    let entities: EPrepared[] = [];
+    try {
+      entities = ew.length ? await prepareEntityWorks(this.db, ew, holder, leased) : [];
+    } catch (e) {
+      await Promise.all([...leased.values()].map((p) => releaseAt(this.db.base, p, holder, null)));
+      throw e;
+    }
     const out = await this.bb.commit();
+    if (entities.length || manifests.length)
+      await this.db.finishAll({ tickets: [], entities, manifests }, holder, leased);
     if (drive.length) await this.db.writeNow(drive);
     return out;
   }
@@ -1009,8 +1041,9 @@ class RBulk implements P.BulkWriter {
     private readonly bw: P.BulkWriter,
   ) {}
   private run(ref: any, method: Method, args: unknown[]): Promise<P.WriteResult> {
-    if (!(ref instanceof RDocRef)) return (this.bw as any)[method](ref, ...args);
-    const p = this.db.writeNow([[ref, method, args]]).then(() => WRITE_RESULT(this.db.Ts));
+    if (!(ref instanceof RDocRef) && !(ref instanceof EDocRef))
+      return (this.bw as any)[method](ref, ...args);
+    const p = this.db.writeNow([[ref as any, method, args]]).then(() => WRITE_RESULT(this.db.Ts));
     this.pending.push(p.catch(() => undefined));
     return p;
   }

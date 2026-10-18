@@ -26,6 +26,13 @@ const WAIT_MS = 20_000;
 export const revPath = (boardId: string, ticketId: string) =>
   `boards/${boardId}/${REV_COLLECTION}/${ticketId}`;
 
+/**
+ * The rev of anything else kept in Drive (§L5): an entity's own settings file
+ * (`_entity`) or one of its documents (its path under the entity, '/' → '~').
+ */
+export const entityRevPath = (kind: string, id: string, key: string) =>
+  `${kind}/${id}/${REV_COLLECTION}/${key}`;
+
 export interface Rev {
   v: number;
   at: number;
@@ -47,25 +54,27 @@ export function pointersOf(r: Rev | undefined): TicketPointers | undefined {
     : undefined;
 }
 
-export async function readRev(
-  base: Db,
-  boardId: string,
-  ticketId: string,
-): Promise<Rev | undefined> {
-  const s = await base.doc(revPath(boardId, ticketId)).get();
+export function readRev(base: Db, boardId: string, ticketId: string): Promise<Rev | undefined> {
+  return readRevAt(base, revPath(boardId, ticketId));
+}
+export async function readRevAt(base: Db, path: string): Promise<Rev | undefined> {
+  const s = await base.doc(path).get();
   return s.exists ? (s.data() as Rev) : undefined;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Take (or keep) the lease; answers the rev as it stands. Waits for another holder. */
-export async function acquire(
+export function acquire(
   base: Db,
   boardId: string,
   ticketId: string,
   holder: string,
 ): Promise<Rev | undefined> {
-  const ref = base.doc(revPath(boardId, ticketId));
+  return acquireAt(base, revPath(boardId, ticketId), holder);
+}
+export async function acquireAt(base: Db, path: string, holder: string): Promise<Rev | undefined> {
+  const ref = base.doc(path);
   const deadline = Date.now() + WAIT_MS;
   for (let delay = 100; ; delay = Math.min(delay * 1.5, 1_000)) {
     const got = await base.runTransaction(async (tx) => {
@@ -85,20 +94,28 @@ export async function acquire(
     });
     if (!got.busy) return got.rev;
     if (Date.now() > deadline)
-      throw errors.unavailable('Someone else is saving this ticket; try again in a moment');
+      throw errors.unavailable('Someone else is saving this; try again in a moment');
     await sleep(delay);
   }
 }
 
 /** Give the lease back; `bump` moves v (a committed write: the ping) and records where the files are. */
-export async function release(
+export function release(
   base: Db,
   boardId: string,
   ticketId: string,
   holder: string,
   bump: { ptr?: TicketPointers | null; deleted?: boolean } | null,
 ): Promise<void> {
-  const ref = base.doc(revPath(boardId, ticketId));
+  return releaseAt(base, revPath(boardId, ticketId), holder, bump);
+}
+export async function releaseAt(
+  base: Db,
+  path: string,
+  holder: string,
+  bump: { ptr?: TicketPointers | null; deleted?: boolean } | null,
+): Promise<void> {
+  const ref = base.doc(path);
   await base
     .runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -128,5 +145,5 @@ export async function release(
       }
       tx.set(ref, next);
     })
-    .catch((e) => console.error(`[drive] release ${boardId}/${ticketId} failed`, e));
+    .catch((e) => console.error(`[drive] release ${path} failed`, e));
 }

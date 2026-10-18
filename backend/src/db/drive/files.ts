@@ -83,6 +83,11 @@ export function clearDriveTicketCache(): void {
 }
 
 async function readJson(drive: DriveApi, f: DriveItem): Promise<Json> {
+  return readJsonFile(drive, f);
+}
+
+/** A JSON file's contents (cached by head revision). */
+export async function readJsonFile(drive: DriveApi, f: DriveItem): Promise<Json> {
   const hit = contents.get(f.id);
   if (hit && f.headRevisionId && hit.rev === f.headRevisionId) return hit.json;
   const stream = await drive.download(f.id);
@@ -104,6 +109,8 @@ async function readJson(drive: DriveApi, f: DriveItem): Promise<Json> {
   }
   return json;
 }
+
+export const rememberJson = (f: DriveItem, json: Json): void => remember(f, json);
 
 function remember(f: DriveItem, json: Json): void {
   if (f.headRevisionId) contents.set(f.id, { rev: f.headRevisionId, json });

@@ -204,7 +204,7 @@ async function indexTarget(d: DriveBucketHandle): Promise<{
     const pathOf = new Map(level.map((l) => [l.id, l.path]));
     const next: { id: string; path: string }[] = [];
     for (const k of kids) {
-      if (k.name === INCOMING && isFolder(k)) continue;
+      if (k.name.startsWith('.tm-')) continue;
       const old = k.appProperties[NODE_ID];
       if (old) moved.add(old);
       if (!isFolder(k)) continue;
