@@ -51,12 +51,13 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
   const own = await ownerForCreate(ownerUid, input.owner);
   const slug = await freeSlug('artifact', own.fields.owner, input.name);
   const artifactId = ctx.ids.id();
-  // §L5: Google Drive — the artifact's folder (settings, data) and files/ for its bucket.
+  // §L5: Google Drive — the artifact's folder (its settings and data). Its
+  // buckets are entities of their own, each with its own storage.
   if (input.storage?.kind === 'drive' && agentId)
     throw errors.forbidden('An agent cannot make an artifact in a Google Drive — its person can');
   const drive =
     input.storage?.kind === 'drive'
-      ? await newDriveFolder(ctx.actor, input.storage, input.name, ['files'])
+      ? await newDriveFolder(ctx.actor, input.storage, input.name, [])
       : null;
   const artifact: Artifact = {
     name: input.name,
@@ -92,5 +93,5 @@ export default defineCommand('artifactCreate', async (ctx, input) => {
       )
       .catch((e) => console.warn('[artifactCreate] inbox row failed', e));
   }
-  return { artifactId, ...(drive ? { filesFolderId: drive.sub.files! } : {}) };
+  return { artifactId };
 });

@@ -650,11 +650,10 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
       <h3 id="k6">K6 · Moving between storages</h3>
         <p>
           A bucket's storage is chosen at create and can be <b>moved</b> later, both ways:
-          managed → a folder in the mover's Google Drive, or Drive → managed. Every entity that
-          keeps files has a <b>Storage</b> tab in its settings: a bucket's (its own storage and the
-          move), a board's (its buckets — the ticket-file one first — each with the move for its
-          owner, or "make one" when it has none) and an artifact's (the buckets granted to it).
-          Dictionaries hold no files and stay where they are.
+          managed → a folder in the mover's Google Drive, or Drive → managed — from the bucket's
+          own Settings › <b>Storage</b> tab, and only there. A board's or an artifact's Storage tab
+          is about that board or artifact alone (§L4); which bucket a board attaches ticket files
+          to is set in Settings › Subscriptions (§J).
         </p>
         <ul>
           <li>
@@ -697,8 +696,13 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
         <h3 id="l1">L1 · The files</h3>
         <pre><code>&lt;board folder&gt;/tickets/&lt;ticketId&gt;/meta.json          the ticket document, minus its messages
 &lt;board folder&gt;/tickets/&lt;ticketId&gt;/messages/&lt;ISO time&gt;_&lt;messageId&gt;.json   one file per inline message
-&lt;board folder&gt;/tickets/&lt;ticketId&gt;/pages/&lt;NNN&gt;.json    older messages and activity, packed (agents.html §W)
-&lt;board folder&gt;/files/                               the board's attachment bucket (§J, §K)</code></pre>
+&lt;board folder&gt;/tickets/&lt;ticketId&gt;/pages/&lt;NNN&gt;.json    older messages and activity, packed (agents.html §W)</code></pre>
+        <p>
+          <b>One entity, one storage.</b> A board, a bucket, an artifact and a dictionary each
+          choose their own: managed or a folder of Google Drive, picked on create and moved only
+          from that entity's own Settings › Storage. A board's attachment bucket (§J) is a bucket
+          like any other — it is never inside the board's folder and never moves with the board.
+        </p>
         <p>
           A Drive ticket keeps at most 40 messages inline (20 after a spill) — a cold read downloads
           each file, so its thread packs into pages sooner than a database ticket's (200/100). Every
@@ -738,20 +742,23 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
         <h3 id="l4">L4 · Choosing and moving</h3>
         <ul>
           <li>
-            <b>Create pages › Google Drive</b> — a board (<code>boardCreate { storage }</code>:
-            <code>&lt;folder&gt;/tickets</code> + <code>&lt;folder&gt;/files</code> for its bucket),
-            a dictionary (<code>dictionaryCreate { storage }</code>) or an artifact
-            (<code>artifactCreate { storage }</code>, files bucket in <code>&lt;folder&gt;/files</code>).
-            The folder is picked, or <code>TaskManager/&lt;name&gt;</code> is made.
+            <b>Create pages › Google Drive</b> — a board (<code>boardCreate { storage }</code>,
+            tickets in <code>&lt;folder&gt;/tickets</code>), a dictionary
+            (<code>dictionaryCreate { storage }</code>) or an artifact
+            (<code>artifactCreate { storage }</code>). The folder is picked, or
+            <code>TaskManager/&lt;name&gt;</code> is made. The new-board and new-artifact pages ask a
+            second, separate question for the new file bucket they make (managed, Drive in its own
+            folder, or none) — §K5.
           </li>
           <li>
-            <b>Settings › Storage</b> on a board, dictionary and artifact:
+            <b>Settings › Storage</b> on a board, dictionary and artifact — that entity only, never
+            its buckets:
             <code>entityStorageMove { kind, id, to | resume }</code> — a board's admin, a
             dictionary's / artifact's owner, in the app. A queued job (<code>entityStorageMove</code>):
             settings and subtrees in one step, then tickets one by one; <code>&lt;kind&gt;.move</code>
             shows progress; everything it keeps is read-only meanwhile (<code>409</code>); resumable.
             To Drive: the database's copy is deleted after the switch. Back: nothing in Drive is
-            deleted. A board's file bucket moves on its own (§K6).
+            deleted. Buckets move from their own Storage tab (§K6).
           </li>
           <li>
             <b>Archived tickets</b> live in <code>&lt;board folder&gt;/archive/&lt;id&gt;/</code>, the
@@ -802,7 +809,7 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           <b>Import</b> (<code>driveImport { folderId, recoveryCode? }</code>) makes the folder an
           entity again with its original id; the importer owns it (a board: admin), the manifest's
           other people come back as a list to invite. A board's key must be free; its ticket keys
-          and numbering are rebuilt from the files; its <code>files/</code> bucket comes along.
+          and numbering are rebuilt from the files; a <code>files/</code> folder written by an older version comes along as a bucket.
           Sealed by another instance → the recovery code re-seals the data key here.
         </p>
         <p>

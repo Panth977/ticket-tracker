@@ -21,7 +21,7 @@ import { defineCommand, OkResSchema, req } from './define.js';
 import { AGG_FIELDS_MAX, AggFieldDefSchema } from '../schema/aggregates.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
-import { BucketStorageInputSchema, DriveIdSchema } from '../bucket/drive.js';
+import { BucketStorageInputSchema } from '../bucket/drive.js';
 
 export const MAX_INVITES_PER_CALL = 50;
 
@@ -128,11 +128,7 @@ export const boardCreate = defineCommand({
      */
     storage: BucketStorageInputSchema.optional(),
   }),
-  res: z.object({
-    boardId: BoardIdSchema,
-    /** A Drive board: <folder>/files, for its attachment bucket. */
-    filesFolderId: DriveIdSchema.optional(),
-  }),
+  res: z.object({ boardId: BoardIdSchema }),
 });
 
 /** Patches are PER SECTION — never a whole settings blob. */

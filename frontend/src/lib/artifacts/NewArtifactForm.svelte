@@ -39,9 +39,13 @@
   const indicator = $derived(picked ?? defaultIndicator(name.trim() || 'artifact'));
   let busy = $state(false);
   let owner = $state('');
-  /** bucket.html §K5: a bucket for its files, made with it — or none. */
-  let storage = $state<StorageChoice>({ kind: 'none' });
-  const storageOk = $derived(storage.kind !== 'drive' || !!driveState.status?.connected);
+  /** bucket.html §L5: where the artifact itself (its data) lives. */
+  let storage = $state<StorageChoice>({ kind: 'managed' });
+  /** §K5: a bucket for its files — an entity of its own, made with it, or none. */
+  let files = $state<StorageChoice>({ kind: 'none' });
+  const storageOk = $derived(
+    (storage.kind !== 'drive' && files.kind !== 'drive') || !!driveState.status?.connected,
+  );
 
   // A fresh form each time it opens.
   $effect(() => {
@@ -50,7 +54,8 @@
       name = '';
       description = '';
       picked = null;
-      storage = { kind: 'none' };
+      storage = { kind: 'managed' };
+      files = { kind: 'none' };
     }
   });
 
@@ -59,10 +64,10 @@
     if (!n || busy || !storageOk) return;
     busy = true;
     try {
-      // bucket.html §L5: Google Drive = the artifact (its data) in that folder,
-      // and its file bucket in <folder>/files.
+      // bucket.html §L5: the artifact and its file bucket are two entities,
+      // each with its own storage.
       const drive = storage.kind === 'drive' ? storageInput(storage) : null;
-      const { artifactId, filesFolderId } = await command(
+      const { artifactId } = await command(
         'artifactCreate',
         {
           name: n,
@@ -73,9 +78,9 @@
         },
         { toast: 'Could not create the artifact' },
       );
-      if (storage.kind !== 'none')
+      if (files.kind !== 'none')
         await storageFor(
-          filesFolderId ? { kind: 'drive', folderId: filesFolderId } : storage,
+          files,
           { artifactId },
           { name: `${n} files`, owner: ownerOf(owner) },
         ).catch((e: Error) => toast.error('Artifact created, but its bucket was not', e.message));
@@ -114,15 +119,26 @@
       placeholder="What it is for (optional)"
     />
     <OwnerSelect bind:value={owner} />
-    <StorageField
-      bind:value={storage}
-      allowNone
-      name={name.trim() || 'Artifact'}
-      label="Where it lives"
-      managedHint="Data in the app, files in a new bucket"
-      noneHint="Data in the app; grant a bucket later"
-      driveHint="Its data and files: a folder in your Drive"
-    />
+    <div data-testid="artifact-storage">
+      <StorageField
+        bind:value={storage}
+        name={name.trim() || 'Artifact'}
+        label="Where it lives"
+        managedHint="Its settings and data in this app"
+        driveHint="Its settings and data: a folder in your Drive"
+      />
+    </div>
+    <div data-testid="files-storage">
+      <StorageField
+        bind:value={files}
+        allowNone
+        name={`${name.trim() || 'Artifact'} files`}
+        label="Its files: a new bucket"
+        managedHint="A new bucket kept by this app"
+        noneHint="Grant a bucket later"
+        driveHint="A new bucket in a folder of your Drive"
+      />
+    </div>
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium">Indicator</span>
       <IndicatorField

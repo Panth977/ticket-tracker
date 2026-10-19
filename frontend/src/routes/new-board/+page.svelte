@@ -70,9 +70,13 @@
   let inviteError = $state<string | null>(null);
 
   let creating = $state(false);
-  /** bucket.html §K5: where its ticket files live — a new bucket made with it, or none yet. */
+  /** bucket.html §L: where the board itself lives (its settings, tickets, messages). */
   let storage = $state<StorageChoice>({ kind: 'managed' });
-  const storageOk = $derived(storage.kind !== 'drive' || !!driveState.status?.connected);
+  /** §K5: its ticket-file bucket — an entity of its own, made with it, or none yet. */
+  let files = $state<StorageChoice>({ kind: 'managed' });
+  const storageOk = $derived(
+    (storage.kind !== 'drive' && files.kind !== 'drive') || !!driveState.status?.connected,
+  );
   // Back from Google's consent page (Connect Google Drive, below): pick Drive
   // again (the root layout's DriveReturn says how it went).
   if (
@@ -140,11 +144,10 @@
     creating = true;
     const template: BoardTemplate = chip === 'copy' ? { fromBoardId: copyFrom! } : chip;
     try {
-      // bucket.html §L: Google Drive = the board's tickets AND its files live
-      // in that folder (<folder>/tickets, <folder>/files); the board is made
-      // there first, then its file bucket in <folder>/files.
+      // bucket.html §L: the board and its file bucket are two entities, each
+      // with its own storage: the board first, then the bucket.
       const tickets = storage.kind === 'drive' ? storageInput(storage) : null;
-      const { boardId, filesFolderId } = await command(
+      const { boardId } = await command(
         'boardCreate',
         {
           name: name.trim(),
@@ -157,10 +160,10 @@
         },
         { toast: false },
       );
-      if (storage.kind !== 'none') {
+      if (files.kind !== 'none') {
         try {
           await storageFor(
-            filesFolderId ? { kind: 'drive', folderId: filesFolderId } : storage,
+            files,
             { boardId },
             { name: `${key} ticket files`, owner: ownerOf(owner) },
           );
@@ -295,15 +298,26 @@
           </p>
         </div>
         <OwnerSelect bind:value={owner} />
-        <StorageField
-          bind:value={storage}
-          allowNone
-          name={name.trim() || 'Board'}
-          label="Where this board lives"
-          managedHint="Tickets in the app, files in a new bucket"
-          noneHint="Tickets in the app; pick a file bucket later"
-          driveHint="Tickets, messages and files: a folder in your Drive"
-        />
+        <div data-testid="board-storage">
+          <StorageField
+            bind:value={storage}
+            name={name.trim() || 'Board'}
+            label="Where this board lives"
+            managedHint="Its settings, tickets and messages in this app"
+            driveHint="Its settings, tickets and messages: a folder in your Drive"
+          />
+        </div>
+        <div data-testid="files-storage">
+          <StorageField
+            bind:value={files}
+            allowNone
+            name={`${name.trim() || 'Board'} ticket files`}
+            label="Its ticket files: a new bucket"
+            managedHint="A new bucket kept by this app"
+            noneHint="Pick or make a bucket later"
+            driveHint="A new bucket in a folder of your Drive"
+          />
+        </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-sm font-medium">Indicator</span>
           <IndicatorField

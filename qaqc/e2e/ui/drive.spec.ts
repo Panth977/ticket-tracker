@@ -106,7 +106,14 @@ test('D3: a new board gets its ticket-file bucket (managed by default) as its at
   await signIn(page, bo.email, '/new-board');
   await page.getByLabel('Name').fill('Drive board');
   await page.getByLabel('Key').fill(`DB${Date.now().toString(36).slice(-3).toUpperCase()}`);
-  await expect(page.getByTestId('storage-managed')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('board-storage').getByTestId('storage-managed')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.getByTestId('files-storage').getByTestId('storage-managed')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   await page.getByRole('button', { name: 'Create board' }).click();
   await page.waitForURL(/\/b\//, { timeout: 20_000 });
 
@@ -171,7 +178,7 @@ test('D4: a ticket file goes into a Drive bucket from the composer, never throug
   expect(storage).toEqual([]);
 });
 
-test('D5: a managed bucket moves to Drive from its Storage tab; the board shows it too', async ({
+test('D5: a managed bucket moves to Drive from its own Storage tab, not from the board', async ({
   page,
 }) => {
   const di = await newPerson('Di');
@@ -203,9 +210,10 @@ test('D5: a managed bucket moves to Drive from its Storage tab; the board shows 
   const tree = await call(di, 'bucketTree', { bucketId });
   expect(tree.nodes.map((n) => n.path)).toEqual(['docs', 'docs/a.md']);
 
-  // The board's Storage tab lists the same bucket, now in Drive.
+  // The board's Storage tab is about the board alone: no bucket on it.
   await page.goto(`/b/${b.key}/settings/storage`);
-  await expect(page.getByTestId('storage-move')).toContainText('are in Google Drive');
+  await expect(page.getByTestId('entity-storage')).toContainText('This board is kept by this app');
+  await expect(page.getByTestId('storage-move')).toHaveCount(0);
 });
 
 test('D6: a board whose tickets live in Drive — create, open, reply, live (bucket.html §L)', async ({
@@ -217,12 +225,13 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
   await page.getByRole('button', { name: 'Connect Google Drive' }).click();
   await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
 
-  // The new-board page: Google Drive = tickets AND files in a Drive folder.
+  // The new-board page asks twice, one entity each: the board in Drive, its
+  // ticket-file bucket kept by the app (the default).
   await page.goto('/new-board');
   const key = `DV${Date.now().toString(36).slice(-3).toUpperCase()}`;
   await page.getByLabel('Name').fill('Drive tickets');
   await page.getByLabel('Key').fill(key);
-  await page.getByTestId('storage-drive').click();
+  await page.getByTestId('board-storage').getByTestId('storage-drive').click();
   await page.getByRole('button', { name: 'Create board' }).click();
   await page.waitForURL(/\/b\//, { timeout: 20_000 });
 
@@ -231,7 +240,7 @@ test('D6: a board whose tickets live in Drive — create, open, reply, live (buc
   expect(board.get('storage')).toMatchObject({ kind: 'drive', folderName: 'Drive tickets' });
   const attach = board.get('attachBucket') as { bucketId: string } | null;
   const bucket = (await admin().db.doc(`buckets/${attach!.bucketId}`).get()).data()!;
-  expect(bucket.storage).toMatchObject({ kind: 'drive', folderName: 'files' });
+  expect(bucket.storage).toBeUndefined();
 
   // A ticket made through the API shows on the board (read from Drive via the api).
   const { ticketId, key: tkey } = await call(ed, 'ticketCreate', {

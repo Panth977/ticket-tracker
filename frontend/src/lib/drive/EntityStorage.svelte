@@ -188,7 +188,9 @@
   <p class="mt-2 text-sm text-muted">
     {choice.kind === 'drive'
       ? 'Afterwards the copy in this app is deleted.' +
-        (kind === 'boards' ? ' Its file bucket moves separately, below.' : '')
+        (kind === 'dictionaries'
+          ? ''
+          : ' Buckets it uses stay where they are; each moves from its own Storage tab.')
       : 'Afterwards the Drive folder is left as it is — nothing in your Drive is deleted.'}
   </p>
   {#snippet footer()}

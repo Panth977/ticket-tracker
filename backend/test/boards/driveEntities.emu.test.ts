@@ -198,11 +198,13 @@ describe('a Drive artifact keeps its data as files (§L5)', () => {
     async () => {
       const { owner, stranger } = await people('owner', 'stranger');
       await connectFakeDrive(owner);
-      const { artifactId, filesFolderId } = await call(owner, 'artifactCreate', {
+      const made = await call(owner, 'artifactCreate', {
         name: `Dash ${uniq('a')}`,
         storage: { kind: 'drive' },
       });
-      expect(filesFolderId).toBeTruthy();
+      const { artifactId } = made;
+      // Its buckets are entities of their own: no files/ folder made for one.
+      expect(made).not.toHaveProperty('filesFolderId');
       const path = `artifacts/${artifactId}/db/data/orders/o1`;
       await call(owner, 'driveDocWrite', {
         path,

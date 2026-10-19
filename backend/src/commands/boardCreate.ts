@@ -123,13 +123,12 @@ export default defineCommand('boardCreate', async (ctx, input) => {
 
   const own = await ownerForCreate(ctx.actor, input.owner);
 
-  // bucket.html §L: "Google Drive" — the board's tickets live in a folder of
-  // the creator's Drive: <folder>/tickets (the tickets) and <folder>/files
-  // (for the attachment bucket the app makes next). Made BEFORE the board, so
-  // a Drive that refuses leaves nothing behind; the key is checked first so a
-  // taken one leaves no folders.
+  // bucket.html §L: "Google Drive" — the board lives in a folder of the
+  // creator's Drive (<folder>/tickets holds the tickets). Its buckets are
+  // entities of their own, each with its own storage. Made BEFORE the board,
+  // so a Drive that refuses leaves nothing behind; the key is checked first
+  // so a taken one leaves no folders.
   let storage: Board['storage'];
-  let filesFolderId: string | null = null;
   if (input.storage?.kind === 'drive') {
     if (
       await typedDoc('boardKeys', paths.boardKey(input.key))
@@ -137,9 +136,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
         .then((s) => s.exists)
     )
       throw errors.conflict(`The key ${input.key} is taken`, { key: input.key });
-    const made = await newDriveFolder(ctx.actor, input.storage, input.name, ['tickets', 'files']);
-    storage = made.storage;
-    filesFolderId = made.sub.files!;
+    storage = (await newDriveFolder(ctx.actor, input.storage, input.name, ['tickets'])).storage;
   }
   const access = { [ctx.actor]: 'admin' as const };
   // indicators.html: every new board (and each of its stages) gets an indicator.
@@ -200,5 +197,5 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   await syncReaders(boardId, board.readerUids);
   if (own.org) await syncThing('board', boardId, own.org);
   if (storage) forgetDriveBoardIds();
-  return { boardId, ...(filesFolderId ? { filesFolderId } : {}) };
+  return { boardId };
 });
