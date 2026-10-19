@@ -29,8 +29,8 @@ test('D1–D4: a dictionary — text and JSON entries, save, reload, conflict, g
   await signIn(page, ada.email, '/dictionary');
 
   // ── D1: create it ──────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'New dictionary' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New dictionary' });
+  await page.getByRole('link', { name: 'New dictionary' }).first().click();
+  const dialog = page.getByRole('main');
   await dialog.getByLabel('Name').fill('Deploy settings');
   await dialog.getByRole('button', { name: 'Create' }).click();
   const dictionaryId = await thingIdAt(page, ada, 'dictionary');

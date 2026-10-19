@@ -114,7 +114,10 @@ test('an agent uploads four kinds of file; the app previews, opens, and download
 
   await msg.getByRole('button', { name: 'Open summary.pdf' }).click();
   const pdfViewer = page.getByRole('dialog', { name: 'Viewing summary.pdf' });
-  await expect(pdfViewer.locator('iframe')).toHaveAttribute('src', /\/api\/files\/blob|storage|\/blob\/read\//);
+  await expect(pdfViewer.locator('iframe')).toHaveAttribute(
+    'src',
+    /\/api\/files\/blob|storage|\/blob\/read\//,
+  );
   await page.keyboard.press('Escape');
 
   // ── /f/{board}/{ticket}/{file}: a whole window for the Markdown plan ──

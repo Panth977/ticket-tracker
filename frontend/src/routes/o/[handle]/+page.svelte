@@ -18,11 +18,8 @@
   import BoardTile from '$lib/account/BoardTile.svelte';
   import InviteCard from '$lib/account/InviteCard.svelte';
   import { relativeTime } from '$lib/account/format';
-  import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
   import { myArtifacts, roleIn, splitArtifacts } from '$lib/artifacts/store';
-  import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
   import { bucketRoleIn, myBuckets, splitBuckets } from '$lib/bucket/store';
-  import NewDictionaryDialog from '$lib/dictionary/NewDictionaryDialog.svelte';
   import { dictionaryRoleIn, myDictionaries, splitDictionaries } from '$lib/dictionary/store';
   import { auth } from '$lib/firebase/auth.svelte';
   import ItemTile from '$lib/layout/ItemTile.svelte';
@@ -81,10 +78,6 @@
   const invitesQ = $derived(myInvites(auth.user?.emailVerified ? auth.user.email : null));
   const invites = $derived(mine ? $invitesQ.data.filter((i) => i.expiresAt > Date.now()) : []);
 
-  let newArtifact = $state(false);
-  let newBucket = $state(false);
-  let newDictionary = $state(false);
-
   let restoring = $state<string | null>(null);
   async function restore(boardId: string, name: string) {
     restoring = boardId;
@@ -139,9 +132,9 @@
             icon={Plus}
             href={`${routes.newBoard()}?owner=${who.owner.kind}:${who.owner.id}`}>New board</Button
           >
-          <Button icon={AppWindow} onclick={() => (newArtifact = true)}>New artifact</Button>
-          <Button icon={Brain} onclick={() => (newBucket = true)}>New bucket</Button>
-          <Button icon={BookA} onclick={() => (newDictionary = true)}>New dictionary</Button>
+          <Button icon={AppWindow} href={routes.newArtifact(key)}>New artifact</Button>
+          <Button icon={Brain} href={routes.newBucket(key)}>New bucket</Button>
+          <Button icon={BookA} href={routes.newDictionary(key)}>New dictionary</Button>
         {/if}
         {#if myRole === 'owner' || myRole === 'admin'}
           <Button icon={Settings} href={routes.orgSettings(who.handle)}>Settings</Button>
@@ -328,8 +321,3 @@
   {/if}
 </div>
 
-{#if who}
-  <NewArtifactDialog bind:open={newArtifact} owner={key} />
-  <NewBucketDialog bind:open={newBucket} owner={key} />
-  <NewDictionaryDialog bind:open={newDictionary} owner={key} />
-{/if}

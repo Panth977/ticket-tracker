@@ -40,6 +40,7 @@ import {
   FILE_BYTES_ROUTE,
   parseAgentAvatarPath,
   parseBucketRefPath,
+  parseDriveStoragePath,
   parseMemoryStoragePath,
   SIGNED_URL_TTL_MS,
   type FileAccessRes,
@@ -52,8 +53,10 @@ import { door, MOUNTS } from '../http/mounts.js';
 import { userAuth } from '../middleware/user.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { loadBoard } from '../tickets/access.js';
-import { bucketRef, nodeRef, reachFor } from '../bucket/shared.js';
-import { safeEqual, serverMac } from './crypto.js';
+import { bucketRef, reachFor } from '../bucket/shared.js';
+import { nodeById } from '../bucket/lookup.js';
+import { safeEqual } from './crypto.js';
+import { blobSig, fileDoorPath } from './blobUrl.js';
 
 /** boards/{boardId}/tickets/{ticketId}/{fileId}/{fileName} — the thumbnail too. */
 const ATTACHMENT = /^boards\/([^/]+)\/tickets\/([^/]+)\/([^/]+)\/([^/]+)$/;
@@ -64,7 +67,6 @@ const AVATAR = /^users\/([^/]+)\/avatar\/[^/]+$/;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 
 /** The capability in `bytesUrl`: we minted it after checking, exactly like a signed URL. */
-const blobSig = (path: string, exp: number): string => serverMac('file-blob', `${path}\n${exp}`);
 
 /**
  * May `ctx.actor` read this object — and WHICH object is it? Answers the
@@ -94,11 +96,11 @@ export async function requireFileRead(ctx: ServerCtx, path: string): Promise<str
   if (ref) {
     const bucket = (await bucketRef(ref.bucketId).get()).data();
     if (!(await reachFor(ctx, bucket))) throw errors.not_found('No longer in memory');
-    const node = (await nodeRef(ref.bucketId, ref.nodeId).get()).data();
+    const node = await nodeById(ref.bucketId, ref.nodeId, bucket);
     if (!node?.file) throw errors.not_found('No longer in memory');
     return node.file.storagePath;
   }
-  const obj = parseMemoryStoragePath(path);
+  const obj = parseMemoryStoragePath(path) ?? parseDriveStoragePath(path);
   if (obj) {
     const bucket = (await bucketRef(obj.bucketId).get()).data();
     if (!(await reachFor(ctx, bucket))) throw errors.not_found('File not found');
@@ -130,9 +132,10 @@ export async function signedAccess(
   if (!stored) throw errors.not_found('File not found');
 
   const expiresAt = ctx.now + SIGNED_URL_TTL_MS;
-  const bytesUrl = `${FILE_BYTES_ROUTE}?path=${encodeURIComponent(path)}&exp=${expiresAt}&sig=${encodeURIComponent(blobSig(path, expiresAt))}`;
+  const bytesUrl = fileDoorPath(path, expiresAt);
   let url = bytesUrl;
-  if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+  // A Drive bucket's file (§K3) has no URL of ours to sign: always the file door.
+  if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST && !parseDriveStoragePath(path)) {
     try {
       url = await ports().files.signedDownloadUrl(path, expiresAt);
     } catch (e) {

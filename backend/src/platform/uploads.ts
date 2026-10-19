@@ -30,7 +30,7 @@ import {
   type TicketWithId,
 } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
-import { nodeRef } from '../bucket/shared.js';
+import { nodeById } from '../bucket/lookup.js';
 import { requireActive, requireCan } from '../tickets/access.js';
 import { storeUploadedFile } from '../tickets/files.js';
 import { getFile } from '../tickets/read.js';
@@ -128,6 +128,6 @@ export async function storeTicketUpload(
  */
 export async function fileObjectPath(f: TicketFile): Promise<string> {
   if (!f.bucket) return f.path;
-  const node = (await nodeRef(f.bucket.bucketId, f.bucket.nodeId).get()).data();
+  const node = await nodeById(f.bucket.bucketId, f.bucket.nodeId).catch(() => null);
   return node?.file?.storagePath ?? '';
 }

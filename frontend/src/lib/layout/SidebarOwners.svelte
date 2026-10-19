@@ -21,9 +21,6 @@
   import type { WithId } from '$lib/stores';
   import PersonAvatar from '$lib/orgs/PersonAvatar.svelte';
   import PersonName from '$lib/orgs/PersonName.svelte';
-  import NewArtifactDialog from '$lib/artifacts/NewArtifactDialog.svelte';
-  import NewBucketDialog from '$lib/bucket/NewBucketDialog.svelte';
-  import NewDictionaryDialog from '$lib/dictionary/NewDictionaryDialog.svelte';
   import type { OwnerGroup } from '$lib/orgs/owners';
   import SidebarBoard from './SidebarBoard.svelte';
   import { routes } from './routes';
@@ -93,38 +90,11 @@
     (g.me ? !unfolded.includes(`-${g.key}`) : unfolded.includes(g.key)) || holdsCurrent(g);
   const toggle = (g: Group) => fold(g.me ? `-${g.key}` : g.key);
 
-  let newArtifactFor = $state('');
-  let newArtifact = $state(false);
-  let newBucketFor = $state('');
-  let newBucket = $state(false);
-  let newDictionaryFor = $state('');
-  let newDictionary = $state(false);
   const createItems = (g: Group): MenuItem[] => [
     { label: 'New board', icon: LayoutGrid, href: `${routes.newBoard()}?owner=${g.key}` },
-    {
-      label: 'New artifact',
-      icon: AppWindow,
-      onSelect: () => {
-        newArtifactFor = g.key;
-        newArtifact = true;
-      },
-    },
-    {
-      label: 'New bucket',
-      icon: Brain,
-      onSelect: () => {
-        newBucketFor = g.key;
-        newBucket = true;
-      },
-    },
-    {
-      label: 'New dictionary',
-      icon: BookA,
-      onSelect: () => {
-        newDictionaryFor = g.key;
-        newDictionary = true;
-      },
-    },
+    { label: 'New artifact', icon: AppWindow, href: routes.newArtifact(g.key) },
+    { label: 'New bucket', icon: Brain, href: routes.newBucket(g.key) },
+    { label: 'New dictionary', icon: BookA, href: routes.newDictionary(g.key) },
   ];
 </script>
 
@@ -268,7 +238,3 @@
     {/if}
   {/each}
 </div>
-
-<NewArtifactDialog bind:open={newArtifact} owner={newArtifactFor} />
-<NewBucketDialog bind:open={newBucket} owner={newBucketFor} />
-<NewDictionaryDialog bind:open={newDictionary} owner={newDictionaryFor} />

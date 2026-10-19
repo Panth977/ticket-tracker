@@ -48,6 +48,7 @@
     type UploadItem,
   } from '$lib/editor';
   import { getTicketCtx, updateTicket } from './context';
+  import { startDriveAttach } from '$lib/drive/upload';
   import { ticketPickers } from './pickers';
   import { relayUpload, sendMessage } from './pending.svelte';
   import { typingSignal } from './presence';
@@ -205,10 +206,29 @@
   }
 
   /** The dialog's answer: upload each file into the bucket, headed for its path. */
-  function uploadInto(bucketId: string, list: { file: File; path: string; label: string }[]) {
+  function uploadInto(
+    bucketId: string,
+    list: { file: File; path: string; label: string }[],
+    drive = false,
+  ) {
     // The chip and the ticket show `label` (the file's name as the person left
     // it); the bucket node gets the full path's own name.
     for (const { file: f, path, label: name } of list) {
+      if (drive) {
+        // bucket.html §K4: straight into Google Drive, never our Storage.
+        const { item, cancel } = startDriveAttach(
+          f,
+          { bucketId, boardId, name, bucketPath: path },
+          (next) => {
+            if (relayUpload(next)) return;
+            uploads = uploads.map((u) => (u.id === next.id ? { ...next, preview: u.preview } : u));
+            if (next.status === 'error') toast.error(`Could not upload ${next.name}`, next.error);
+          },
+        );
+        cancels.set(item.id, cancel);
+        uploads = [...uploads, item];
+        continue;
+      }
       const target = {
         path: objectPathFor(bucketId, newFileId(), name),
         metadata: { boardId, originalName: name },
@@ -603,7 +623,7 @@
       attachBucket={t.board.attachBucket}
       isAdmin={t.perms.role === 'admin'}
       files={attachFiles}
-      onattach={(a) => uploadInto(a.bucketId, a.list)}
+      onattach={(a) => uploadInto(a.bucketId, a.list, a.drive)}
     />
     <BucketPicker
       bind:open={bucketOpen}

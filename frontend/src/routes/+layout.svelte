@@ -28,6 +28,7 @@
   import CanonicalUrl from '$lib/orgs/CanonicalUrl.svelte';
   import { hasShell } from '$lib/layout/routes';
   import Toaster from '$lib/ui/Toaster.svelte';
+  import DriveReturn from '$lib/drive/DriveReturn.svelte';
   import TopProgress from '$lib/ui/TopProgress.svelte';
   import { applyTheme } from '$lib/ui/theme';
   import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -94,3 +95,4 @@
 {/if}
 
 <Toaster />
+<DriveReturn />

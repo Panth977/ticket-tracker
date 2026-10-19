@@ -8,6 +8,19 @@ import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { StorageFiles, StoredObject } from '@tm/shared';
 import { blobKind, storageBucket } from '../blob/index.js';
+import { fileDoorUrl } from '../platform/blobUrl.js';
+import {
+  driveObjectDelete,
+  driveObjectRead,
+  driveObjectStat,
+  driveObjectStream,
+} from '../bucket/drive/objects.js';
+
+/**
+ * bucket.html §K3: drive/{bucketId}/{driveId}/{name} is a Drive bucket's file,
+ * read from Google Drive — never an object in our store.
+ */
+const isDrivePath = (path: string): boolean => path.startsWith('drive/');
 
 /**
  * A read stream over a stored object, optionally one byte range (`end` is
@@ -19,6 +32,7 @@ import { blobKind, storageBucket } from '../blob/index.js';
  * objects through `read`.
  */
 export function readStream(path: string, range?: { start: number; end: number }): Readable {
+  if (isDrivePath(path)) return driveObjectStream(path, range);
   return storageBucket()
     .file(path)
     .createReadStream(range ? { start: range.start, end: range.end } : {});
@@ -48,6 +62,7 @@ export function adminFiles(): StorageFiles {
 
   return {
     async stat(path) {
+      if (isDrivePath(path)) return driveObjectStat(path);
       const f = bucket().file(path);
       const [exists] = await f.exists();
       if (!exists) return null;
@@ -55,6 +70,7 @@ export function adminFiles(): StorageFiles {
       return meta(path, m);
     },
     async read(path) {
+      if (isDrivePath(path)) return driveObjectRead(path);
       const [buf] = await bucket().file(path).download();
       return new Uint8Array(buf);
     },
@@ -80,6 +96,7 @@ export function adminFiles(): StorageFiles {
       await bucket().file(from).copy(bucket().file(to));
     },
     async delete(path) {
+      if (isDrivePath(path)) return driveObjectDelete(path);
       await bucket().file(path).delete({ ignoreNotFound: true });
     },
     async deletePrefix(prefix) {
@@ -100,6 +117,9 @@ export function adminFiles(): StorageFiles {
       return url;
     },
     async signedDownloadUrl(path, expiresAt) {
+      // A Drive file has no object of ours to sign: the file door's own signed
+      // link serves it (it streams from Drive). Agents, REST and MCP get this.
+      if (isDrivePath(path)) return fileDoorUrl(path, expiresAt);
       const host = emu();
       if (host)
         return `http://${host}/v0/b/${bucket().name}/o/${encodeURIComponent(path)}?alt=media`;

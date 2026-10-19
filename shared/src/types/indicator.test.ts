@@ -103,19 +103,19 @@ describe('indicatorOf — legacy fields', () => {
 describe('schemas carrying indicators', () => {
   it('a stage takes an indicator and a description', () => {
     const base = { id: 'abc1234', name: 'Todo', color: 'blue', category: 'todo', position: 1 };
-    expect(StageSchema.safeParse({ ...base, indicator: { kind: 'emoji', emoji: '📝' } }).success).toBe(
-      true,
-    );
+    expect(
+      StageSchema.safeParse({ ...base, indicator: { kind: 'emoji', emoji: '📝' } }).success,
+    ).toBe(true);
     expect(StageSchema.safeParse({ ...base, description: 'x'.repeat(2001) }).success).toBe(false);
-    expect(StageSchema.safeParse({ ...base, indicator: { kind: 'emoji', emoji: 'T' } }).success).toBe(
-      false,
-    );
+    expect(
+      StageSchema.safeParse({ ...base, indicator: { kind: 'emoji', emoji: 'T' } }).success,
+    ).toBe(false);
   });
   it('BoardPatch: plain or legacy rich-text description, and an indicator', () => {
     expect(BoardPatchSchema.safeParse({ description: 'Plain' }).success).toBe(true);
-    expect(
-      BoardPatchSchema.safeParse({ description: { type: 'doc', content: [] } }).success,
-    ).toBe(true);
+    expect(BoardPatchSchema.safeParse({ description: { type: 'doc', content: [] } }).success).toBe(
+      true,
+    );
     expect(
       BoardPatchSchema.safeParse({ indicator: { kind: 'color', color: '#22c55e' } }).success,
     ).toBe(true);

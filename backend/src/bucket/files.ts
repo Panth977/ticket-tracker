@@ -29,6 +29,8 @@ import {
   type Found,
 } from './nodes.js';
 import { loadBucket, nodeRef, nodesCol } from './shared.js';
+import { bytesSource } from './drive/api.js';
+import { drivePut, isDriveBucket, openDrive } from './drive/store.js';
 
 export interface FileTarget {
   path?: string | undefined;
@@ -186,9 +188,23 @@ export async function bucketRawPut(
   mime: string | undefined,
   limit: number,
 ): Promise<PutResult> {
-  await loadBucket(null, bucketId, ctx, 'write');
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'write');
   const clean = cleanPath(path);
   const type = mime && !/^application\/octet-stream/.test(mime) ? mime.split(';')[0]!.trim() : null;
+  if (isDriveBucket(bucket)) {
+    if (bytes.byteLength > limit)
+      throw errors.too_large('This file is over the limit for this door', {
+        size: bytes.byteLength,
+        limit,
+      });
+    return drivePut(
+      await openDrive(bucketId, bucket),
+      { path: clean },
+      bytesSource(bytes),
+      type,
+      ctx.actor,
+    );
+  }
   const file = await writeBytes(ctx, bucketId, bucketBaseName(clean), bytes, type, limit);
   return putVersion(ctx, bucketId, { path: clean }, file);
 }

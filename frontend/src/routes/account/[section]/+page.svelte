@@ -9,6 +9,7 @@
   import ChannelsSection from '$lib/account/sections/ChannelsSection.svelte';
   import ConnectedAppsSection from '$lib/account/sections/ConnectedAppsSection.svelte';
   import DataSection from '$lib/account/sections/DataSection.svelte';
+  import DriveSection from '$lib/account/sections/DriveSection.svelte';
   import ProfileSection from '$lib/account/sections/ProfileSection.svelte';
   import SecuritySection from '$lib/account/sections/SecuritySection.svelte';
   import TokensSection from '$lib/account/sections/TokensSection.svelte';
@@ -31,6 +32,8 @@
   <SecuritySection />
 {:else if section === 'connected-apps'}
   <ConnectedAppsSection />
+{:else if section === 'drive'}
+  <DriveSection />
 {:else if section === 'tokens'}
   <TokensSection />
 {:else if section === 'data'}

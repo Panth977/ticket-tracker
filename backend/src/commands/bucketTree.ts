@@ -6,12 +6,22 @@
 import { errors, BUCKET_NODES_MAX } from '@tm/shared';
 import { cleanPath, nodeAt, readSubtree } from '../bucket/nodes.js';
 import { loadBucket, nodesCol, toNodeOut } from '../bucket/shared.js';
+import { driveTree, isDriveBucket, openDrive } from '../bucket/drive/store.js';
 import { defineCommand } from './_registry.js';
 
 export default defineCommand('bucketTree', async (ctx, input) => {
   const { bucketId } = input;
-  await loadBucket(null, bucketId, ctx, 'read');
+  const { bucket } = await loadBucket(null, bucketId, ctx, 'read');
   const folder = cleanPath(input.path ?? '', 'path', true);
+  if (isDriveBucket(bucket)) {
+    // §K2: the tree IS Drive's, read now — nothing about it is written here.
+    const d = await openDrive(bucketId, bucket);
+    const { rows } = await driveTree(d, folder, { shallow: !!input.shallow });
+    return {
+      nodes: rows.slice(0, BUCKET_NODES_MAX).map((r) => toNodeOut(r.id, r.node)),
+      truncated: rows.length > BUCKET_NODES_MAX,
+    };
+  }
   let folderId: string | null = null;
   if (folder !== '') {
     const f = await nodeAt(bucketId, folder);

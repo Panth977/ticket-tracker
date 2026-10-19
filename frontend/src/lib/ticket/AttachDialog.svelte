@@ -55,6 +55,8 @@
     onattach: (a: {
       bucketId: string;
       bucketName: string;
+      /** §K4: the bucket lives in Google Drive — upload there, not to Storage. */
+      drive: boolean;
       list: { file: File; path: string; label: string }[];
     }) => void;
   }
@@ -134,7 +136,12 @@
       label: attachLabel(r.pre, r.value),
     }));
     open = false;
-    onattach({ bucketId: current.id, bucketName: current.name, list });
+    onattach({
+      bucketId: current.id,
+      bucketName: current.name,
+      drive: current.storage?.kind === 'drive',
+      list,
+    });
   }
 </script>
 

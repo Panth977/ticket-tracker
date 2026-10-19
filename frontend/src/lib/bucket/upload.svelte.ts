@@ -4,12 +4,18 @@
  * progress, up to BUCKET_UPLOAD_MAX_BYTES — and then bucketFilePut registers
  * the node at its path (creating its parent folders, replacing a file that is
  * already there). One queue for the page, at most three files in flight.
+ *
+ * §K4: a DRIVE bucket's files go straight to Google Drive instead (a session
+ * from bucketDriveUpload) — nothing is written to our Storage — and
+ * bucketFilePut only confirms. The page says which buckets are in Drive
+ * (inDrive), so every caller of add() keeps working unchanged.
  */
 import { ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
 import { BUCKET_UPLOAD_MAX_BYTES, formatBytes, bucketStoragePath } from '@tm/shared';
 import { command } from '$lib/api';
 import { safeFileName } from '$lib/editor/upload';
 import { getStorageClient } from '$lib/firebase/client';
+import { uploadToDrive } from '$lib/drive/upload';
 
 export type BucketUploadStatus = 'queued' | 'uploading' | 'saving' | 'done' | 'error';
 
@@ -51,6 +57,7 @@ interface Job {
   mime: string;
   expectedFileId: string | null | undefined;
   task?: UploadTask;
+  abort?: AbortController;
   resolve: (ok: boolean) => void;
 }
 
@@ -58,6 +65,13 @@ class BucketUploads {
   items = $state<BucketUpload[]>([]);
   private jobs: Job[] = [];
   private running = 0;
+  /** §K4: buckets whose files live in Google Drive (the bucket page says so). */
+  private drive = new Set<string>();
+
+  inDrive(bucketId: string, yes: boolean) {
+    if (yes) this.drive.add(bucketId);
+    else this.drive.delete(bucketId);
+  }
 
   /** Files still moving (the tray shows while this is > 0 or anything failed). */
   get active(): number {
@@ -119,6 +133,7 @@ class BucketUploads {
   }
 
   private async run(job: Job): Promise<void> {
+    if (this.drive.has(job.item.bucketId)) return this.runDrive(job);
     const { item } = job;
     const fileId = newFileId();
     const storagePath = objectPathFor(item.bucketId, fileId, item.name);
@@ -164,6 +179,53 @@ class BucketUploads {
           code === 'conflict'
             ? 'Changed by someone else meanwhile'
             : code === 'storage/unauthorized' || code === 'forbidden'
+              ? 'Not allowed'
+              : ((e as { message?: string }).message ?? 'Upload failed'),
+      });
+      job.resolve(false);
+    }
+  }
+
+  /** §K4: into Google Drive directly; bucketFilePut confirms. */
+  private async runDrive(job: Job): Promise<void> {
+    const { item } = job;
+    this.set(item.key, { status: 'uploading' });
+    job.abort = new AbortController();
+    try {
+      const blob = job.file.type ? job.file : new Blob([job.file], { type: job.mime });
+      const s = await uploadToDrive(
+        {
+          bucketId: item.bucketId,
+          purpose: 'put',
+          path: item.path,
+          name: item.name,
+          ...(job.expectedFileId !== undefined ? { expectedFileId: job.expectedFileId } : {}),
+        },
+        blob,
+        (progress) => this.set(item.key, { progress }),
+        job.abort.signal,
+      );
+      this.set(item.key, { status: 'saving', progress: 1 });
+      await command(
+        'bucketFilePut',
+        { bucketId: item.bucketId, path: s.path, storagePath: s.storagePath },
+        { toast: false },
+      );
+      this.set(item.key, { status: 'done' });
+      job.resolve(true);
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if (code === 'storage/canceled') {
+        this.items = this.items.filter((i) => i.key !== item.key);
+        job.resolve(false);
+        return;
+      }
+      this.set(item.key, {
+        status: 'error',
+        error:
+          code === 'conflict'
+            ? 'Changed by someone else meanwhile'
+            : code === 'forbidden'
               ? 'Not allowed'
               : ((e as { message?: string }).message ?? 'Upload failed'),
       });

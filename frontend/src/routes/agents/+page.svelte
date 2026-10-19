@@ -11,7 +11,6 @@
   import { auth } from '$lib/firebase/auth.svelte';
   import { boardsOfAgent, myAgents, sortAgents } from '$lib/agents/agents';
   import AgentActivity from '$lib/agents/AgentActivity.svelte';
-  import NewAgentDialog from '$lib/agents/NewAgentDialog.svelte';
   import { agentRoutes } from '$lib/agents/routes';
   import { AgentBadge, PrincipalAvatar } from '$lib/people';
   import { myBoards } from '$lib/stores';
@@ -23,7 +22,6 @@
   const all = $derived(sortAgents($agentsQ.data));
   const active = $derived(all.filter((a) => a.archivedAt == null));
   const archived = $derived(all.filter((a) => a.archivedAt != null));
-  let creating = $state(false);
 </script>
 
 <svelte:head><title>Agents · {APP_NAME}</title></svelte:head>
@@ -37,7 +35,7 @@
         tickets, @-mention it, and give your orchestrator a token that acts as it.
       </p>
     </div>
-    <Button variant="primary" icon={Plus} onclick={() => (creating = true)}>New agent</Button>
+    <Button variant="primary" icon={Plus} href={agentRoutes.newAgent()}>New agent</Button>
   </header>
 
   {#if $agentsQ.loading}
@@ -50,7 +48,7 @@
       title="No agents yet"
       description="Create one — e.g. “Builder”, with a system prompt your orchestrator loads from its token."
     >
-      {#snippet action()}<Button icon={Plus} onclick={() => (creating = true)}>New agent</Button
+      {#snippet action()}<Button icon={Plus} href={agentRoutes.newAgent()}>New agent</Button
         >{/snippet}
     </EmptyState>
   {:else}
@@ -119,5 +117,3 @@
     {/if}
   {/if}
 </div>
-
-<NewAgentDialog bind:open={creating} />

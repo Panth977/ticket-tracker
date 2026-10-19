@@ -142,6 +142,13 @@ export const COMMANDS = {
   bucketFolderCreate: bucket.bucketFolderCreate,
   bucketMove: bucket.bucketMove,
   bucketNodeDelete: bucket.bucketNodeDelete,
+  // Google Drive as a bucket's storage (bucket.html §K)
+  bucketDriveUpload: bucket.bucketDriveUpload,
+  bucketStorageMove: bucket.bucketStorageMove,
+  driveStatus: bucket.driveStatus,
+  driveConnect: bucket.driveConnect,
+  driveDisconnect: bucket.driveDisconnect,
+  drivePickerToken: bucket.drivePickerToken,
 } as const satisfies { [K in string]: CommandSpec<K> };
 
 export type Commands = typeof COMMANDS;

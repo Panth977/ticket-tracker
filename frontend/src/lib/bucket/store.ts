@@ -6,10 +6,11 @@
  * Reads are direct for the bucket's own people (the rules let anyone in
  * `access` read the document and its nodes); every WRITE is a command.
  */
-import type { Readable } from 'svelte/store';
+import { readable, type Readable } from 'svelte/store';
 import {
   bucketCan,
   bucketReach,
+  bucketRefPath,
   paths,
   type Bucket,
   type BucketReach,
@@ -17,6 +18,8 @@ import {
   type BucketNode,
 } from '@tm/shared';
 import { docStore, queryStore, type DocState, type QueryState, type WithId } from '$lib/stores';
+import { command } from '$lib/api';
+import { onBucketChanged } from './changes';
 
 /** Every bucket I have a role on (archived included — see splitBuckets). */
 export function myBuckets(uid: string | null | undefined): Readable<QueryState<Bucket>> {
@@ -30,9 +33,87 @@ export function bucketDoc(id: string | null | undefined): Readable<DocState<Buck
   return docStore<Bucket>(id ? paths.bucket(id) : null);
 }
 
-/** Every node of one bucket — the tree is built client-side (D-M1: ≤ 10,000, small rows). */
-export function bucketNodes(id: string | null | undefined): Readable<QueryState<BucketNode>> {
+/**
+ * Every node of one bucket — the tree is built client-side (D-M1: ≤ 10,000,
+ * small rows). A managed bucket is a live Firestore query; a DRIVE bucket
+ * (§K2) has no nodes in Firestore — Drive is the truth — so its tree is read
+ * with bucketTree: on open, after each of my writes, when the tab comes back,
+ * and every DRIVE_POLL_MS while it is in front (changes made in Drive itself,
+ * or by someone else).
+ */
+export function bucketNodes(
+  id: string | null | undefined,
+  storage: 'managed' | 'drive' = 'managed',
+): Readable<QueryState<BucketNode>> {
+  if (storage === 'drive') return driveNodes(id);
   return queryStore<BucketNode>(id ? { path: paths.bucketNodes(id) } : null);
+}
+
+export const DRIVE_POLL_MS = 20_000;
+
+const driveStores = new Map<string, Readable<QueryState<BucketNode>>>();
+
+function driveNodes(id: string | null | undefined): Readable<QueryState<BucketNode>> {
+  const empty: QueryState<BucketNode> = { loading: false, error: null, data: [], fromCache: false };
+  if (!id) return readable(empty);
+  const hit = driveStores.get(id);
+  if (hit) return hit;
+  const store = readable<QueryState<BucketNode>>({ ...empty, loading: true }, (set) => {
+    let last: QueryState<BucketNode> = { ...empty, loading: true };
+    let inFlight = false;
+    let again = false;
+    async function load() {
+      if (inFlight) return void (again = true);
+      inFlight = true;
+      try {
+        const r = await command('bucketTree', { bucketId: id! }, { toast: false });
+        last = {
+          loading: false,
+          error: null,
+          fromCache: false,
+          data: r.nodes.map((n) => ({
+            id: n.id,
+            kind: n.kind,
+            parentId: n.parentId,
+            name: n.name,
+            path: n.path,
+            // The API never shows where the bytes are: the app reads a Drive file
+            // through its reference, which the file door resolves (§E, §K3).
+            file: n.file ? { ...n.file, storagePath: bucketRefPath(id!, n.id) } : null,
+            createdAt: n.updatedAt,
+            createdBy: '',
+            updatedAt: n.updatedAt,
+            updatedBy: '',
+          })),
+        };
+      } catch (e) {
+        last = { ...last, loading: false, error: e as Error };
+      } finally {
+        inFlight = false;
+      }
+      set(last);
+      if (again) {
+        again = false;
+        void load();
+      }
+    }
+    void load();
+    const off = onBucketChanged((b) => b === id && void load());
+    const tick = setInterval(
+      () => document.visibilityState === 'visible' && void load(),
+      DRIVE_POLL_MS,
+    );
+    const vis = () => document.visibilityState === 'visible' && void load();
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      off();
+      clearInterval(tick);
+      document.removeEventListener('visibilitychange', vis);
+      driveStores.delete(id);
+    };
+  });
+  driveStores.set(id, store);
+  return store;
 }
 
 // ── pure ─────────────────────────────────────────────────────────────────────
@@ -69,6 +150,8 @@ export function splitBuckets<T extends Pick<Bucket, 'name' | 'archivedAt'>>(
 export const BUCKET_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General', owner: true },
   { id: 'people', label: 'People', owner: true },
+  /** bucket.html §K6: where its files live, and moving them. */
+  { id: 'storage', label: 'Storage', owner: true },
   /** lib/access: the boards and artifacts that use it. */
   { id: 'subscribers', label: 'Subscribers', owner: false },
 ] as const;

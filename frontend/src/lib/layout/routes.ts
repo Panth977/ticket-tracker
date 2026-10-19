@@ -10,6 +10,8 @@ export const ACCOUNT_SECTIONS = [
   { id: 'channels', label: 'Channels' },
   { id: 'security', label: 'Security' },
   { id: 'connected-apps', label: 'Connected apps' },
+  // bucket.html §K1: buckets in your own Google Drive.
+  { id: 'drive', label: 'Google Drive' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'data', label: 'Data & deletion' },
   // §X — whose app this is. Only the admin sees it (the menus filter on
@@ -46,6 +48,8 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'subscriptions', label: 'Subscriptions' },
   /** lib/access: what uses this board (artifacts §K, agents §AA2). */
   { id: 'subscribers', label: 'Subscribers' },
+  /** bucket.html §K6: where its ticket files live (its buckets' storage), and moving them. */
+  { id: 'storage', label: 'Storage' },
   /** aggregates.html: the numbers the board adds up (Cost, Time…). */
   { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
@@ -72,6 +76,12 @@ export const routes = {
   invitations: () => '/inbox?tab=invitations',
   myWork: () => '/me',
   newBoard: () => '/new-board',
+  /** Every "New …" is a page of its own, like /new-board (lib/ui/CreatePage). */
+  newBucket: (owner?: string | null) => `/new-bucket${q({ owner })}`,
+  newArtifact: (owner?: string | null) => `/new-artifact${q({ owner })}`,
+  newDictionary: (owner?: string | null) => `/new-dictionary${q({ owner })}`,
+  newOrg: () => '/new-org',
+  newAgent: () => '/new-agent',
   /** A board, optionally a view, optionally with the ticket drawer open. */
   board: (boardKey: string, viewId?: string | null, ticketKey?: string | null) =>
     `/b/${boardKey}${viewId ? `/${viewId}` : ''}${q({ ticket: ticketKey })}`,
@@ -110,8 +120,10 @@ export const routes = {
   buckets: () => '/bucket',
   bucket: (bucketId: string, path?: string | null) =>
     `/bucket/${bucketId}${path ? `?path=${encodeURIComponent(path)}` : ''}`,
-  bucketSettings: (bucketId: string, section: 'general' | 'people' | 'subscribers' = 'general') =>
-    `/bucket/${bucketId}/settings/${section}`,
+  bucketSettings: (
+    bucketId: string,
+    section: 'general' | 'people' | 'storage' | 'subscribers' = 'general',
+  ) => `/bucket/${bucketId}/settings/${section}`,
   /** Dictionary (docs/plan/dictionary.html): the list (my own page), one dictionary, its settings. */
   dictionaries: () => '/dictionary',
   dictionary: (dictionaryId: string) => `/dictionary/${dictionaryId}`,
@@ -122,7 +134,14 @@ export const routes = {
   artifactSettings: (
     artifactId: string,
     section:
-      'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'dictionaries',
+      | 'general'
+      | 'people'
+      | 'subscriptions'
+      | 'subscribers'
+      | 'storage'
+      | 'builds'
+      | 'data'
+      | 'dictionaries',
   ) => `/x/${artifactId}/settings/${section}`,
   /** §AC: an owner's page — a person or an org (/{handle}). */
   owner: (handle: string) => `/${handle}`,
@@ -141,6 +160,11 @@ export const NO_SHELL_PREFIXES = [
   '/invite',
   '/oauth',
   '/new-board',
+  '/new-bucket',
+  '/new-artifact',
+  '/new-dictionary',
+  '/new-org',
+  '/new-agent',
   '/t',
   '/f',
 ];

@@ -13,6 +13,7 @@ import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
+import { BucketDriveStorageSchema, BucketMoveSchema } from './drive.js';
 import {
   BoardIdSchema,
   MillisSchema,
@@ -103,7 +104,14 @@ export const BucketSchema = z.object({
   artifacts: z.record(ArtifactIdSchema, BucketGrantSchema),
   /** The keys of `boards`, derived — where('boardIds', 'array-contains', b). */
   boardIds: z.array(BoardIdSchema),
-  /** Counters kept by the node commands. */
+  /**
+   * §K: where its files live. Absent = managed (Firestore nodes + our object
+   * store). Set once, at create; a Drive bucket keeps no nodes of its own.
+   */
+  storage: BucketDriveStorageSchema.optional(),
+  /** §K6: a move between managed and Drive, while it runs (or after it failed). */
+  move: BucketMoveSchema.optional(),
+  /** Counters kept by the node commands (§K: a Drive bucket's, as of its last listing). */
   stats: z.object({
     files: z.number().int().nonnegative(),
     folders: z.number().int().nonnegative(),

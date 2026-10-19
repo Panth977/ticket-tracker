@@ -139,6 +139,7 @@ describe('store helpers', () => {
     expect(bucketSettingsFor('owner').map((s) => s.id)).toEqual([
       'general',
       'people',
+      'storage',
       'subscribers',
     ]);
     expect(bucketSettingsFor('editor').map((s) => s.id)).toEqual(['subscribers']);

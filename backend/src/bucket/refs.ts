@@ -17,9 +17,10 @@ import {
   type BucketRef,
   type PublicBucketFileRef,
 } from '@tm/shared';
-import { cleanPath, nodeAt } from './nodes.js';
+import { cleanPath } from './nodes.js';
 import type { ServerCtx } from '../runtime/context.js';
-import { bucketRef, nodeRef } from './shared.js';
+import { nodeById, nodeByPath } from './lookup.js';
+import { bucketRef } from './shared.js';
 
 export async function resolveBucketRefs(
   ctx: Pick<ServerCtx, 'actor' | 'ids'>,
@@ -49,7 +50,7 @@ export async function resolveBucketRefs(
   const out: Attachment[] = [];
   for (const r of list) {
     if (!buckets.has(r.bucketId)) buckets.set(r.bucketId, await loadGranted(r.bucketId));
-    const node = (await nodeRef(r.bucketId, r.nodeId).get()).data();
+    const node = await nodeById(r.bucketId, r.nodeId, buckets.get(r.bucketId));
     if (!node || node.kind !== 'file' || !node.file)
       throw errors.invalid('That bucket file does not exist (any more)', {
         field: 'bucketRefs',
@@ -83,7 +84,7 @@ export async function bucketRefsIn(
   return Promise.all(
     list.map(async (r) => {
       if (r.node_id) return { bucketId: r.bucket_id, nodeId: r.node_id };
-      const found = await nodeAt(r.bucket_id, cleanPath(r.path ?? '', 'bucket_files'));
+      const found = await nodeByPath(r.bucket_id, cleanPath(r.path ?? '', 'bucket_files'));
       if (!found)
         throw errors.invalid(`Nothing at ${r.path} in that bucket`, { field: 'bucket_files' });
       return { bucketId: r.bucket_id, nodeId: found.id };

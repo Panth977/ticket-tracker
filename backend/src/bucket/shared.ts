@@ -153,6 +153,12 @@ export async function loadBucket(
       : need === 'write'
         ? bucketCan.write(reach)
         : bucketCan.manage(reach);
+  // §K6: a bucket moving between storages is read-only until the move ends.
+  if (ok && need === 'write' && bucket.move?.state === 'running')
+    throw errors.conflict(
+      'This bucket is moving to another storage — it is read-only until the move finishes',
+      { reason: 'bucket_moving' },
+    );
   // Archived is read-only for everyone, the owner included, until restored.
   if (ok && need === 'write' && bucket.archivedAt !== null)
     throw errors.conflict('This bucket is archived — restore it first');
@@ -186,6 +192,10 @@ export const toBucketOut = (
   archived: m.archivedAt !== null,
   stats: m.stats,
   updatedAt: m.updatedAt,
+  storage:
+    m.storage?.kind === 'drive'
+      ? { kind: 'drive', folderName: m.storage.folderName, email: m.storage.email }
+      : { kind: 'managed', folderName: null, email: null },
 });
 
 export function toNodeOut(id: string, n: BucketNode): BucketNodeOut {

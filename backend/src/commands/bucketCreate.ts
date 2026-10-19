@@ -11,6 +11,8 @@ import {
   type Bucket,
 } from '@tm/shared';
 import { isBoardTokenAsPerson, bucketsCol, bucketRef, withMembers } from '../bucket/shared.js';
+import { driveFor, driveEmail } from '../bucket/drive/link.js';
+import { driveBucketFolder } from '../bucket/drive/store.js';
 import { freeSlug, ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
 import { markOnCreate } from './indicatorShared.js';
@@ -29,6 +31,14 @@ export default defineCommand('bucketCreate', async (ctx, input) => {
     throw errors.conflict(`You can own at most ${BUCKETS_OWNED_MAX} buckets`);
 
   const own = await ownerForCreate(ctx.actor, input.owner);
+  // §K: a Drive bucket is a folder in the CREATOR's Drive — found or made now,
+  // before anything is written, so a refused folder leaves no bucket behind.
+  let storage: Bucket['storage'];
+  if (input.storage?.kind === 'drive') {
+    const api = await driveFor(ctx.actor);
+    const folder = await driveBucketFolder(api, input.storage, input.name, ctx.actor);
+    storage = { kind: 'drive', uid: ctx.actor, ...folder, email: await driveEmail(ctx.actor) };
+  }
   const slug = await freeSlug('bucket', own.fields.owner, input.name);
   const bucketId = ctx.ids.id();
   const bucket: Bucket = {
@@ -42,6 +52,7 @@ export default defineCommand('bucketCreate', async (ctx, input) => {
     boards: {},
     artifacts: {},
     boardIds: [],
+    ...(storage ? { storage } : {}),
     stats: { files: 0, folders: 0, bytes: 0 },
     archivedAt: null,
     createdAt: ctx.now,
