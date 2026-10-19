@@ -168,6 +168,8 @@ export class Plan {
   constructor(
     readonly q: QueryState,
     private readonly isRef: IsRef,
+    /** Rows are already in memory (src/db/drive): filter, sort and page in JS. */
+    inMemory = false,
   ) {
     this.group = q.parent === null;
     // Firestore: an inequality field orders first when no explicit order is given;
@@ -183,6 +185,7 @@ export class Plan {
     this.orders = orders;
     this.encodedFilters = q.filters.map((f) => ({ f, v: this.encodeFilterValue(f) }));
     this.pureSql =
+      !inMemory &&
       this.encodedFilters.every(({ f, v }) => this.sqlFilterable(f, v)) &&
       [q.start, q.end].every((c) => !c || this.sqlCursor(c)) &&
       q.limitToLast === undefined;

@@ -25,7 +25,7 @@
   import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
   import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
-  import StoragePanel from '$lib/drive/StoragePanel.svelte';
+  import EntityStorage from '$lib/drive/EntityStorage.svelte';
 
   const s = useSettings();
   const section = $derived(page.params.section ?? 'general');
@@ -73,15 +73,10 @@
     <SubscribersSection />
   {:else if section === 'storage'}
     <Section
-      title="Storage"
-      description="Where this board's ticket files live: its buckets, each managed by this app or a folder in Google Drive. The owner of a bucket can move its files between the two."
+      title="This board"
+      description="Where this board lives — its settings, views, templates, webhooks, tickets and messages: this app's database, or a folder in Google Drive. A board admin can move it between the two. Buckets are entities of their own: each moves from its own Storage tab."
     >
-      <StoragePanel
-        target={{ boardId: s.board.id }}
-        name={s.board.key}
-        attachBucketId={s.board.attachBucket?.bucketId ?? null}
-        manages={s.isAdmin}
-      />
+      <EntityStorage kind="boards" id={s.board.id} canMove={s.isAdmin} />
     </Section>
   {:else if section === 'aggregates'}
     <AggregatesSection />

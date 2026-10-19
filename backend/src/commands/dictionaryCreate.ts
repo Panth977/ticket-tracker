@@ -15,6 +15,7 @@ import { isBoardTokenAsPerson } from '../bucket/shared.js';
 import { contentRef, dictionariesCol, dictionaryRef, withMembers } from '../dictionary/shared.js';
 import { freeSlug, ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
+import { newDriveFolder } from '../db/drive/create.js';
 
 export default defineCommand('dictionaryCreate', async (ctx, input) => {
   if (isAgentId(ctx.actor))
@@ -38,6 +39,11 @@ export default defineCommand('dictionaryCreate', async (ctx, input) => {
   const own = await ownerForCreate(ctx.actor, input.owner);
   const slug = await freeSlug('dictionary', own.fields.owner, input.name);
   const dictionaryId = ctx.ids.id();
+  // §L5: Google Drive — its folder first, so a Drive that refuses leaves nothing behind.
+  const drive =
+    input.storage?.kind === 'drive'
+      ? await newDriveFolder(ctx.actor, input.storage, input.name, [])
+      : null;
   const d: Dictionary = {
     name: input.name,
     description: input.description || null,
@@ -56,6 +62,7 @@ export default defineCommand('dictionaryCreate', async (ctx, input) => {
     archivedAt: null,
     createdAt: ctx.now,
     updatedAt: ctx.now,
+    ...(drive ? { storage: drive.storage } : {}),
   };
   await dictionaryRef(dictionaryId).create(d);
   await contentRef(dictionaryId).set({

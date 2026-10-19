@@ -43,6 +43,8 @@
     /** What "managed" means here (a board: "a new bucket for its ticket files"). */
     managedHint = 'Kept by this app',
     noneHint = 'Add one later in settings',
+    /** What "Google Drive" means here (a board: its tickets too — bucket.html §L). */
+    driveHint = 'A folder in your Drive is the source of truth',
   }: {
     value?: StorageChoice;
     allowNone?: boolean;
@@ -50,6 +52,7 @@
     label?: string;
     managedHint?: string;
     noneHint?: string;
+    driveHint?: string;
   } = $props();
 
   onMount(() => void driveState.load());
@@ -64,9 +67,7 @@
     {
       id: 'drive' as const,
       label: 'Google Drive',
-      hint: available
-        ? 'A folder in your Drive is the source of truth'
-        : 'Not set up on this server',
+      hint: available ? driveHint : 'Not set up on this server',
       icon: FolderOpen,
     },
   ]);

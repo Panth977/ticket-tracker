@@ -5,6 +5,7 @@
 import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { CostCounterSchema } from './message.js';
+import { BoardDriveStorageSchema, BoardMoveSchema } from '../bucket/drive.js';
 import {
   AgentIconIdSchema,
   BoardIdSchema,
@@ -170,6 +171,10 @@ export const BoardSchema = z.object({
    * boardAttachBucketSet; cleared when that bucket's write grant goes.
    */
   attachBucket: BoardAttachBucketSchema.nullable().optional(),
+  /** bucket.html §L: the board's tickets live in this Drive folder. Absent = in the database. */
+  storage: BoardDriveStorageSchema.optional(),
+  /** bucket.html §L: a move of its tickets to the other storage, while it runs (or after it failed). */
+  move: BoardMoveSchema.nullable().optional(),
   /** boardArchive: read-only, hidden from the sidebar, restorable. */
   archivedAt: MillisSchema.nullable(),
   createdBy: UidSchema,

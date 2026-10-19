@@ -20,7 +20,17 @@
  * an in-memory fake Drive (api.ts) — the whole flow still runs.
  */
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { DRIVE_SCOPE, errors, type DriveStatus } from '@tm/shared';
+import { DRIVE_FULL_SCOPE, DRIVE_SCOPE, errors, type DriveStatus } from '@tm/shared';
+
+/**
+ * bucket.html §L7: the scope this instance asks for. `drive.file` (default)
+ * sees only what this app made or the person picked; TM_DRIVE_SCOPE=drive asks
+ * for the whole Drive, so a folder written by ANOTHER TaskManager can be
+ * imported (a restricted scope: fine for a self-hosted instance in Google's
+ * testing mode; a public app needs Google's verification).
+ */
+export const driveScope = (): string =>
+  process.env.TM_DRIVE_SCOPE === 'drive' ? DRIVE_FULL_SCOPE : DRIVE_SCOPE;
 import { db, isEmulated } from '../../runtime/firebase.js';
 import { base62, safeEqual, serverMac, signingKey } from '../../platform/crypto.js';
 import { DriveAuthError, fakeDrive, fetchRetrying, httpDrive, type DriveApi } from './api.js';
@@ -161,7 +171,7 @@ export function driveConsentUrl(
   u.searchParams.set('client_id', clientId());
   u.searchParams.set('redirect_uri', cb);
   u.searchParams.set('response_type', 'code');
-  u.searchParams.set('scope', `openid email ${DRIVE_SCOPE}`);
+  u.searchParams.set('scope', `openid email ${driveScope()}`);
   u.searchParams.set('access_type', 'offline');
   // Always ask: Google only returns a refresh token on a consent it showed.
   u.searchParams.set('prompt', 'consent');
@@ -217,7 +227,7 @@ export const drivePopupOrigin = (): string =>
 /** The public bits the popup page needs. */
 export const drivePopupConfig = () => ({
   clientId: clientId(),
-  scope: `openid email ${DRIVE_SCOPE}`,
+  scope: `openid email ${driveScope()}`,
 });
 
 /** No refresh token (the person had granted before): revoke so the next consent hands one over. */
@@ -236,7 +246,7 @@ export async function completeDriveConnect(
     link = {
       email: `${uid.slice(0, 8).toLowerCase()}@drive.test`,
       refresh: seal(`fake:${code}`),
-      scope: DRIVE_SCOPE,
+      scope: driveScope(),
       fake: true,
       connectedAt: now,
       updatedAt: now,
@@ -263,14 +273,16 @@ export async function completeDriveConnect(
       throw errors.forbidden(
         `Google did not hand over Drive access (${t.error_description ?? t.error ?? 'no refresh token'})`,
       );
-    if (!(t.scope ?? '').split(' ').includes(DRIVE_SCOPE))
+    if (!(t.scope ?? '').split(' ').includes(driveScope()))
       throw errors.forbidden(
-        'Tick “See, edit, create and delete only the specific Google Drive files you use with this app” to connect Drive',
+        driveScope() === DRIVE_SCOPE
+          ? 'Tick “See, edit, create and delete only the specific Google Drive files you use with this app” to connect Drive'
+          : 'Tick “See, edit, create and delete all of your Google Drive files” to connect Drive',
       );
     link = {
       email: emailOf(t.id_token),
       refresh: seal(t.refresh_token),
-      scope: t.scope ?? DRIVE_SCOPE,
+      scope: t.scope ?? driveScope(),
       fake: false,
       connectedAt: now,
       updatedAt: now,

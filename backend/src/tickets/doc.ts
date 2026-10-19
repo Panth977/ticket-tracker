@@ -26,6 +26,7 @@
 import { type Transaction, type WriteBatch } from '../db/index.js';
 import {
   byTime,
+  DRIVE_INLINE_MESSAGES,
   docBytes,
   errors,
   inlineActivity,
@@ -52,6 +53,8 @@ import {
   type WaitingOn,
 } from '@tm/shared';
 import { typedDoc } from '../runtime/converters.js';
+import { cachedDriveBoard, driveBoardOf } from '../db/drive/board.js';
+import { baseDb, db } from '../db/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { txGet, type Tx } from '../runtime/tx.js';
 import { ticketRef } from './access.js';
@@ -377,7 +380,15 @@ export class TicketWriter {
     // The budget is the WHOLE document's, so weigh everything but the two
     // arrays that can move out of it.
     const fixed = docBytes({ ...staged, recentMessages: [], recentActivity: [] });
-    const spill = planSpill(this.msgs, this.acts, fixed, this.before.pageCount ?? 0, this.ctx.now);
+    const spill = planSpill(
+      this.msgs,
+      this.acts,
+      fixed,
+      this.before.pageCount ?? 0,
+      this.ctx.now,
+      // §L: a Drive board's ticket keeps fewer messages inline (one file each).
+      cachedDriveBoard(this.boardId) ? DRIVE_INLINE_MESSAGES : undefined,
+    );
 
     const tasks = tasklistRollup(this.lists);
     const next: Ticket = {
@@ -468,4 +479,22 @@ export function batchWriter(
   ticket: Ticket,
 ): TicketWriter {
   return new TicketWriter(batch, null, ctx, boardId, ticketId, ticket);
+}
+
+/**
+ * bucket.html §L: a QUERY answer for a Drive board is each ticket's meta.json —
+ * no thread (reading every message file of every ticket would be slow). A
+ * TicketWriter rewrites the inline thread whole, so before one is built on a
+ * query answer, read those tickets whole (one getAll). A database board's
+ * answer is whole already and is returned as it is.
+ */
+export async function wholeTickets<R extends { ref: { path: string }; ticket: Ticket }>(
+  boardId: string,
+  rows: R[],
+): Promise<R[]> {
+  if (!rows.length || !(await driveBoardOf(baseDb(), boardId))) return rows;
+  const snaps = await db().getAll(...rows.map((r) => db().doc(r.ref.path)));
+  return rows
+    .map((r, i) => (snaps[i]!.exists ? { ...r, ticket: snaps[i]!.data() as Ticket } : null))
+    .filter((r): r is R => r !== null);
 }

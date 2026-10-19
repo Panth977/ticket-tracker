@@ -35,6 +35,9 @@ export const COMMANDS = {
   inviteAccept: boards.inviteAccept,
   inviteRevoke: boards.inviteRevoke,
   boardCreate: boards.boardCreate,
+  driveDocs: boards.driveDocs,
+  driveDocWrite: boards.driveDocWrite,
+  entityStorageMove: boards.entityStorageMove,
   boardUpdate: boards.boardUpdate,
   tagCreate: boards.tagCreate,
   boardAccessSet: boards.boardAccessSet,
@@ -145,6 +148,8 @@ export const COMMANDS = {
   // Google Drive as a bucket's storage (bucket.html §K)
   bucketDriveUpload: bucket.bucketDriveUpload,
   bucketStorageMove: bucket.bucketStorageMove,
+  driveImport: bucket.driveImport,
+  driveRecoveryCode: bucket.driveRecoveryCode,
   driveStatus: bucket.driveStatus,
   driveConnect: bucket.driveConnect,
   driveDisconnect: bucket.driveDisconnect,

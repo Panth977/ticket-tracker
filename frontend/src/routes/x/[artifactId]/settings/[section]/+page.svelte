@@ -14,7 +14,7 @@
   import { useArtifactSettings } from '$lib/artifacts/settings/context.svelte';
   import Section from '$lib/board/settings/Section.svelte';
   import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
-  import StoragePanel from '$lib/drive/StoragePanel.svelte';
+  import EntityStorage from '$lib/drive/EntityStorage.svelte';
   import { firstSettingsSection, settingsSectionsFor } from '$lib/artifacts/store';
   import { routes } from '$lib/layout/routes';
   import Button from '$lib/ui/Button.svelte';
@@ -63,14 +63,10 @@
     <SubscribersSection />
   {:else if section === 'storage'}
     <Section
-      title="Storage"
-      description="The buckets this artifact's page uses, where each lives — managed by this app or a folder in Google Drive — and moving them (by the bucket's owner)."
+      title="This artifact"
+      description="Where this artifact's data lives: this app's database, or a folder in Google Drive. Its owner can move it between the two."
     >
-      <StoragePanel
-        target={{ artifactId: s.artifact.id }}
-        name={s.artifact.name}
-        manages={s.isOwner}
-      />
+      <EntityStorage kind="artifacts" id={s.artifact.id} canMove={s.isOwner} />
     </Section>
   {:else if section === 'builds'}
     <BuildsSection />

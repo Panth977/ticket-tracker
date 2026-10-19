@@ -18,6 +18,7 @@
  * and the text round-trips exactly.
  */
 import { z } from 'zod';
+import { BoardDriveStorageSchema, BoardMoveSchema } from '../bucket/drive.js';
 import { OwnedFieldsShape } from '../org/owner.js';
 import { DESCRIPTION_MAX, IndicatorSchema, type Indicator } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
@@ -130,6 +131,10 @@ export const DictionarySchema = z.object({
     entries: z.number().int().nonnegative(),
     bytes: z.number().int().nonnegative(),
   }),
+  /** bucket.html §L5: kept in this Drive folder (its settings and its data). Absent = in the database. */
+  storage: BoardDriveStorageSchema.optional(),
+  /** bucket.html §L4: a move to the other storage, while it runs (or after it failed). */
+  move: BoardMoveSchema.nullable().optional(),
   archivedAt: MillisSchema.nullable(),
   createdAt: MillisSchema,
   updatedAt: MillisSchema,

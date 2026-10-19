@@ -7,6 +7,8 @@
  *
  * There is no API-only write path to drift.
  */
+import { baseDb } from '../db/index.js';
+import { driveBoardOf } from '../db/drive/board.js';
 import {
   errors,
   paths,
@@ -371,23 +373,28 @@ export async function searchTicketsIn(
 ): Promise<TicketWithId[]> {
   const readable = boards.filter((b) => can(ctx, b, 'read'));
   if (!readable.length) return [];
-  const { hits } = await ports().search.search({
-    q: text,
-    boardIds: readable.map((b) => b.id),
-    ...(opts.assignee ? { assigneeUids: [opts.assignee] } : {}),
-    state: [opts.state ?? 'active'],
-    limit: opts.limit,
-  });
-  if (hits.length) {
-    const snaps = await db().getAll(...hits.map((h) => db().doc(paths.ticket(h.boardId, h.id))));
-    return snaps
-      .filter((s) => s.exists)
-      .map((s, i) => withTicketId(hits[i]!.boardId, s.id, s.data() as Ticket));
+  // bucket.html §L: a Drive board is not in the search index — its tickets are matched in memory.
+  const isDrive = await Promise.all(readable.map((b) => driveBoardOf(baseDb(), b.id)));
+  const indexed = readable.filter((_, i) => !isDrive[i]);
+  const inMemory = readable.filter((_, i) => isDrive[i]);
+  const found: TicketWithId[] = [];
+  if (indexed.length) {
+    const { hits } = await ports().search.search({
+      q: text,
+      boardIds: indexed.map((b) => b.id),
+      ...(opts.assignee ? { assigneeUids: [opts.assignee] } : {}),
+      state: [opts.state ?? 'active'],
+      limit: opts.limit,
+    });
+    if (hits.length) {
+      const snaps = await db().getAll(...hits.map((h) => db().doc(paths.ticket(h.boardId, h.id))));
+      snaps.forEach((s, i) => {
+        if (s.exists) found.push(withTicketId(hits[i]!.boardId, s.id, s.data() as Ticket));
+      });
+    } else if (isEmulated()) inMemory.push(...indexed);
   }
-  if (!isEmulated()) return [];
   const needle = text.trim().toLowerCase();
-  const out: TicketWithId[] = [];
-  for (const b of readable) {
+  for (const b of inMemory) {
     let qy = db()
       .collection(paths.tickets(b.id))
       .where('state', '==', opts.state ?? 'active');
@@ -396,10 +403,10 @@ export async function searchTicketsIn(
     for (const d of snap.docs) {
       const t = d.data() as Ticket;
       const hay = `${t.key} ${t.title} ${t.description?.text ?? ''}`.toLowerCase();
-      if (hay.includes(needle)) out.push(withTicketId(b.id, d.id, t));
+      if (hay.includes(needle)) found.push(withTicketId(b.id, d.id, t));
     }
   }
-  return out.slice(0, opts.limit);
+  return found.slice(0, opts.limit);
 }
 
 /**

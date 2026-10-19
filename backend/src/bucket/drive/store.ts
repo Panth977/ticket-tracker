@@ -127,7 +127,8 @@ export function toFound(
 function named(items: DriveItem[]): { item: DriveItem; seg: string }[] {
   // The staging folder (§K4) is the app's own, never part of the bucket.
   const sorted = items
-    .filter((i) => !(i.name === INCOMING && isFolder(i)))
+    // The app's own files (staging, §L7's manifest and keys) are not the bucket's.
+    .filter((i) => !i.name.startsWith('.tm-'))
     .sort(
       (a, b) =>
         Number(isFolder(b)) - Number(isFolder(a)) ||

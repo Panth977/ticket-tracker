@@ -37,7 +37,7 @@ import type { ServerCtx } from '../runtime/context.js';
 import { typedDoc } from '../runtime/converters.js';
 import { db } from '../runtime/firebase.js';
 import { runTx, txGet } from '../runtime/tx.js';
-import { batchWriter } from '../tickets/doc.js';
+import { batchWriter, wholeTickets } from '../tickets/doc.js';
 import { defineCommand } from './_registry.js';
 import {
   allDocs,
@@ -315,7 +315,8 @@ async function rewriteTickets(board: BoardWithId, plan: Plan, ctx: ServerCtx): P
   }
 
   await inBatches(
-    [...writes.values()],
+    // §L: a Drive board's query answer has no thread — the writer needs the whole ticket.
+    await wholeTickets(board.id, [...writes.values()]),
     (batch, w) => {
       // §W: the ticket and its activity row are the same document — one write.
       const tw = batchWriter(batch, ctx, board.id, w.ref.id, w.ticket);

@@ -62,7 +62,7 @@
           them sees the current version. Since <a href="#j">§J</a> a board takes no files of its
           own: every file put on a ticket goes into one of the board's buckets. Since
           <a href="#k">§K</a> a bucket can also live in its creator's Google Drive, Drive being
-          the source of truth.
+          the source of truth; since <a href="#l">§L</a> a board's tickets can too.
         </p>
 
         <h2 id="a">A · What a bucket is</h2>
@@ -650,11 +650,10 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
       <h3 id="k6">K6 · Moving between storages</h3>
         <p>
           A bucket's storage is chosen at create and can be <b>moved</b> later, both ways:
-          managed → a folder in the mover's Google Drive, or Drive → managed. Every entity that
-          keeps files has a <b>Storage</b> tab in its settings: a bucket's (its own storage and the
-          move), a board's (its buckets — the ticket-file one first — each with the move for its
-          owner, or "make one" when it has none) and an artifact's (the buckets granted to it).
-          Dictionaries hold no files and stay where they are.
+          managed → a folder in the mover's Google Drive, or Drive → managed — from the bucket's
+          own Settings › <b>Storage</b> tab, and only there. A board's or an artifact's Storage tab
+          is about that board or artifact alone (§L4); which bucket a board attaches ticket files
+          to is set in Settings › Subscriptions (§J).
         </p>
         <ul>
           <li>
@@ -685,6 +684,140 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
             bucket still reads from where it was) and the owner starts the move again.
           </li>
         </ul>
+
+        <h2 id="l">L · Boards, dictionaries and artifacts in Google Drive</h2>
+        <p>
+          A board can keep its <b>tickets</b> — fields, task lists, messages, activity — in a
+          folder of its creator's Google Drive, not just its files. Drive is the single source of
+          truth; the database keeps only where they are. Notifications, unread marks, agent events,
+          aggregates and the board's own settings stay in the database (they belong to a person or
+          to the board, not to a ticket).
+        </p>
+        <h3 id="l1">L1 · The files</h3>
+        <pre><code>&lt;board folder&gt;/tickets/&lt;ticketId&gt;/meta.json          the ticket document, minus its messages
+&lt;board folder&gt;/tickets/&lt;ticketId&gt;/messages/&lt;ISO time&gt;_&lt;messageId&gt;.json   one file per inline message
+&lt;board folder&gt;/tickets/&lt;ticketId&gt;/pages/&lt;NNN&gt;.json    older messages and activity, packed (agents.html §W)</code></pre>
+        <p>
+          <b>One entity, one storage.</b> A board, a bucket, an artifact and a dictionary each
+          choose their own: managed or a folder of Google Drive, picked on create and moved only
+          from that entity's own Settings › Storage. A board's attachment bucket (§J) is a bucket
+          like any other — it is never inside the board's folder and never moves with the board.
+        </p>
+        <p>
+          A Drive ticket keeps at most 40 messages inline (20 after a spill) — a cold read downloads
+          each file, so its thread packs into pages sooner than a database ticket's (200/100). Every
+          meta.json carries the private appProperties <code>tmBoard</code>, <code>tmTicket</code>:
+          one Drive search lists a board's tickets. A file edited by hand in Drive is what the next
+          read sees (a file that is not JSON reads as empty, never as an error).
+        </p>
+        <h3 id="l2">L2 · Behind the database port</h3>
+        <p>
+          Nothing above the database changes. <code>backend/src/db/drive/router.ts</code> wraps
+          the adapter: every path under <code>boards/{b}/tickets/</code> of a board whose
+          <code>storage.kind</code> is <code>'drive'</code> goes to Drive; every other call is
+          the adapter's own. Queries on a Drive board run in memory with the SQLite adapter's exact
+          Firestore semantics (a list carries meta.json — no thread);
+          <code>collectionGroup('tickets')</code> merges the database's answer with every Drive
+          board's and orders and limits them as one. A Drive board is not in the search index: its
+          tickets are matched in memory. <code>onTicketWritten</code> runs after each Drive write
+          (board counts), as Firestore would have run it.
+        </p>
+        <h3 id="l3">L3 · Writes take turns</h3>
+        <p>
+          Drive cannot refuse a stale write, so the database keeps one small document per ticket,
+          <code>boards/{b}/driveRev/{t} { v, at, lease, folderId, messagesId, pagesId, metaId }</code>.
+          A transaction reads Drive freely; before the database commits, it takes the lease of every
+          Drive ticket it changes (in path order) and checks <code>v</code> is still what it read —
+          changed, and the whole transaction runs again. Then the database commits, the files are
+          written, and the lease is given back with <code>v + 1</code>. A lease runs out after a
+          minute if its writer dies.
+        </p>
+        <p>
+          <b>Live.</b> The browser reads a Drive board's tickets through the <code>ticketDocs</code>
+          command (<code>frontend/src/lib/firebase/routedFirestore.ts</code> answers the app's
+          Firestore reads with it). It listens to the board's <code>driveRev</code> documents: when
+          one moves — the ping after every write — it reads again; and it reads again once a minute
+          regardless, for edits made in Drive by hand.
+        </p>
+        <h3 id="l4">L4 · Choosing and moving</h3>
+        <ul>
+          <li>
+            <b>Create pages › Google Drive</b> — a board (<code>boardCreate { storage }</code>,
+            tickets in <code>&lt;folder&gt;/tickets</code>), a dictionary
+            (<code>dictionaryCreate { storage }</code>) or an artifact
+            (<code>artifactCreate { storage }</code>). The folder is picked, or
+            <code>TaskManager/&lt;name&gt;</code> is made. The new-board and new-artifact pages ask a
+            second, separate question for the new file bucket they make (managed, Drive in its own
+            folder, or none) — §K5.
+          </li>
+          <li>
+            <b>Settings › Storage</b> on a board, dictionary and artifact — that entity only, never
+            its buckets:
+            <code>entityStorageMove { kind, id, to | resume }</code> — a board's admin, a
+            dictionary's / artifact's owner, in the app. A queued job (<code>entityStorageMove</code>):
+            settings and subtrees in one step, then tickets one by one; <code>&lt;kind&gt;.move</code>
+            shows progress; everything it keeps is read-only meanwhile (<code>409</code>); resumable.
+            To Drive: the database's copy is deleted after the switch. Back: nothing in Drive is
+            deleted. Buckets move from their own Storage tab (§K6).
+          </li>
+          <li>
+            <b>Archived tickets</b> live in <code>&lt;board folder&gt;/archive/&lt;id&gt;/</code>, the
+            same files; archiving or restoring moves the folder. Each meta.json carries
+            <code>tmState</code>, so a list of active tickets (the board, My work) never downloads an
+            archived one.
+          </li>
+        </ul>
+
+        <h3 id="l5">L5 · Every entity, not only tickets</h3>
+        <p>
+          The workspace — who owns what, who may see it, names, keys, counters — stays in the
+          database: it is the instance's index, and the security rules read it. What an entity
+          <i>is</i> lives in its Drive folder (<code>backend/src/db/drive/entities.ts</code>):
+        </p>
+        <table>
+          <tr><th>Entity</th><th>In Drive</th><th>Stays in the database</th></tr>
+          <tr><td>Board</td><td><code>settings.json</code> (stages, priorities, tags, fields, aggregate fields, default view, settings), <code>views/</code>, <code>templates/</code>, <code>webhooks/</code> and <code>integrations/</code> (sealed), <code>tickets/</code>, <code>archive/</code></td><td>name, key, people and roles, counters, attach bucket, a webhook's delivery log</td></tr>
+          <tr><td>Dictionary</td><td><code>content/entries.enc.json</code> (sealed)</td><td>name, people, grants</td></tr>
+          <tr><td>Artifact</td><td><code>db/data/…</code> — its data tabs, one file per document</td><td>name, people, read-only flag, builds (served from our CDN), viewers' kv, realtime data</td></tr>
+          <tr><td>Bucket</td><td>its files (§K)</td><td>name, people, grants</td></tr>
+        </table>
+        <p>
+          The router splits an entity document's write by field: settings go to the file, every
+          other field stays a database write in the same transaction (counters and access stay
+          atomic). A subtree document maps onto folders by its path
+          (<code>db/data/orders/o1</code> → <code>db/data/orders/o1.json</code>). Every write takes a
+          turn through <code>&lt;kind&gt;/{id}/driveRev/{key}</code> (§L3). The browser reads them
+          through <code>driveDocs</code>, and an artifact's broker writes its data through
+          <code>driveDocWrite</code> (same gates as the rules).
+        </p>
+
+        <h3 id="l6">L6 · Secrets</h3>
+        <p>
+          Each Drive entity has a random 256-bit data key; secret subtrees are AES-256-GCM sealed
+          with it (<code>{"$tm":"tm/sealed@1",…}</code>). The key is in
+          <code>.tm-keys.json</code>, wrapped twice: sealed for this instance, and wrapped
+          (X25519 + HKDF + AES-GCM) to the Drive owner's <b>recovery key</b>. The recovery code — its
+          private half — is shown once (Account › Google Drive, <code>driveRecoveryCode</code>); the
+          database keeps only the public half (<code>_driveVaults/{uid}</code>). Lose the code and
+          this instance together and the secrets are gone; everything else is plain JSON.
+        </p>
+
+        <h3 id="l7">L7 · Import, and the scope</h3>
+        <p>
+          Every entity folder has <code>.tm-entity.json</code> (kind, original id, name, a board's
+          key, people by e-mail), rewritten after its document changes. Account › Google Drive ›
+          <b>Import</b> (<code>driveImport { folderId, recoveryCode? }</code>) makes the folder an
+          entity again with its original id; the importer owns it (a board: admin), the manifest's
+          other people come back as a list to invite. A board's key must be free; its ticket keys
+          and numbering are rebuilt from the files; a <code>files/</code> folder written by an older version comes along as a bucket.
+          Sealed by another instance → the recovery code re-seals the data key here.
+        </p>
+        <p>
+          <code>drive.file</code> sees only what this Google app made or the person picked — another
+          TaskManager (another Google app) may not see a folder's children. An instance can ask for
+          the whole Drive instead: <code>TM_DRIVE_SCOPE=drive</code> (a restricted scope: fine for a
+          self-hosted instance in Google's testing mode; a public app needs Google's verification).
+        </p>
       </article>
     </div>
     <script type="module">

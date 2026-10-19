@@ -13,6 +13,7 @@
   import { dateOnly } from '../format';
   import { auth } from '$lib/firebase/auth.svelte';
   import SectionHeader from '../SectionHeader.svelte';
+  import DriveVaultAndImport from '$lib/drive/DriveVaultAndImport.svelte';
 
   onMount(() => void driveState.load(true));
   const st = $derived(driveState.status);
@@ -42,7 +43,7 @@
 
 <SectionHeader
   title="Google Drive"
-  description="Keep a bucket’s files in your own Google Drive. {APP_NAME} only sees the files it creates there or the folders you pick."
+  description="Keep boards, dictionaries, buckets and artifacts in your own Google Drive. {APP_NAME} only sees the files it creates there or the folders you pick."
 />
 
 {#if !st && driveState.loading}
@@ -80,6 +81,7 @@
       >Disconnect</Button
     >
   </div>
+  <DriveVaultAndImport />
 {/if}
 
 <Dialog bind:open={confirmOpen} title="Disconnect Google Drive?" size="sm">

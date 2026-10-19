@@ -28,6 +28,8 @@ import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
 import { ownerForCreate, syncThing } from '../org/shared.js';
 import { defineCommand } from './_registry.js';
+import { newDriveFolder } from '../db/drive/create.js';
+import { forgetDriveBoardIds } from '../db/drive/board.js';
 import {
   BOARD_CREATES_PER_DAY,
   boardRef,
@@ -120,6 +122,22 @@ export default defineCommand('boardCreate', async (ctx, input) => {
   );
 
   const own = await ownerForCreate(ctx.actor, input.owner);
+
+  // bucket.html §L: "Google Drive" — the board lives in a folder of the
+  // creator's Drive (<folder>/tickets holds the tickets). Its buckets are
+  // entities of their own, each with its own storage. Made BEFORE the board,
+  // so a Drive that refuses leaves nothing behind; the key is checked first
+  // so a taken one leaves no folders.
+  let storage: Board['storage'];
+  if (input.storage?.kind === 'drive') {
+    if (
+      await typedDoc('boardKeys', paths.boardKey(input.key))
+        .get()
+        .then((s) => s.exists)
+    )
+      throw errors.conflict(`The key ${input.key} is taken`, { key: input.key });
+    storage = (await newDriveFolder(ctx.actor, input.storage, input.name, ['tickets'])).storage;
+  }
   const access = { [ctx.actor]: 'admin' as const };
   // indicators.html: every new board (and each of its stages) gets an indicator.
   const indicator =
@@ -148,6 +166,7 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     archivedAt: null,
     createdBy: ctx.actor,
     createdAt: ctx.now,
+    ...(storage ? { storage } : {}),
     ...own.fields,
   };
   const pref: BoardPref = { mode: 'mine', watching: [], starred: false, lastViewId: defaultViewId };
@@ -177,5 +196,6 @@ export default defineCommand('boardCreate', async (ctx, input) => {
 
   await syncReaders(boardId, board.readerUids);
   if (own.org) await syncThing('board', boardId, own.org);
+  if (storage) forgetDriveBoardIds();
   return { boardId };
 });

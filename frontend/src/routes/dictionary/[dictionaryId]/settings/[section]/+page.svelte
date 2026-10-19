@@ -9,6 +9,8 @@
   import { dictionarySettingsFor } from '$lib/dictionary/store';
   import { routes } from '$lib/layout/routes';
   import { Button, EmptyState } from '$lib/ui';
+  import Section from '$lib/board/settings/Section.svelte';
+  import EntityStorage from '$lib/drive/EntityStorage.svelte';
 
   const s = useDictionarySettings();
   const section = $derived(page.params.section ?? '');
@@ -32,5 +34,12 @@
     <PeopleSection />
   {:else if section === 'subscribers'}
     <SubscribersSection />
+  {:else if section === 'storage'}
+    <Section
+      title="Storage"
+      description="Where this dictionary's entries live: this app's database, or a folder in Google Drive (sealed with your recovery key). Its owner can move it between the two."
+    >
+      <EntityStorage kind="dictionaries" id={s.dictionary.id} canMove={s.isOwner} />
+    </Section>
   {/if}
 {/key}

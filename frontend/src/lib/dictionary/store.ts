@@ -88,6 +88,8 @@ export const DICTIONARY_SETTINGS_SECTIONS = [
   { id: 'people', label: 'People', owner: true },
   /** lib/access: the boards, artifacts and agents that use it. */
   { id: 'subscribers', label: 'Subscribers', owner: false },
+  /** bucket.html §L4: this app ⇄ a folder of Google Drive (its owner moves it). */
+  { id: 'storage', label: 'Storage', owner: false },
 ] as const;
 export type DictionarySettingsSection = (typeof DICTIONARY_SETTINGS_SECTIONS)[number]['id'];
 

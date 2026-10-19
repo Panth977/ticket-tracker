@@ -67,6 +67,8 @@
       busy = false;
     }
   }
+  // "bucket “ticket”", never just "ticket": a bucket's name reads like the board's tickets.
+  const title = $derived(name || b?.name ? `bucket “${name || b?.name}”` : 'this bucket');
   const label = (k: 'managed' | 'drive' | 'none') =>
     k === 'drive' ? 'Google Drive' : 'managed storage';
 </script>
@@ -77,18 +79,19 @@
       <FolderOpen size={18} class="mt-0.5 text-muted" aria-hidden="true" />
       <div class="text-sm">
         <p class="font-medium">
-          {name || b?.name || 'This bucket'} lives in Google Drive
+          The files of {title} are in Google Drive
         </p>
         <p class="text-muted">
           Folder <span class="text-text">{b?.storage?.folderName}</span>{b?.storage?.email
             ? ` in ${b.storage.email}`
-            : ''}. Drive is the source of truth.
+            : ''}: only this bucket's files (ticket attachments and uploads). Drive is the source of
+          truth for them.
         </p>
       </div>
     {:else}
       <HardDrive size={18} class="mt-0.5 text-muted" aria-hidden="true" />
       <div class="text-sm">
-        <p class="font-medium">{name || b?.name || 'This bucket'} is managed</p>
+        <p class="font-medium">The files of {title} are kept by this app</p>
         <p class="text-muted">Its files are kept by this app.</p>
       </div>
     {/if}

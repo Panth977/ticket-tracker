@@ -78,6 +78,18 @@ export interface DriveApi {
     source: ByteSource,
     props?: Record<string, string>,
   ): Promise<DriveItem>;
+  /**
+   * A SMALL file (a JSON document, src/db/drive) in ONE request: a new file in
+   * `parentId` named `name` (id from generateIds when given), or a new version
+   * of `fileId`.
+   */
+  putSmall(opts: {
+    fileId?: string | undefined;
+    create?: { id?: string | undefined; parentId: string; name: string } | undefined;
+    mime: string;
+    bytes: Uint8Array;
+    props?: Record<string, string> | undefined;
+  }): Promise<DriveItem>;
   /** Rename and/or move (one parent in, one out). */
   update(
     id: string,
@@ -376,6 +388,36 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
         source,
       );
     },
+    async putSmall({ fileId, create, mime, bytes, props }) {
+      const boundary = `tm${Math.random().toString(36).slice(2)}`;
+      const meta = create
+        ? {
+            ...(create.id ? { id: create.id } : {}),
+            name: create.name,
+            mimeType: mime,
+            parents: [create.parentId],
+          }
+        : { mimeType: mime };
+      const head = Buffer.from(
+        `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n` +
+          JSON.stringify({ ...meta, ...(props ? { appProperties: props } : {}) }) +
+          `\r\n--${boundary}\r\ncontent-type: ${mime}\r\n\r\n`,
+      );
+      const body = Buffer.concat([head, Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`)]);
+      const url = create
+        ? `${UPLOAD}/files?uploadType=multipart&fields=${FIELDS}`
+        : `${UPLOAD}/files/${encodeURIComponent(fileId!)}?uploadType=multipart&fields=${FIELDS}`;
+      const f = await json<RawFile>(
+        url,
+        {
+          method: create ? 'POST' : 'PATCH',
+          headers: { 'content-type': `multipart/related; boundary=${boundary}` },
+          body,
+        },
+        'write',
+      );
+      return toItem(f);
+    },
     async update(id, patch) {
       const u = new URL(`${API}/files/${encodeURIComponent(id)}`);
       u.searchParams.set('fields', FIELDS);
@@ -447,9 +489,21 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
         `appProperties has { key=${lit(key)} and value=${lit(value)} } and trashed = false`,
       );
       u.searchParams.set('spaces', 'drive');
-      u.searchParams.set('fields', `files(${FIELDS})`);
-      const r = await json<{ files?: RawFile[] }>(u.toString(), {}, 'find');
-      return (r.files ?? []).map(toItem);
+      u.searchParams.set('pageSize', '1000');
+      u.searchParams.set('fields', `nextPageToken,files(${FIELDS})`);
+      const out: DriveItem[] = [];
+      let page: string | undefined;
+      do {
+        if (page) u.searchParams.set('pageToken', page);
+        const r = await json<{ files?: RawFile[]; nextPageToken?: string }>(
+          u.toString(),
+          {},
+          'find',
+        );
+        for (const f of r.files ?? []) out.push(toItem(f));
+        page = r.nextPageToken;
+      } while (page);
+      return out;
     },
     async generateIds(count) {
       const r = await json<{ ids: string[] }>(
@@ -509,6 +563,8 @@ export const resetFakeDrives = (): void => {
 let fakeSeq = 0;
 const fakeId = () => `fake${Date.now().toString(36)}${(fakeSeq++).toString(36).padStart(4, '0')}x`;
 
+const fakeQueues = new Map<string, Promise<unknown>>();
+
 export function fakeDrive(account: string): DriveApi {
   const api = fakeDriveIn(account);
   const files = fakes.get(account)!;
@@ -518,11 +574,21 @@ export function fakeDrive(account: string): DriveApi {
     keyof DriveApi,
     (...a: unknown[]) => Promise<unknown>,
   ][])
-    (synced as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
-      fakeLoad(account, files);
-      const out = await fn.apply(api, args);
-      fakeSave(account, files);
-      return out;
+    (synced as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      // One call at a time per account: a load between another call's change
+      // and its save would drop that change (callers run Drive calls in parallel).
+      const run = async () => {
+        fakeLoad(account, files);
+        const out = await fn.apply(api, args);
+        fakeSave(account, files);
+        return out;
+      };
+      const next = (fakeQueues.get(account) ?? Promise.resolve()).then(run, run);
+      fakeQueues.set(
+        account,
+        next.catch(() => undefined),
+      );
+      return next;
     };
   return synced;
 }
@@ -611,6 +677,11 @@ function fakeDriveIn(account: string): DriveApi {
       f.modifiedTime = now();
       if (props) f.appProperties = { ...f.appProperties, ...props };
       return pub(f);
+    },
+    async putSmall({ fileId, create, mime, bytes, props }) {
+      return create
+        ? this.create({ ...create, mime, source: bytesSource(bytes), props })
+        : this.replace(fileId!, mime, bytesSource(bytes), props);
     },
     async update(id, patch) {
       const f = must(id);
