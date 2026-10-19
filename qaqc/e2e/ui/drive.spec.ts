@@ -186,7 +186,7 @@ test('D5: a managed bucket moves to Drive from its Storage tab; the board shows 
 
   await page.goto(`/bucket/${bucketId}/settings/storage`);
   const tab = page.getByTestId('storage-move');
-  await expect(tab).toContainText('is managed');
+  await expect(tab).toContainText('are kept by this app');
   await tab.getByTestId('storage-drive').click();
   await tab.getByTestId('storage-move-start').click();
   await page.getByTestId('storage-move-confirm').click();
@@ -199,13 +199,13 @@ test('D5: a managed bucket moves to Drive from its Storage tab; the board shows 
     },
     60_000,
   );
-  await expect(tab).toContainText('lives in Google Drive', { timeout: 20_000 });
+  await expect(tab).toContainText('are in Google Drive', { timeout: 20_000 });
   const tree = await call(di, 'bucketTree', { bucketId });
   expect(tree.nodes.map((n) => n.path)).toEqual(['docs', 'docs/a.md']);
 
   // The board's Storage tab lists the same bucket, now in Drive.
   await page.goto(`/b/${b.key}/settings/storage`);
-  await expect(page.getByTestId('storage-move')).toContainText('lives in Google Drive');
+  await expect(page.getByTestId('storage-move')).toContainText('are in Google Drive');
 });
 
 test('D6: a board whose tickets live in Drive — create, open, reply, live (bucket.html §L)', async ({

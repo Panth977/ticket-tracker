@@ -80,8 +80,8 @@
       <EntityStorage kind="boards" id={s.board.id} canMove={s.isAdmin} />
     </Section>
     <Section
-      title="Files"
-      description="Where this board's ticket files live: its buckets, each managed by this app or a folder in Google Drive. The owner of a bucket can move its files between the two."
+      title="Ticket files"
+      description="Where the files attached to its tickets live: its buckets, each managed by this app or a folder in Google Drive. Only files — the tickets themselves go where “This board” says. The owner of a bucket can move its files between the two."
     >
       <StoragePanel
         target={{ boardId: s.board.id }}
