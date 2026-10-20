@@ -441,7 +441,8 @@ export async function listTickets(
   b: DriveBoard,
   opts: { activeOnly?: boolean } = {},
 ): Promise<{ id: string; doc: Json; file: DriveItem }[]> {
-  const metas = (await drive.findByProp(PROP_BOARD, b.boardId)).filter(
+  // Only meta.json files come back (not every message file of the board).
+  const metas = (await drive.findByProp(PROP_BOARD, b.boardId, META)).filter(
     (f) =>
       !isFolder(f) &&
       f.name === META &&

@@ -8,6 +8,7 @@
   Shared by the overlay and the /f/… page.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { Download, Loader2 } from 'lucide-svelte';
   import { formatBytes, parseBucketRefPath } from '@tm/shared';
   import { Button } from '$lib/ui';
@@ -43,15 +44,22 @@
       : 'Could not load this file.',
   );
 
+  // What the bytes are — not the object carrying them: a list that refreshes
+  // (a Drive bucket's poll, a Drive ticket's) hands a NEW file object with the
+  // same content, and must not reload the video / page / scroll position.
+  const same = $derived(`${file.path}|${file.size}|${file.mime}|${kind}`);
+
   $effect(() => {
-    const f = file;
-    const k = kind;
+    void same;
+    const f = untrack(() => file);
+    const k = untrack(() => kind);
+    const textual = untrack(() => info.textual);
     let alive = true;
     url = null;
     text = null;
     error = null;
     loading = true;
-    if (info.textual) {
+    if (textual) {
       fileText(f, VIEWER_TEXT_BYTES)
         .then((r) => alive && ((text = r), (loading = false)))
         .catch(() => alive && ((error = failMsg), (loading = false)));

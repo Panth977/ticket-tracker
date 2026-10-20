@@ -105,8 +105,11 @@ export interface DriveApi {
   download(id: string, range?: { start: number; end: number }): Promise<Readable>;
   /** File ids reserved for create(), so a reference can be written before the bytes. */
   generateIds(count: number): Promise<string[]>;
-  /** Untrashed items carrying this private appProperty (§K6: a node moved from managed). */
-  findByProp(key: string, value: string): Promise<DriveItem[]>;
+  /**
+   * Untrashed items carrying this private appProperty (§K6: a node moved from
+   * managed) — and, given, this exact name (§L: a board's meta.json files only).
+   */
+  findByProp(key: string, value: string, name?: string): Promise<DriveItem[]>;
   /**
    * Open a resumable upload the BROWSER finishes (§K4): a new file (`id`
    * reserved, in `parentId`, named `name`) or a new version of `replaceId`.
@@ -482,11 +485,12 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
       if (!session) throw errors.unavailable('Google Drive did not open an upload');
       return session;
     },
-    async findByProp(key, value) {
+    async findByProp(key, value, name) {
       const u = new URL(`${API}/files`);
       u.searchParams.set(
         'q',
-        `appProperties has { key=${lit(key)} and value=${lit(value)} } and trashed = false`,
+        `appProperties has { key=${lit(key)} and value=${lit(value)} } and trashed = false` +
+          (name ? ` and name = ${lit(name)}` : ''),
       );
       u.searchParams.set('spaces', 'drive');
       u.searchParams.set('pageSize', '1000');
@@ -705,9 +709,11 @@ function fakeDriveIn(account: string): DriveApi {
     async generateIds(count) {
       return Array.from({ length: count }, fakeId);
     },
-    async findByProp(key, value) {
+    async findByProp(key, value, name) {
       return [...store.values()]
-        .filter((f) => !trashedUp(f) && f.appProperties[key] === value)
+        .filter(
+          (f) => !trashedUp(f) && f.appProperties[key] === value && (!name || f.name === name),
+        )
         .map(pub);
     },
     async openUpload({ create, replaceId, mime, size, props }) {
