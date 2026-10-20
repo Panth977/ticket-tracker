@@ -266,6 +266,12 @@ function encode(v: unknown): unknown {
   return v;
 }
 
+/** A failure worth retrying: the network, or the server busy — not a refusal. */
+function isTransient(e: unknown): boolean {
+  const code = (e as { code?: string })?.code;
+  return !code || ['unavailable', 'internal', 'rate_limited', 'conflict'].includes(code);
+}
+
 async function ask(t: Target): Promise<Answer> {
   const { command } = await import('$lib/api');
   const shape =
@@ -362,7 +368,11 @@ function querySnap(db: Firestore, q: unknown, rows: Row[], prev: Map<string, str
         type: 'removed',
         doc: new FakeDoc(R.doc(db, p) as DocumentReference, null),
       });
-  return { snap: new FakeQuerySnap(q, docs, changes) as unknown as QuerySnapshot, seen: now };
+  return {
+    snap: new FakeQuerySnap(q, docs, changes) as unknown as QuerySnapshot,
+    seen: now,
+    changed: changes.length > 0 || prev?.size !== now.size,
+  };
 }
 
 // ─── the boards collection: a Drive board's settings merged in ──────────────
@@ -396,12 +406,21 @@ function settingsOf(boardId: string, fresh = false): Promise<Record<string, unkn
       if (!d) return null;
       const out: Record<string, unknown> = {};
       for (const f of BOARD_SETTINGS) if (d[f] !== undefined) out[f] = d[f];
+      goodSettings.set(boardId, out);
       return out;
     })
-    .catch(() => null);
+    // A failed read keeps the last settings it had (and asks again soon).
+    .catch(() => {
+      boardSettings.set(boardId, {
+        at: 0,
+        data: Promise.resolve(goodSettings.get(boardId) ?? null),
+      });
+      return goodSettings.get(boardId) ?? null;
+    });
   boardSettings.set(boardId, { at: Date.now(), data });
   return data;
 }
+const goodSettings = new Map<string, Record<string, unknown>>();
 
 const isBoardsCollection = (q: unknown) => specOf(q)?.path === 'boards';
 const isDriveRow = (r: Row) => (r.data.storage as { kind?: string } | undefined)?.kind === 'drive';
@@ -579,15 +598,24 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
     let driveReady = false;
     const watched = new Set<string>();
 
+    // Only what changed is told: a poll that finds the same rows says nothing
+    // (a new snapshot re-renders — an open preview would reload every minute).
+    let lastDoc: string | undefined;
     const emit = () => {
       if (stopped || !realReady || !driveReady) return;
       if (t.kind === 'doc') {
-        next(new FakeDoc(R.doc(db, t.path) as DocumentReference, driveRowsNow[0] ?? null));
+        const row = driveRowsNow[0] ?? null;
+        const now = JSON.stringify(row?.data ?? null);
+        if (now === lastDoc) return;
+        lastDoc = now;
+        next(new FakeDoc(R.doc(db, t.path) as DocumentReference, row));
         return;
       }
       const rows = t.kind === 'group' ? mergeGroup(t.spec, realRows, driveRowsNow) : driveRowsNow;
+      const first = seen === null;
       const out = querySnap(db, target, rows, seen);
       seen = out.seen;
+      if (!first && !out.changed) return;
       next(out.snap);
     };
 
@@ -616,6 +644,7 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let inflight = false;
     let again = false;
+    let fails = 0;
     const fetchNow = async () => {
       if (inflight) {
         again = true;
@@ -624,12 +653,21 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
       inflight = true;
       try {
         const a = await ask(t);
+        fails = 0;
         driveRowsNow = a.docs;
         driveReady = true;
         for (const b of a.boards) watch({ kind: 'boards', id: b });
         emit();
       } catch (e) {
-        if (!stopped) error(e instanceof Error ? e : new Error(String(e)));
+        // A read that fails after one worked (a phone between networks, a slow
+        // Drive) keeps what is shown and tries again; only a first load that
+        // keeps failing is an error — never "not found" over good data.
+        fails++;
+        if (stopped) return;
+        if (driveReady || (fails < 3 && isTransient(e))) {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => void fetchNow(), Math.min(30_000, 1_000 * 2 ** fails));
+        } else error(e instanceof Error ? e : new Error(String(e)));
       } finally {
         inflight = false;
         if (again && !stopped) {
@@ -702,8 +740,10 @@ function boardsListener(
     }
     const merged = await mergeBoards(rows);
     if (stopped || mine !== gen) return;
+    const first = seen === null;
     const out = querySnap(db, target, merged, seen);
     seen = out.seen;
+    if (!first && !out.changed) return;
     next(out.snap);
   };
   const off = real(

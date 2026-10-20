@@ -370,3 +370,33 @@ test('D8: a dictionary kept in Drive — made from its create page, entries seal
     'This dictionary lives in Google Drive',
   );
 });
+
+test('D9: an open preview in a Drive bucket survives the bucket’s poll (no reload)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const hu = await newPerson('Hu');
+  await signIn(page, hu.email, '/account/drive');
+  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
+  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
+  const { bucketId } = await call(hu, 'bucketCreate', {
+    name: 'Previews',
+    storage: { kind: 'drive' },
+  });
+  await call(hu, 'bucketFileWrite', {
+    bucketId,
+    path: 'page.html',
+    text: '<!doctype html><h1>Long page</h1>' + '<p>row</p>'.repeat(400),
+  });
+
+  await page.goto(`/bucket/${bucketId}`);
+  await page.getByRole('button', { name: 'Tree' }).click();
+  await nodeEl(page, 'page.html').click();
+  const frame = page.locator('main iframe').first();
+  await expect(frame).toBeVisible({ timeout: 20_000 });
+  // Mark the frame element: a reload would replace it (and lose the mark).
+  await frame.evaluate((el) => ((el as HTMLElement).dataset.mark = 'kept'));
+  // The Drive bucket's tree polls every 20 s, with new objects for the same files.
+  await page.waitForTimeout(25_000);
+  await expect(page.locator('main iframe[data-mark="kept"]')).toHaveCount(1);
+});
