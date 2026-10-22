@@ -395,7 +395,7 @@ test('D9: an open preview in a Drive bucket survives the bucket’s poll (no rel
   const frame = page.locator('main iframe').first();
   await expect(frame).toBeVisible({ timeout: 20_000 });
   // Mark the frame element: a reload would replace it (and lose the mark).
-  await frame.evaluate((el) => ((el as HTMLElement).dataset.mark = 'kept'));
+  await frame.evaluate((el) => el.setAttribute('data-mark', 'kept'));
   // The Drive bucket's tree polls every 20 s, with new objects for the same files.
   await page.waitForTimeout(25_000);
   await expect(page.locator('main iframe[data-mark="kept"]')).toHaveCount(1);
