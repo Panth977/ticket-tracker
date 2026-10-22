@@ -165,6 +165,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.13
         version: 6.43.13
+      '@panth977/sandbox':
+        specifier: github:Panth977/sandbox-environment#v0.1.4
+        version: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/675251c7b3890c8303e7bf74890139f113e0bd0d
       '@tiptap/core':
         specifier: ^3.31.3
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -1290,6 +1293,11 @@ packages:
 
   '@oxc-project/types@0.150.0':
     resolution: {integrity: sha512-rDS5/31E9HfPl/CIzGrn0DOlvBbXFseQ5URJ9sYMfstbKLD/c6Gm9vmRzRGDdAXyOIL4zmO37lc9RIwYqVruZw==}
+
+  '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/675251c7b3890c8303e7bf74890139f113e0bd0d':
+    resolution: {tarball: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/675251c7b3890c8303e7bf74890139f113e0bd0d}
+    version: 0.1.4
+    hasBin: true
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -4892,6 +4900,8 @@ snapshots:
   '@opentelemetry/api@1.9.1': {}
 
   '@oxc-project/types@0.150.0': {}
+
+  '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/675251c7b3890c8303e7bf74890139f113e0bd0d': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

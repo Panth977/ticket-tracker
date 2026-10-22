@@ -249,12 +249,39 @@ export async function stageLib({
       JSON.stringify({ ...manifest, channel, base: `/lib/${channel}/` }, null, 2) + '\n',
     );
 
+  await stageSandboxKit(out);
+
   const total = Object.values(manifest.files).reduce((n, f) => n + f.bytes, 0);
   log(
     `staged → ${relative(ROOT, out)}/lib/{${CHANNELS.join(',')}}/  ` +
       `${Object.keys(manifest.files).length + 1} files, ${(total / 1024).toFixed(0)} kB each`,
   );
   return { version, out: join(out, 'lib'), manifest };
+}
+
+/**
+ * The Sandbox Environment kit (@panth977/sandbox; artifacts.html §L), mirrored
+ * on our own site next to the SDK: /lib/sandbox/v<version>/… (the dist/ of the
+ * version the app is built with: browser ES modules, .d.ts, kit.css,
+ * runtime.html). /lib/** already answers CORS `*`, so artifacts and other sites
+ * can import from it as from any CDN.
+ */
+async function stageSandboxKit(out) {
+  const pkgDir = join(ROOT, 'frontend', 'node_modules', '@panth977', 'sandbox');
+  const pkgFile = join(pkgDir, 'package.json');
+  if (!existsSync(pkgFile)) throw new LibError('frontend/node_modules/@panth977/sandbox is missing — run pnpm install');
+  const { version } = JSON.parse(await readFile(pkgFile, 'utf8'));
+  const dest = join(out, 'lib', 'sandbox', `v${version}`);
+  await rm(dest, { recursive: true, force: true });
+  const copyTree = async (from, to) => {
+    await mkdir(to, { recursive: true });
+    for (const e of await readdir(from, { withFileTypes: true })) {
+      if (e.isDirectory()) await copyTree(join(from, e.name), join(to, e.name));
+      else await copyFile(join(from, e.name), join(to, e.name));
+    }
+  };
+  await copyTree(join(pkgDir, 'dist'), dest);
+  log(`staged the sandbox kit → ${relative(ROOT, dest)}/`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

@@ -6,7 +6,7 @@ describe('artifact host tabs', () => {
     expect(parseArtifactTab('db').id).toBe('db');
     expect(parseArtifactTab(null).id).toBe('website');
     expect(parseArtifactTab('nope').id).toBe('website');
-    expect(ARTIFACT_TABS.filter((t) => t.data).map((t) => t.id)).toEqual(['db', 'json']);
+    expect(ARTIFACT_TABS.filter((t) => t.data).map((t) => t.id)).toEqual(['code', 'db', 'json']);
   });
 
   it('a tab link keeps the path (owner-first too) and drops the other tabs’ parameters', () => {

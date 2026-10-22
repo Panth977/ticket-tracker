@@ -400,6 +400,49 @@ db.tickets.onAggregates(board, query, cb, onErr?)   → unsubscribe (live)</pre>
     times, and go in the same way; an unknown name is <code>invalid-argument</code> listing the ones that exist. The shapes and the
     conversion are <code>shared/artifacts/tickets.ts</code>; the driver's own documentation is §8.6 of
     <code>llms-full.txt</code> and the artifact skill.</p>
+
+    <h2 id="l">L · Kit artifacts: code it here (Sandbox Environment)</h2>
+    <p>Besides a static folder that talks through <code>window.BackendDriver</code>, an artifact can be a <b>kit artifact</b>:
+    source files (TypeScript, React/TSX, Svelte or plain JS) compiled <b>in the browser</b> by the open-source
+    <a href="https://github.com/Panth977/sandbox-environment">Sandbox Environment</a> kit (<code>@panth977/sandbox</code>,
+    zero dependencies) and run by its render engine. The owner and editors write it in the host page's <b>Code</b> tab: a typed
+    editor (TypeScript errors, completions for <code>host.*</code>), a live preview with real data, Publish.</p>
+    <h3 id="l1">L1 · A kit build is an ordinary build</h3>
+    <pre>index.html      a plain page for anyone who opens the build URL by hand
+artifact.json   the compiled artifact (the kit's CompiledArtifact: ES modules keyed by sbx: URL, import map, manifest)
+sbx-src.json    { kit, files: { "/index.tsx": "…" } } — the source, so the Code tab can reopen it</pre>
+    <p>Published with <code>artifactPublish</code> and the inline <code>files</code> (§C) — the same command, limits and history;
+    rolling back works as for any build. Nothing changes on the server. The host page (<code>lib/artifacts/kit/build.ts</code>)
+    fetches <code>artifact.json</code> through the build's capability URL (the usercontent door answers CORS <code>*</code>, §D):
+    present → a kit build; absent → the classic iframe, exactly as before.</p>
+    <h3 id="l2">L2 · Same fence, new frame</h3>
+    <ul>
+      <li>The kit's frame is <code>&lt;iframe sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-modals"&gt;</code>
+        with <code>srcdoc</code> (an opaque origin; never <code>allow-same-origin</code>), a per-mount CSP nonce, the modules as
+        <code>blob:</code> URLs and one import map. Libraries an artifact imports (react, svelte…) come from esm.sh at the versions
+        in its <code>manifest.json</code>.</li>
+      <li>Calls cross a private <code>MessagePort</code> as the kit's typed RPC — promises, async-iterable streams, cancellation —
+        and land on <b>the broker</b> (§E3) through <code>kit/bridgeApi.ts</code>, which plays a frame window to it. Every broker
+        promise holds unchanged: the artifact-id fence, read-only viewers, board and bucket grants, the listener cap, revocation.</li>
+      <li>The app's theme tokens (<code>--tm-*</code> → <code>--sbx-*</code>) and light/dark are handed to the artifact at boot and
+        live after, so the kit's UI components look like the app.</li>
+    </ul>
+    <h3 id="l3">L3 · <code>host</code> inside a kit artifact</h3>
+    <pre>import { host, env, expose } from "@panth977/sandbox/artifact";
+host.me() · host.artifact() · host.signals()                         // readonly · revoked · build
+host.db.get/set/update/delete/add/list · host.db.watch/watchList      // for await (…) — break to stop
+host.rtdb.get/set/update/push/remove · host.rtdb.watch
+host.files.upload/url/list/delete · host.kv.get/set/delete
+host.tickets.boards/list/watchList/get/create/update/comment/thread/watchThread/fileUrl/aggregates/watchAggregates
+host.bucket.list/tree/read/url/write/mkdir/remove
+host.ui.toast(message, kind) · host.ui.open(url)                      // drawn by the app, outside the frame</pre>
+    <p>The full types are <code>kit/hostTypes.ts</code> (what the Code tab's editor loads). The UI kit — tokens, typography,
+    <code>.sbx-*</code> classes, <code>&lt;sbx-select&gt;</code>, <code>&lt;sbx-table&gt;</code>, <code>&lt;sbx-chart&gt;</code>,
+    dialogs, menus, tabs, toasts — is loaded in every kit frame.</p>
+    <h3 id="l4">L4 · Where the kit comes from</h3>
+    <p>The app depends on a tagged release (<code>github:Panth977/sandbox-environment#vX</code>); the dev engine's language worker
+    loads from jsDelivr at the same tag; <code>scripts/deploy-lib.mjs</code> mirrors the kit's <code>dist/</code> at
+    <code>/lib/sandbox/vX/</code> on our own site. JSR (<code>jsr:@panth977/sandbox</code>) follows when it is published.</p>
     </article>
   </div>
   <script type="module">

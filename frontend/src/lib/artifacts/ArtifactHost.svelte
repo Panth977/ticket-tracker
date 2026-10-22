@@ -51,7 +51,13 @@
   import { switcherFor } from '$lib/orgs/switcherStore';
   import OrgCrumb from '$lib/orgs/OrgCrumb.svelte';
   import TitleSwitcher from '$lib/orgs/TitleSwitcher.svelte';
-  import { createBroker, type Broker } from './broker';
+  import { createBroker, type Broker, type BrokerOptions } from './broker';
+  import type { CompiledArtifact } from '@panth977/sandbox/protocol';
+  import { toast } from '$lib/ui/toast.svelte';
+  import KitFrame from './kit/KitFrame.svelte';
+  import { createBrokerLink, createKitApi, type BrokerLink, type KitUi } from './kit/bridgeApi';
+  import { loadKitBuild } from './kit/build';
+  import { setKitHost } from './kit/context';
   import { firebaseBackend } from './firebaseBackend';
   import { ARTIFACT_TABS, artifactTabHref, parseArtifactTab } from './tabs';
   import {
@@ -123,34 +129,113 @@
   let broker: Broker | null = null;
   let detach: (() => void) | null = null;
 
+  /** Everything a broker is given but its frame: the Website's and every Code-tab preview's. */
+  function brokerOptions(frame: BrokerOptions['frame']): BrokerOptions {
+    const r = roleIn(art, uid)!;
+    return {
+      // THE id: from this page's own URL. Nothing the iframe says can change it.
+      artifactId,
+      uid: uid!,
+      frame,
+      artifact: () => ({ name: art?.name ?? '', buildId: opened?.buildId ?? '' }),
+      viewer: () => ({
+        name: auth.profile?.name ?? auth.displayName,
+        email: auth.user?.email ?? null,
+        photoURL: auth.photoURL,
+      }),
+      role: r,
+      readOnly: viewerReadOnly(art!, r),
+      backend: firebaseBackend(artifactId),
+      // §K: live — a grant the owner changes applies to the next call.
+      boards: () => art?.boards ?? {},
+      origin: window.location.origin,
+    };
+  }
+
+  // §L: a KIT build runs in the kit's frame; the broker hears it through a
+  // pretend frame window (./kit/bridgeApi) instead of an iframe's contentWindow.
+  let siteLink: BrokerLink | null = null;
+  // Plain bookkeeping, never rendered: not reactive on purpose.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const previews = new Set<Broker>();
+  const kitUi: KitUi = {
+    toast: (message, kind) =>
+      kind === 'error'
+        ? toast.error(message)
+        : kind === 'success'
+          ? toast.success(message)
+          : toast.info(message),
+    open: (url) => {
+      try {
+        const u = new URL(url, window.location.origin);
+        if (u.protocol === 'https:' || u.protocol === 'http:')
+          window.open(u.href, '_blank', 'noopener,noreferrer');
+      } catch {
+        /* not a URL */
+      }
+    },
+  };
+  function siteApi() {
+    if (!broker) throw new Error('The artifact is not open yet');
+    siteLink?.close();
+    siteLink = createBrokerLink();
+    siteLink.connect(broker);
+    return createKitApi(siteLink, kitUi);
+  }
+
   $effect(() => {
     if (!art || !role || !uid || revoked) return;
     const readOnly = viewerReadOnly(art, role);
     untrack(() => {
       if (!broker) {
-        broker = createBroker({
-          // THE id: from this page's own URL. Nothing the iframe says can change it.
-          artifactId,
-          uid,
-          frame: () => frameEl?.contentWindow ?? null,
-          artifact: () => ({ name: art?.name ?? '', buildId: opened?.buildId ?? '' }),
-          viewer: () => ({
-            name: auth.profile?.name ?? auth.displayName,
-            email: auth.user?.email ?? null,
-            photoURL: auth.photoURL,
-          }),
-          role,
-          readOnly,
-          backend: firebaseBackend(artifactId),
-          // §K: live — a grant the owner changes applies to the next call.
-          boards: () => art?.boards ?? {},
-          origin: window.location.origin,
-        });
+        broker = createBroker(
+          brokerOptions(() => (kit ? (siteLink?.frame ?? null) : (frameEl?.contentWindow ?? null))),
+        );
         detach = broker.attach(window);
       }
       // A role change, the read-only switch, archiving: the artifact hears 'readonly'.
       broker.setAccess(role, readOnly);
+      for (const p of previews) p.setAccess(role, readOnly);
     });
+  });
+
+  // ── §L: is the build on screen a kit build? ────────────────────────────────
+  /** undefined while checking; null = a classic static build. */
+  let kit = $state.raw<CompiledArtifact | null | undefined>(undefined);
+  let kitFor = $state<string | null>(null);
+  $effect(() => {
+    const o = opened;
+    if (!o || untrack(() => kitFor) === o.buildId) return;
+    const id = o.buildId;
+    kit = undefined;
+    const done = (a: CompiledArtifact | null) => {
+      if (opened?.buildId !== id) return;
+      kit = a;
+      kitFor = id;
+    };
+    // A failure to read artifact.json falls back to the classic frame.
+    loadKitBuild(id, o.contentUrl).then(done, () => done(null));
+  });
+
+  setKitHost({
+    name: () => art?.name ?? '',
+    hasBuild: () => !!art?.currentBuild,
+    opened: () => (opened ? { buildId: opened.buildId, contentUrl: opened.contentUrl } : null),
+    kit: () => (opened && kitFor === opened.buildId ? kit : undefined),
+    previewApi() {
+      const link = createBrokerLink();
+      const b = createBroker(brokerOptions(() => link.frame));
+      previews.add(b);
+      link.connect(b);
+      return {
+        api: createKitApi(link, kitUi),
+        close() {
+          link.close();
+          b.stop();
+          previews.delete(b);
+        },
+      };
+    },
   });
 
   // ── opening, and losing access ─────────────────────────────────────────────
@@ -175,6 +260,8 @@
     // Tell the artifact (it may want to say goodbye), then take it off the screen:
     // the broker has already dropped every listener it held.
     broker?.revoke();
+    for (const p of previews) p.revoke();
+    siteLink?.close();
     opened = null;
   }
 
@@ -263,6 +350,8 @@
     // Removes the window listener and closes every Firestore / RTDB listener
     // the artifact was holding through us.
     detach?.();
+    siteLink?.close();
+    for (const p of previews) p.stop();
   });
 
   // ── full screen: no bar, no sidebar — a dashboard on a wall screen ─────────
@@ -454,10 +543,17 @@
             </div>
           {/snippet}
         </EmptyState>
-      {:else if !opened}
+      {:else if !opened || kitFor !== opened.buildId}
         <div class="flex flex-1 items-center justify-center text-sm text-muted" aria-busy="true">
           <AppWindow size={16} class="mr-2" aria-hidden="true" /> Opening…
         </div>
+      {:else if kit}
+        <!-- §L: a kit build — the kit's own sandbox (same fence, see KitFrame). -->
+        {#key generation}
+          <div class="flex min-h-0 flex-1 flex-col" data-build={opened.buildId} data-kit>
+            <KitFrame artifact={kit} makeApi={siteApi} title={art.name} />
+          </div>
+        {/key}
       {:else}
         <!--
         THE SANDBOX. No allow-same-origin, ever: with it the artifact would run
