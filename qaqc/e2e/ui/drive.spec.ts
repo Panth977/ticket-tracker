@@ -9,12 +9,22 @@
  *   D3  the new-board form makes the board's ticket-file bucket (managed by
  *       default) and sets it as the attachment bucket
  *   D4  a ticket file into a Drive bucket, from the composer
+ *   D10 a Drive board's card counts its unread messages, and opening the
+ *       ticket shows the newest ones (not the start of the thread)
  *
  * Drive buckets never touch our object store: every test fails on a request
  * to Storage (the browser's uploads go straight to Drive's session URL).
  */
 import { expect, test, type Page } from '@playwright/test';
-import { admin, call, eventually, newBoard, newPerson } from '../support/stack.js';
+import {
+  admin,
+  call,
+  doc,
+  eventually,
+  inviteAndAccept,
+  newBoard,
+  newPerson,
+} from '../support/stack.js';
 import { signIn, thingIdAt } from '../support/ui.js';
 
 const nodeEl = (page: Page, path: string) => page.locator(`[data-node="${path}"]`).first();
@@ -399,4 +409,59 @@ test('D9: an open preview in a Drive bucket survives the bucket’s poll (no rel
   // The Drive bucket's tree polls every 20 s, with new objects for the same files.
   await page.waitForTimeout(25_000);
   await expect(page.locator('main iframe[data-mark="kept"]')).toHaveCount(1);
+});
+
+test('D10: a Drive board — the card counts unread messages; the thread opens at the newest', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const io = await newPerson('Io');
+  const jo = await newPerson('Jo');
+  await signIn(page, io.email, '/account/drive');
+  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
+  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
+
+  const key = `DU${Date.now().toString(36).slice(-3).toUpperCase()}`;
+  const { boardId } = await call(io, 'boardCreate', {
+    name: 'Drive unread',
+    key,
+    template: 'kanban',
+    storage: { kind: 'drive' },
+  });
+  await inviteAndAccept(io, boardId, jo, 'editor');
+  const t = await call(io, 'ticketCreate', { boardId, title: 'A long Drive thread' });
+  // A thread longer than the screen AND than a Drive ticket keeps inline (so it
+  // has spilled to pages): mine first, then three from Jo I have not read.
+  for (let i = 1; i <= 56; i++)
+    await call(io, 'messagePost', { boardId, ticketId: t.ticketId, body: doc([`Mine ${i}`]) });
+  for (let i = 1; i <= 3; i++)
+    await call(jo, 'messagePost', { boardId, ticketId: t.ticketId, body: doc([`Jo says ${i}`]) });
+
+  // The card (a list answer: meta.json only) still knows how many are new.
+  await page.goto(`/b/${key}`);
+  const card = page.getByRole('button', { name: new RegExp(`^${t.key} `) }).first();
+  await expect(card).toBeVisible({ timeout: 70_000 });
+  await expect(card.locator('[data-unread]')).toHaveAttribute('data-unread', '3', {
+    timeout: 70_000,
+  });
+
+  // Real Drive is slow: an older page takes seconds. The thread must not sit
+  // at its top waiting for history nobody asked to see.
+  await page.route('**/driveDocs', async (route) => {
+    if (/\/data\/\d+/.test(route.request().postData() ?? ''))
+      await new Promise((r) => setTimeout(r, 8_000));
+    await route.fallback();
+  });
+
+  // Opening it lands on the new messages: the newest one is on screen.
+  await card.click();
+  const thread = page.getByRole('region', { name: 'Thread' });
+  const last = thread.getByRole('article').filter({ hasText: 'Jo says 3' });
+  await expect(last).toBeVisible({ timeout: 30_000 });
+  await expect(last).toBeInViewport({ timeout: 3_000 });
+  await expect(thread.getByText('New messages')).toBeInViewport();
+  await expect(thread.getByText('Mine 30', { exact: true })).not.toBeInViewport();
+  // …and stays there when the older page lands above it.
+  await page.waitForTimeout(9_000);
+  await expect(last).toBeInViewport();
 });

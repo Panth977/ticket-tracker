@@ -710,6 +710,14 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
           one Drive search lists a board's tickets. A file edited by hand in Drive is what the next
           read sees (a file that is not JSON reads as empty, never as an error).
         </p>
+        <p>
+          A list reads meta.json and nothing else, so meta.json also carries
+          <code>unreadTail</code>: the newest 21 inline messages cut down to
+          <code>{id, createdAt, authorUid, deletedAt}</code>, rewritten on every write. It is what
+          a board card counts its unread badge from (one more than the badge counts to, so it can
+          say 20+). A whole read drops it — that answer has the thread itself. The thread opens
+          on the rows in hand and lets older pages land above without moving the view.
+        </p>
         <h3 id="l2">L2 · Behind the database port</h3>
         <p>
           Nothing above the database changes. <code>backend/src/db/drive/router.ts</code> wraps
