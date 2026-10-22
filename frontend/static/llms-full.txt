@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    937ee9f7c871397ca459f156030a4c59eb29021d419a7edb250b5cb36609110a
+content-sha256:    1192b182f0236f7a2a94fd9c23bb30b988f04589684ef80313f6725bb47495bd
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -74,6 +74,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [8.8 A complete artifact](#8-8-a-complete-artifact)
   - [8.9 A Vite project](#8-9-a-vite-project)
   - [8.10 Data from outside the page](#8-10-data-from-outside-the-page)
+  - [8.11 Kit artifacts: source code, compiled in the browser](#8-11-kit-artifacts-source-code-compiled-in-the-browser)
 - [9. Templates](#9-templates)
   - [How it runs](#how-it-runs)
   - [The module](#the-module)
@@ -6145,6 +6146,45 @@ artifact_data_batch  write  Apply up to 400 set / update / delete writes to an a
 ```
 
 They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both ways.
+
+### 8.11 Kit artifacts: source code, compiled in the browser
+
+An artifact can also be written as **source** — plain JS, TypeScript, React (TSX) or Svelte — and
+run by the open-source [Sandbox Environment](https://github.com/Panth977/sandbox-environment) kit
+(`@panth977/sandbox`, zero dependencies). People write these in the artifact's **Code** tab (a
+typed editor, a live preview with real data, Publish). An agent publishes one like any build, with
+three files:
+
+```text
+index.html      any small page (shown only to someone who opens the build URL by hand)
+artifact.json   the compiled artifact
+sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (so the Code tab reopens it)
+```
+
+`artifact.json` is the kit compiler's output. Compile with the kit's CLI (plain JS needs nothing
+else; TypeScript/TSX needs `typescript` installed next to the sources, Svelte needs `svelte`):
+
+```bash
+npx -p github:Panth977/sandbox-environment#v0.1.4 sbx build ./my-artifact -o artifact.json
+```
+
+Inside, the code imports the host API instead of using `window.BackendDriver`:
+
+```ts
+import { host } from "@panth977/sandbox/artifact";
+import { toast } from "@panth977/sandbox/ui";          // the UI kit: .sbx-* classes, <sbx-table>, <sbx-chart>, <sbx-select>…
+
+const me = await host.me();                               // { uid, name, role, readOnly }
+await host.db.add("/notes", { text: "hi", at: await host.db.serverTime() });
+for await (const docs of host.db.watchList("/notes", { orderBy: ["at", "desc"] })) render(docs);   // live; break to stop
+const boards = await host.tickets.boards();               // §8.6's tickets, as promises and streams
+host.ui.toast("Saved", "success");                        // drawn by the app, outside the frame
+```
+
+`host` has the same operations as the driver (§8.6) — `db`, `rtdb`, `files`, `kv`, `tickets`,
+`bucket` — with `watch*` streams instead of callbacks, and the same rules: every call runs as the
+viewer, read-only and grants apply, paths stay under the artifact. Bare imports (`react`,
+`svelte`, …) load from esm.sh at the versions in `manifest.json`'s `dependencies`.
 
 ## 9. Templates
 
