@@ -38,6 +38,25 @@ export const JSON_MIME = 'application/json';
 export const PROP_BOARD = 'tmBoard';
 export const PROP_TICKET = 'tmTicket';
 
+/**
+ * On meta.json only: the newest inline messages reduced to what a board card
+ * counts unread from (id, time, author, deleted). A list reads meta.json and
+ * nothing else, so without this a Drive card could never say how many are new.
+ * One more than the card counts to (UNREAD_WINDOW), so it can say '20+'.
+ * Written from the thread on every write; a whole read drops it again.
+ */
+export const UNREAD_TAIL = 'unreadTail';
+const UNREAD_TAIL_SIZE = 21;
+
+function unreadTail(msgs: Json[]): Json[] {
+  return msgs.slice(-UNREAD_TAIL_SIZE).map((m) => ({
+    id: String(m.id),
+    createdAt: m.createdAt,
+    authorUid: m.authorUid ?? null,
+    deletedAt: m.deletedAt ?? null,
+  }));
+}
+
 /** Where a board's tickets live. */
 export interface DriveBoard {
   boardId: string;
@@ -263,7 +282,9 @@ export async function readTicket(
   const files = msgFiles
     .filter((f) => !isFolder(f) && f.name.endsWith('.json'))
     .sort((a, z) => (a.name < z.name ? -1 : 1));
-  const [doc, ...msgs] = await pool([meta, ...files], 12, (f) => readJson(drive, f));
+  const [read, ...msgs] = await pool([meta, ...files], 12, (f) => readJson(drive, f));
+  // The card's unread tail is a copy of the thread: a whole ticket has the thread itself.
+  const { [UNREAD_TAIL]: _tail, ...doc } = read!;
   const messageFiles = new Map<string, { id: string; name: string }>();
   const recent: Json[] = [];
   files.forEach((f, i) => {
@@ -273,7 +294,7 @@ export async function readTicket(
     messageFiles.set(id, { id: f.id, name: f.name });
     recent.push({ ...m, id });
   });
-  return { ptr, doc: { ...doc!, recentMessages: recent }, messageFiles };
+  return { ptr, doc: { ...doc, recentMessages: recent }, messageFiles };
 }
 
 /**
@@ -289,8 +310,9 @@ export async function writeTicket(
   doc: Json,
 ): Promise<TicketPointers> {
   const ptr = (await ticketFolder(drive, b, ticketId, before?.ptr, true))!;
-  const { recentMessages, ...meta } = doc;
+  const { recentMessages, [UNREAD_TAIL]: _tail, ...fields } = doc;
   const msgs = (Array.isArray(recentMessages) ? recentMessages : []) as Json[];
+  const meta: Json = { ...fields, [UNREAD_TAIL]: unreadTail(msgs) };
   const oldDoc = before?.doc;
   const oldMsgs = new Map(
     ((oldDoc?.recentMessages as Json[] | undefined) ?? []).map((m) => [String(m.id), m]),
@@ -433,7 +455,8 @@ export async function readPages(
 
 /**
  * Every ticket of a board, as its meta.json (no messages: a list never needs
- * the thread, and reading every message file of every ticket would be slow).
+ * the thread, and reading every message file of every ticket would be slow —
+ * the card's unread count comes from meta.json's UNREAD_TAIL).
  * One search for the board's meta files, then only the changed ones are downloaded.
  */
 export async function listTickets(

@@ -60,6 +60,10 @@ describe('a Drive board (§L)', () => {
     const meta = await readJson(drive, inside.find((k) => k.name === 'meta.json')!.id);
     expect(meta).toMatchObject({ title: 'Ship the Drive board', key: `${b.key}-1` });
     expect(meta.recentMessages).toBeUndefined();
+    // …but the card's unread tail: what a list (meta.json only) counts from.
+    expect(meta.unreadTail).toEqual([
+      { id: messageId, createdAt: expect.any(Number), authorUid: priya.uid, deletedAt: null },
+    ]);
     const msgs = await kids(drive, inside.find((k) => isFolder(k))!.id);
     expect(msgs).toHaveLength(1);
     expect(msgs[0]!.name).toMatch(
@@ -81,6 +85,8 @@ describe('a Drive board (§L)', () => {
     expect(t.title).toBe('Ship the Drive board');
     expect(t.recentMessages?.map((m) => m.id)).toEqual([messageId]);
     expect(t.counts.messages).toBe(1);
+    // A whole read has the thread itself, so no copy of it.
+    expect(t.unreadTail).toBeUndefined();
   });
 
   inProcess('Drive is the truth: an edit made in Drive is what the next read sees', async () => {
@@ -217,6 +223,9 @@ describe('a Drive board (§L)', () => {
       where: [['state', '==', 'active']],
     });
     expect(list.docs.map((d) => d.id)).toEqual([ticketId]);
+    // A list has no thread, but the tail the card counts unread from (empty: no messages yet).
+    expect(list.docs[0]!.data.recentMessages).toEqual([]);
+    expect(Array.isArray(list.docs[0]!.data.unreadTail)).toBe(true);
 
     const group = await call(asha, 'driveDocs', {
       target: { kind: 'group' },

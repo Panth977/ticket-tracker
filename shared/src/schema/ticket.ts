@@ -254,6 +254,21 @@ export const TicketSchema = z.object({
   recentMessages: z.array(StoredMessageSchema).optional(),
   /** The newest activity rows, oldest first. */
   recentActivity: z.array(StoredActivitySchema).optional(),
+  /**
+   * bucket.html §L — a Drive board's LIST answer only (meta.json, no thread):
+   * the newest messages cut down to what the card's unread count reads. Never
+   * on a Firestore ticket, never on a whole Drive read (that has the thread).
+   */
+  unreadTail: z
+    .array(
+      z.object({
+        id: z.string(),
+        createdAt: MillisSchema,
+        authorUid: PrincipalIdSchema.nullable(),
+        deletedAt: MillisSchema.nullable(),
+      }),
+    )
+    .optional(),
   /** How many data/{NNN} pages exist (ids 000 … pageCount-1). */
   pageCount: z.number().int().nonnegative().optional(),
   /**

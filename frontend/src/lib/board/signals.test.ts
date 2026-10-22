@@ -194,3 +194,47 @@ describe('unreadOfTicket — counted from the inline window', () => {
     expect(unreadOfTicket({}, 0, 'u1')).toBeNull();
   });
 });
+
+describe('unreadOfTicket — a Drive board’s list answer (meta.json + unread tail)', () => {
+  const tail = [
+    { id: 'm1', createdAt: NOW - 5000, authorUid: 'u2', deletedAt: null },
+    { id: 'm2', createdAt: NOW - 4000, authorUid: 'u1', deletedAt: null },
+    { id: 'm3', createdAt: NOW - 3000, authorUid: 'u2', deletedAt: null },
+    { id: 'm4', createdAt: NOW - 2000, authorUid: 'u2', deletedAt: NOW },
+  ];
+  // The list has no thread; its signals still say where the 40-message window starts.
+  const listed = (over: Partial<Ticket> = {}) =>
+    ticket({
+      recentMessages: [],
+      unreadTail: tail,
+      counts: { messages: 4 } as never,
+      signals: { unreadFrom: NOW - 90_000, messageCount: 4 } as never,
+      ...over,
+    });
+
+  it('counts from the tail: not mine, not deleted', () => {
+    expect(unreadOfTicket(listed(), NOW - 4500, 'u1')).toEqual({ count: 1, capped: false });
+  });
+
+  it('says "at least" when my pointer is older than the tail of a longer thread', () => {
+    const c = unreadOfTicket(
+      listed({ counts: { messages: 60 } as never, signals: { messageCount: 60 } as never }),
+      NOW - 60_000,
+      'u1',
+    );
+    expect(c).toEqual({ count: 2, capped: true });
+  });
+
+  it('is unknown (not zero) for a listed ticket with messages but no tail yet', () => {
+    expect(unreadOfTicket(listed({ unreadTail: undefined }), 0, 'u1')).toBeNull();
+  });
+
+  it('prefers the thread itself when the ticket was read whole', () => {
+    const whole = listed({
+      recentMessages: [msg('m8', NOW - 200, 'u2'), msg('m9', NOW - 100, 'u2')],
+      counts: { messages: 2 } as never,
+      signals: { unreadFrom: NOW - 200, messageCount: 2 } as never,
+    });
+    expect(unreadOfTicket(whole, NOW - 4500, 'u1')).toEqual({ count: 2, capped: false });
+  });
+});
