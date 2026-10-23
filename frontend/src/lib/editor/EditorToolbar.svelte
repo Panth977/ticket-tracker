@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import type { Editor } from '@tiptap/core';
+  import { untrack } from 'svelte';
   import {
     Bold,
     CircleHelp,
@@ -56,7 +57,10 @@
   $effect(() => {
     const e = editor;
     if (!e) return;
-    const bump = () => (tick += 1);
+    // A transaction can fire inside someone else's effect (a command run from
+    // one): reading `tick` there would make that effect depend on it and run
+    // again on every bump — an endless loop. Read it untracked.
+    const bump = () => (tick = untrack(() => tick) + 1);
     e.on('transaction', bump);
     return () => {
       e.off('transaction', bump);

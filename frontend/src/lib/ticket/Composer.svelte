@@ -18,7 +18,7 @@
   on inside the sent bubble.
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import type { Editor } from '@tiptap/core';
   import { Brain, Loader2, Paperclip, Send, X } from 'lucide-svelte';
   import { KIND_ICON, kindOf } from '$lib/files';
@@ -411,8 +411,12 @@
   export function focus() {
     editor?.commands.focus('end');
   }
+  // Only `replyTo` is the trigger: the focus is a transaction, and whatever it
+  // touches must not become a dependency of this effect.
   $effect(() => {
-    if (replyTo) editor?.commands.focus('end');
+    if (!replyTo) return;
+    const e = editor;
+    untrack(() => e?.commands.focus('end'));
   });
 </script>
 
