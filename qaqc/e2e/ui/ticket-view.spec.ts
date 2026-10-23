@@ -184,3 +184,38 @@ test('bubbles: mine right, others left with an avatar; a New messages divider th
   ).toBeVisible();
   await expect(thread.getByRole('separator', { name: 'New messages' })).toHaveCount(0);
 });
+
+test('Reply on a message quotes it in the composer and sends a reply — the page stays responsive', async ({
+  page,
+}) => {
+  const ada = await newPerson('Ada');
+  const grace = await newPerson('Grace');
+  const b = await newBoard(ada);
+  await inviteAndAccept(ada, b.id, grace, 'editor');
+  const t = await call(ada, 'ticketCreate', {
+    boardId: b.id,
+    title: 'Answer me',
+    stageId: stage(b, 'To do'),
+  });
+  await call(grace, 'messagePost', {
+    boardId: b.id,
+    ticketId: t.ticketId,
+    body: doc(['Which branch is it on?']),
+  });
+
+  await signIn(page, ada.email, `/t/${t.key}`);
+  const thread = page.getByRole('region', { name: 'Thread' });
+  const asked = thread.getByRole('article').filter({ hasText: 'Which branch is it on?' });
+  await expect(asked).toBeVisible();
+  await asked.hover();
+  // Focusing the editor from an effect once looped forever (the toolbar's
+  // transaction counter became that effect's dependency) and froze the tab.
+  await asked.getByRole('button', { name: 'Reply' }).click({ timeout: 5_000 });
+  const reply = page.getByRole('group', { name: 'Reply' });
+  await expect(page.getByText('Replying to')).toBeVisible();
+  await reply.getByRole('textbox').first().fill('main');
+  await reply.getByRole('button', { name: 'Send' }).click({ timeout: 5_000 });
+  const answer = thread.getByRole('article').filter({ hasText: 'main' });
+  await expect(answer).toContainText('Which branch is it on?');
+  await expect(page.getByText('Replying to')).toBeHidden();
+});
