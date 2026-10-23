@@ -92,7 +92,9 @@ test('a kit build: runs in the kit frame, live data through the broker, read-onl
   await ctx.close();
 });
 
-test('the Code tab: a starter, the live preview, Publish, the Website runs it', async ({ page }) => {
+test('the Code tab: a starter, the live preview, Publish, the Website runs it', async ({
+  page,
+}) => {
   test.setTimeout(180_000);
   const owner = await newPerson('Cody');
   const { artifactId } = await call(owner, 'artifactCreate', { name: 'Coded' });
