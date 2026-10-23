@@ -109,6 +109,17 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   await tree.locator('.sbx-tree__input').press('Enter');
   await expect(tree.locator('.sbx-tree__row[data-folder=true]', { hasText: 'lib' })).toBeVisible();
   await expect(page.locator('.sbx-dev__tab[aria-selected=true]')).toContainText('format.ts');
+  // completions while typing: host.* from the app's types
+  await tree.locator('.sbx-tree__row[data-path="/index.ts"]').click();
+  await page.locator('sbx-editor textarea').click();
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.keyboard.type('host.', { delay: 50 });
+  const pop = page.locator('sbx-editor .pop');
+  await expect(pop).toBeVisible({ timeout: 60_000 });
+  await expect(pop).toContainText('tickets');
+  await page.keyboard.press('Escape');
+  // undo the typing so the starter still builds
+  for (let i = 0; i < 5; i++) await page.keyboard.press('Backspace');
   const preview = page.frameLocator('.sbx-dev__preview iframe');
   await expect(preview.locator('h1')).toHaveText('Notes', { timeout: 60_000 });
   await preview.locator('input[name=text]').fill('from the preview');
