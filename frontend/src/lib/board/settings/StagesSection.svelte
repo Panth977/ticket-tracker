@@ -3,7 +3,8 @@
   has a CATEGORY (what the system reads: done / cancelled end the clock,
   backlog / todo / active are open), an optional WIP limit and the custom
   fields it `requires` before a ticket may enter it (enforced by the server —
-  a drag that misses one opens the requires prompt).
+  a drag that misses one opens the requires prompt), and what happens to a
+  ticket left idle in it (archive, or move on — StageAutoRule).
   Removing a stage that still holds tickets asks where they go (remap).
 -->
 <script lang="ts">
@@ -21,6 +22,7 @@
   import ChoicePicker from '$lib/views/pickers/ChoicePicker.svelte';
   import OptionListEditor from './OptionListEditor.svelte';
   import RemapDialog from './RemapDialog.svelte';
+  import StageAutoRule from './StageAutoRule.svelte';
   import Section from './Section.svelte';
   import { byPosition, useDraft, useRestore, useSettings } from './draft.svelte';
   import { saveBoard, type Remap } from './save';
@@ -168,6 +170,12 @@
               <span class="text-subtle">add custom fields first</span>
             {/if}
           </span>
+          <StageAutoRule
+            stage={st}
+            stages={draft.value}
+            disabled={s.readOnly}
+            onchange={(auto) => patch({ auto })}
+          />
         </div>
       {/snippet}
     </OptionListEditor>

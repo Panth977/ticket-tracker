@@ -27,6 +27,7 @@ import {
   ticketRef,
 } from '../tickets/access.js';
 import { afterCommit, emitSafe } from '../tickets/effects.js';
+import { clearTicketInbox } from '../notify/inboxClean.js';
 import { writerFor } from '../tickets/doc.js';
 import { withoutTicket } from '../tickets/links.js';
 import { locateTickets } from '../tickets/locate.js';
@@ -103,6 +104,8 @@ export default defineCommand('ticketDelete', async (ctx, input) => {
   await afterCommit('storage', () =>
     ports().files.deletePrefix(storage.ticketPrefix(boardId, ticketId)),
   );
+  // Its unread rows would count forever (nobody can open it to read them).
+  await clearTicketInbox(boardId, ticketId, ctx.now);
   await emitSafe(boardId, 'ticket.deleted', () => ({ id: ticketId, key }), ctx);
   return { ok: true as const };
 });

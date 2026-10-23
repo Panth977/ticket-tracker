@@ -170,19 +170,45 @@ export function can(
   switch (role) {
     case 'admin':
       return true;
-    case 'editor':
-      return !EDITOR_DENIED.has(action);
+    case 'editor': {
+      if (EDITOR_DENIED.has(action)) return false;
+      // Stage paths bind an editor's moves too (everything else is theirs).
+      const grant = board.stageGrants[ctx.actor];
+      if (action === 'move' && grant?.moves && ticket && toStageId)
+        return stagePathAllows(grant, ticket.stageId, toStageId);
+      return true;
+    }
     case 'commenter': {
       if (COMMENTER_ALLOWED.has(action)) return true;
       if (action !== 'move') return false;
       const grant = board.stageGrants[ctx.actor];
       if (!grant || !ticket || !toStageId) return false;
       if (!grant.stages.includes(ticket.stageId) || !grant.stages.includes(toStageId)) return false;
+      if (!stagePathAllows(grant, ticket.stageId, toStageId)) return false;
       return !grant.assignedOnly || ticket.assigneeUids.includes(ctx.actor);
     }
     case 'viewer':
       return action === 'read';
   }
+}
+
+/**
+ * A grant's stage paths (StageGrant.moves): without any, every move between
+ * its stages is fine; with them, only from → one of the stages listed for it.
+ * Staying put is always fine.
+ */
+export function stagePathAllows(
+  grant: { moves?: Record<string, string[]> },
+  from: string,
+  to: string,
+): boolean {
+  if (from === to || !grant.moves) return true;
+  return (grant.moves[from] ?? []).includes(to);
+}
+
+/** Does this principal's stage change need the 'move' check even as an editor? */
+export function hasStagePaths(board: CanBoard, actor: string): boolean {
+  return !!board.stageGrants[actor]?.moves;
 }
 
 /**

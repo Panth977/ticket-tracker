@@ -6,6 +6,7 @@ import {
   fileViewerPath,
   formatBytes,
   HTML_SANDBOX,
+  htmlForFrame,
   languageFor,
   mimeForName,
   normalizeMime,
@@ -76,5 +77,15 @@ describe('fileKind', () => {
     expect(formatBytes(1536)).toBe('1.5 KB');
     expect(formatBytes(25 * 1024 * 1024)).toBe('25 MB');
     expect(HTML_SANDBOX).not.toContain('allow-same-origin');
+  });
+
+  it('htmlForFrame puts the storage shim before the page’s scripts, after the doctype', () => {
+    const page =
+      '<!DOCTYPE html><html lang="en"><head><title>x</title></head><body><script>1</script>';
+    const out = htmlForFrame(page);
+    expect(out.startsWith('<!DOCTYPE html><html lang="en"><head><script>')).toBe(true);
+    expect(out.indexOf('localStorage')).toBeLessThan(out.indexOf('<script>1'));
+    expect(htmlForFrame('<!doctype html><p>hi')).toMatch(/^<!doctype html><script>/);
+    expect(htmlForFrame('<p>hi</p>')).toMatch(/^<script>[\s\S]*<p>hi<\/p>$/);
   });
 });

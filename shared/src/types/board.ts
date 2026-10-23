@@ -47,14 +47,43 @@ export const StageSchema = z.object({
   wipLimit: z.number().int().positive().optional(),
   /** Field ids that must be set to ENTER this stage (enforced server-side → 422). */
   requires: z.array(z.string()).optional(),
+  /**
+   * A ticket left idle here (no activity of any kind) for `afterHours` is
+   * archived, or moved to `toStageId` — e.g. Done → archived after 1 day,
+   * Review → Won't do after a week. Run hourly by the stageRules job.
+   */
+  auto: z
+    .object({
+      afterHours: z
+        .number()
+        .int()
+        .min(1)
+        .max(24 * 365),
+      action: z.enum(['archive', 'move']),
+      /** Required for 'move': another stage of the same board. */
+      toStageId: LocalIdSchema.optional(),
+    })
+    .refine((a) => a.action === 'archive' || !!a.toStageId, {
+      message: 'A move needs the stage to move to',
+      path: ['toStageId'],
+    })
+    .optional(),
 });
 export type Stage = z.infer<typeof StageSchema>;
+export type StageAuto = NonNullable<Stage['auto']>;
 
-/** Per person: a commenter may move tickets between THESE stages only. */
+/**
+ * Per person: a commenter may move tickets between THESE stages only.
+ * With `moves`, only along those paths — from a stage to the ones listed for
+ * it (X → Y, Z; never X → I). `moves` also binds an EDITOR: they still edit
+ * everything else, but change a ticket's stage only along their paths.
+ */
 export const StageGrantSchema = z.object({
   stages: z.array(LocalIdSchema),
   /** Only tickets assigned to them. */
   assignedOnly: z.boolean().optional(),
+  /** from stage id → the stage ids it may move to. Absent = any granted stage to any other. */
+  moves: z.record(LocalIdSchema, z.array(LocalIdSchema)).optional(),
 });
 export type StageGrant = z.infer<typeof StageGrantSchema>;
 

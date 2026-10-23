@@ -56,31 +56,44 @@ describe('notify() recipients and prefs', () => {
     expect(f.queue.pending()).toHaveLength(0);
   });
 
-  it('events and stageIds filter; watching overrides mode, events and stages', async () => {
+  it('a move is not news for a person: no inbox row, even for a watcher (only the conversation is)', async () => {
     useFakes();
-    const [actor, evOnly, stageOnly, watcher] = await Promise.all([
-      seedUser(),
-      seedUser(),
-      seedUser(),
-      seedUser(),
-    ]);
-    const board = await seedBoard([actor.uid, evOnly.uid, stageOnly.uid, watcher.uid]);
+    const [actor, all, watcher] = await Promise.all([seedUser(), seedUser(), seedUser()]);
+    const board = await seedBoard([actor.uid, all.uid, watcher.uid]);
     const t = await seedTicket(board.id, { stageId: 'st_rev' });
     await Promise.all([
-      seedPref(board.id, evOnly.uid, { mode: 'all', events: ['comment'] }),
-      seedPref(board.id, stageOnly.uid, { mode: 'all', stageIds: ['st_done'] }),
-      seedPref(board.id, watcher.uid, { mode: 'muted', events: ['comment'], watching: [t.id] }),
+      seedPref(board.id, all.uid, { mode: 'all' }),
+      seedPref(board.id, watcher.uid, { mode: 'muted', watching: [t.id] }),
     ]);
-    const r = await route('stage', t, ctxOf(actor.uid), {
-      changes: { stageId: { from: 'st_todo', to: 'st_rev' } },
-    });
-    expect(Object.keys(r.inbox)).toEqual([watcher.uid]);
-    expect((await inbox(watcher.uid, `${t.id}:stage`))!.summary).toBe('moved to In review');
+    for (const ev of ['stage', 'state', 'updated'] as const) {
+      const r = await route(ev, t, ctxOf(actor.uid), {
+        changes: { stageId: { from: 'st_todo', to: 'st_rev' } },
+      });
+      expect(r.inbox).toEqual({});
+      expect(await inbox(watcher.uid, `${t.id}:${ev}`)).toBeUndefined();
+    }
+    // A comment still reaches them.
+    const c = await route('comment', t, ctxOf(actor.uid));
+    expect(Object.keys(c.inbox).sort()).toEqual([all.uid, watcher.uid].sort());
+  });
 
-    const r2 = await route('stage', { ...t, stageId: 'st_done' }, ctxOf(actor.uid), {
-      changes: { stageId: { from: 'st_rev', to: 'st_done' } },
-    });
-    expect(Object.keys(r2.inbox).sort()).toEqual([stageOnly.uid, watcher.uid].sort());
+  it('events filter; watching overrides mode and events', async () => {
+    useFakes();
+    const [actor, evOnly, other, watcher] = await Promise.all([
+      seedUser(),
+      seedUser(),
+      seedUser(),
+      seedUser(),
+    ]);
+    const board = await seedBoard([actor.uid, evOnly.uid, other.uid, watcher.uid]);
+    const t = await seedTicket(board.id);
+    await Promise.all([
+      seedPref(board.id, evOnly.uid, { mode: 'all', events: ['comment'] }),
+      seedPref(board.id, other.uid, { mode: 'all', events: ['assigned'] }),
+      seedPref(board.id, watcher.uid, { mode: 'muted', events: ['assigned'], watching: [t.id] }),
+    ]);
+    const r = await route('comment', t, ctxOf(actor.uid));
+    expect(Object.keys(r.inbox).sort()).toEqual([evOnly.uid, watcher.uid].sort());
   });
 
   it('mentioned is unconditional (even muted), limited to board readers, and excludes the actor', async () => {

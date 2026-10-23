@@ -126,4 +126,38 @@ describe('command()', () => {
     );
     expect((err as AppError).code).toBe('unavailable');
   });
+
+  it('a background call (a read) never shows the Saving pill', async () => {
+    let done!: (r: Response) => void;
+    const d = deps({
+      fetch: vi.fn(() => new Promise<Response>((r) => (done = r))) as unknown as typeof fetch,
+      savingDelayMs: 1,
+    });
+    const command = createCommandClient(d);
+    const p = command('profileUpdate', { name: 'Ok' }, { background: true });
+    await new Promise((r) => setTimeout(r, 20));
+    done(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    await p;
+    expect(d.onSaving).not.toHaveBeenCalled();
+  });
+
+  it('a request that never answers times out and lets the Saving pill go', async () => {
+    const d = deps({
+      fetch: vi.fn(
+        (_u: string, init: RequestInit) =>
+          new Promise<Response>((_, reject) =>
+            init.signal!.addEventListener('abort', () =>
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+            ),
+          ),
+      ) as unknown as typeof fetch,
+      savingDelayMs: 1,
+    });
+    const command = createCommandClient(d);
+    const err = await command('profileUpdate', { name: 'Ok' }, { timeoutMs: 30 }).catch((e) => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.code).toBe('unavailable');
+    expect(d.onSaving).toHaveBeenNthCalledWith(1, 1);
+    expect(d.onSaving).toHaveBeenNthCalledWith(2, -1);
+  });
 });

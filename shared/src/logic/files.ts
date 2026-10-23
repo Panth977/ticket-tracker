@@ -51,7 +51,46 @@ export const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
  * NEVER allow-same-origin — the document can never touch the app or the session.
  * Always load with srcdoc (or a blob URL), never the app's origin.
  */
-export const HTML_SANDBOX = 'allow-scripts allow-popups allow-forms';
+export const HTML_SANDBOX = 'allow-scripts allow-popups allow-forms allow-modals allow-downloads';
+
+/**
+ * In the sandbox the document is an opaque origin, so `localStorage`,
+ * `sessionStorage` and `document.cookie` THROW — and a page that touches them
+ * at load (saving a selection, a theme) dies before it draws anything, while
+ * the same file opened from disk works. This runs first and gives such a page
+ * in-memory stand-ins (gone when the frame closes; nothing reaches the app).
+ */
+const HTML_STORAGE_SHIM =
+  '<script>(function(){' +
+  'function mem(){var d=Object.create(null);return{' +
+  'getItem:function(k){k=String(k);return k in d?d[k]:null},' +
+  'setItem:function(k,v){d[String(k)]=String(v)},' +
+  'removeItem:function(k){delete d[String(k)]},' +
+  'clear:function(){for(var k in d)delete d[k]},' +
+  'key:function(i){var a=Object.keys(d);return i<a.length?a[i]:null},' +
+  'get length(){return Object.keys(d).length}}}' +
+  "['localStorage','sessionStorage'].forEach(function(n){try{window[n].length}catch(e){" +
+  'try{Object.defineProperty(window,n,{value:mem(),configurable:true})}catch(_){}}});' +
+  "try{document.cookie}catch(e){var c={};try{Object.defineProperty(document,'cookie',{" +
+  "get:function(){return Object.keys(c).map(function(k){return k+'='+c[k]}).join('; ')}," +
+  "set:function(v){var p=String(v).split(';')[0],i=p.indexOf('=');if(i>0)c[p.slice(0,i).trim()]=p.slice(i+1)}," +
+  'configurable:true})}catch(_){}}' +
+  '})();</script>';
+
+/**
+ * An HTML file as the sandboxed frame loads it (srcdoc): the storage shim
+ * goes in before the document's own scripts — inside <head> when there is
+ * one, never before the doctype (that would flip the page into quirks mode).
+ */
+export function htmlForFrame(html: string): string {
+  const at =
+    /<head(\s[^>]*)?>/i.exec(html) ??
+    /<html(\s[^>]*)?>/i.exec(html) ??
+    /<!doctype[^>]*>/i.exec(html);
+  if (!at) return HTML_STORAGE_SHIM + html;
+  const i = at.index + at[0].length;
+  return html.slice(0, i) + HTML_STORAGE_SHIM + html.slice(i);
+}
 
 /** Extension → language id (highlight.js / Shiki names). */
 const CODE_LANGUAGES: Record<string, string> = {

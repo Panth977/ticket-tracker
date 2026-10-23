@@ -5,6 +5,8 @@
  *   invites past expiresAt, still pending      → 'expired'
  *   inbox rows older than 90 days AND read     → deleted
  *   boards with autoArchiveDoneAfterDays       → done tickets completed longer ago archived
+ *   unread inbox rows                          → stale ones (ticket gone/archived, read
+ *                                                since, a move) marked read (inboxClean.ts)
  *   unattached uploads older than 24h          → deleted (no ticket.files row points at them)
  *   webhook deliveries (and notify deliveries) older than 30 days → deleted
  *   agent inbox events acked more than 30 days ago → deleted (unacked stay)
@@ -30,6 +32,7 @@ import { batchWriter, wholeTickets } from '../tickets/doc.js';
 import { baseDb } from '../db/index.js';
 import { driveBoardIds } from '../db/drive/board.js';
 import { readFiles } from '../tickets/read.js';
+import { clearTicketInbox, reconcileInbox } from './inboxClean.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 export const INBOX_READ_TTL_MS = 90 * DAY;
@@ -39,6 +42,7 @@ export interface HousekeepingResult {
   invitesExpired: number;
   inboxDeleted: number;
   ticketsArchived: number;
+  inboxReconciled: number;
   uploadsDeleted: number;
   deliveriesDeleted: number;
   agentEventsDeleted: number;
@@ -52,6 +56,7 @@ export async function housekeeping(now: number): Promise<HousekeepingResult> {
     invitesExpired: 0,
     inboxDeleted: 0,
     ticketsArchived: 0,
+    inboxReconciled: 0,
     uploadsDeleted: 0,
     deliveriesDeleted: 0,
     agentEventsDeleted: 0,
@@ -73,6 +78,8 @@ export async function housekeeping(now: number): Promise<HousekeepingResult> {
   await part('invitesExpired', () => expireInvites(now));
   await part('inboxDeleted', () => pruneInbox(now));
   await part('ticketsArchived', () => autoArchive(now));
+  // After the archive: the rows about tickets it just closed go too.
+  await part('inboxReconciled', () => reconcileInbox(now));
   await part('uploadsDeleted', () => pruneUploads(now));
   await part('deliveriesDeleted', () => pruneDeliveries(now));
   await part('agentEventsDeleted', () => pruneAgentEvents(now));
@@ -160,6 +167,7 @@ export async function autoArchive(now: number): Promise<number> {
       w.touch(now);
       w.commit();
       await batch.commit();
+      await clearTicketInbox(b.id, t.id, now);
       n++;
     }
   }

@@ -10,7 +10,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags -- highlightCode() escapes its input */
   import { Play } from 'lucide-svelte';
-  import { HTML_SANDBOX, parseBucketRefPath } from '@tm/shared';
+  import { HTML_SANDBOX, htmlForFrame, parseBucketRefPath } from '@tm/shared';
   import { Markdown, highlightCode, markdownExcerpt } from '$lib/editor';
   import {
     CARD_HTML_BYTES,
@@ -136,7 +136,7 @@
     <iframe
       title="Preview of {file.name}"
       sandbox={HTML_SANDBOX}
-      srcdoc={text}
+      srcdoc={htmlForFrame(text)}
       referrerpolicy="no-referrer"
       loading="lazy"
       tabindex="-1"

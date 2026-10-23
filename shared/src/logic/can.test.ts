@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasStagePaths,
+  stagePathAllows,
   ACTIONS,
   actionsForScopes,
   can,
@@ -170,6 +172,31 @@ describe('can — commenter StageGrant', () => {
   });
   it('editors move anywhere regardless of grants', () => {
     expect(can({ actor: 'ed' }, board(), 'move', t('todo'), 'backlog')).toBe(true);
+  });
+});
+
+describe('can — stage paths (StageGrant.moves)', () => {
+  const t = (stageId: string) => ({ stageId, assigneeUids: [] as string[] });
+  const paths = { review: ['done'], done: [] as string[] };
+  it('a commenter moves only along their paths', () => {
+    const b = board({ stageGrants: { co: { stages: ['review', 'done'], moves: paths } } });
+    expect(can({ actor: 'co' }, b, 'move', t('review'), 'done')).toBe(true);
+    expect(can({ actor: 'co' }, b, 'move', t('done'), 'review')).toBe(false);
+  });
+  it('an editor with paths: X → Y only, everything else still theirs', () => {
+    const b = board({
+      stageGrants: { ed: { stages: ['todo', 'review', 'done'], moves: { todo: ['review'] } } },
+    });
+    expect(can({ actor: 'ed' }, b, 'move', t('todo'), 'review')).toBe(true);
+    expect(can({ actor: 'ed' }, b, 'move', t('todo'), 'done')).toBe(false);
+    expect(can({ actor: 'ed' }, b, 'edit')).toBe(true);
+    expect(hasStagePaths(b, 'ed')).toBe(true);
+    expect(hasStagePaths(b, 'ad')).toBe(false);
+  });
+  it('staying put is always fine; no paths = no limit', () => {
+    expect(stagePathAllows({ moves: {} }, 'a', 'a')).toBe(true);
+    expect(stagePathAllows({}, 'a', 'b')).toBe(true);
+    expect(stagePathAllows({ moves: { a: ['c'] } }, 'a', 'b')).toBe(false);
   });
 });
 

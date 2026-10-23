@@ -113,6 +113,24 @@ describe('ticketUpdate', () => {
     ).rejects.toMatchObject({ code: 'forbidden' });
   });
 
+  it('editor with stage paths: edits anything, moves only along the paths (X → Y, never X → Z)', async () => {
+    spyPorts();
+    const { asha, eddy } = await people('asha', 'eddy');
+    const all = [STAGES.todo, STAGES.doing, STAGES.review];
+    const b = await seedBoard({
+      admin: asha,
+      editors: [eddy],
+      grants: { [eddy.uid]: { stages: all, moves: { [STAGES.todo]: [STAGES.doing] } } },
+    });
+    const { ticketId } = await call(asha, 'ticketCreate', { boardId: b.id, title: 'T' });
+    await expect(
+      call(eddy, 'ticketUpdate', { boardId: b.id, ticketId, patch: { stageId: STAGES.review } }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await call(eddy, 'ticketUpdate', { boardId: b.id, ticketId, patch: { title: 'edited' } });
+    await call(eddy, 'ticketUpdate', { boardId: b.id, ticketId, patch: { stageId: STAGES.doing } });
+    expect(await T(b.id, ticketId)).toMatchObject({ title: 'edited', stageId: STAGES.doing });
+  });
+
   it('ifUpdatedAt: stale title edit → 409 with the current ticket', async () => {
     spyPorts();
     let now = 1_800_000_000_000;

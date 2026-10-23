@@ -21,7 +21,7 @@ import {
   type TicketPatch,
   type TicketWithId,
 } from '@tm/shared';
-import { can, roleOf, type Action } from '@tm/shared/logic/can';
+import { can, hasStagePaths, roleOf, type Action } from '@tm/shared/logic/can';
 import type { WithId } from '$lib/stores';
 import { outbox } from '$lib/api';
 import { principalChoices } from '$lib/people/pickers';
@@ -117,6 +117,9 @@ export class BoardState {
 
   /** May I drop this ticket in that stage? (editor+, or a commenter within their StageGrant). */
   canMoveTo(t: Pick<Ticket, 'stageId' | 'assigneeUids'>, toStageId: string): boolean {
+    // Stage paths (StageGrant.moves) bind an editor's moves too.
+    const b = this.board;
+    if (b && this.me && hasStagePaths(b, this.me)) return this.can('move', t, toStageId);
     return this.can('edit') || this.can('move', t, toStageId);
   }
 

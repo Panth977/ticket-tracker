@@ -287,9 +287,8 @@ async function ask(t: Target): Promise<Answer> {
   const a = (await command(
     'driveDocs',
     { target, ...shape } as never,
-    {
-      toast: false,
-    } as never,
+    // A read: no 'Saving…' pill, however slow Drive is.
+    { toast: false, background: true } as never,
   )) as unknown as Answer;
   return {
     ...a,

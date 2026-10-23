@@ -22,6 +22,7 @@
  * the command: a notification failure is logged, the change stands.
  */
 import {
+  SILENT_EVENTS,
   paths,
   type BoardPref,
   type CommandCtx,
@@ -100,15 +101,18 @@ export async function route(
       ? ((extra.changes?.stageId?.to as string | undefined) ?? ticket?.stageId)
       : undefined;
 
-  const uids = candidates({
-    event,
-    actor: ctx.actor,
-    ticket,
-    readers: board.readerUids,
-    recipients: extra.recipients,
-    mentioned: extra.mentioned,
-    exclude: extra.exclude,
-  });
+  // People hear about the conversation, not about moves and edits (agents still do).
+  const uids = SILENT_EVENTS.includes(event)
+    ? []
+    : candidates({
+        event,
+        actor: ctx.actor,
+        ticket,
+        readers: board.readerUids,
+        recipients: extra.recipients,
+        mentioned: extra.mentioned,
+        exclude: extra.exclude,
+      });
   const agentIds = agentRecipients({
     event,
     actor: ctx.actor,
