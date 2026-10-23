@@ -100,6 +100,15 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   await page.getByRole('button', { name: 'TypeScript' }).click();
   // the dev engine: editor + preview (TypeScript comes from the CDN on first build)
   await expect(page.locator('sbx-editor')).toBeVisible();
+  // the explorer: the starter's files, and a new one made inline in a new folder
+  const tree = page.locator('.sbx-tree__body');
+  await expect(tree.locator('.sbx-tree__name', { hasText: 'index.ts' })).toBeVisible();
+  await expect(tree.locator('.sbx-tree__name', { hasText: 'manifest.json' })).toBeVisible();
+  await page.locator('.sbx-tree__head [data-act=new-file]').click();
+  await tree.locator('.sbx-tree__input').fill('lib/format.ts');
+  await tree.locator('.sbx-tree__input').press('Enter');
+  await expect(tree.locator('.sbx-tree__row[data-folder=true]', { hasText: 'lib' })).toBeVisible();
+  await expect(page.locator('.sbx-dev__tab[aria-selected=true]')).toContainText('format.ts');
   const preview = page.frameLocator('.sbx-dev__preview iframe');
   await expect(preview.locator('h1')).toHaveText('Notes', { timeout: 60_000 });
   await preview.locator('input[name=text]').fill('from the preview');
