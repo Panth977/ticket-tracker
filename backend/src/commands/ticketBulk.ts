@@ -13,7 +13,14 @@
  * the whole run ('Priya moved 14 tickets to Done'), not fourteen; webhooks
  * stay per ticket (receivers sync ticket by ticket).
  */
-import { betweenN, can, diff, effectiveRole, type CanCtx } from '@tm/shared/logic/index';
+import {
+  betweenN,
+  can,
+  diff,
+  effectiveRole,
+  hasStagePaths,
+  type CanCtx,
+} from '@tm/shared/logic/index';
 import {
   bulkActionScope,
   errors,
@@ -26,6 +33,7 @@ import { db } from '../runtime/firebase.js';
 import { batchWriter } from '../tickets/doc.js';
 import { loadBoard, requireCan, requireWritableBoard, withTicketId } from '../tickets/access.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
+import { clearTicketInbox } from '../notify/inboxClean.js';
 import { chunk } from '../tickets/locate.js';
 import { applyPatch, updatesFor, type CleanPatch, type Pair } from '../tickets/patch.js';
 import { toPublicTicket } from '../platform/public.js';
@@ -133,7 +141,7 @@ export default defineCommand('ticketBulk', async (ctx, input) => {
     }
     let viaGrant: string[] | undefined;
     if (a.type === 'stage') {
-      if (!editor) {
+      if (!editor || hasStagePaths(board, ctx.actor)) {
         if (!can(rc, board, 'move', t, a.stageId)) {
           skipped.push(id);
           continue;
@@ -205,6 +213,7 @@ export default defineCommand('ticketBulk', async (ctx, input) => {
         ctx,
       );
     } else if (a.type === 'state') {
+      if (a.state === 'archived') await clearTicketInbox(boardId, t.id, ctx.now);
       await emitSafe(boardId, 'ticket.state', () => toPublicTicket(board, t), ctx);
     } else {
       const changes = Object.keys(diff(before, t)).map((k) => k.split('.')[0]!);

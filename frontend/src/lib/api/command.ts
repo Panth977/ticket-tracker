@@ -40,7 +40,17 @@ export interface CommandOptions {
   /** false = no toast on failure; a string = the toast's headline. */
   toast?: boolean | string;
   signal?: AbortSignal;
+  /**
+   * A read or a poll, not a change: never shows 'Saving…' (a Drive board's
+   * reads take seconds and run every minute — the pill would never go away).
+   */
+  background?: boolean;
+  /** Give up after this long ('unavailable'); default REQUEST_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+/** No request may hold the 'Saving…' pill (or its caller) forever. */
+export const REQUEST_TIMEOUT_MS = 120_000;
 
 /** Input without clientId (pass it via opts.clientId). */
 // Distributive: a union request (whatsappLink send | verify) keeps its variants
@@ -103,6 +113,21 @@ export function describeError(err: AppError): string {
   }
 }
 
+/** Aborts when any of these does (AbortSignal.any, where the browser lacks it). */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  const any = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  if (any) return any(signals);
+  const c = new AbortController();
+  for (const s of signals) {
+    if (s.aborted) {
+      c.abort();
+      break;
+    }
+    s.addEventListener('abort', () => c.abort(), { once: true });
+  }
+  return c.signal;
+}
+
 export function createCommandClient(deps: CommandDeps) {
   const base = deps.baseUrl ?? '/api';
   const delay = deps.savingDelayMs ?? 250;
@@ -130,10 +155,16 @@ export function createCommandClient(deps: CommandDeps) {
     const body = { ...(input as object), clientId };
     let rollback: () => void = () => {};
     let savingShown = false;
-    const timer = setTimeout(() => {
-      savingShown = true;
-      deps.onSaving(1);
-    }, delay);
+    const timer = opts.background
+      ? undefined
+      : setTimeout(() => {
+          savingShown = true;
+          deps.onSaving(1);
+        }, delay);
+    // The caller's signal, or our own deadline — whichever comes first.
+    const deadline = new AbortController();
+    const timeout = setTimeout(() => deadline.abort(), opts.timeoutMs ?? REQUEST_TIMEOUT_MS);
+    const signal = opts.signal ? anySignal([opts.signal, deadline.signal]) : deadline.signal;
 
     try {
       if (!deps.isOnline())
@@ -151,13 +182,15 @@ export function createCommandClient(deps: CommandDeps) {
       if (!token) throw new AppError('unauthenticated');
       let res: Response;
       try {
-        res = await send(name, body, token, opts.signal);
+        res = await send(name, body, token, signal);
         if (res.status === 401) {
           // Token may have just expired: refresh once, same clientId.
           token = await deps.getToken(true);
-          res = await send(name, body, token, opts.signal);
+          res = await send(name, body, token, signal);
         }
       } catch (e) {
+        if (deadline.signal.aborted && !opts.signal?.aborted)
+          throw new AppError('unavailable', 'The server took too long to answer — try again.');
         if ((e as { name?: string })?.name === 'AbortError') throw e;
         throw new AppError('unavailable', 'Could not reach the server — check your connection.');
       }
@@ -184,6 +217,7 @@ export function createCommandClient(deps: CommandDeps) {
       throw err;
     } finally {
       clearTimeout(timer);
+      clearTimeout(timeout);
       if (savingShown) deps.onSaving(-1);
       // On success the listener delivers the committed document shortly after
       // the response; keep the overlay a moment longer so the UI never flickers

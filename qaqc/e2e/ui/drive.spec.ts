@@ -465,3 +465,32 @@ test('D10: a Drive board — the card counts unread messages; the thread opens a
   await page.waitForTimeout(9_000);
   await expect(last).toBeInViewport();
 });
+
+test('D11: an HTML page that uses localStorage runs in the bucket preview', async ({ page }) => {
+  test.setTimeout(120_000);
+  const ki = await newPerson('Ki');
+  await signIn(page, ki.email, '/account/drive');
+  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
+  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
+  const { bucketId } = await call(ki, 'bucketCreate', {
+    name: 'Pages',
+    storage: { kind: 'drive' },
+  });
+  // The sandbox is an opaque origin: real storage and cookies throw there, and
+  // a page touching them at load used to die before drawing anything.
+  await call(ki, 'bucketFileWrite', {
+    bucketId,
+    path: 'app.html',
+    text:
+      '<!doctype html><html><head><title>t</title></head><body><p id="o">not run</p><script>' +
+      "localStorage.setItem('pick', 'six'); sessionStorage.setItem('n', '1'); document.cookie = 'k=v';" +
+      "document.getElementById('o').textContent = 'ran ' + localStorage.getItem('pick') + ' ' + document.cookie;" +
+      '</script></body></html>',
+  });
+
+  await page.goto(`/bucket/${bucketId}`);
+  await page.getByRole('button', { name: 'Tree' }).click();
+  await nodeEl(page, 'app.html').click();
+  const frame = page.frameLocator('main iframe').first();
+  await expect(frame.locator('#o')).toHaveText('ran six k=v', { timeout: 20_000 });
+});

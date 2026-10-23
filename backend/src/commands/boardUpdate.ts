@@ -200,9 +200,27 @@ export function planUpdate(board: Board, { patch, remap }: Pick<Input, 'patch' |
     for (const [uid, g] of Object.entries(board.stageGrants)) {
       const stages = g.stages.filter((s) => nextById.has(s));
       if (stages.length !== g.stages.length) changed = true;
-      grants[uid] = { ...g, stages };
+      let moves = g.moves;
+      if (moves) {
+        const kept: Record<string, string[]> = {};
+        for (const [from, to] of Object.entries(moves)) {
+          if (!nextById.has(from)) continue;
+          kept[from] = to.filter((s) => nextById.has(s));
+        }
+        if (JSON.stringify(kept) !== JSON.stringify(moves)) changed = true;
+        moves = kept;
+      }
+      grants[uid] = { ...g, stages, ...(moves ? { moves } : {}) };
     }
     if (changed) u.stageGrants = grants;
+    // A stage's auto-move must name another stage of this board.
+    for (const st of next) {
+      const to = st.auto?.action === 'move' ? st.auto.toStageId : undefined;
+      if (to !== undefined && (to === st.id || !nextById.has(to)))
+        throw errors.invalid(
+          `Stage "${st.name}": its auto-move goes to a stage that is not on the board`,
+        );
+    }
   }
 
   if (patch.priorities) {

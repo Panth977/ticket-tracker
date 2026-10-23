@@ -61,7 +61,10 @@ describe('HTML sandbox', () => {
     const { container } = render(HtmlFrame, { html: '<p>hi</p>', title: 'Doc' });
     const frame = container.querySelector('iframe')!;
     assertSandboxed(frame);
-    expect(frame.getAttribute('srcdoc')).toBe('<p>hi</p>');
+    // The page itself, after the storage shim (an opaque origin's storage throws).
+    expect(frame.getAttribute('srcdoc')).toMatch(
+      /^<script>[\s\S]*localStorage[\s\S]*<\/script><p>hi<\/p>$/,
+    );
     expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
   });
 

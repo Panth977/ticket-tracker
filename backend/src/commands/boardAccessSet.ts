@@ -85,9 +85,12 @@ export async function applyAccess(ctx: ServerCtx, input: Input): Promise<{ remov
           : 'A board needs at least one admin',
       );
 
-    // Grants belong to commenters only: removed people and ex-commenters lose theirs.
-    for (const uid of Object.keys(grants)) {
-      if (access[uid] !== 'commenter') {
+    // Grants belong to commenters (stages + paths) and editors (paths only):
+    // removed people, and anyone now admin or viewer, lose theirs.
+    const granted = (r: string | undefined) => r === 'commenter' || r === 'editor';
+    for (const [uid, g] of Object.entries(grants)) {
+      // An editor keeps only paths: a commenter's plain stage list means nothing to them.
+      if (!granted(access[uid]) || (access[uid] === 'editor' && !g.moves)) {
         delete grants[uid];
         touched.add(uid);
       }
@@ -98,9 +101,12 @@ export async function applyAccess(ctx: ServerCtx, input: Input): Promise<{ remov
       if (g === null) {
         delete grants[uid];
       } else {
-        if (access[uid] !== 'commenter')
-          throw errors.invalid('Stage grants are for commenters only', { uid });
-        const bad = g.stages.filter((s) => !stageIds.has(s));
+        if (!granted(access[uid]))
+          throw errors.invalid('Stage grants are for commenters and editors only', { uid });
+        if (access[uid] === 'editor' && !g.moves)
+          throw errors.invalid('An editor’s grant is its stage paths', { uid });
+        const paths_ = Object.entries(g.moves ?? {}).flatMap(([from, to]) => [from, ...to]);
+        const bad = [...g.stages, ...paths_].filter((s) => !stageIds.has(s));
         if (bad.length) throw errors.invalid('Unknown stage ids', { stageIds: bad });
         grants[uid] = g;
       }

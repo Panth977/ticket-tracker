@@ -21,7 +21,7 @@
   import { Bell, Bot, Inbox, KeyRound, LogOut, Mail, Search, SquareCheck } from 'lucide-svelte';
   import { derived, readable } from 'svelte/store';
   import { SvelteMap } from 'svelte/reactivity';
-  import type { BoardPref } from '@tm/shared';
+  import { UNREAD_EVENTS, type BoardPref } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
   import { palette } from '$lib/keyboard/palette.svelte';
   import { boardPref, inboxUnread, myBoards, myInvites } from '$lib/stores';
@@ -58,7 +58,9 @@
   );
   const unreadByBoard = $derived.by(() => {
     const m = new SvelteMap<string, number>();
-    for (const n of $inboxQ.data) m.set(n.boardId, (m.get(n.boardId) ?? 0) + 1);
+    // The conversation only: a move or an edit is not something to read.
+    for (const n of $inboxQ.data)
+      if (UNREAD_EVENTS.includes(n.event)) m.set(n.boardId, (m.get(n.boardId) ?? 0) + 1);
     return m;
   });
   const inboxCount = $derived($inboxQ.data.length);

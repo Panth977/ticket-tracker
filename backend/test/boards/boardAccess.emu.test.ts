@@ -139,6 +139,20 @@ describe('boardAccessSet', () => {
     await call(alice, 'boardAccessSet', { boardId, people: { [c.uid]: 'editor' } });
     expect((await getBoard(boardId))!.stageGrants[c.uid]).toBeUndefined();
     expect((await getMember(boardId, c.uid))!.stageGrant).toBeNull();
+
+    // An editor may be held to stage PATHS — and only paths make an editor's grant.
+    await expect(
+      call(alice, 'boardAccessSet', { boardId, stageGrants: { [c.uid]: { stages } } }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    const moves = { [stages[0]!]: [stages[1]!] };
+    await call(alice, 'boardAccessSet', { boardId, stageGrants: { [c.uid]: { stages, moves } } });
+    expect((await getBoard(boardId))!.stageGrants[c.uid]).toEqual({ stages, moves });
+    await expect(
+      call(alice, 'boardAccessSet', {
+        boardId,
+        stageGrants: { [c.uid]: { stages, moves: { [stages[0]!]: ['nope'] } } },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
   });
 
   it('anyone may leave', async () => {

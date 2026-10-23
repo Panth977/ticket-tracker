@@ -118,6 +118,8 @@ export const SCHEDULES = {
   deadlineSweep: 'every 15 minutes',
   digestSend: '0 * * * *',
   housekeeping: '0 3 * * *',
+  /** Stage.auto: idle tickets archived or moved on (tickets/stageRules.ts). */
+  stageRules: '20 * * * *',
   /**
    * Phase 3 (§L3): agent silence (5 min without a beat) and question expiry.
    *

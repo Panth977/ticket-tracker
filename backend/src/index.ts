@@ -132,6 +132,7 @@ function scheduleFn(name: ScheduleName) {
 export const deadlineSweep = scheduleFn('deadlineSweep');
 export const digestSend = scheduleFn('digestSend');
 export const housekeeping = scheduleFn('housekeeping');
+export const stageRules = scheduleFn('stageRules');
 // Phase 3 (§L3): agent silence + question expiry, every minute.
 export const agentSilenceSweep = scheduleFn('agentSilenceSweep');
 

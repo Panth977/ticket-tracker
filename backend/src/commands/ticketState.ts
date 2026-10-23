@@ -16,6 +16,7 @@ import { runTx } from '../runtime/tx.js';
 import { openTicket } from '../tickets/doc.js';
 import { loadBoard, requireCan, requireWritableBoard, withTicketId } from '../tickets/access.js';
 import { emitSafe, notifySafe } from '../tickets/effects.js';
+import { clearTicketInbox } from '../notify/inboxClean.js';
 import { toPublicTicket } from '../platform/public.js';
 import { stateAction, writeStateChange } from '../tickets/state.js';
 import { actorName } from '../tickets/writes.js';
@@ -47,6 +48,8 @@ export default defineCommand('ticketState', async (ctx, input) => {
 
   const after = withTicketId(boardId, ticketId, next);
   await notifySafe('state', after, ctx, { changes: { state: { from: before.state, to } } });
+  // Archived: nobody's unread number keeps counting it.
+  if (to === 'archived') await clearTicketInbox(boardId, ticketId, ctx.now);
   await emitSafe(boardId, 'ticket.state', () => toPublicTicket(board, after), ctx);
   return { ok: true as const };
 });

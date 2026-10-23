@@ -48,6 +48,15 @@ export const NOTIFY_EVENTS = [
 export const NotifyEventSchema = z.enum(NOTIFY_EVENTS);
 export type NotifyEvent = z.infer<typeof NotifyEventSchema>;
 
+/**
+ * Moves and edits are not news for a PERSON (Panth, 2026-10-23: "moving a
+ * ticket should not be a notification, only the comment should"): they
+ * write no inbox row and ring no channel. Agents still get them as events.
+ */
+export const SILENT_EVENTS: readonly NotifyEvent[] = ['stage', 'state', 'updated'];
+/** What a board's unread number in the sidebar counts: the conversation. */
+export const UNREAD_EVENTS: readonly NotifyEvent[] = ['comment', 'mentioned', 'question'];
+
 export const CHANNELS = ['inApp', 'push', 'email', 'whatsapp'] as const;
 export const ChannelSchema = z.enum(CHANNELS);
 export type Channel = z.infer<typeof ChannelSchema>;

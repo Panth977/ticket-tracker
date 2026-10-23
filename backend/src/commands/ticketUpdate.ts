@@ -15,7 +15,15 @@
  * after commit: notify stage / assigned / mentioned / updated; webhooks
  * ticket.moved (stage) and ticket.updated (anything else).
  */
-import { can, changedKeys, diff, isEmptyDoc, setDelta, type CanCtx } from '@tm/shared/logic/index';
+import {
+  can,
+  changedKeys,
+  diff,
+  hasStagePaths,
+  isEmptyDoc,
+  setDelta,
+  type CanCtx,
+} from '@tm/shared/logic/index';
 import {
   errors,
   isAgentId,
@@ -153,6 +161,13 @@ export default defineCommand('ticketUpdate', async (ctx, input) => {
         requireCan(role, board, 'edit');
       requireCan(role, board, 'move', ticket, toStage, 'Your stage grant does not cover this move');
       viaGrant = board.stageGrants[ctx.actor]?.stages;
+    } else if (
+      clean.stageId !== undefined &&
+      clean.stageId !== ticket.stageId &&
+      hasStagePaths(board, ctx.actor)
+    ) {
+      // An editor with stage paths edits freely but moves only along them.
+      requireCan(role, board, 'move', ticket, toStage, 'Your stage rules do not allow this move');
     }
 
     if (touchesText && input.ifUpdatedAt !== undefined && ticket.updatedAt > input.ifUpdatedAt) {
