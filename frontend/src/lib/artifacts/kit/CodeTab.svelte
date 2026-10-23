@@ -196,7 +196,8 @@
     >
       <Code2 size={15} class="text-muted" aria-hidden="true" />
       <span class="truncate text-muted">
-        From {start.from}{#if dirty}<span class="text-subtle"> · unpublished changes</span>{/if}
+        From {start.from}{#if dirty}<span class="text-subtle">&nbsp;· unpublished changes</span
+          >{/if}
       </span>
       <span class="flex-1"></span>
       <Input

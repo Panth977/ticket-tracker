@@ -69,6 +69,7 @@ createRoot(document.getElementById("root")!).render(<App />);
 
 const REACT_APP = `import { useEffect, useState } from "react";
 import { host } from "@panth977/sandbox/artifact";
+import { StatTile } from "./components/StatTile";
 
 type Ticket = Awaited<ReturnType<typeof host.tickets.list>>[number];
 
@@ -121,15 +122,24 @@ export function App() {
         />
       </div>
       <div className="sbx-grid">
-        <div className="sbx-stat">
-          <span className="sbx-stat__label">Open tickets</span>
-          <span className="sbx-stat__value">{tickets.length}</span>
-        </div>
+        <StatTile label="Open tickets" value={tickets.length} />
+        <StatTile label="Stages in use" value={byStage.length} />
       </div>
       <div className="sbx-card sbx-card--pad">
         <sbx-chart type="bar" data={byStage} x="stage" y="n" height={240} />
       </div>
     </main>
+  );
+}
+`;
+
+const REACT_STAT = `/** A number with a label, in the UI kit's stat style. */
+export function StatTile({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="sbx-stat">
+      <span className="sbx-stat__label">{label}</span>
+      <span className="sbx-stat__value">{value}</span>
+    </div>
   );
 }
 `;
@@ -176,6 +186,7 @@ export const KIT_TEMPLATES: readonly KitTemplate[] = [
       '/manifest.json': manifest('Tickets by stage', { react: '19', 'react-dom': '19' }),
       '/index.tsx': REACT_INDEX,
       '/App.tsx': REACT_APP,
+      '/components/StatTile.tsx': REACT_STAT,
     },
   },
   {

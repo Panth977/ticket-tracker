@@ -18,7 +18,7 @@ import type { ArtifactInlineFile } from '@tm/shared';
 export const KIT_ARTIFACT_FILE = 'artifact.json';
 export const KIT_SOURCE_FILE = 'sbx-src.json';
 /** Pinned kit version: the CDN copy the dev engine's language worker comes from. */
-export const KIT_VERSION = '0.1.4';
+export const KIT_VERSION = '0.1.6';
 export const KIT_CDN = `https://cdn.jsdelivr.net/gh/Panth977/sandbox-environment@v${KIT_VERSION}/dist`;
 
 export type SourceFiles = Record<string, string>;
