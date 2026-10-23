@@ -4,7 +4,7 @@
   "version": "2.2.0",
   "apiVersion": "v1",
   "updated": "2026-10-17",
-  "contentSha256": "eb080f3bdbe943c3d307cdfab9bcf032b9af03628be24c4ce5655bc5edb7ce84",
+  "contentSha256": "c92ded499be7936945fe69bd7ba67cbbcaf5369937da1437b460abcbe171a6d1",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",

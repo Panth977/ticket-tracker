@@ -405,8 +405,10 @@ db.tickets.onAggregates(board, query, cb, onErr?)   → unsubscribe (live)</pre>
     <p>Besides a static folder that talks through <code>window.BackendDriver</code>, an artifact can be a <b>kit artifact</b>:
     source files (TypeScript, React/TSX, Svelte or plain JS) compiled <b>in the browser</b> by the open-source
     <a href="https://github.com/Panth977/sandbox-environment">Sandbox Environment</a> kit (<code>@panth977/sandbox</code>,
-    zero dependencies) and run by its render engine. The owner and editors write it in the host page's <b>Code</b> tab: a typed
-    editor (TypeScript errors, completions for <code>host.*</code>), a live preview with real data, Publish.</p>
+    zero dependencies) and run by its render engine. The owner and editors write it in the host page's <b>Code</b> tab: the VS Code
+    editor (Monaco, loaded from jsDelivr on first open) with TypeScript errors, completions for <code>host.*</code>,
+    hover, signature help, go to definition, rename and format from the kit's TypeScript worker; a live preview
+    with real data; Publish.</p>
     <h3 id="l1">L1 · A kit build is an ordinary build</h3>
     <pre>index.html      a plain page for anyone who opens the build URL by hand
 artifact.json   the compiled artifact (the kit's CompiledArtifact: ES modules keyed by sbx: URL, import map, manifest)

@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    eb080f3bdbe943c3d307cdfab9bcf032b9af03628be24c4ce5655bc5edb7ce84
+content-sha256:    c92ded499be7936945fe69bd7ba67cbbcaf5369937da1437b460abcbe171a6d1
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -6151,8 +6151,9 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 
 An artifact can also be written as **source** — plain JS, TypeScript, React (TSX) or Svelte — and
 run by the open-source [Sandbox Environment](https://github.com/Panth977/sandbox-environment) kit
-(`@panth977/sandbox`, zero dependencies). People write these in the artifact's **Code** tab (a
-typed editor, a live preview with real data, Publish). An agent publishes one like any build, with
+(`@panth977/sandbox`, zero dependencies). People write these in the artifact's **Code** tab (the
+VS Code editor, Monaco, with TypeScript errors, completions, go to definition and rename; a live
+preview with real data; Publish). An agent publishes one like any build, with
 three files:
 
 ```text
@@ -6165,7 +6166,7 @@ sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (
 else; TypeScript/TSX needs `typescript` installed next to the sources, Svelte needs `svelte`):
 
 ```bash
-npx -p github:Panth977/sandbox-environment#v0.1.9 sbx build ./my-artifact -o artifact.json
+npx -p github:Panth977/sandbox-environment#v0.2.1 sbx build ./my-artifact -o artifact.json
 ```
 
 Inside, the code imports the host API instead of using `window.BackendDriver`:
