@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 313fe40a5daa…</span>
+        <span>sha256 bef1e29bdd78…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -4165,7 +4165,7 @@ artifact_data_batch  write  Apply up to 400 set / update / delete writes to an a
 artifact.json   the compiled artifact
 sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (so the Code tab reopens it)</code></pre></figure>
 <p><code>artifact.json</code> is the kit compiler's output. Compile with the kit's CLI (plain JS needs nothing else; TypeScript/TSX needs <code>typescript</code> installed next to the sources, Svelte needs <code>svelte</code>):</p>
-<figure class="code" data-lang="bash"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>npx -p github:Panth977/sandbox-environment#v0.1.6 sbx build ./my-artifact -o artifact.json</code></pre></figure>
+<figure class="code" data-lang="bash"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>npx -p github:Panth977/sandbox-environment#v0.1.8 sbx build ./my-artifact -o artifact.json</code></pre></figure>
 <p>Inside, the code imports the host API instead of using <code>window.BackendDriver</code>:</p>
 <figure class="code" data-lang="ts"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>import { host } from "@panth977/sandbox/artifact";
 import { toast } from "@panth977/sandbox/ui";          // the UI kit: .sbx-* classes, &lt;sbx-table&gt;, &lt;sbx-chart&gt;, &lt;sbx-select&gt;…

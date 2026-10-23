@@ -438,7 +438,10 @@ host.bucket.list/tree/read/url/write/mkdir/remove
 host.ui.toast(message, kind) · host.ui.open(url)                      // drawn by the app, outside the frame</pre>
     <p>The full types are <code>kit/hostTypes.ts</code> (what the Code tab's editor loads). The UI kit — tokens, typography,
     <code>.sbx-*</code> classes, <code>&lt;sbx-select&gt;</code>, <code>&lt;sbx-table&gt;</code>, <code>&lt;sbx-chart&gt;</code>,
-    dialogs, menus, tabs, toasts — is loaded in every kit frame.</p>
+    dialogs, menus, tabs, toasts — is available in every kit frame, lazily: the tags are defined at
+    boot (so properties set early are kept), each component's code loads the first time it is rendered.
+    The Code tab's editor completes and checks <code>.ts/.tsx/.js</code> and <code>.svelte</code> files
+    (script blocks and template expressions).</p>
     <h3 id="l4">L4 · Where the kit comes from</h3>
     <p>The app depends on a tagged release (<code>github:Panth977/sandbox-environment#vX</code>); the dev engine's language worker
     loads from jsDelivr at the same tag; <code>scripts/deploy-lib.mjs</code> mirrors the kit's <code>dist/</code> at
