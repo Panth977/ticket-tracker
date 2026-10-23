@@ -57,6 +57,8 @@
       return null;
     }
   }
+  /** The source last published from here (JSON), until the next real edit. */
+  let published: string | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   function saveDraft(files: SourceFiles) {
     clearTimeout(saveTimer);
@@ -72,6 +74,7 @@
     }, 500);
   }
   function dropDraft() {
+    clearTimeout(saveTimer);
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch {
@@ -136,6 +139,9 @@
       network: ['*'],
       sandbox: ['allow-forms', 'allow-popups', 'allow-downloads', 'allow-modals'],
       onChange: (files) => {
+        // a late echo of what was just published is not a change
+        if (published !== null && JSON.stringify(files) === published) return;
+        published = null;
         dirty = true;
         saveDraft(files);
       },
@@ -167,6 +173,7 @@
         },
         { toast: 'Could not publish' },
       );
+      published = JSON.stringify(files);
       dropDraft();
       dirty = false;
       message = '';
