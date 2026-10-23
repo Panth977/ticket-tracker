@@ -1,5 +1,5 @@
 /**
- * Starters for the Code tab: a kit artifact in plain TypeScript, React or Svelte.
+ * Starters for the Code tab: a kit artifact in plain JavaScript, TypeScript, React or Svelte.
  * Each one shows the parts that matter — the UI kit, the viewer, a live
  * collection of the artifact's own data, the boards it was granted.
  */
@@ -60,6 +60,15 @@ for await (const docs of host.db.watchList("/notes", { orderBy: ["at", "desc"], 
   table.rows = docs.map((d) => d.data);
 }
 `;
+
+/** The same Notes app as plain JavaScript: no types, nothing to learn but the DOM. */
+const PLAIN_JS = VANILLA.replace('document.getElementById("root")!', 'document.getElementById("root")')
+  .replace('document.getElementById("who")!', 'document.getElementById("who")')
+  .replace('document.getElementById("notes") as any', 'document.getElementById("notes")')
+  .replace('(v: Date | null) =>', '(v) =>')
+  .replace('document.getElementById("add")!', 'document.getElementById("add")')
+  .replace('const form = e.target as HTMLFormElement;', 'const form = e.target;')
+  .replace('catch (err: any)', 'catch (err)');
 
 const REACT_INDEX = `import { createRoot } from "react-dom/client";
 import { App } from "./App";
@@ -172,6 +181,12 @@ const SVELTE_APP = `<script lang="ts">
 `;
 
 export const KIT_TEMPLATES: readonly KitTemplate[] = [
+  {
+    id: 'javascript',
+    label: 'JavaScript',
+    description: 'Plain JavaScript, no build step to think about: the UI kit and a live list of notes.',
+    files: { '/manifest.json': manifest('Notes'), '/index.js': PLAIN_JS },
+  },
   {
     id: 'vanilla',
     label: 'TypeScript',

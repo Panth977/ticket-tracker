@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    5f6eb90171dfddb34c9698a8c821bdf7152a0ebedfb5217095a46a80ade9a4bf
+content-sha256:    56b929467a085f83d04ba6b6fa0db8b53949063446ab86bbd2e6cc5b19c7e83f
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -6166,7 +6166,7 @@ sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (
 else; TypeScript/TSX needs `typescript` installed next to the sources, Svelte needs `svelte`):
 
 ```bash
-npx -p github:Panth977/sandbox-environment#v0.2.2 sbx build ./my-artifact -o artifact.json
+npx -p github:Panth977/sandbox-environment#v0.2.3 sbx build ./my-artifact -o artifact.json
 ```
 
 Inside, the code imports the host API instead of using `window.BackendDriver`:
