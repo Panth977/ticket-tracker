@@ -479,7 +479,7 @@ They answer and take the wire's own JSON: timestamps are `{ "$date": … }` both
 
 An artifact can also be written as **source** — plain JS, TypeScript, React (TSX) or Svelte — and
 run by the open-source [Sandbox Environment](https://github.com/Panth977/sandbox-environment) kit
-(`@panth977/sandbox`, zero dependencies). People write these in the artifact's **Code** tab (the
+([`jsr:@panth977/sandbox`](https://jsr.io/@panth977/sandbox), zero dependencies). People write these in the artifact's **Code** tab (the
 VS Code editor, Monaco, with TypeScript errors, completions, go to definition and rename; a live
 preview with real data; Publish). An agent publishes one like any build, with
 three files:
@@ -494,7 +494,7 @@ sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (
 else; TypeScript/TSX needs `typescript` installed next to the sources, Svelte needs `svelte`):
 
 ```bash
-npx -p github:Panth977/sandbox-environment#v0.2.1 sbx build ./my-artifact -o artifact.json
+npx -p github:Panth977/sandbox-environment#v0.2.2 sbx build ./my-artifact -o artifact.json
 ```
 
 Inside, the code imports the host API instead of using `window.BackendDriver`:

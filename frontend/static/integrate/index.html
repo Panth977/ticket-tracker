@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 c92ded499be7…</span>
+        <span>sha256 5f6eb90171df…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -4160,12 +4160,12 @@ artifact_data_set    write  Write one document of an artifact's own database (re
 artifact_data_batch  write  Apply up to 400 set / update / delete writes to an artifact's own database atomically — all of them or none.</code></pre></figure>
 <p>They answer and take the wire's own JSON: timestamps are <code>{ "$date": … }</code> both ways.</p>
 <h3 id="8-11-kit-artifacts-source-code-compiled-in-the-browser"><a class="anchor" href="#8-11-kit-artifacts-source-code-compiled-in-the-browser" aria-label="Link to this section">#</a>8.11 Kit artifacts: source code, compiled in the browser</h3>
-<p>An artifact can also be written as <strong>source</strong> — plain JS, TypeScript, React (TSX) or Svelte — and run by the open-source <a href="<a href="https://github.com/Panth977/sandbox-environment">Sandbox">https://github.com/Panth977/sandbox-environment">Sandbox</a> Environment</a> kit (<code>@panth977/sandbox</code>, zero dependencies). People write these in the artifact's <strong>Code</strong> tab (the VS Code editor, Monaco, with TypeScript errors, completions, go to definition and rename; a live preview with real data; Publish). An agent publishes one like any build, with three files:</p>
+<p>An artifact can also be written as <strong>source</strong> — plain JS, TypeScript, React (TSX) or Svelte — and run by the open-source <a href="<a href="https://github.com/Panth977/sandbox-environment">Sandbox">https://github.com/Panth977/sandbox-environment">Sandbox</a> Environment</a> kit (<a href="<a href="https://jsr.io/@panth977/sandbox"><code>jsr:@panth977/sandbox</code>">https://jsr.io/@panth977/sandbox"><code>jsr:@panth977/sandbox</code></a></a>, zero dependencies). People write these in the artifact's <strong>Code</strong> tab (the VS Code editor, Monaco, with TypeScript errors, completions, go to definition and rename; a live preview with real data; Publish). An agent publishes one like any build, with three files:</p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>index.html      any small page (shown only to someone who opens the build URL by hand)
 artifact.json   the compiled artifact
 sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (so the Code tab reopens it)</code></pre></figure>
 <p><code>artifact.json</code> is the kit compiler's output. Compile with the kit's CLI (plain JS needs nothing else; TypeScript/TSX needs <code>typescript</code> installed next to the sources, Svelte needs <code>svelte</code>):</p>
-<figure class="code" data-lang="bash"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>npx -p github:Panth977/sandbox-environment#v0.2.1 sbx build ./my-artifact -o artifact.json</code></pre></figure>
+<figure class="code" data-lang="bash"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>npx -p github:Panth977/sandbox-environment#v0.2.2 sbx build ./my-artifact -o artifact.json</code></pre></figure>
 <p>Inside, the code imports the host API instead of using <code>window.BackendDriver</code>:</p>
 <figure class="code" data-lang="ts"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>import { host } from "@panth977/sandbox/artifact";
 import { toast } from "@panth977/sandbox/ui";          // the UI kit: .sbx-* classes, &lt;sbx-table&gt;, &lt;sbx-chart&gt;, &lt;sbx-select&gt;…
