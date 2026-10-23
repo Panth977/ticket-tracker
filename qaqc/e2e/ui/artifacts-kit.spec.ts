@@ -100,8 +100,8 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   const { artifactId } = await call(owner, 'artifactCreate', { name: 'Coded' });
   await signIn(page, owner.email, `/x/${artifactId}?tab=code`);
   await page.getByRole('button', { name: 'TypeScript' }).click();
-  // the dev engine: editor + preview (TypeScript comes from the CDN on first build)
-  await expect(page.locator('sbx-editor')).toBeVisible();
+  // the dev engine: Monaco + preview (Monaco and TypeScript come from the CDN on first open)
+  await expect(page.locator('.sbx-dev__code .monaco-editor')).toBeVisible({ timeout: 60_000 });
   // the explorer: the starter's files, and a new one made inline in a new folder
   const tree = page.locator('.sbx-tree__body');
   await expect(tree.locator('.sbx-tree__name', { hasText: 'index.ts' })).toBeVisible();
@@ -113,18 +113,20 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   await expect(page.locator('.sbx-dev__tab[aria-selected=true]')).toContainText('format.ts');
   // completions while typing: host.* from the app's types
   await tree.locator('.sbx-tree__row[data-path="/index.ts"]').click();
-  await page.locator('sbx-editor textarea').click();
-  await page.keyboard.press('ControlOrMeta+Home');
+  await page.locator('.sbx-dev__code .monaco-editor .view-line').first().click();
+  // on a new last line
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
+  await page.keyboard.press('Enter');
   await page.keyboard.type('host.', { delay: 50 });
-  const pop = page.locator('sbx-editor .pop');
-  await expect(pop).toBeVisible({ timeout: 60_000 });
-  await expect(pop).toContainText('tickets');
+  const suggest = page.locator('.suggest-widget.visible');
+  await expect(suggest).toBeVisible({ timeout: 60_000 });
+  await expect(suggest).toContainText('tickets');
   // namespaces of methods are shown as objects, and the pane beside the list describes the item
-  await expect(pop.locator('.item .kind.object').first()).toBeVisible();
-  await expect(page.locator('sbx-editor .pop-detail')).toBeVisible({ timeout: 15_000 });
+  await expect(suggest.locator('.monaco-list-row .codicon-symbol-module').first()).toBeVisible();
+  await expect(page.locator('.suggest-details')).toBeVisible({ timeout: 15_000 });
   await page.keyboard.press('Escape');
   // undo the typing so the starter still builds
-  for (let i = 0; i < 5; i++) await page.keyboard.press('Backspace');
+  for (let i = 0; i < 6; i++) await page.keyboard.press('Backspace');
   const preview = page.frameLocator('.sbx-dev__preview iframe');
   await expect(preview.locator('h1')).toHaveText('Notes', { timeout: 60_000 });
   await preview.locator('input[name=text]').fill('from the preview');
