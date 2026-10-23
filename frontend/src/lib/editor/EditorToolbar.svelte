@@ -3,6 +3,8 @@
   ❓ when onask — the composer's 'Ask a question', §N1; 🧠 when onbucket —
   'Attach from bucket', bucket.html §E; 📋 when ontemplate — the board's
   message templates, templates.html §D1).
+  `collapsible` (the composer): on a phone only the actions show (📎 🧠 ❓ Σ 📋)
+  and a › button unfolds the formatting tools.
   <EditorToolbar {editor} onattach={() => fileInput.click()} onask={() => (askOpen = true)} />
 -->
 <script lang="ts">
@@ -19,6 +21,8 @@
     ListOrdered,
     Paperclip,
     Brain,
+    ChevronLeft,
+    ChevronRight,
     ClipboardList,
     Quote,
     Sigma,
@@ -40,6 +44,8 @@
     /** templates.html §D1: 'Use a template' — shown when the board has message templates. */
     ontemplate?: () => void;
     disabled?: boolean;
+    /** On a phone, hide the formatting tools behind a › toggle (the composer). */
+    collapsible?: boolean;
     class?: string;
   }
   let {
@@ -50,8 +56,13 @@
     onagg,
     ontemplate,
     disabled = false,
+    collapsible = false,
     class: cls = '',
   }: Props = $props();
+
+  /** Phone only: the formatting tools are unfolded. */
+  let expanded = $state(false);
+  const fold = $derived(collapsible && !expanded ? 'max-sm:hidden' : '');
 
   let tick = $state(0);
   $effect(() => {
@@ -171,12 +182,15 @@
       disabled={disabled || !editor}
       onmousedown={(ev: MouseEvent) => ev.preventDefault()}
       onclick={() => editor && t.run(editor)}
+      class={fold}
     />
-    {#if t.id === 'link' || t.id === 'code'}<span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"
+    {#if t.id === 'link' || t.id === 'code'}<span
+        class="mx-0.5 h-4 w-px bg-line {fold}"
+        aria-hidden="true"
       ></span>{/if}
   {/each}
   {#if onattach || onask || onbucket || onagg || ontemplate}
-    <span class="mx-0.5 h-4 w-px bg-line" aria-hidden="true"></span>
+    <span class="mx-0.5 h-4 w-px bg-line {fold}" aria-hidden="true"></span>
   {/if}
   {#if onattach}
     <IconButton icon={Paperclip} label="Attach files" size="sm" {disabled} onclick={onattach} />
@@ -197,6 +211,17 @@
       size="sm"
       {disabled}
       onclick={ontemplate}
+    />
+  {/if}
+  {#if collapsible}
+    <IconButton
+      icon={expanded ? ChevronLeft : ChevronRight}
+      label={expanded ? 'Hide formatting' : 'Show formatting'}
+      size="sm"
+      aria-expanded={expanded}
+      onmousedown={(ev: MouseEvent) => ev.preventDefault()}
+      onclick={() => (expanded = !expanded)}
+      class="ml-auto sm:hidden"
     />
   {/if}
 </div>

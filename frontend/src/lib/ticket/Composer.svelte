@@ -485,14 +485,20 @@
         onbucket={() => (bucketOpen = true)}
         onagg={canAgg ? () => (aggOpen = true) : undefined}
         ontemplate={$msgTemplates.list.length ? () => (templateOpen = true) : undefined}
+        collapsible
         class="border-b border-line px-1.5 py-1"
       />
       {#if uploads.length || bucketPicks.length}
-        <!-- Above the editor: an attachment never pushes Send away from where you type. -->
-        <ul class="flex flex-wrap gap-2 border-b border-line px-2 py-2" aria-label="Attachments">
+        <!-- Above the editor: an attachment never pushes Send away from where you type.
+             A phone keeps them on ONE row that scrolls sideways (Google Chat), so five
+             screenshots don't push the text field under the keyboard. -->
+        <ul
+          class="flex gap-2 overscroll-x-contain border-b border-line px-2 py-2 max-sm:snap-x max-sm:overflow-x-auto sm:flex-wrap"
+          aria-label="Attachments"
+        >
           {#each bucketPicks as p (p.bucketId + p.nodeId)}
             <li
-              class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border border-line px-2 py-1.5"
+              class="relative flex w-44 max-w-56 shrink-0 snap-start items-center gap-2 overflow-hidden rounded-md border border-line px-2 py-1.5 sm:w-auto"
               data-bucket-pick={p.name}
             >
               <Brain size={16} class="shrink-0 text-accent" aria-label="From bucket" />
@@ -515,7 +521,7 @@
           {/each}
           {#each uploads as u (u.id)}
             <li
-              class="relative flex max-w-56 items-center gap-2 overflow-hidden rounded-md border px-2 py-1.5
+              class="relative flex w-44 max-w-56 shrink-0 snap-start items-center gap-2 overflow-hidden rounded-md border px-2 py-1.5 sm:w-auto
               {u.status === 'error' ? 'border-danger' : 'border-line'}"
             >
               {#if u.preview}
