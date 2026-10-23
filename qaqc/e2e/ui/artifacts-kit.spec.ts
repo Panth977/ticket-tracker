@@ -119,6 +119,9 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   const pop = page.locator('sbx-editor .pop');
   await expect(pop).toBeVisible({ timeout: 60_000 });
   await expect(pop).toContainText('tickets');
+  // namespaces of methods are shown as objects, and the pane beside the list describes the item
+  await expect(pop.locator('.item .kind.object').first()).toBeVisible();
+  await expect(page.locator('sbx-editor .pop-detail')).toBeVisible({ timeout: 15_000 });
   await page.keyboard.press('Escape');
   // undo the typing so the starter still builds
   for (let i = 0; i < 5; i++) await page.keyboard.press('Backspace');
