@@ -494,7 +494,7 @@ sbx-src.json    { "files": { "/index.ts": "…", "/manifest.json": "…" } }   (
 else; TypeScript/TSX needs `typescript` installed next to the sources, Svelte needs `svelte`):
 
 ```bash
-npx -p github:Panth977/sandbox-environment#v0.2.2 sbx build ./my-artifact -o artifact.json
+npx -p github:Panth977/sandbox-environment#v0.2.3 sbx build ./my-artifact -o artifact.json
 ```
 
 Inside, the code imports the host API instead of using `window.BackendDriver`:

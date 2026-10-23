@@ -146,3 +146,15 @@ test('the Code tab: a starter, the live preview, Publish, the Website runs it', 
   await page.goto(`/x/${artifactId}?tab=code`);
   await expect(page.getByText(/From build/)).toBeVisible();
 });
+
+test('the Code tab: the plain JavaScript starter runs', async ({ page }) => {
+  test.setTimeout(120_000);
+  const owner = await newPerson('Jess');
+  const { artifactId } = await call(owner, 'artifactCreate', { name: 'Plain' });
+  await signIn(page, owner.email, `/x/${artifactId}?tab=code`);
+  await page.getByRole('button', { name: 'JavaScript' }).click();
+  await expect(page.locator('.sbx-tree__body .sbx-tree__name', { hasText: 'index.js' })).toBeVisible();
+  const preview = page.frameLocator('.sbx-dev__preview iframe');
+  await expect(preview.locator('h1')).toHaveText('Notes', { timeout: 60_000 });
+  await expect(page.locator('.sbx-dev__status [data-s=lang]')).toHaveText('JavaScript');
+});
