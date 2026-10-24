@@ -10,7 +10,11 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('uid'),
   ],
   '_dev/{doc}/items': [
+    index('at'),
     index('to'),
+  ],
+  '_tasks': [
+    index('state', 'runAt'),
   ],
   'agentInbox/{agentId}/events': [
     index('ackedAt'),
@@ -28,6 +32,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('slug'),
     index(['agents', '*', 'data']),
     index(['agents', '*']),
+    index(['boards', '*']),
     index(contains('memberUids'), desc('updatedAt')),
   ],
   'artifacts/{artifactId}/builds': [
@@ -36,6 +41,8 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
   'boards': [
     index('agentIds'),
     index('archivedAt'),
+    index('key'),
+    index('name'),
     index('ownerKey'),
     index('readerUids'),
     index(['counts', 'overdue']),
@@ -63,6 +70,8 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('assigneeUids'),
     index('createdBy'),
     index('fileIds'),
+    index('key'),
+    index('lastActivityAt'),
     index('nextCommitmentAt'),
     index('nextQuestionExpiresAt'),
     index('priorityId'),
@@ -81,6 +90,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
   ],
   'boards/{boardId}/views': [
     index('cardTemplateId'),
+    index('ownerUid'),
     index('ownerUid', 'position'),
     index('scope'),
     index('scope', 'position'),
@@ -121,6 +131,9 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('ownerUid'),
     index('slug'),
   ],
+  'dictionaries/{dictionaryId}/driveRev': [
+    index('at'),
+  ],
   'intakes': [
     index('boardId'),
     index('email'),
@@ -144,6 +157,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('grantId'),
   ],
   'orgs': [
+    index('handle'),
     index('memberUids'),
   ],
   'users': [
@@ -157,6 +171,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index(['actsAs', 'kind']),
   ],
   'users/{uid}/inbox': [
+    index('archivedAt'),
     index('archivedAt', desc('createdAt')),
     index('boardId', 'createdAt'),
     index('createdAt'),
@@ -165,6 +180,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('ticketId'),
   ],
   'users/{uid}/reads': [
+    index('boardId'),
     index('boardId', 'ticketId'),
   ],
 };

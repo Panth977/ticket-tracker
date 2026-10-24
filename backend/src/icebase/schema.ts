@@ -95,6 +95,7 @@ const GROUPS = new Set([
   'boards/{boardId}/members',
   'users/{uid}/inbox',
   'users/{uid}/apiKeys',
+  'users/{uid}/reads',
   'agentInbox/{agentId}/events',
   'boards/{boardId}/webhooks/{webhookId}/deliveries',
   'deliveries',

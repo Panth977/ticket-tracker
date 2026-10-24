@@ -48,7 +48,17 @@ export function icebaseServer(): Promise<RunningEmulator> {
   mkdirSync(dir, { recursive: true });
   const token = adminToken(dir);
   server = import('@panth977/icebase-cli/emulator').then((m) =>
-    m.startEmulator({ config: icebaseConfig, env: 'vm', dataDir: dir, listen: false, name: EMBEDDED, adminToken: token, without: ['auth', 'database', 'storage', 'functions', 'customAuth'], log: () => {} }),
+    m.startEmulator({
+      config: icebaseConfig,
+      env: 'vm',
+      dataDir: dir,
+      listen: false,
+      name: EMBEDDED,
+      adminToken: token,
+      without: ['auth', 'database', 'storage', 'functions', 'customAuth'],
+      log: () => {},
+      ...(process.env.ICEBASE_LEARN ? { learnIndexes: (x: { collection: string; suggestion: string }) => learn(process.env.ICEBASE_LEARN!)({ kind: 'index', collection: x.collection, message: 'server', suggestion: x.suggestion }) } : {}),
+    }),
   );
   // Calls made before it is up wait for it.
   registerEmbedded(EMBEDDED, async (req) => (await server!).handler(req));
