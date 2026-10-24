@@ -6,6 +6,9 @@
 import { contains, desc, index, type IndexSpec } from '@panth977/icebase/schema';
 
 export const INDEXES: Record<string, IndexSpec<string>[]> = {
+  '_authSessions': [
+    index('uid'),
+  ],
   '_dev/{doc}/items': [
     index('to'),
   ],

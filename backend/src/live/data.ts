@@ -25,7 +25,7 @@
  * moment it would show something the rules deny.
  */
 import { db, type DocumentData, type Query, type WhereFilterOp } from '../db/index.js';
-import { sqliteDb, type DocChange } from '../db/sqlite/index.js';
+import { onDocChanges, type DocChange } from '../db/changes.js';
 import { firestoreAllows, type RulesAuth } from '../rules/firestore.js';
 import { RtdbDenied, RtdbSession } from './rtdb.js';
 import { fromWire, resolveForRules, toWire } from './wire.js';
@@ -186,7 +186,7 @@ export class DataSession {
   };
 
   private ensureFeed(): void {
-    this.offChanges ??= sqliteDb().onChange(this.onChanges);
+    this.offChanges ??= onDocChanges(this.onChanges) ?? (() => {});
   }
 
   // ─── writes ────────────────────────────────────────────────────────────────

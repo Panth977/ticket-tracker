@@ -23,6 +23,7 @@
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@panth977/icebase": "file:/tmp/icebase-npm/icebase",
+    "@panth977/icebase-cli": "file:/tmp/icebase-npm/icebase-cli",
     "@panth977/icebase-server": "file:/tmp/icebase-npm/icebase-server",
     "@tm/shared": "workspace:*",
     "firebase-admin": "^14.4.0",

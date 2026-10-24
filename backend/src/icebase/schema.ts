@@ -74,6 +74,13 @@ const COLLECTIONS: Record<string, Name | null> = {
   _whatsappOtp: null,
   memories: null,
   'memories/{memoryId}/nodes': null,
+  // vm: local identity (identity/local) — server-only.
+  _authUsers: null,
+  _authEmails: null,
+  _authLinks: null,
+  _authOauth: null,
+  _authProviders: null,
+  _authSessions: null,
   _idem: null,
   _jobs: null,
   _triggerEvents: null,

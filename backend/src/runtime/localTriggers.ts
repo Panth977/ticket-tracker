@@ -16,8 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { blobKind } from '../blob/index.js';
 import { onFinalize } from '../blob/disk.js';
 import type { FinalizedObject } from '../blob/types.js';
-import { dbKind } from '../db/index.js';
-import { sqliteDb, type DocChange } from '../db/sqlite/index.js';
+import { changeSnapshot, onDocChanges, type DocChange } from '../db/changes.js';
 import { getTrigger, type TriggerHandlers } from './functions.js';
 
 type DocTriggerName = 'onTicketWritten' | 'onMessageWritten';
@@ -42,18 +41,7 @@ export function matchPattern(pattern: string, path: string): Record<string, stri
   return params;
 }
 
-function snapshotOf(path: string, data: Record<string, unknown> | undefined) {
-  const ref = sqliteDb().doc(path);
-  // The change carries the encoded document; read it back through a snapshot for decoding.
-  const decoded = data === undefined ? undefined : sqliteDb().decodeDoc(path, data);
-  return {
-    exists: data !== undefined,
-    id: ref.id,
-    ref,
-    data: () => decoded,
-    get: (f: string) => decoded?.[f],
-  };
-}
+const snapshotOf = changeSnapshot;
 
 function dispatch(changes: DocChange[]): void {
   for (const change of changes) {
@@ -104,6 +92,6 @@ let installed = false;
 export function installLocalTriggers(): void {
   if (installed) return;
   installed = true;
-  if (dbKind() === 'sqlite') sqliteDb().onChange(dispatch);
+  onDocChanges(dispatch);
   if (blobKind() === 'disk') onFinalize(finalized);
 }
