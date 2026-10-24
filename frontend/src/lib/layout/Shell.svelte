@@ -112,9 +112,11 @@
 <SearchProviders />
 
 {#if saving.active}
+  <!-- A phone's ticket drawer covers the screen: the pill sits BEHIND it (z-30 < the
+       drawer's z-40), so it never floats over the composer while you type. -->
   <div
     role="status"
-    class="fixed bottom-4 left-4 z-[65] flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted shadow-pop"
+    class="fixed bottom-4 left-4 z-30 flex sm:z-[65] items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted shadow-pop"
   >
     <span class="size-3 animate-spin rounded-full border-2 border-muted border-t-transparent"
     ></span> Saving…

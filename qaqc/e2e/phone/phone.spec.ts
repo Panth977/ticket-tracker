@@ -11,9 +11,13 @@
  *        the body at opacity 0, which reads as "tapping did nothing".
  *   §U3  the controls in the top bars are at least 40 px to a thumb, without
  *        the layout growing (a coarse pointer gets an invisible hit area).
+ *   §U4  the composer stays small: its toolbar shows the actions (📎 ❓ …) and
+ *        a › that unfolds the formatting tools, and files waiting to be sent
+ *        sit on one row that scrolls sideways (Google Chat), not a column
+ *        that pushes the text field under the keyboard.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { call, newBoard, newPerson, stage } from '../support/stack.js';
+import { call, giveAttachBucket, newBoard, newPerson, stage } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 /*
@@ -26,6 +30,7 @@ interface Box {
   height: number;
   right: number;
   x: number;
+  y: number;
 }
 interface El {
   tagName: string;
@@ -179,4 +184,53 @@ test('§U3: the top bar can be hit with a thumb', async ({ page }) => {
     expect(r.w, `${r.label} is only ${r.w}px wide to a thumb`).toBeGreaterThanOrEqual(40);
     expect(r.h, `${r.label} is only ${r.h}px tall to a thumb`).toBeGreaterThanOrEqual(40);
   }
+});
+
+test('§U4: the composer folds its formatting and keeps files on one sideways row', async ({
+  page,
+}) => {
+  const ada = await newPerson('Ada');
+  const b = await newBoard(ada, { name: 'Engineering' });
+  await giveAttachBucket(ada, b.id);
+  const t = await call(ada, 'ticketCreate', { boardId: b.id, title: 'Screenshots' });
+
+  await signIn(page, ada.email, `/t/${t.key}`);
+  const reply = page.getByRole('group', { name: 'Reply' });
+  const bar = reply.getByRole('toolbar', { name: 'Formatting' });
+  // Folded: the actions only.
+  await expect(bar.getByRole('button', { name: 'Attach files' })).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'Ask a question' })).toBeVisible();
+  await expect(bar.getByRole('button', { name: /^Bold/ })).toBeHidden();
+  // › unfolds the formatting tools, ‹ folds them again.
+  await bar.getByRole('button', { name: 'Show formatting' }).tap();
+  await expect(bar.getByRole('button', { name: /^Bold/ })).toBeVisible();
+  await bar.getByRole('button', { name: 'Hide formatting' }).tap();
+  await expect(bar.getByRole('button', { name: /^Bold/ })).toBeHidden();
+
+  // Five files: one row, as tall as one card, scrolling sideways.
+  const chooser = page.waitForEvent('filechooser');
+  await bar.getByRole('button', { name: 'Attach files' }).tap();
+  await (
+    await chooser
+  ).setFiles(
+    [1, 2, 3, 4, 5].map((i) => ({
+      name: `Screenshot_${i}.txt`,
+      mimeType: 'text/plain',
+      buffer: Buffer.from(`shot ${i}`),
+    })),
+  );
+  const dlg = page.getByRole('dialog', { name: 'Attach 5 files' });
+  await dlg.getByRole('button', { name: 'Attach 5' }).tap();
+  await expect(dlg).toBeHidden();
+  const list = reply.getByRole('list', { name: 'Attachments' });
+  await expect(list.getByRole('listitem')).toHaveCount(5);
+  const rows = await list.evaluate((ul) => {
+    const el = ul as unknown as El;
+    const tops = new Set(
+      [...el.querySelectorAll('li')].map((li) => Math.round(li.getBoundingClientRect().y)),
+    );
+    return { rows: tops.size, scrolls: el.scrollWidth > el.clientWidth };
+  });
+  expect(rows).toEqual({ rows: 1, scrolls: true });
+  expect(await sidewaysOverflow(page)).toBe(0);
 });
