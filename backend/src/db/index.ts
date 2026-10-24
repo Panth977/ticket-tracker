@@ -26,22 +26,33 @@ import type {
 } from './types.js';
 import { firestoreAdapter } from './firestore.js';
 import { sqliteAdapter } from './sqlite/index.js';
+import { icebaseAdapter, icebaseRawDb } from './icebase.js';
 import { RoutedDb } from './drive/router.js';
 import { adapterFor } from '../runtime/platform.js';
 
 export type * from './types.js';
 
-export type DbKind = 'firestore' | 'sqlite';
+export type DbKind = 'firestore' | 'sqlite' | 'icebase';
 
 /** The store this process uses: TM_DB, else the platform's (runtime/platform.ts). */
 export function dbKind(): DbKind {
   return adapterFor<DbKind>('TM_DB', { firebase: 'firestore', vm: 'sqlite' }, [
     'firestore',
     'sqlite',
+    'icebase',
   ]);
 }
 
-const adapter: DbAdapter = dbKind() === 'sqlite' ? sqliteAdapter : firestoreAdapter;
+const kind = dbKind();
+const adapter: DbAdapter = kind === 'sqlite' ? sqliteAdapter : kind === 'icebase' ? icebaseAdapter : firestoreAdapter;
+
+/**
+ * The database without schema checks, for seeding data a test means to be invalid or legacy
+ * (a migration test). With the IceBase adapter it skips write validation; the others are db().
+ */
+export function rawDb(): Db {
+  return kind === 'icebase' ? icebaseRawDb() : db();
+}
 
 let routed: { base: Db; db: RoutedDb } | undefined;
 

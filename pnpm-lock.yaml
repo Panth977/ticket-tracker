@@ -56,6 +56,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
+      '@panth977/icebase':
+        specifier: file:/tmp/icebase-npm/icebase
+        version: file:../../../../../tmp/icebase-npm/icebase(firebase@12.19.0)
+      '@panth977/icebase-server':
+        specifier: file:/tmp/icebase-npm/icebase-server
+        version: file:../../../../../tmp/icebase-npm/icebase-server(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2))(firebase-functions@7.4.0(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)))(firebase@12.19.0)
       '@tm/shared':
         specifier: workspace:*
         version: link:../shared
@@ -1293,6 +1299,27 @@ packages:
 
   '@oxc-project/types@0.150.0':
     resolution: {integrity: sha512-rDS5/31E9HfPl/CIzGrn0DOlvBbXFseQ5URJ9sYMfstbKLD/c6Gm9vmRzRGDdAXyOIL4zmO37lc9RIwYqVruZw==}
+
+  '@panth977/icebase-server@file:../../../../../tmp/icebase-npm/icebase-server':
+    resolution: {directory: ../../../../../tmp/icebase-npm/icebase-server, type: directory}
+    engines: {node: '>=22'}
+    peerDependencies:
+      firebase: ^13.1.0
+      firebase-admin: ^14.5.0
+      firebase-functions: ^7.4.0
+    peerDependenciesMeta:
+      firebase:
+        optional: true
+      firebase-admin:
+        optional: true
+      firebase-functions:
+        optional: true
+
+  '@panth977/icebase@file:../../../../../tmp/icebase-npm/icebase':
+    resolution: {directory: ../../../../../tmp/icebase-npm/icebase, type: directory}
+    engines: {node: '>=22'}
+    peerDependencies:
+      firebase: ^13.1.0
 
   '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/5f37c6e6c84c5056108963ccf7df09448269b8bf':
     resolution: {tarball: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/5f37c6e6c84c5056108963ccf7df09448269b8bf}
@@ -4900,6 +4927,18 @@ snapshots:
   '@opentelemetry/api@1.9.1': {}
 
   '@oxc-project/types@0.150.0': {}
+
+  '@panth977/icebase-server@file:../../../../../tmp/icebase-npm/icebase-server(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2))(firebase-functions@7.4.0(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)))(firebase@12.19.0)':
+    dependencies:
+      '@panth977/icebase': file:../../../../../tmp/icebase-npm/icebase(firebase@12.19.0)
+    optionalDependencies:
+      firebase: 12.19.0
+      firebase-admin: 14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
+      firebase-functions: 7.4.0(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2))
+
+  '@panth977/icebase@file:../../../../../tmp/icebase-npm/icebase(firebase@12.19.0)':
+    dependencies:
+      firebase: 12.19.0
 
   '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/5f37c6e6c84c5056108963ccf7df09448269b8bf': {}
 

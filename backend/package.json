@@ -22,6 +22,8 @@
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@panth977/icebase": "file:/tmp/icebase-npm/icebase",
+    "@panth977/icebase-server": "file:/tmp/icebase-npm/icebase-server",
     "@tm/shared": "workspace:*",
     "firebase-admin": "^14.4.0",
     "firebase-functions": "^7.4.0",

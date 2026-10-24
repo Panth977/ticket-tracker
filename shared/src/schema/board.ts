@@ -179,6 +179,8 @@ export const BoardSchema = z.object({
   archivedAt: MillisSchema.nullable(),
   createdBy: UidSchema,
   createdAt: MillisSchema,
+  /** Last change to the board's settings (boardUpdate and friends). */
+  updatedAt: MillisSchema.optional(),
   ...OwnedFieldsShape,
 });
 export type Board = z.infer<typeof BoardSchema>;

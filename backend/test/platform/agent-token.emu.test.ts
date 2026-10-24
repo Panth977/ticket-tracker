@@ -32,6 +32,7 @@ import { agentKeyDoc } from '../../src/platform/apiKeyMint.js';
 import { sha256hex } from '../../src/platform/crypto.js';
 import { createApp } from '../../src/http/app.js';
 import { db } from '../../src/runtime/firebase.js';
+import { rawDb } from '../../src/db/index.js';
 import { asAgent, makeAgent, type TestAgent } from '../agents/helpers.js';
 import { call, setupEmulators, uniq, type TestUser } from '../harness/index.js';
 import { people, seedBoard, STAGES, type SeededBoard } from '../tickets/helpers.js';
@@ -432,7 +433,7 @@ describe('§AA2 the role is the permission', () => {
     expect((await boardDoc(s.editing.id)).name).toBe(s.editing.board.name);
     // Webhooks: an editor does not even see that one exists.
     const hookId = uniq('wh');
-    await db()
+    await rawDb()
       .doc(paths.webhook(s.editing.id, hookId))
       .set({
         url: 'https://hooks.example.com/x',
@@ -460,7 +461,7 @@ describe('§AA2 the role is the permission', () => {
     expect((await boardDoc(s.owning.id)).name).toBe('Run by the agent');
     // Webhooks.
     const hookId = uniq('wh');
-    await db()
+    await rawDb()
       .doc(paths.webhook(s.owning.id, hookId))
       .set({
         url: 'https://hooks.example.com/x',

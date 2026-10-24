@@ -64,11 +64,27 @@ export function foreignSegments(v: unknown): string[] | null {
   return Array.isArray(segs) && segs.every((s) => typeof s === 'string') ? [...segs] : null;
 }
 
+/** IceBase's sentinels ({ op, operand }) — the icebase adapter's FieldValue. */
+const ICEBASE_KINDS = new Set(['increment', 'arrayUnion', 'arrayRemove', 'delete', 'serverTimestamp']);
+const isIceBaseSentinel = (v: unknown): v is { op: string; operand?: unknown } =>
+  typeof v === 'object' &&
+  v !== null &&
+  typeof (v as { op?: unknown }).op === 'string' &&
+  ICEBASE_KINDS.has((v as { op: string }).op) &&
+  typeof (v as { isEqual?: unknown }).isEqual === 'function';
+
 /** Anything coming from code above the port → the SQLite value classes. */
 export function toLocal(v: unknown): unknown {
   if (v === null || typeof v !== 'object') return v;
   if (v instanceof SqlFieldValue || v instanceof SqlTimestamp || v instanceof SqlFieldPath)
     return v;
+  if (isIceBaseSentinel(v)) {
+    const kind = v.op as ConstructorParameters<typeof SqlFieldValue>[0];
+    if (kind === 'increment') return new SqlFieldValue(kind, v.operand);
+    if (kind === 'arrayUnion' || kind === 'arrayRemove')
+      return new SqlFieldValue(kind, ((v.operand as unknown[]) ?? []).map(toLocal));
+    return new SqlFieldValue(kind);
+  }
   if (isForeignSentinel(v)) {
     const kind = ADMIN_KINDS[v.methodName]!;
     if (kind === 'increment') return new SqlFieldValue(kind, v.operand);
