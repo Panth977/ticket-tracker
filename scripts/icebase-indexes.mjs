@@ -9,9 +9,13 @@ const schemaSrc = readFileSync('backend/src/icebase/schema.ts', 'utf8');
 const templates = [...schemaSrc.matchAll(/^\s+'?([A-Za-z_{}/]+)'?: (?:'[A-Za-z]+'|null),$/gm)].map((m) => m[1]);
 const idOf = (t) => t.slice(t.lastIndexOf('/') + 1);
 
+/** firestore.indexes.json keys composites by collection id; these do not apply to every collection with that id. */
+const EXCLUDE = { 'boards/{boardId}/webhooks/{webhookId}/deliveries': ["index('uid', desc('createdAt'))"] };
+
 /** template → Set of index(…) code */
 const indexes = new Map();
 const add = (t, code) => {
+  if (EXCLUDE[t]?.includes(code)) return;
   if (!indexes.has(t)) indexes.set(t, new Set());
   indexes.get(t).add(code);
 };

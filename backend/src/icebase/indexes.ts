@@ -101,7 +101,6 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
   'boards/{boardId}/webhooks/{webhookId}/deliveries': [
     index('createdAt'),
     index('envelopeId'),
-    index('uid', desc('createdAt')),
   ],
   'buckets': [
     index('boardIds'),

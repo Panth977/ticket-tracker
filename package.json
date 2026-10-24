@@ -49,5 +49,13 @@
     "type": "git",
     "url": "https://github.com/Panth977/ticket-tracker.git"
   },
-  "homepage": "https://github.com/Panth977/ticket-tracker"
+  "homepage": "https://github.com/Panth977/ticket-tracker",
+  "pnpm": {
+    "overrides": {
+      "@jsr/panth977__icebase>firebase": "^12.19.0",
+      "@jsr/panth977__icebase-server>firebase-admin": "^14.4.0",
+      "@jsr/panth977__icebase-server>firebase-functions": "^7.4.0",
+      "@jsr/panth977__icebase-cli>firebase-admin": "^14.4.0"
+    }
+  }
 }
