@@ -46,10 +46,11 @@ async function bootIcebase(): Promise<void> {
     TM_ARTIFACT_ORIGIN: process.env.TM_ARTIFACT_ORIGIN || `http://localhost:${VM_PORT}`,
     TM_DEV_WEBHOOK_SINK: process.env.TM_DEV_WEBHOOK_SINK || 'http://127.0.0.1:5199',
     ICEBASE_LOG_ERRORS: '1',
+    ...(process.env.ICEBASE_LOG_REQUESTS ? { ICEBASE_LOG_REQUESTS: '1' } : {}),
   };
   const cli = join(ROOT, 'node_modules', '@panth977', 'icebase-cli', 'dist', 'cli', 'index.js');
   const child = spawn(process.execPath, [cli, 'serve', '--port', String(VM_PORT), '--host', '127.0.0.1', '--data', join(data, 'icebase')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  const log = (b: Buffer) => /failed|threw|gave up|Error/.test(String(b)) && process.stderr.write(b);
+  const log = (b: Buffer) => (process.env.ICEBASE_LOG_REQUESTS || /failed|threw|gave up|Error/.test(String(b))) && process.stderr.write(b);
   child.stdout.on('data', log);
   child.stderr.on('data', log);
   process.once('exit', () => child.kill());

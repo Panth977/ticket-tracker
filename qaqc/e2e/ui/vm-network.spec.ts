@@ -13,7 +13,7 @@
 import { createServer, connect, type Server } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
 import { mailTo, eventually, uniqueEmail } from '../support/stack.js';
-import { VM, VM_PORT } from '../../seed/vm.js';
+import { ICEBASE, VM, VM_PORT } from '../../seed/vm.js';
 
 test.skip(!VM, 'the VM build only');
 
@@ -60,7 +60,7 @@ test('sign-in link opened in a second tab, over a slow link: both tabs signed in
 
   const link = await eventually('sign-in link', async () => {
     const m = (await mailTo(email)).find((x) => x.subject === 'Sign in to TaskManager');
-    return m ? /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0] : null;
+    return m ? /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0] : null;
   });
   const second = await context.newPage();
   watch(second, 'second');
@@ -103,6 +103,8 @@ test('static files are served compressed', async ({ request }) => {
 test('a socket that reconnects with an expired token stays signed in (no trip to /welcome)', async ({
   context,
 }) => {
+  // The VM's own /live socket; the IceBase build's reconnects are IceBase's (its realtime client).
+  test.skip(ICEBASE, 'the /live socket is the VM build’s');
   // The laptop slept: the /live socket dropped, and the page reconnects still
   // holding the ID token that lapsed in the meantime. The route below plays
   // that: after `stale` is set, the first auth frame carries a dead token.
@@ -129,7 +131,7 @@ test('a socket that reconnects with an expired token stays signed in (no trip to
   await expect(page.getByText('We sent a sign-in link')).toBeVisible();
   const link = await eventually('sign-in link', async () => {
     const m = (await mailTo(email)).find((x) => x.subject === 'Sign in to TaskManager');
-    return m ? /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0] : null;
+    return m ? /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0] : null;
   });
   await page.goto(link.replace(/^https?:\/\/[^/]+/, ''));
   await expect(page).toHaveURL(/\/welcome/, { timeout: 30_000 });
