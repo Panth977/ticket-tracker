@@ -91,8 +91,13 @@ export async function migrateToIcebase(o: IcebaseMigrationOptions): Promise<Iceb
     let nc = 0;
     let nr = 0;
     for (const w of batch) {
-      if (w.raw) (raw.set(o.raw.doc(w.path), w.data), nr++);
-      else (checked.set(o.target.doc(w.path), w.data), nc++);
+      if (w.raw) {
+        raw.set(o.raw.doc(w.path), w.data);
+        nr++;
+      } else {
+        checked.set(o.target.doc(w.path), w.data);
+        nc++;
+      }
     }
     if (nc) await checked.commit();
     if (nr) await raw.commit();

@@ -21,7 +21,7 @@ const add = (t, code) => {
 };
 // keep what is there
 if (existsSync(out)) {
-  for (const m of readFileSync(out, 'utf8').matchAll(/^  '([^']+)': \[\n((?:    .+\n)*?)  \],$/gm)) for (const l of m[2].trim().split('\n')) add(m[1], l.trim().replace(/,$/, ''));
+  for (const m of readFileSync(out, 'utf8').matchAll(/^ {2}'([^']+)': \[\n((?: {4}.+\n)*?) {2}\],$/gm)) for (const l of m[2].trim().split('\n')) add(m[1], l.trim().replace(/,$/, ''));
 }
 const key = (p) => {
   const segs = p.split('.');
