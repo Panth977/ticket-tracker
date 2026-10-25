@@ -33,6 +33,7 @@
  * minutes, and no URL is ever written to Firestore.
  */
 import { Readable } from 'node:stream';
+import { storageSigns } from '../adapters/files.js';
 import type { Hono } from 'hono';
 import {
   errors,
@@ -135,7 +136,7 @@ export async function signedAccess(
   const bytesUrl = fileDoorPath(path, expiresAt);
   let url = bytesUrl;
   // A Drive bucket's file (§K3) has no URL of ours to sign: always the file door.
-  if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST && !parseDriveStoragePath(path)) {
+  if (storageSigns() && !parseDriveStoragePath(path)) {
     try {
       url = await ports().files.signedDownloadUrl(path, expiresAt);
     } catch (e) {

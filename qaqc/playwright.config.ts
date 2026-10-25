@@ -15,7 +15,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { URLS } from '../scripts/ports.mjs';
 
 // TM_E2E_PLATFORM=vm: the VM server runs inside each worker (seed/vm.ts) on one port.
-const VM = process.env.TM_E2E_PLATFORM === 'vm';
+const VM = process.env.TM_E2E_PLATFORM === 'vm' || process.env.TM_E2E_PLATFORM === 'icebase';
 const WEB = VM
   ? `http://127.0.0.1:${process.env.TM_E2E_VM_PORT || 5280}`
   : (process.env.TM_WEB_URL ?? (URLS as { web: string }).web);

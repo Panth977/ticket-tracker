@@ -36,7 +36,7 @@ export type DbKind = 'firestore' | 'sqlite' | 'icebase';
 
 /** The store this process uses: TM_DB, else the platform's (runtime/platform.ts). */
 export function dbKind(): DbKind {
-  return adapterFor<DbKind>('TM_DB', { firebase: 'firestore', vm: 'sqlite' }, [
+  return adapterFor<DbKind>('TM_DB', { firebase: 'firestore', vm: 'sqlite', icebase: 'icebase' }, [
     'firestore',
     'sqlite',
     'icebase',

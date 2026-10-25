@@ -75,7 +75,7 @@ interface Wire {
 export function artifactOrigin(): string {
   const env = process.env.TM_ARTIFACT_ORIGIN?.trim();
   if (env) return env.replace(/\/+$/, '');
-  if (platform() === 'vm' && process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
+  if (platform() !== 'firebase' && process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
   if (isEmulated()) return `http://127.0.0.1:${DEV_FUNCTIONS_PORT}/${projectId()}/${region()}/api`;
   return `https://${projectId()}-usercontent.web.app`;
 }

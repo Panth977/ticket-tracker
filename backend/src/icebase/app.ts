@@ -1,7 +1,9 @@
 /**
  * The IceBase app behind TaskManager's backend. TM_PLATFORM picks the environment:
  * 'firebase' runs every service on Firebase (sharing the one firebase-admin app, adminApp.ts);
- * 'vm' runs them on the IceBase server.
+ * 'vm' runs the database on an IceBase server embedded in this process;
+ * 'icebase' is TaskManager's functions inside the IceBase server (`icebase serve`), which tells
+ * them where it is (ICEBASE_EMULATOR_HOST) and its admin token (ICEBASE_ADMIN_TOKEN).
  *
  * ICEBASE_LEARN=<file> turns on IceBase's learning mode: an undeclared collection or index, or a
  * write that does not fit the schema, is appended to <file> (JSON lines) instead of refused.
@@ -22,8 +24,10 @@ import { schema } from './schema.js';
 export const icebaseConfig = defineConfig({
   name: 'taskmanager',
   schema,
-  firebase: { projectId: projectId() },
-  environments: { firebase: { mode: 'firebase' }, vm: { mode: 'emulator' } },
+  // The default bucket of the IceBase server (icebase.config.ts uses the same); on Firebase, the
+  // shared firebase-admin app's own bucket is used.
+  firebase: { projectId: projectId(), storageBucket: process.env.TM_STORAGE_BUCKET || `${projectId()}.appspot.com` },
+  environments: { firebase: { mode: 'firebase' }, vm: { mode: 'emulator' }, server: { mode: 'emulator' } },
 });
 
 // ─── vm: the IceBase server, embedded ──────────────────────────────────────────
@@ -65,9 +69,18 @@ export function icebaseServer(): Promise<RunningEmulator> {
   return server;
 }
 
+/** The IceBase server these functions run in (TM_PLATFORM=icebase). */
+function serverEmulator(): { origin: string; adminToken: string } {
+  const host = process.env.ICEBASE_EMULATOR_HOST;
+  const adminToken = process.env.ICEBASE_ADMIN_TOKEN;
+  if (!host || !adminToken) throw new Error('TM_PLATFORM=icebase runs inside the IceBase server (`icebase serve`): ICEBASE_EMULATOR_HOST and ICEBASE_ADMIN_TOKEN are not set');
+  return { origin: `http://${host.replace(/^https?:\/\//, '')}`, adminToken };
+}
+
 let app: IceBaseApp | undefined;
 export function icebaseApp(): IceBaseApp {
   if (app) return app;
+  if (platform() === 'icebase') return (app = initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager', emulator: serverEmulator() }));
   if (platform() === 'vm') {
     void icebaseServer();
     const dir = join(dataDir(), 'icebase');
@@ -136,6 +149,10 @@ export function icebaseFirestore(): Firestore {
 let rawApp: IceBaseApp | undefined;
 /** The same, without write validation (db/index.ts rawDb) — on the VM, the server skips its check too. */
 export function icebaseRawFirestore(): Firestore {
+  if (platform() === 'icebase') {
+    rawApp ??= initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager-raw', emulator: { ...serverEmulator(), unchecked: true } });
+    return getFirestore(rawApp, { validate: false, checkQueryValues: false });
+  }
   if (platform() !== 'vm') return getFirestore(icebaseApp(), { validate: false, checkQueryValues: false });
   icebaseApp();
   const dir = join(dataDir(), 'icebase');

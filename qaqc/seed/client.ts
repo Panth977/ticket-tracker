@@ -16,7 +16,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import type { CommandName, CommandReq, CommandRes, PMNode, RichTextDoc } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts (no types needed)
 import { EMULATOR_ENV, PROJECT_ID, URLS } from '../../scripts/ports.mjs';
-import { bootVm, VM, VM_URL, vmAdmin } from './vm.js';
+import { bootVm, ICEBASE, VM, VM_URL, vmAdmin } from './vm.js';
 
 // On a VM (TM_E2E_PLATFORM=vm) the server runs in this process; no emulators.
 const E = VM ? {} : (EMULATOR_ENV as Record<string, string>);
@@ -69,6 +69,16 @@ async function authRest<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function signIn(email: string, password: string): Promise<string> {
+  if (ICEBASE) {
+    // The IceBase server speaks Firebase Auth's API on its own port.
+    const res = await fetch(`${VM_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=icebase`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    });
+    if (!res.ok) throw new Error(`accounts:signInWithPassword: ${res.status}`);
+    return ((await res.json()) as { idToken: string }).idToken;
+  }
   if (VM) {
     const res = await fetch(`${VM_URL}/identity/password/signin`, {
       method: 'POST',

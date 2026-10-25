@@ -23,7 +23,8 @@ async function signInLinks(email: string): Promise<OobCode[]> {
       .map((m) => ({
         email,
         requestType: 'EMAIL_SIGNIN',
-        oobLink: /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0],
+        // The VM's own link (tm_link=…), or the IceBase server's (…&oobCode=…).
+        oobLink: /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0],
       }));
   const host = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
   const r = await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/oobCodes`);

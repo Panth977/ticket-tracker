@@ -30,8 +30,11 @@ export function isEmulated(): boolean {
     process.env.FUNCTIONS_EMULATOR === 'true' ||
     !!process.env.FIRESTORE_EMULATOR_HOST ||
     !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
-  if ((process.env.TM_PLATFORM || '').toLowerCase() === 'vm')
-    return emulatorHosts || process.env.TM_DEV === '1';
+  const p = (process.env.TM_PLATFORM || '').toLowerCase();
+  // On the IceBase server the *_EMULATOR_HOST variables point firebase-admin at it, in production
+  // too: only its development mode (FUNCTIONS_EMULATOR, not set by `icebase serve`) or TM_DEV counts.
+  if (p === 'icebase') return process.env.FUNCTIONS_EMULATOR === 'true' || process.env.TM_DEV === '1';
+  if (p === 'vm') return emulatorHosts || process.env.TM_DEV === '1';
   return emulatorHosts || projectId().startsWith('demo-');
 }
 

@@ -172,3 +172,8 @@ export const onUserCreated = trig('onUserCreated', (h) =>
 export const onUserDeleted = trig('onUserDeleted', (h) =>
   onAuthUserDeleted(V1, (u) => h(u as never)),
 );
+
+// ─── the IceBase server ──────────────────────────────────────────────────────
+
+/** Mails the IceBase server's auth links (TM_PLATFORM=icebase); a plain export, which Firebase ignores. */
+export { sendAuthEmail } from './identity/icebaseMail.js';

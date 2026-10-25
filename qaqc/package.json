@@ -12,6 +12,7 @@
     "test:rules": "PATH=\"/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH\" node ../scripts/lock.mjs emulators -- firebase emulators:exec --config rules/firebase.rules.json --project demo-taskmanager --only firestore,storage,database 'vitest run --passWithNoTests --project rules'",
     "e2e": "playwright test",
     "e2e:vm": "TM_E2E_PLATFORM=vm playwright test",
+    "e2e:icebase": "TM_E2E_PLATFORM=icebase playwright test",
     "playwright:install": "playwright install chromium",
     "seed": "tsx seed/seed.ts"
   },

@@ -75,8 +75,8 @@ export function fcmPush(): PushSender {
 function basePush(): PushSender | null {
   if (process.env.TM_PUSH === 'fcm') return fcmPush();
   if (process.env.TM_PUSH === 'dev' || isEmulated()) return devPush();
-  // A VM has no FCM: only Web Push subscriptions can be reached.
-  return platform() === 'vm' ? null : fcmPush();
+  // A VM or the IceBase server has no FCM: only Web Push subscriptions can be reached.
+  return platform() === 'firebase' ? fcmPush() : null;
 }
 
 /**

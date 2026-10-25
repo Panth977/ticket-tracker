@@ -6,21 +6,27 @@
  *   TM_PLATFORM=vm                  one Node server (Docker): SQLite, files on
  *                                   disk, local auth, WebSocket realtime,
  *                                   in-process jobs
+ *   TM_PLATFORM=icebase             the functions inside the IceBase server
+ *                                   (`icebase serve`, icebase.config.ts): its
+ *                                   database, auth, storage, realtime database
+ *                                   and task queues, through IceBase's admin API
  *
  * Each port picks its adapter from its own variable when set, else from the
  * platform default — so a mixed setup (say SQLite with Cloud Storage) is one
  * extra variable, and tests can swap a single port.
  *
- *   port      variable   firebase    vm
- *   database  TM_DB      firestore   sqlite
- *   files     TM_BLOB    gcs         disk
+ *   port      variable   firebase    vm        icebase
+ *   database  TM_DB      firestore   sqlite    icebase
+ *   files     TM_BLOB    gcs         disk      gcs (IceBase's storage)
+ *   auth      TM_AUTH    firebase    local     firebase (IceBase's auth)
+ *   rtdb      TM_RTDB    firebase    local     icebase
  */
-export type Platform = 'firebase' | 'vm';
+export type Platform = 'firebase' | 'vm' | 'icebase';
 
 export function platform(): Platform {
   const v = (process.env.TM_PLATFORM || 'firebase').toLowerCase();
-  if (v === 'firebase' || v === 'vm') return v;
-  throw new Error(`TM_PLATFORM must be 'firebase' or 'vm', not ${JSON.stringify(v)}`);
+  if (v === 'firebase' || v === 'vm' || v === 'icebase') return v;
+  throw new Error(`TM_PLATFORM must be 'firebase', 'vm' or 'icebase', not ${JSON.stringify(v)}`);
 }
 
 /** A port's adapter: its own env variable, else the platform's default. */

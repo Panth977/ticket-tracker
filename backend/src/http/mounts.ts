@@ -42,6 +42,8 @@ export const MOUNTS = {
   identity: '/identity',
   /** The Realtime Database's REST API from the local tree, /rtdb/{path}.json (doors/rtdbRest.ts; VM only). */
   rtdb: '/rtdb',
+  /** What the browser needs to know about this deploy (doors/deployConfig.ts; the IceBase server only — the VM server answers it itself). */
+  deployConfig: '/config.json',
 } as const;
 export type MountName = keyof typeof MOUNTS;
 

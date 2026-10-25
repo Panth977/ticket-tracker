@@ -19,7 +19,7 @@ export type BlobKind = 'gcs' | 'disk';
 
 /** The object store this process uses: TM_BLOB, else the platform's. */
 export function blobKind(): BlobKind {
-  return adapterFor<BlobKind>('TM_BLOB', { firebase: 'gcs', vm: 'disk' }, ['gcs', 'disk']);
+  return adapterFor<BlobKind>('TM_BLOB', { firebase: 'gcs', vm: 'disk', icebase: 'gcs' }, ['gcs', 'disk']);
 }
 
 const adapter: BlobAdapter = blobKind() === 'disk' ? diskAdapter : gcsAdapter;

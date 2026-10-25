@@ -8,7 +8,10 @@ import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getDatabase, type Database } from 'firebase-admin/database';
 import { getFunctions, type Functions } from 'firebase-admin/functions';
 import { getStorage, type Storage } from 'firebase-admin/storage';
+import { getAdminAuth, getAdminStorage } from '@panth977/icebase-server/admin';
+import { icebaseApp } from '../icebase/app.js';
 import { adminApp } from './adminApp.js';
+import { platform } from './platform.js';
 
 export { DEMO_PROJECT_ID, projectId, isEmulated, adminApp } from './adminApp.js';
 
@@ -19,7 +22,10 @@ export { DEMO_PROJECT_ID, projectId, isEmulated, adminApp } from './adminApp.js'
  */
 export { db } from '../db/index.js';
 
-export const auth = (): Auth => getAuth(adminApp());
+// On the IceBase server (TM_PLATFORM=icebase) auth and storage are IceBase's admin API: the same
+// firebase-admin objects, aimed at the server, with its signed tokens and signed URLs.
+const onIcebase = () => platform() === 'icebase';
+export const auth = (): Auth => (onIcebase() ? (getAdminAuth(icebaseApp()) as unknown as Auth) : getAuth(adminApp()));
 export const rtdbAdmin = (): Database => getDatabase(adminApp());
-export const storageAdmin = (): Storage => getStorage(adminApp());
+export const storageAdmin = (): Storage => (onIcebase() ? (getAdminStorage(icebaseApp()) as unknown as Storage) : getStorage(adminApp()));
 export const functionsAdmin = (): Functions => getFunctions(adminApp());

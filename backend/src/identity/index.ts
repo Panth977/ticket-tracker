@@ -19,7 +19,7 @@ export type IdentityKind = 'firebase' | 'local';
 
 /** Who issues identities here: TM_AUTH, else the platform's. */
 export function identityKind(): IdentityKind {
-  return adapterFor<IdentityKind>('TM_AUTH', { firebase: 'firebase', vm: 'local' }, [
+  return adapterFor<IdentityKind>('TM_AUTH', { firebase: 'firebase', vm: 'local', icebase: 'firebase' }, [
     'firebase',
     'local',
   ]);

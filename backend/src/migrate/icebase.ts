@@ -29,6 +29,8 @@ export interface IcebaseMigrationOptions {
   apply: boolean;
   /** Copy documents that do not fit the schema as they are (else they are reported and left out). */
   unchecked?: boolean;
+  /** Top-level collections not to copy (e.g. the VM's own sign-in store, moved to IceBase's auth). */
+  skip?: string[];
   log?: (line: string) => void;
 }
 
@@ -80,7 +82,7 @@ export async function migrateToIcebase(o: IcebaseMigrationOptions): Promise<Iceb
 
   // Collections depth first; a document's subcollections right after it.
   type Col = { path: string; list(): Promise<DocumentReference[]> };
-  const roots = await o.source.listCollections();
+  const roots = (await o.source.listCollections()).filter((c) => !o.skip?.includes(c.id));
   const queue: Col[] = roots.map((c) => ({ path: c.path, list: () => c.listDocuments() as Promise<DocumentReference[]> }));
 
   let batch: { path: string; data: Record<string, unknown>; raw: boolean }[] = [];
