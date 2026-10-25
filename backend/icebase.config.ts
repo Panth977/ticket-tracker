@@ -1,18 +1,19 @@
 /**
- * TaskManager on the IceBase server (TM_PLATFORM=icebase): `icebase serve` in this directory runs
+ * TaskManager on the IceBase server (TM_PLATFORM=icebase): `icebase serve` in backend/ runs
  * the web app (frontend/build, routed as firebase.json routes it), the functions
- * (backend/lib/index.js — the same exports Cloud Functions runs), and the database, auth,
+ * (lib/index.js — the same exports Cloud Functions runs), and the database, auth,
  * storage, realtime database and task queues they use, on one port.
  *
- * Build first (pnpm build:icebase): the schema and the functions are read from backend/lib.
+ * Build first: the schema and the functions are read from lib/ (pnpm --filter @tm/backend build),
+ * the web app from ../frontend/build (TM_PLATFORM=icebase pnpm --filter @tm/frontend build).
  */
 import { readFileSync } from 'node:fs';
 import { defineConfig } from '@panth977/icebase/config';
-import { schema } from './backend/lib/icebase/schema.js';
+import { schema } from './lib/icebase/schema.js';
 
 type Rewrite = { source: string; function?: string | { functionId: string; region?: string }; destination?: string };
 type Header = { source: string; headers: { key: string; value: string }[] };
-const firebase = JSON.parse(readFileSync(new URL('./firebase.json', import.meta.url), 'utf8')) as {
+const firebase = JSON.parse(readFileSync(new URL('../firebase.json', import.meta.url), 'utf8')) as {
   hosting: { target?: string; public: string; rewrites?: Rewrite[]; headers?: Header[] }[];
 };
 const app = firebase.hosting.find((h) => h.target === 'app') ?? firebase.hosting[0]!;
@@ -22,10 +23,10 @@ const projectId = process.env.GCLOUD_PROJECT || 'taskmanager';
 export default defineConfig({
   name: 'taskmanager',
   schema,
-  rules: { firestore: 'backend/firestore.rules', storage: 'backend/storage.rules', database: 'backend/database.rules.json' },
-  functions: { source: 'backend', region: process.env.TM_REGION || 'us-central1' },
+  rules: { firestore: 'firestore.rules', storage: 'storage.rules', database: 'database.rules.json' },
+  functions: { source: '.', region: process.env.TM_REGION || 'us-central1' },
   hosting: {
-    public: app.public,
+    public: `../${app.public}`,
     rewrites: [
       // Artifact files: Firebase serves them on a second site; here, the same origin (as on a VM).
       { source: '/c/**', function: 'api' },
@@ -37,6 +38,6 @@ export default defineConfig({
   },
   auth: { providers: ['password', 'emailLink'] },
   firebase: { projectId, storageBucket: `${projectId}.appspot.com` },
-  emulator: { dataDir: process.env.TM_DATA_DIR ? `${process.env.TM_DATA_DIR}/icebase` : 'data/icebase' },
+  emulator: { dataDir: process.env.TM_DATA_DIR ? `${process.env.TM_DATA_DIR}/icebase` : '../data/icebase' },
   environments: { server: { mode: 'emulator' } },
 });

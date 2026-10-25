@@ -11,6 +11,7 @@
  * temp directory per run (TM_E2E_DATA_DIR keeps it across worker restarts).
  */
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,8 +49,8 @@ async function bootIcebase(): Promise<void> {
     ICEBASE_LOG_ERRORS: '1',
     ...(process.env.ICEBASE_LOG_REQUESTS ? { ICEBASE_LOG_REQUESTS: '1' } : {}),
   };
-  const cli = join(ROOT, 'node_modules', '@panth977', 'icebase-cli', 'dist', 'cli', 'index.js');
-  const child = spawn(process.execPath, [cli, 'serve', '--port', String(VM_PORT), '--host', '127.0.0.1', '--data', join(data, 'icebase')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const cli = createRequire(join(ROOT, 'backend', 'package.json')).resolve('@panth977/icebase-cli/cli');
+  const child = spawn(process.execPath, [cli, 'serve', '--port', String(VM_PORT), '--host', '127.0.0.1', '--data', join(data, 'icebase')], { cwd: join(ROOT, 'backend'), env, stdio: ['ignore', 'pipe', 'pipe'] });
   const log = (b: Buffer) => (process.env.ICEBASE_LOG_REQUESTS || /failed|threw|gave up|Error/.test(String(b))) && process.stderr.write(b);
   child.stdout.on('data', log);
   child.stderr.on('data', log);
