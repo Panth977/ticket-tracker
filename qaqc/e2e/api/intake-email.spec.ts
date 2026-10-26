@@ -83,6 +83,9 @@ test('intake widget: schema, a post with the slug + secret becomes a ticket; wro
 });
 
 test('email reply → thread: a mention mails Grace; her reply lands in the same thread, via email', async () => {
+  // Deliveries collapse into a one-minute window (notify/config.ts DELIVER_WINDOW_MS), which the
+  // IceBase server's task queue honours as Cloud Tasks does: the mail can take ~62 s.
+  test.setTimeout(180_000);
   const ada = await newPerson('Ada');
   const grace = await newPerson('Grace');
   const b = await newBoard(ada);
@@ -101,7 +104,7 @@ test('email reply → thread: a mention mails Grace; her reply lands in the same
   const mail = await eventually(
     'the mention e-mail',
     async () => (await mailTo(grace.email)).find((m) => m.replyTo && `${m.subject}`.includes(key)),
-    45_000,
+    75_000,
   );
   expect(mail.replyTo).toMatch(/^t\./);
 

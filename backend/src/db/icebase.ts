@@ -1,7 +1,7 @@
 /**
  * The IceBase adapter: firebase-admin's API (icebase-server/compat) over IceBase, which
  * validates every write against the schema (src/icebase/schema.ts), refuses queries whose
- * index is not declared, and runs on Firebase or on the IceBase server per TM_PLATFORM.
+ * index is not declared, and runs on Firebase or on the IceBase server per TM_ICEBASE.
  */
 import { DocumentReference, FieldPath, FieldValue, GeoPoint, Timestamp } from '@panth977/icebase-server/compat';
 import { icebaseFirestore, icebaseRawFirestore } from '../icebase/app.js';

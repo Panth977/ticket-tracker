@@ -1,12 +1,11 @@
 /**
- * THE RULES INTERPRETER (backend/src/rules) AGAINST THE REAL THING.
+ * ICEBASE'S RULES ENGINE AGAINST THE REAL THING.
  *
- * On a VM there is no Firestore to enforce firestore.rules, so the backend
- * interprets the very same file. This suite asks the Firestore emulator
- * (loaded with backend/firestore.rules) and the interpreter the same
- * questions — every seeded document, read by every person (and by nobody),
- * plus the client writes the rules allow and the near-misses they refuse —
- * and requires the same answer to each.
+ * On the IceBase server (TM_ICEBASE=emulator) there is no Firestore to enforce firestore.rules:
+ * IceBase interprets the very same file. This suite asks the Firestore emulator (loaded with
+ * backend/firestore.rules) and IceBase's engine the same questions — every seeded document, read
+ * by every person (and by nobody), plus the client writes the rules allow and the near-misses
+ * they refuse — and requires the same answer to each.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -16,13 +15,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { fixtures } from '@tm/shared/schema/fixtures';
-import { parseRules } from '../../backend/src/rules/parse.js';
-import {
-  allowed,
-  RulePath,
-  type Resource,
-  type RulesRequest,
-} from '../../backend/src/rules/evaluate.js';
+import { loadRules } from '@panth977/icebase-cli/internal';
 import {
   ADMIN,
   BOARD,
@@ -44,7 +37,7 @@ import {
 } from './_env.js';
 
 let env: RulesTestEnvironment;
-const rules = parseRules(readRules('firestore.rules'));
+const rules = loadRules(readRules('firestore.rules'), 'firestore');
 const T = `boards/${BOARD}/tickets/${TICKET}`;
 const REFUSED = 'u_refused';
 
@@ -94,39 +87,11 @@ put(`boards/${OTHER_BOARD}/tickets/tkt_ops`, {
   createdBy: STRANGER,
 });
 
-// ─── the interpreter's side ──────────────────────────────────────────────────
+// ─── IceBase's side ──────────────────────────────────────────────────────────
 
 const DOCS = '/databases/(default)/documents';
-const asResource = (path: string, data: Record<string, unknown> | undefined): Resource | null =>
-  data === undefined
-    ? null
-    : {
-        data,
-        id: path.split('/').pop(),
-        __name__: new RulePath([...DOCS.split('/').filter(Boolean), ...path.split('/')]),
-      };
-
-const lookup = {
-  async get(segs: string[]) {
-    const path = segs.slice(3).join('/'); // drop databases/(default)/documents
-    return asResource(path, seed.get(path));
-  },
-};
-
-function request(
-  uid: string | null,
-  method: string,
-  path: string,
-  after?: Record<string, unknown>,
-): RulesRequest {
-  return {
-    auth: uid ? { uid, token: { email: emailOf(uid), email_verified: true } } : null,
-    method,
-    path: `${DOCS}/${path}`,
-    time: { toMillis: () => Date.now() },
-    resource: after === undefined ? null : asResource(path, after),
-  };
-}
+const asDoc = (path: string, data: Record<string, unknown> | undefined) =>
+  data === undefined ? null : { data, id: path.split('/').pop()!, path: `${DOCS}/${path}` };
 
 const interp = (
   uid: string | null,
@@ -134,12 +99,14 @@ const interp = (
   path: string,
   after?: Record<string, unknown>,
 ) =>
-  allowed(rules, {
+  rules.allows({
+    method: method as 'get',
     path: `${DOCS}/${path}`,
-    method,
-    request: request(uid, method, path, after),
-    resource: asResource(path, seed.get(path)),
-    lookup,
+    auth: uid ? { uid, token: { email: emailOf(uid), email_verified: true } } : null,
+    resource: asDoc(path, seed.get(path)),
+    requestResource: after === undefined ? null : asDoc(path, after),
+    query: null,
+    get: (p: string) => asDoc(p.replace(/^\/databases\/[^/]+\/documents\//, ''), seed.get(p.replace(/^\/databases\/[^/]+\/documents\//, ''))),
   });
 
 // ─── the emulator's side ─────────────────────────────────────────────────────
@@ -171,7 +138,7 @@ afterAll(() => env?.cleanup());
 
 const WHO = [null, ...EVERYONE, REFUSED];
 
-describe('rules interpreter = Firestore emulator', () => {
+describe('IceBase rules engine = Firestore emulator', () => {
   it('get: every seeded document, by everyone', async () => {
     const diffs: string[] = [];
     for (const path of seed.keys()) {

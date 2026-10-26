@@ -6,7 +6,7 @@
  */
 import { expect, type Page } from '@playwright/test';
 import { call, eventually, mailTo, PROJECT_ID, type Person } from './stack.js';
-import { VM } from '../../seed/vm.js';
+import { ICEBASE } from '../../seed/icebase.js';
 
 interface OobCode {
   email: string;
@@ -15,16 +15,15 @@ interface OobCode {
 }
 
 async function signInLinks(email: string): Promise<OobCode[]> {
-  // On a VM the link is in the mail the server "sent" (the dev outbox).
-  if (VM)
+  // On the IceBase server the link is in the mail TaskManager "sent" (the dev outbox).
+  if (ICEBASE)
     return (await mailTo(email))
       .filter((m) => m.subject === 'Sign in to TaskManager')
       .reverse()
       .map((m) => ({
         email,
         requestType: 'EMAIL_SIGNIN',
-        // The VM's own link (tm_link=…), or the IceBase server's (…&oobCode=…).
-        oobLink: /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0],
+        oobLink: /https?:\/\/\S+oobCode=\S+/.exec(m.text ?? '')![0],
       }));
   const host = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
   const r = await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/oobCodes`);

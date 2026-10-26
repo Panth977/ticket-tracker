@@ -18,7 +18,7 @@ import {
   isPlainObject,
   type FieldValueKind,
   type PathLike,
-} from '../sqlite/values.js';
+} from '../engine/values.js';
 import type { TimestampStatic } from '../types.js';
 
 type Json = Record<string, unknown>;

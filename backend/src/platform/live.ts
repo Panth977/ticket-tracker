@@ -28,9 +28,8 @@
 import { errors, isAgentId, live, type RestLiveRes } from '@tm/shared';
 import type { ServerCtx } from '../runtime/context.js';
 import { adminApp, isEmulated } from '../runtime/firebase.js';
-import { identity, identityKind } from '../identity/index.js';
-import { signInWithCustomToken } from '../identity/local/flows.js';
-import { rtdbKind } from '../rtdb/index.js';
+import { identity } from '../identity/index.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { readableBoards } from './resolve.js';
 
 /**
@@ -42,6 +41,8 @@ import { readableBoards } from './resolve.js';
 export function webApiKey(): string {
   const key = process.env.TM_WEB_API_KEY?.trim();
   if (key) return key;
+  // The IceBase server takes any key.
+  if (onIcebaseServer()) return 'icebase';
   if (isEmulated()) return 'demo-web-api-key';
   throw errors.unavailable(
     'Live credentials are not configured on this deployment (TM_WEB_API_KEY)',
@@ -50,9 +51,9 @@ export function webApiKey(): string {
 
 /** The RTDB origin the SDK streams from: what the Admin SDK itself was given. */
 export function databaseUrl(): string {
-  // A VM serves the RTDB's REST protocol itself, from its JSON tree (doors/rtdbRest.ts).
-  if (rtdbKind() === 'local')
-    return `${(process.env.API_URL || process.env.APP_URL || 'http://localhost:8080').replace(/\/+$/, '')}/rtdb`;
+  // The IceBase server serves the RTDB's REST protocol (reads and SSE streams) at /__/icebase/rtdb.
+  if (onIcebaseServer())
+    return `${(process.env.ICEBASE_PUBLIC_URL || process.env.API_URL || process.env.APP_URL || 'http://localhost:8080').replace(/\/+$/, '')}/__/icebase/rtdb`;
   const url = process.env.TM_DATABASE_URL?.trim() || adminApp().options.databaseURL;
   if (!url) throw errors.unavailable('This deployment has no Realtime Database configured');
   return url;
@@ -60,7 +61,8 @@ export function databaseUrl(): string {
 
 /** Where a custom token is exchanged: Google's Identity Toolkit, or the Auth emulator's copy of it. */
 export function signInUrl(): string {
-  const host = process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim();
+  // The IceBase server (its own address, loopback), or the Auth emulator.
+  const host = (onIcebaseServer() ? process.env.ICEBASE_EMULATOR_HOST : process.env.FIREBASE_AUTH_EMULATOR_HOST)?.trim();
   const origin = host ? `http://${host}/` : 'https://';
   return `${origin}identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(webApiKey())}`;
 }
@@ -70,11 +72,6 @@ export async function exchangeCustomToken(
   token: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ idToken: string; expiresIn: number }> {
-  if (identityKind() === 'local') {
-    // A VM issues its own sessions (identity/local).
-    const s = await signInWithCustomToken(token);
-    return { idToken: s.idToken, expiresIn: s.expiresIn };
-  }
   const res = await fetchImpl(signInUrl(), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

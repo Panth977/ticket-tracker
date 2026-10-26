@@ -7,8 +7,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { StorageFiles, StoredObject } from '@tm/shared';
-import { blobKind, storageBucket } from '../blob/index.js';
-import { platform } from '../runtime/platform.js';
+import { storageBucket } from '../blob/index.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { fileDoorUrl } from '../platform/blobUrl.js';
 import {
   driveObjectDelete,
@@ -43,13 +43,13 @@ export function readStream(path: string, range?: { start: number; end: number })
  * Whether the store signs URLs: Cloud Storage and the IceBase server do, the Storage emulator
  * cannot (no service account). (The IceBase server sets FIREBASE_STORAGE_EMULATOR_HOST too.)
  */
-export const storageSigns = (): boolean => platform() === 'icebase' || !process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+export const storageSigns = (): boolean => onIcebaseServer() || !process.env.FIREBASE_STORAGE_EMULATOR_HOST;
 
 export function adminFiles(): StorageFiles {
   const bucket = () => storageBucket();
   // Only Cloud Storage has an emulator; the disk store signs its own URLs.
   // (The IceBase server signs its own: its *_EMULATOR_HOST is not an emulator's.)
-  const emu = () => (blobKind() === 'gcs' && platform() !== 'icebase' ? process.env.FIREBASE_STORAGE_EMULATOR_HOST : undefined);
+  const emu = () => (onIcebaseServer() ? undefined : process.env.FIREBASE_STORAGE_EMULATOR_HOST);
   const meta = (
     path: string,
     m: { size?: string | number; contentType?: string; metadata?: Record<string, unknown> },

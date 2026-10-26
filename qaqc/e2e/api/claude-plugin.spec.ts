@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { MCP_TOOLS } from '@tm/shared';
-// The stack: on a VM (TM_E2E_PLATFORM=vm) importing it starts the server.
+// The stack: on the IceBase server (TM_ICEBASE=emulator) importing it starts the server.
 import '../support/stack.js';
 // @ts-expect-error — plain .mjs shared with the root scripts
 import { PLUGIN_FILES, PLUGIN_ZIP, urls } from '../../../scripts/gen-integration.mjs';

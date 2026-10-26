@@ -30,7 +30,7 @@
  *   TM_ARTIFACT_ORIGIN when set;
  *   else, deployed: https://{projectId}-usercontent.web.app — the second
  *     Hosting site, whose only rewrite is /c/** → this function;
- *   else, on a VM (TM_PLATFORM=vm): APP_URL — the one port; the sandbox CSP
+ *   else, on the IceBase server (TM_ICEBASE=emulator): APP_URL — the one port; the sandbox CSP
  *     gives the content an opaque origin (a second host name pointed at the
  *     same port, as TM_ARTIFACT_ORIGIN, separates them further);
  *   else, under the emulators: the functions emulator's own URL for `api`
@@ -42,7 +42,7 @@ import { ARTIFACT_CAPABILITY_TTL_MS } from '@tm/shared';
 import { safeEqual, serverMac } from '../platform/crypto.js';
 import { region } from '../runtime/deploy.js';
 import { isEmulated, projectId } from '../runtime/firebase.js';
-import { platform } from '../runtime/platform.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 
 const PURPOSE = 'artifact-capability';
 /** The functions emulator's port in firebase.json (scripts/ports.mjs PORTS.functions). */
@@ -75,7 +75,10 @@ interface Wire {
 export function artifactOrigin(): string {
   const env = process.env.TM_ARTIFACT_ORIGIN?.trim();
   if (env) return env.replace(/\/+$/, '');
-  if (platform() !== 'firebase' && process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
+  if (onIcebaseServer()) {
+    const origin = process.env.ICEBASE_PUBLIC_URL || process.env.APP_URL;
+    if (origin) return origin.replace(/\/+$/, '');
+  }
   if (isEmulated()) return `http://127.0.0.1:${DEV_FUNCTIONS_PORT}/${projectId()}/${region()}/api`;
   return `https://${projectId()}-usercontent.web.app`;
 }

@@ -36,13 +36,7 @@ export const MOUNTS = {
    * usercontent Hosting site this is the ONLY path that reaches the function.
    */
   content: '/c',
-  /** Signed object URLs of the disk store, /blob/{read|write}/… (doors/blob.ts; VM only). */
-  blob: '/blob',
-  /** Sign-in endpoints of the local identity, /identity/… (doors/identity.ts; VM only). */
-  identity: '/identity',
-  /** The Realtime Database's REST API from the local tree, /rtdb/{path}.json (doors/rtdbRest.ts; VM only). */
-  rtdb: '/rtdb',
-  /** What the browser needs to know about this deploy (doors/deployConfig.ts; the IceBase server only — the VM server answers it itself). */
+  /** What the browser needs to know about this deploy (doors/deployConfig.ts; the IceBase server only). */
   deployConfig: '/config.json',
 } as const;
 export type MountName = keyof typeof MOUNTS;

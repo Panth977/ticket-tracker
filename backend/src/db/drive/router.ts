@@ -14,7 +14,7 @@
  *
  *   reads        files.ts (one listing + changed files; the rest cached)
  *   queries      evaluated in memory with the SQLite adapter's exact
- *                Firestore semantics (sqlite/query.ts); a list carries
+ *                Firestore semantics (db/engine/query.ts); a list carries
  *                meta.json only — no thread
  *   collectionGroup('tickets')   the database's answer merged with every
  *                Drive board's, then ordered and limited as one
@@ -26,9 +26,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { errors } from '@tm/shared';
-import { applyWrite, type WriteOp } from '../sqlite/mutate.js';
-import { Plan, type QueryState } from '../sqlite/query.js';
-import { DOC_ID, Timestamp as SqlTimestamp } from '../sqlite/values.js';
+import { applyWrite, type WriteOp } from '../engine/mutate.js';
+import { Plan, type QueryState } from '../engine/query.js';
+import { DOC_ID, Timestamp as SqlTimestamp } from '../engine/values.js';
 import type * as P from '../types.js';
 import { assertNotMoving, driveBoardIds, driveBoardOf, driveEntityOf, driveOf } from './board.js';
 import {

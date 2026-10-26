@@ -75,16 +75,27 @@ The run book with every environment variable, the Firebase console steps and the
 
 ### Or on your own VM, with Docker
 
-The same app runs as one container on one port, with no Firebase project. Every Firebase service has a local adapter, picked by `TM_PLATFORM=vm`: SQLite files for the documents (one per board, bucket and artifact, plus a root file), a JSON tree for the realtime data, the disk for files, the server's own sign-in (email links, passwords, Google and Microsoft), and in-process task queues and schedules. The same `firestore.rules`, `storage.rules` and `database.rules.json` guard it.
+TaskManager runs on [IceBase](https://github.com/Panth977/icebase): every collection, index, file
+path and realtime path is declared in `backend/src/icebase/`, and every service goes through it.
+`TM_ICEBASE` picks the backend: `firebase` (the default: the Firebase deploy above) or `emulator`,
+the IceBase server (`icebase serve`, `backend/icebase.config.ts`). On a VM that is one container on
+one port, with no Firebase project: SQLite for the documents, the disk for files, its own sign-in
+(e-mail links, passwords), task queues and schedules. The same `firestore.rules`, `storage.rules`
+and `database.rules.json` guard it.
 
 ```bash
 cp .env.vm.example .env.vm      # set APP_URL; add SMTP_URL to send mail
 docker compose up -d            # ghcr.io/panth977/ticket-tracker on :8080
 ```
 
-Port 8080 serves the web app, `/api`, `/v1`, `/mcp`, `/oauth`, `/identity`, `/blob`, `/rtdb`, artifacts under `/c`, and the `/live` WebSocket. Put a TLS proxy in front of it. All state lives in the `/data` volume, so that is what you back up. Push notifications use Web Push, with a VAPID key the server makes on its first start.
+Port 8080 serves the web app, `/api`, `/v1`, `/mcp`, `/oauth`, artifacts under `/c`, the IceBase
+services and the realtime WebSocket (`/live`). Put a TLS proxy in front of it. All state lives in
+the `/data` volume (`/data/icebase`), so that is what you back up. Push notifications use Web Push,
+with a VAPID key the server makes on its first start.
 
-`pnpm test:emu:vm` runs the backend suites on the VM adapters, and `pnpm --filter @tm/qaqc e2e:vm` runs the browser suites against the VM server (after `TM_PLATFORM=vm pnpm --filter @tm/frontend build`).
+`pnpm test:emu:icebase` runs the backend suites against the IceBase server, and
+`pnpm --filter @tm/qaqc e2e:icebase` runs the browser suites against it (after
+`TM_ICEBASE=emulator pnpm --filter @tm/frontend build`).
 
 ## Give an agent a ticket
 

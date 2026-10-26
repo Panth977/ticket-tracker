@@ -1,6 +1,6 @@
 /**
- * storage.rules through the interpreter vs. the Storage emulator (which
- * reads Firestore for firestore.get()/exists()). Same questions, same answers.
+ * storage.rules through IceBase's rules engine (what the IceBase server enforces) vs. the Storage
+ * emulator (which reads Firestore for firestore.get()/exists()). Same questions, same answers.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -11,8 +11,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { deleteObject, getMetadata, ref, uploadBytes } from 'firebase/storage';
 import { storage as paths } from '@tm/shared';
-import { parseRules } from '../../backend/src/rules/parse.js';
-import { allowed, RulePath, type Resource } from '../../backend/src/rules/evaluate.js';
+import { loadRules } from '@panth977/icebase-cli/internal';
 import {
   ADMIN,
   BOARD,
@@ -32,7 +31,7 @@ import {
 } from './_env.js';
 
 let env: RulesTestEnvironment;
-const rules = parseRules(readRules('storage.rules'));
+const rules = loadRules(readRules('storage.rules'), 'storage');
 const BUCKET = 'demo-taskmanager.appspot.com';
 const EXISTING = paths.attachment(BOARD, TICKET, 'att_1', 'screenshot.png');
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
@@ -42,20 +41,11 @@ const docs = new Map<string, Record<string, unknown>>([
 ]);
 const objects = new Map<string, { size: number; contentType: string }>();
 
-const firestore = {
-  async get(segs: string[]) {
-    const path = segs.slice(3).join('/');
-    const data = docs.get(path);
-    return data ? { data, id: segs[segs.length - 1], __name__: new RulePath(segs) } : null;
-  },
-};
+const DOCS = '/databases/(default)/documents';
 const objectResource = (
   name: string,
   o: { size: number; contentType: string; metadata?: Record<string, string> } | undefined,
-): Resource | null =>
-  o
-    ? { name, bucket: BUCKET, size: o.size, contentType: o.contentType, metadata: o.metadata ?? {} }
-    : null;
+) => (o ? { name, bucket: BUCKET, size: o.size, contentType: o.contentType, metadata: o.metadata ?? {} } : null);
 
 const interp = (
   uid: string | null,
@@ -63,19 +53,17 @@ const interp = (
   name: string,
   after?: { size: number; contentType: string },
 ) =>
-  allowed(rules, {
+  rules.allows({
+    method: method as 'get',
     path: `/b/${BUCKET}/o/${name}`,
-    method,
-    request: {
-      auth: uid ? { uid, token: { email: emailOf(uid), email_verified: true } } : null,
-      method,
-      path: `/b/${BUCKET}/o/${name}`,
-      time: { toMillis: () => Date.now() },
-      resource: after ? objectResource(name, after) : null,
-    },
+    auth: uid ? { uid, token: { email: emailOf(uid), email_verified: true } } : null,
     resource: objectResource(name, objects.get(name)),
-    lookup: { get: async () => null },
-    firestore,
+    requestResource: after ? objectResource(name, after) : null,
+    get: (p: string) => {
+      const path = p.replace(/^\/databases\/[^/]+\/documents\//, '');
+      const data = docs.get(path);
+      return data ? { data, id: path.split('/').pop()!, path: `${DOCS}/${path}` } : null;
+    },
   });
 
 const storageOf = (uid: string | null) => st(uid ? as(env, uid) : env.unauthenticatedContext());
@@ -107,7 +95,7 @@ beforeAll(async () => {
 });
 afterAll(() => env?.cleanup());
 
-describe('storage rules interpreter = Storage emulator', () => {
+describe('storage rules: IceBase = Storage emulator', () => {
   it('reads and writes across people and paths', async () => {
     const WHO = [null, ...MEMBERS, STRANGER];
     const diffs: string[] = [];
@@ -116,7 +104,7 @@ describe('storage rules interpreter = Storage emulator', () => {
         const want = await emu(getMetadata(ref(storageOf(uid), name)));
         const got = await interp(uid, 'get', name);
         if (want !== got)
-          diffs.push(`${uid ?? 'anon'} get ${name}: emulator ${want}, interpreter ${got}`);
+          diffs.push(`${uid ?? 'anon'} get ${name}: emulator ${want}, IceBase ${got}`);
       }
       const writes: [string, string, Uint8Array][] = [
         [paths.avatar(uid ?? 'nobody', 2), 'image/png', png],
@@ -135,7 +123,7 @@ describe('storage rules interpreter = Storage emulator', () => {
         });
         if (want !== got)
           diffs.push(
-            `${uid ?? 'anon'} write ${name} ${contentType}: emulator ${want}, interpreter ${got}`,
+            `${uid ?? 'anon'} write ${name} ${contentType}: emulator ${want}, IceBase ${got}`,
           );
         if (want) objects.set(name, { size: bytes.length, contentType });
       }
@@ -145,7 +133,7 @@ describe('storage rules interpreter = Storage emulator', () => {
       if (!objects.has(name)) continue;
       const want = await emu(deleteObject(ref(storageOf(uid), name)));
       const got = await interp(uid, 'delete', name);
-      if (want !== got) diffs.push(`${uid} delete ${name}: emulator ${want}, interpreter ${got}`);
+      if (want !== got) diffs.push(`${uid} delete ${name}: emulator ${want}, IceBase ${got}`);
       if (want) objects.delete(name);
     }
     expect(diffs).toEqual([]);

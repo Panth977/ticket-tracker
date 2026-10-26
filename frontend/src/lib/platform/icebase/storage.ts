@@ -1,5 +1,5 @@
 /**
- * `firebase/storage` FOR THE ICEBASE BUILD — Firebase's own SDK, talking to the IceBase server this
+ * `firebase/storage` FOR THE EMULATOR BUILD (TM_ICEBASE=emulator) — Firebase's own SDK, talking to the IceBase server this
  * page came from (it speaks Cloud Storage for Firebase's API; storage.rules apply there).
  */
 import * as real from 'tm-real-storage';

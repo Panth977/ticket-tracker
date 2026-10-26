@@ -35,7 +35,6 @@ import {
 import type { QueueName, QueuePayloads } from '@tm/shared';
 import { createApp } from './http/app.js';
 import { autoloadSync } from './runtime/autoload.js';
-import { DOC_TRIGGERS } from './runtime/localTriggers.js';
 import { boundSecrets, region, withServerSecrets } from './runtime/deploy.js';
 import {
   getScheduleHandler,
@@ -156,10 +155,10 @@ function trig<T extends TriggerName>(name: T, wrap: (h: TriggerHandlers[T]) => u
 }
 
 export const onTicketWritten = trig('onTicketWritten', (h) =>
-  onDocumentWritten(DOC_TRIGGERS.onTicketWritten, h),
+  onDocumentWritten('boards/{boardId}/tickets/{ticketId}', h),
 );
 export const onMessageWritten = trig('onMessageWritten', (h) =>
-  onDocumentWritten(DOC_TRIGGERS.onMessageWritten, h),
+  onDocumentWritten('boards/{boardId}/tickets/{ticketId}/messages/{messageId}', h),
 );
 export const onAttachmentFinalized = trig('onAttachmentFinalized', (h) =>
   onObjectFinalized({ memory: '1GiB' }, h),
@@ -175,5 +174,5 @@ export const onUserDeleted = trig('onUserDeleted', (h) =>
 
 // ─── the IceBase server ──────────────────────────────────────────────────────
 
-/** Mails the IceBase server's auth links (TM_PLATFORM=icebase); a plain export, which Firebase ignores. */
+/** Mails the IceBase server's auth links (TM_ICEBASE=emulator); a plain export, which Firebase ignores. */
 export { sendAuthEmail } from './identity/icebaseMail.js';

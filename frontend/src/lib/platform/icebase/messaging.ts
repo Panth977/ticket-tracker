@@ -1,5 +1,5 @@
 /**
- * `firebase/messaging` FOR THE VM BUILD — a plain Web Push subscription with
+ * `firebase/messaging` FOR THE EMULATOR BUILD (TM_ICEBASE=emulator) — a plain Web Push subscription with
  * the server's VAPID key (/config.json), handed to the backend as the device
  * token `webpush:<base64url(subscription JSON)>`; the server pushes to it
  * directly (backend adapters/webPush.ts). The service worker that shows the

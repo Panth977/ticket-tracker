@@ -63,14 +63,12 @@ const bypass = (req: { url?: string }) =>
     ? req.url
     : undefined;
 
-// THE VM BUILD (TM_PLATFORM=vm): the same app, with the Firebase SDK's modules
-// swapped for src/lib/platform/vm — the same API over the VM server's /live
-// socket, /identity, /blob (backend src/server.ts). No call site knows.
-const VM = process.env.TM_PLATFORM === 'vm';
-// THE ICEBASE BUILD (TM_PLATFORM=icebase): served by `icebase serve` (icebase.config.ts). Firebase's
-// own Auth and Storage SDKs, pointed at the page's origin; Firestore and the Realtime Database
-// from IceBase's compat modules (the same modular API over the IceBase server).
-const ICEBASE = process.env.TM_PLATFORM === 'icebase';
+// TaskManager runs on IceBase; TM_ICEBASE picks the backend (backend/src/runtime/platform.ts).
+// THE EMULATOR BUILD (TM_ICEBASE=emulator): served by `icebase serve` (backend/icebase.config.ts).
+// Firebase's own Auth and Storage SDKs, pointed at the page's origin; Firestore and the Realtime
+// Database from IceBase's compat modules (the same modular API over the IceBase server); Web Push
+// with the server's key. The default build is Firebase's SDK itself (IceBase's firebase mode).
+const ICEBASE = process.env.TM_ICEBASE === 'emulator';
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const icebaseAlias = [
   { find: /^firebase\/auth$/, replacement: here('./src/lib/platform/icebase/auth.ts') },
@@ -78,17 +76,11 @@ const icebaseAlias = [
   { find: /^firebase\/storage$/, replacement: here('./src/lib/platform/icebase/storage.ts') },
   { find: /^tm-real-storage$/, replacement: 'firebase/storage' },
   { find: /^firebase\/database$/, replacement: '@panth977/icebase/compat/database' },
-  // Web Push with the server's key, as on the VM.
-  { find: /^firebase\/messaging$/, replacement: here('./src/lib/platform/vm/messaging.ts') },
+  { find: /^firebase\/messaging$/, replacement: here('./src/lib/platform/icebase/messaging.ts') },
 ];
-const VM_SHIMS = ['app', 'auth', 'database', 'storage', 'messaging'];
-const vmAlias = VM_SHIMS.map((m) => ({
-  find: new RegExp(`^firebase/${m}$`),
-  replacement: fileURLToPath(new URL(`./src/lib/platform/vm/${m}.ts`, import.meta.url)),
-}));
 // bucket.html §L: every 'firebase/firestore' import is the ticket-routing
 // wrapper (a Drive board's tickets come from the api); the wrapper reaches the
-// real SDK — or, on the VM, its shim — as 'tm-real-firestore'.
+// real SDK — or, on the IceBase server, IceBase's compat — as 'tm-real-firestore'.
 const firestoreAlias = [
   {
     find: /^firebase\/firestore$/,
@@ -96,11 +88,7 @@ const firestoreAlias = [
   },
   {
     find: /^tm-real-firestore$/,
-    replacement: VM
-      ? fileURLToPath(new URL('./src/lib/platform/vm/firestore.ts', import.meta.url))
-      : ICEBASE
-        ? '@panth977/icebase/compat/firestore'
-        : 'firebase/firestore',
+    replacement: ICEBASE ? '@panth977/icebase/compat/firestore' : 'firebase/firestore',
   },
 ];
 if (ICEBASE) {
@@ -110,19 +98,13 @@ if (ICEBASE) {
   process.env.PUBLIC_FIREBASE_API_KEY ||= 'icebase';
   process.env.PUBLIC_FCM_VAPID_KEY ||= 'from-server';
 }
-if (VM) {
-  // No Firebase project and no emulators; push keys come from the server.
-  process.env.PUBLIC_USE_EMULATORS = 'false';
-  process.env.PUBLIC_FIREBASE_PROJECT_ID ||= 'vm';
-  process.env.PUBLIC_FCM_VAPID_KEY ||= 'from-server';
-}
 
 export default defineConfig({
   plugins: [icons, driver, tailwindcss(), sveltekit()],
   // "@tm/source" resolves @tm/shared to its TypeScript source: live HMR, no prebuild.
   resolve: {
     conditions: ['@tm/source', ...defaultClientConditions],
-    alias: [...firestoreAlias, ...(VM ? vmAlias : []), ...(ICEBASE ? icebaseAlias : [])],
+    alias: [...firestoreAlias, ...(ICEBASE ? icebaseAlias : [])],
   },
   ssr: {
     resolve: {

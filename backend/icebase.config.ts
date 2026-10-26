@@ -1,11 +1,11 @@
 /**
- * TaskManager on the IceBase server (TM_PLATFORM=icebase): `icebase serve` in backend/ runs
+ * TaskManager on the IceBase server (TM_ICEBASE=emulator): `icebase serve` in backend/ runs
  * the web app (frontend/build, routed as firebase.json routes it), the functions
  * (lib/index.js — the same exports Cloud Functions runs), and the database, auth,
  * storage, realtime database and task queues they use, on one port.
  *
  * Build first: the schema and the functions are read from lib/ (pnpm --filter @tm/backend build),
- * the web app from ../frontend/build (TM_PLATFORM=icebase pnpm --filter @tm/frontend build).
+ * the web app from ../frontend/build (TM_ICEBASE=emulator pnpm --filter @tm/frontend build).
  */
 import { readFileSync } from 'node:fs';
 import { defineConfig } from '@panth977/icebase/config';

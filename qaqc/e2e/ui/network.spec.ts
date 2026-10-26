@@ -1,6 +1,6 @@
 /**
- * THE VM BUILD ON A REAL NETWORK: what a deploy behind a proxy sees and the
- * local suite does not. A TCP proxy in front of the VM server holds every new
+ * THE ICEBASE SERVER ON A REAL NETWORK: what a deploy behind a proxy sees and the
+ * local suite does not. A TCP proxy in front of the IceBase server holds every new
  * connection back for a moment, the way TLS and a hop through nginx do, so a
  * WebSocket is still connecting when the page signs in.
  *
@@ -8,17 +8,17 @@
  *     profile loads (no request left hanging), nobody is thrown back to /login;
  *   - static files come compressed.
  *
- * VM only (TM_E2E_PLATFORM=vm): Firebase's SDK and Hosting are not ours to test.
+ * The IceBase server only (TM_ICEBASE=emulator): Firebase's SDK and Hosting are not ours to test.
  */
 import { createServer, connect, type Server } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
 import { mailTo, eventually, uniqueEmail } from '../support/stack.js';
-import { ICEBASE, VM, VM_PORT } from '../../seed/vm.js';
+import { ICEBASE, ICEBASE_PORT } from '../../seed/icebase.js';
 
-test.skip(!VM, 'the VM build only');
+test.skip(!ICEBASE, 'the IceBase server only');
 
 const DELAY_MS = 600;
-const PROXY_PORT = VM_PORT + 1;
+const PROXY_PORT = ICEBASE_PORT + 1;
 const ORIGIN = `http://127.0.0.1:${PROXY_PORT}`;
 let proxy: Server;
 
@@ -26,7 +26,7 @@ test.beforeAll(async () => {
   proxy = createServer((client) => {
     client.pause();
     setTimeout(() => {
-      const upstream = connect(VM_PORT, '127.0.0.1');
+      const upstream = connect(ICEBASE_PORT, '127.0.0.1');
       client.pipe(upstream).pipe(client);
       client.resume();
       const end = () => {
@@ -60,7 +60,7 @@ test('sign-in link opened in a second tab, over a slow link: both tabs signed in
 
   const link = await eventually('sign-in link', async () => {
     const m = (await mailTo(email)).find((x) => x.subject === 'Sign in to TaskManager');
-    return m ? /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0] : null;
+    return m ? /https?:\/\/\S+oobCode=\S+/.exec(m.text ?? '')![0] : null;
   });
   const second = await context.newPage();
   watch(second, 'second');
@@ -103,8 +103,6 @@ test('static files are served compressed', async ({ request }) => {
 test('a socket that reconnects with an expired token stays signed in (no trip to /welcome)', async ({
   context,
 }) => {
-  // The VM's own /live socket; the IceBase build's reconnects are IceBase's (its realtime client).
-  test.skip(ICEBASE, 'the /live socket is the VM build’s');
   // The laptop slept: the /live socket dropped, and the page reconnects still
   // holding the ID token that lapsed in the meantime. The route below plays
   // that: after `stale` is set, the first auth frame carries a dead token.
@@ -114,8 +112,8 @@ test('a socket that reconnects with an expired token stays signed in (no trip to
     const server = ws.connectToServer();
     sockets.push(ws);
     ws.onMessage((m) => {
-      const f = JSON.parse(String(m)) as { op?: string; token?: string };
-      if (stale && f.op === 'auth' && f.token) {
+      const f = JSON.parse(String(m)) as { t?: string; token?: string };
+      if (stale && f.t === 'auth' && f.token) {
         stale = false;
         server.send(JSON.stringify({ ...f, token: 'expired.id.token' }));
       } else server.send(m);
@@ -131,7 +129,7 @@ test('a socket that reconnects with an expired token stays signed in (no trip to
   await expect(page.getByText('We sent a sign-in link')).toBeVisible();
   const link = await eventually('sign-in link', async () => {
     const m = (await mailTo(email)).find((x) => x.subject === 'Sign in to TaskManager');
-    return m ? /https?:\/\/\S+(?:tm_link|oobCode)=\S+/.exec(m.text ?? '')![0] : null;
+    return m ? /https?:\/\/\S+oobCode=\S+/.exec(m.text ?? '')![0] : null;
   });
   await page.goto(link.replace(/^https?:\/\/[^/]+/, ''));
   await expect(page).toHaveURL(/\/welcome/, { timeout: 30_000 });

@@ -90,11 +90,11 @@ const PASSTHROUGH = [
   // ARTIFACTS, cross-origin, from a sandboxed frame. Same reasoning — and a
   // pinned /v1/ the worker cached would outlive hosting's own cache rules.
   '/backend-driver',
-  // The VM deploy's own doors (backend src/server.ts): sign-in, objects, the
-  // RTDB REST stream, the live socket, the deploy's config, artifact content.
-  '/identity/',
-  '/blob/',
-  '/rtdb/',
+  // The IceBase server's own APIs (TM_ICEBASE=emulator): sign-in, files, the realtime socket,
+  // the deploy's config. (/v1/fs, /v1/db and /__/icebase/… fall under /v1 and /__ above.)
+  '/identitytoolkit.googleapis.com/',
+  '/securetoken.googleapis.com/',
+  '/v0/b/',
   '/live',
   '/config.json',
   '/c/',

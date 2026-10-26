@@ -5,7 +5,7 @@
  * adapter's WriteOp.
  */
 import { errors } from '@tm/shared';
-import { updatePairs, type WriteOp } from '../sqlite/mutate.js';
+import { updatePairs, type WriteOp } from '../engine/mutate.js';
 import type * as P from '../types.js';
 import { decodeJson, foreignSegments, toLocal } from './values.js';
 

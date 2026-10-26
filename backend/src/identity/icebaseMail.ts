@@ -1,5 +1,5 @@
 /**
- * The IceBase server's auth emails (TM_PLATFORM=icebase): it makes the sign-in, password-reset,
+ * The IceBase server's auth emails (TM_ICEBASE=emulator): it makes the sign-in, password-reset,
  * verify and change-e-mail links, and index.ts's `sendAuthEmail` export mails them — with the
  * same words and the same mailer (ports().email) as the VM's own sign-in.
  */

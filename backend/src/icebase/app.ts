@@ -1,24 +1,21 @@
 /**
- * The IceBase app behind TaskManager's backend. TM_PLATFORM picks the environment:
- * 'firebase' runs every service on Firebase (sharing the one firebase-admin app, adminApp.ts);
- * 'vm' runs the database on an IceBase server embedded in this process;
- * 'icebase' is TaskManager's functions inside the IceBase server (`icebase serve`), which tells
- * them where it is (ICEBASE_EMULATOR_HOST) and its admin token (ICEBASE_ADMIN_TOKEN).
+ * The IceBase app behind TaskManager's backend — every service goes through it. TM_ICEBASE picks
+ * what it drives (runtime/platform.ts):
+ *
+ *   firebase  every service on Firebase, sharing the one firebase-admin app (adminApp.ts)
+ *   emulator  TaskManager's functions inside the IceBase server (`icebase serve`), which tells
+ *             them where it is (ICEBASE_EMULATOR_HOST) and its admin token (ICEBASE_ADMIN_TOKEN)
  *
  * ICEBASE_LEARN=<file> turns on IceBase's learning mode: an undeclared collection or index, or a
  * write that does not fit the schema, is appended to <file> (JSON lines) instead of refused.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { appendFileSync } from 'node:fs';
 import { defineConfig } from '@panth977/icebase/config';
-import { registerEmbedded, type IceBaseApp } from '@panth977/icebase/app';
-import { decode } from '@panth977/icebase/internal';
-import type { RunningEmulator } from '@panth977/icebase-cli/emulator';
+import type { IceBaseApp } from '@panth977/icebase/app';
 import { initializeAdminApp } from '@panth977/icebase-server/admin';
 import { getFirestore, type CompatIssue, type Firestore } from '@panth977/icebase-server/compat';
 import { adminApp, projectId } from '../runtime/adminApp.js';
-import { dataDir, platform } from '../runtime/platform.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { schema } from './schema.js';
 
 export const icebaseConfig = defineConfig({
@@ -27,106 +24,22 @@ export const icebaseConfig = defineConfig({
   // The default bucket of the IceBase server (icebase.config.ts uses the same); on Firebase, the
   // shared firebase-admin app's own bucket is used.
   firebase: { projectId: projectId(), storageBucket: process.env.TM_STORAGE_BUCKET || `${projectId()}.appspot.com` },
-  environments: { firebase: { mode: 'firebase' }, vm: { mode: 'emulator' }, server: { mode: 'emulator' } },
+  environments: { firebase: { mode: 'firebase' }, server: { mode: 'emulator' } },
 });
 
-// ─── vm: the IceBase server, embedded ──────────────────────────────────────────
-//
-// On a VM the IceBase server runs inside this process (no port of its own): its SQLite file,
-// its rules, its schema checks. TM_DATA_DIR/icebase holds its data; the admin token is made once
-// and kept there, so nothing reaches the data without it.
-
-const EMBEDDED = 'taskmanager';
-let server: Promise<RunningEmulator> | undefined;
-
-function adminToken(dir: string): string {
-  const file = join(dir, 'admin-token');
-  if (!existsSync(file)) writeFileSync(file, randomBytes(32).toString('base64url'), { mode: 0o600 });
-  return readFileSync(file, 'utf8').trim();
-}
-
-/** The embedded IceBase server (vm), started on first use. */
-export function icebaseServer(): Promise<RunningEmulator> {
-  if (server) return server;
-  const dir = join(dataDir(), 'icebase');
-  mkdirSync(dir, { recursive: true });
-  const token = adminToken(dir);
-  server = import('@panth977/icebase-cli/emulator').then((m) =>
-    m.startEmulator({
-      config: icebaseConfig,
-      env: 'vm',
-      dataDir: dir,
-      listen: false,
-      name: EMBEDDED,
-      adminToken: token,
-      without: ['auth', 'database', 'storage', 'functions', 'customAuth'],
-      log: () => {},
-      ...(process.env.ICEBASE_LEARN ? { learnIndexes: (x: { collection: string; suggestion: string }) => learn(process.env.ICEBASE_LEARN!)({ kind: 'index', collection: x.collection, message: 'server', suggestion: x.suggestion }) } : {}),
-    }),
-  );
-  // Calls made before it is up wait for it.
-  registerEmbedded(EMBEDDED, async (req) => (await server!).handler(req));
-  return server;
-}
-
-/** The IceBase server these functions run in (TM_PLATFORM=icebase). */
+/** The IceBase server these functions run in (TM_ICEBASE=emulator). */
 function serverEmulator(): { origin: string; adminToken: string } {
   const host = process.env.ICEBASE_EMULATOR_HOST;
   const adminToken = process.env.ICEBASE_ADMIN_TOKEN;
-  if (!host || !adminToken) throw new Error('TM_PLATFORM=icebase runs inside the IceBase server (`icebase serve`): ICEBASE_EMULATOR_HOST and ICEBASE_ADMIN_TOKEN are not set');
+  if (!host || !adminToken) throw new Error('TM_ICEBASE=emulator runs inside the IceBase server (`icebase serve`): ICEBASE_EMULATOR_HOST and ICEBASE_ADMIN_TOKEN are not set');
   return { origin: `http://${host.replace(/^https?:\/\//, '')}`, adminToken };
 }
 
 let app: IceBaseApp | undefined;
 export function icebaseApp(): IceBaseApp {
   if (app) return app;
-  if (platform() === 'icebase') return (app = initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager', emulator: serverEmulator() }));
-  if (platform() === 'vm') {
-    void icebaseServer();
-    const dir = join(dataDir(), 'icebase');
-    return (app = initializeAdminApp(icebaseConfig, 'vm', { name: 'taskmanager', emulator: { embedded: EMBEDDED, adminToken: adminToken(dir) } }));
-  }
+  if (onIcebaseServer()) return (app = initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager', emulator: serverEmulator() }));
   return (app = initializeAdminApp(icebaseConfig, 'firebase', { name: 'taskmanager', firebaseAdminApp: adminApp() }));
-}
-
-/** A committed document change (vm): what the local triggers and live listeners hang off. */
-export interface IcebaseChange {
-  id: string;
-  path: string;
-  collectionId: string;
-  time: number;
-  before: Record<string, unknown> | undefined;
-  after: Record<string, unknown> | undefined;
-}
-
-/** Every committed change of the embedded server's documents, decoded to IceBase values. */
-export function onIcebaseChanges(listener: (changes: IcebaseChange[]) => void): () => void {
-  let off: (() => void) | null = null;
-  let stopped = false;
-  void icebaseServer().then((emu) => {
-    if (stopped) return;
-    const fs = icebaseFirestore();
-    const toRef = (p: string) => fs.doc(p);
-    off = emu.context.firestore.onChanges((changes) =>
-      listener(
-        changes.map((c) => {
-          const v = c.after ?? c.before;
-          return {
-            id: `${c.path}@${v?.version ?? 0}:${randomBytes(4).toString('hex')}`,
-            path: c.path,
-            collectionId: c.collectionId,
-            time: Date.now(),
-            before: c.before ? (decode(c.before.data, toRef) as Record<string, unknown>) : undefined,
-            after: c.after ? (decode(c.after.data, toRef) as Record<string, unknown>) : undefined,
-          };
-        }),
-      ),
-    );
-  });
-  return () => {
-    stopped = true;
-    off?.();
-  };
 }
 
 const seen = new Set<string>();
@@ -147,15 +60,9 @@ export function icebaseFirestore(): Firestore {
 }
 
 let rawApp: IceBaseApp | undefined;
-/** The same, without write validation (db/index.ts rawDb) — on the VM, the server skips its check too. */
+/** The same, without write validation (db/index.ts rawDb); on the IceBase server it skips its check too. */
 export function icebaseRawFirestore(): Firestore {
-  if (platform() === 'icebase') {
-    rawApp ??= initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager-raw', emulator: { ...serverEmulator(), unchecked: true } });
-    return getFirestore(rawApp, { validate: false, checkQueryValues: false });
-  }
-  if (platform() !== 'vm') return getFirestore(icebaseApp(), { validate: false, checkQueryValues: false });
-  icebaseApp();
-  const dir = join(dataDir(), 'icebase');
-  rawApp ??= initializeAdminApp(icebaseConfig, 'vm', { name: 'taskmanager-raw', emulator: { embedded: EMBEDDED, adminToken: adminToken(dir), unchecked: true } });
+  if (!onIcebaseServer()) return getFirestore(icebaseApp(), { validate: false, checkQueryValues: false });
+  rawApp ??= initializeAdminApp(icebaseConfig, 'server', { name: 'taskmanager-raw', emulator: { ...serverEmulator(), unchecked: true } });
   return getFirestore(rawApp, { validate: false, checkQueryValues: false });
 }

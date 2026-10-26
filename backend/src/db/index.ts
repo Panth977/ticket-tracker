@@ -1,14 +1,9 @@
 /**
- * The database, behind one port (types.ts). TM_DB (else TM_PLATFORM) picks
- * the adapter once, at startup:
+ * The database — IceBase (src/icebase), on Firebase or on the IceBase server (TM_ICEBASE). Every
+ * write is checked against the schema (icebase/schema.ts) and every query needs its index
+ * declared (icebase/indexes.ts).
  *
- *   'firestore' (firebase)      Cloud Firestore through the Admin SDK (the
- *                               Firebase deploy; emulator-aware as before)
- *   'sqlite' (vm)               SQLite files under TM_DB_DIR (the VM / Docker
- *                               deploy) — see src/db/sqlite/
- *
- * Everything above this file imports db(), the value classes and the types
- * from here. Nothing above it knows which store is underneath.
+ * Everything above this file imports db(), the value classes and the types from here.
  */
 import type {
   DbAdapter,
@@ -24,34 +19,19 @@ import type {
   Timestamp as TimestampT,
   TimestampStatic,
 } from './types.js';
-import { firestoreAdapter } from './firestore.js';
-import { sqliteAdapter } from './sqlite/index.js';
 import { icebaseAdapter, icebaseRawDb } from './icebase.js';
 import { RoutedDb } from './drive/router.js';
-import { adapterFor } from '../runtime/platform.js';
 
 export type * from './types.js';
 
-export type DbKind = 'firestore' | 'sqlite' | 'icebase';
-
-/** The store this process uses: TM_DB, else the platform's (runtime/platform.ts). */
-export function dbKind(): DbKind {
-  return adapterFor<DbKind>('TM_DB', { firebase: 'firestore', vm: 'sqlite', icebase: 'icebase' }, [
-    'firestore',
-    'sqlite',
-    'icebase',
-  ]);
-}
-
-const kind = dbKind();
-const adapter: DbAdapter = kind === 'sqlite' ? sqliteAdapter : kind === 'icebase' ? icebaseAdapter : firestoreAdapter;
+const adapter: DbAdapter = icebaseAdapter;
 
 /**
  * The database without schema checks, for seeding data a test means to be invalid or legacy
- * (a migration test). With the IceBase adapter it skips write validation; the others are db().
+ * (a migration test).
  */
 export function rawDb(): Db {
-  return kind === 'icebase' ? icebaseRawDb() : db();
+  return icebaseRawDb();
 }
 
 let routed: { base: Db; db: RoutedDb } | undefined;

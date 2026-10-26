@@ -19,6 +19,14 @@ const defaults: Record<string, string> = {
   // Phase 17: GET /v1/live exchanges a custom token at the Auth emulator's Identity Toolkit (any key works).
   TM_WEB_API_KEY: 'demo-web-api-key',
 };
+// TM_ICEBASE=emulator (root `pnpm test:emu:icebase`): the IceBase server (scripts/icebase-test.mjs
+// starts it) answers Firebase Auth's and Storage's APIs on its own port.
+if (process.env.TM_ICEBASE === 'emulator' && process.env.ICEBASE_EMULATOR_HOST) {
+  defaults.FIREBASE_AUTH_EMULATOR_HOST = process.env.ICEBASE_EMULATOR_HOST;
+  defaults.FIREBASE_STORAGE_EMULATOR_HOST = process.env.ICEBASE_EMULATOR_HOST;
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.ICEBASE_EMULATOR_HOST;
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = process.env.ICEBASE_EMULATOR_HOST;
+}
 for (const [k, v] of Object.entries(defaults)) process.env[k] ||= v;
 
 export const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST!;

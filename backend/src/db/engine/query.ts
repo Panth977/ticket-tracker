@@ -1,5 +1,6 @@
 /**
- * Firestore queries → SQL over (parent, id, doc) rows.
+ * Firestore queries over (parent, id, doc) rows — evaluated in JS by the Drive router
+ * (db/drive/router.ts); the SQL half was the VM's SQLite adapter's.
  *
  * Semantics kept from Firestore:
  *   - a filter or an orderBy on a field excludes documents without it
@@ -16,7 +17,20 @@
  * is the same either way, only slower. A collection-group query reads each
  * shard and merges in JS.
  */
-import { fieldExpr, type Row } from './store.js';
+/** A stored document row (the shape the Drive router hands the plan). */
+export interface Row {
+  parent: string;
+  id: string;
+  doc: string;
+  v: number;
+  ct: number;
+  ut: number;
+}
+/** JSON path of a field ('$."a"."b"'). */
+function jsonPath(segments: readonly string[]): string {
+  return '$' + segments.map((s) => `."${s.replace(/"/g, '\\"')}"`).join('');
+}
+const fieldExpr = (segments: readonly string[]) => `json_extract(doc, '${jsonPath(segments).replace(/'/g, "''")}')`;
 import {
   DbError,
   DOC_ID,

@@ -50,6 +50,9 @@ export function getAuthClient(): Auth {
 
 export function getDb(): Firestore {
   if (!db) {
+    // Auth first: on the IceBase server the token (and the socket path) reach IceBase's compat
+    // through getAuth(), so a read made before it would go out signed out and be refused.
+    getAuthClient();
     const a = getFirebaseApp();
     try {
       db = initializeFirestore(a, {
@@ -96,6 +99,9 @@ export async function clearPersistentCache(): Promise<void> {
 
 export function getRtdb(): Database {
   if (!rtdb) {
+    // Auth first: on the IceBase server the token (and the socket path) reach IceBase's compat
+    // through getAuth(), so a read made before it would go out signed out and be refused.
+    getAuthClient();
     const a = getFirebaseApp();
     /*
      * THE NAMESPACE MUST MATCH THE SERVER'S. An RTDB instance is identified by
@@ -123,6 +129,9 @@ export function getRtdb(): Database {
 
 export function getStorageClient(): FirebaseStorage {
   if (!storage) {
+    // Auth first: on the IceBase server the token (and the socket path) reach IceBase's compat
+    // through getAuth(), so a read made before it would go out signed out and be refused.
+    getAuthClient();
     storage = getStorage(getFirebaseApp());
     if (USE_EMULATORS) {
       try {

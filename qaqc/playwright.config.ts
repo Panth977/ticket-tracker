@@ -14,10 +14,10 @@ import { defineConfig, devices } from '@playwright/test';
 // @ts-expect-error — plain .mjs shared with the root scripts
 import { URLS } from '../scripts/ports.mjs';
 
-// TM_E2E_PLATFORM=vm: the VM server runs inside each worker (seed/vm.ts) on one port.
-const VM = process.env.TM_E2E_PLATFORM === 'vm' || process.env.TM_E2E_PLATFORM === 'icebase';
-const WEB = VM
-  ? `http://127.0.0.1:${process.env.TM_E2E_VM_PORT || 5280}`
+// TM_ICEBASE=emulator: the IceBase server runs beside each worker (seed/icebase.ts) on one port.
+const ICEBASE = process.env.TM_ICEBASE === 'emulator';
+const WEB = ICEBASE
+  ? `http://127.0.0.1:${process.env.TM_E2E_PORT || 5280}`
   : (process.env.TM_WEB_URL ?? (URLS as { web: string }).web);
 
 export default defineConfig({
@@ -26,7 +26,7 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
-  workers: process.env.CI || VM ? 1 : 2,
+  workers: process.env.CI || ICEBASE ? 1 : 2,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
@@ -45,7 +45,7 @@ export default defineConfig({
     // §U: the same app on a phone — a real touch device profile, not a narrow desktop window.
     { name: 'phone', testMatch: /phone\/.*\.spec\.ts$/, use: { ...devices['Pixel 7'] } },
   ],
-  webServer: VM ? undefined : {
+  webServer: ICEBASE ? undefined : {
     // The same stack a developer runs, empty (tests seed what they need).
     command: 'node ../scripts/dev.mjs --no-seed',
     url: WEB,

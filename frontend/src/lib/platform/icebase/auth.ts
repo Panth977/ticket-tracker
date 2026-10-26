@@ -1,5 +1,5 @@
 /**
- * `firebase/auth` FOR THE ICEBASE BUILD (TM_PLATFORM=icebase) — Firebase's own SDK, talking to the
+ * `firebase/auth` FOR THE EMULATOR BUILD (TM_ICEBASE=emulator) — Firebase's own SDK, talking to the
  * IceBase server this page came from (it speaks Firebase Auth's API and signs its tokens). The
  * signed-in user's ID token is what IceBase's Firestore and Realtime Database compat send.
  */

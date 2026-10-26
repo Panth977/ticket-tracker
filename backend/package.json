@@ -9,7 +9,7 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc -b ../shared && tsc -p tsconfig.json",
+    "build": "tsc -b ../shared && node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "typecheck": "tsc -b ../shared && tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests --project unit",
     "test:emu": "vitest run --passWithNoTests --project emu",
@@ -22,9 +22,9 @@
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@panth977/icebase": "npm:@jsr/panth977__icebase@0.4.1",
-    "@panth977/icebase-cli": "npm:@jsr/panth977__icebase-cli@0.4.1",
-    "@panth977/icebase-server": "npm:@jsr/panth977__icebase-server@0.4.1",
+    "@panth977/icebase": "npm:@jsr/panth977__icebase@0.4.6",
+    "@panth977/icebase-cli": "npm:@jsr/panth977__icebase-cli@0.4.6",
+    "@panth977/icebase-server": "npm:@jsr/panth977__icebase-server@0.4.6",
     "@tm/shared": "workspace:*",
     "firebase-admin": "^14.4.0",
     "firebase-functions": "^7.4.0",

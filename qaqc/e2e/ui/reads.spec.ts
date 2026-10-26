@@ -30,11 +30,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { call, doc, newBoard, newPerson, stage } from '../support/stack.js';
 import { signIn } from '../support/ui.js';
-import { VM } from '../../seed/vm.js';
+import { ICEBASE } from '../../seed/icebase.js';
 
 // §W counts FIRESTORE reads — what the Firebase deploy is billed for, and what
-// its offline cache saves. A VM has neither the bill nor that cache.
-test.skip(VM, 'Firestore read billing: not a VM concern');
+// its offline cache saves. The IceBase server has neither the bill nor that cache.
+test.skip(ICEBASE, 'Firestore read billing: Firebase only');
 
 /** qaqc has no DOM lib (it is a Node project): what the page bodies touch. */
 declare const window: {

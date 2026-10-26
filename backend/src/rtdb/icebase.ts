@@ -1,19 +1,21 @@
 /**
- * The IceBase adapter (TM_PLATFORM=icebase): the IceBase server's Realtime Database, reached with
- * the admin token (database.rules.json does not apply), behind the Admin SDK-shaped port.
+ * IceBase's Realtime Database as the admin (database.rules.json does not apply) — Firebase's on
+ * Firebase, the IceBase server's on it (TM_ICEBASE) — behind the Admin SDK-shaped port.
  */
-import { emulatorDatabaseDriver, FieldValue, type DatabaseDriver, type RawDbSnapshot } from '@panth977/icebase/internal';
+import { FieldValue, type DatabaseDriver, type RawDbSnapshot } from '@panth977/icebase/internal';
+import { getAdminDatabase } from '@panth977/icebase-server/admin';
 import { icebaseApp } from '../icebase/app.js';
 import type { DataSnapshot, RealtimeDb, Reference, RtdbAdapter, TransactionResult } from './types.js';
 
 let driver: DatabaseDriver | undefined;
-const d = (): DatabaseDriver => (driver ??= emulatorDatabaseDriver(icebaseApp()));
+const d = (): DatabaseDriver => (driver ??= (getAdminDatabase(icebaseApp()) as unknown as { _driver: DatabaseDriver })._driver);
 
-const clean = (p: string) =>
-  p
-    .split('/')
-    .filter((s) => s !== '')
-    .join('/');
+/** A path's keys: never empty, never . $ # [ ] (the Realtime Database's rule, as the Admin SDK checks it). */
+const clean = (p: string) => {
+  const keys = p.split('/').filter((s) => s !== '');
+  for (const k of keys) if (/[.$#[\]]/.test(k)) throw new Error(`Invalid key "${k}" in "${p}": keys can't contain ".", "#", "$", "[", or "]"`);
+  return keys.join('/');
+};
 
 function snap(key: string | null, raw: RawDbSnapshot): DataSnapshot {
   const value = raw.value ?? null;

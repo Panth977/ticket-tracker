@@ -2,8 +2,7 @@
  * THE IDENTITY PORT CONFORMANCE SUITE — one set of expectations, run on
  * every adapter:
  *
- *   test/identity/port.test.ts      local (SQLite in memory)
- *   test/identity/port.emu.test.ts  Firebase Auth on the emulator (the reference)
+ *   test/identity/port.emu.test.ts  IceBase's auth (Firebase's emulator, or the IceBase server)
  */
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../../src/identity/types.js';

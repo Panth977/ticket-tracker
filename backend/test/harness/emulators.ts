@@ -12,6 +12,10 @@ async function reachable(host: string): Promise<boolean> {
 
 /** Throws a clear error when the emulators are not up (instead of 30s timeouts). */
 export async function assertEmulators(): Promise<void> {
+  if (process.env.TM_ICEBASE === 'emulator') {
+    if (!(await reachable(AUTH_HOST))) throw new Error(`The IceBase server is not reachable at ${AUTH_HOST}. Run via the root \`pnpm test:emu:icebase\`.`);
+    return;
+  }
   const [fs, au] = await Promise.all([reachable(FIRESTORE_HOST), reachable(AUTH_HOST)]);
   if (!fs || !au) {
     throw new Error(
@@ -27,11 +31,11 @@ export async function assertEmulators(): Promise<void> {
  * owns the whole database.
  */
 export async function clearFirestore(): Promise<void> {
-  const { dbKind } = await import('../../src/db/index.js');
-  if (dbKind() === 'sqlite') {
-    // The database port's SQLite store (TM_PLATFORM=vm / TM_DB=sqlite): same wipe, same callers.
-    const { sqliteDb } = await import('../../src/db/sqlite/index.js');
-    sqliteDb().wipe();
+  if (process.env.TM_ICEBASE === 'emulator') {
+    // The IceBase server: every root collection, recursively, as the admin.
+    const { icebaseRawFirestore } = await import('../../src/icebase/app.js');
+    const fs = icebaseRawFirestore();
+    for (const c of await fs.listCollections()) await fs.recursiveDelete(c);
     return;
   }
   const res = await fetch(
