@@ -26,7 +26,8 @@ export default defineConfig({
   rules: { firestore: 'firestore.rules', storage: 'storage.rules', database: 'database.rules.json' },
   functions: { source: '.', region: process.env.TM_REGION || 'us-central1' },
   hosting: {
-    public: `../${app.public}`,
+    // scripts/icebase-start.mjs serves a branded copy (TM_WEB_DIR); else the build itself.
+    public: process.env.TM_WEB_DIR || `../${app.public}`,
     rewrites: [
       // Artifact files: Firebase serves them on a second site; here, the same origin (as on a VM).
       { source: '/c/**', function: 'api' },
@@ -38,6 +39,7 @@ export default defineConfig({
   },
   auth: { providers: ['password', 'emailLink'] },
   firebase: { projectId, storageBucket: `${projectId}.appspot.com` },
-  emulator: { dataDir: process.env.TM_DATA_DIR ? `${process.env.TM_DATA_DIR}/icebase` : '../data/icebase' },
+  // The realtime socket also on /live: the path a proxy in front of a VM deploy already upgrades.
+  emulator: { socketPath: '/live', dataDir: process.env.TM_DATA_DIR ? `${process.env.TM_DATA_DIR}/icebase` : '../data/icebase' },
   environments: { server: { mode: 'emulator' } },
 });

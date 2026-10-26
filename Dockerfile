@@ -66,7 +66,7 @@ COPY --from=build /src/backend/lib backend/lib
 COPY --from=build /src/backend/icebase.config.ts /src/backend/firestore.rules /src/backend/storage.rules /src/backend/database.rules.json /src/backend/firestore.indexes.json backend/
 COPY --from=build-icebase /src/frontend/build frontend/build
 COPY --from=build /src/firebase.json ./
-COPY --from=build /src/scripts/icebase.mjs scripts/
+COPY --from=build /src/scripts/icebase.mjs /src/scripts/icebase-start.mjs scripts/
 RUN mkdir -p /data && chown node:node /data
 # ICEBASE_PUBLIC_URL defaults to APP_URL (signed file URLs); set ICEBASE_ADMIN_TOKEN to choose
 # the admin token, else one is made once and kept in /data/icebase/admin-token.
@@ -79,7 +79,8 @@ VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/config.json').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
-CMD ["sh", "-c", "ICEBASE_PUBLIC_URL=${ICEBASE_PUBLIC_URL:-$APP_URL} exec node --disable-warning=ExperimentalWarning scripts/icebase.mjs serve"]
+# Branding and the SPA's runtime settings are applied to a copy of the web app first (as the VM server does).
+CMD ["node", "--disable-warning=ExperimentalWarning", "scripts/icebase-start.mjs"]
 
 # ─── the image ───────────────────────────────────────────────────────────────
 FROM node:${NODE}

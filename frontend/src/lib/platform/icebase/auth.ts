@@ -21,6 +21,8 @@ export function getAuth(app?: Parameters<typeof real.getAuth>[0]): Auth {
     // user (after a reload), so it is not sent as signed out and refused.
     configureIceBase({
       origin: location.origin,
+      // The path a proxy in front of a VM deploy already upgrades (backend/icebase.config.ts).
+      socketPath: '/live',
       idToken: async () => {
         await auth.authStateReady();
         return (await auth.currentUser?.getIdToken()) ?? null;
