@@ -26,14 +26,18 @@
 ARG NODE=22-bookworm-slim
 
 # ─── build: everything, from source ──────────────────────────────────────────
-FROM node:${NODE} AS build
+# On the build machine's own platform: the output is JavaScript, the same for every target
+# (an emulated Vite build of another architecture is slow and can crash).
+FROM --platform=$BUILDPLATFORM node:${NODE} AS build
 ENV CI=1
 RUN corepack enable
 WORKDIR /src
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @tm/shared build && pnpm --filter @tm/backend build
+
 # The VM build of the SPA: firebase/* resolves to src/lib/platform/vm.
+FROM build AS build-vm
 RUN TM_PLATFORM=vm pnpm --filter @tm/frontend build
 
 # The IceBase build of the SPA: Firestore / RTDB from IceBase's compat, Auth and Storage at the origin.
@@ -92,7 +96,7 @@ COPY --from=deps /app ./
 COPY --from=build /src/shared/dist shared/dist
 COPY --from=build /src/backend/lib backend/lib
 COPY --from=build /src/backend/firestore.rules /src/backend/storage.rules /src/backend/database.rules.json /src/backend/firestore.indexes.json backend/
-COPY --from=build /src/frontend/build frontend/build
+COPY --from=build-vm /src/frontend/build frontend/build
 COPY --from=build /src/firebase.json ./
 RUN mkdir -p /data && chown node:node /data
 ENV NODE_ENV=production \
