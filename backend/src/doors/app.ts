@@ -9,6 +9,7 @@ import { door } from '../http/mounts.js';
 import { userAuth } from '../middleware/user.js';
 import { assertAdmin } from '../platform/allow.js';
 import { readUsage } from '../platform/usage.js';
+import { commandsOpenApi } from '../platform/commandsOpenapi.js';
 import { runCommand } from '../runtime/runner.js';
 
 /** Commands carry JSON, never files (uploads go straight to Storage). */
@@ -34,6 +35,9 @@ api.get(USAGE_ROUTE.slice('/api'.length), userAuth, async (c) => {
   c.header('cache-control', 'no-store');
   return c.json(await readUsage({ refresh: c.req.query('refresh') === '1', now: ctx.now }));
 });
+
+/** GET /api/openapi.json — the command API as OpenAPI (public, like /v1/openapi.json). Above /:command for the same reason as /usage. */
+api.get('/openapi.json', (c) => c.json(commandsOpenApi()));
 
 api.post('/:command', userAuth, async (c) => {
   let body: unknown = {};

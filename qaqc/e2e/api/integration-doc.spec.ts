@@ -124,6 +124,8 @@ test('integrate.json is a manifest a machine can bootstrap from', async ({ reque
 });
 
 test('the published copy matches a fresh generation, and a stale one fails the guard', async () => {
+  // The generator runs once per output (~10 s each): more than the default 90 s on a busy machine.
+  test.setTimeout(300_000);
   // What is committed under frontend/static must be what the generator makes
   // today — this is the check the deploy runs.
   const fresh = await check({});
