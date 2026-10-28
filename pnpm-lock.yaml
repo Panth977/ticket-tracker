@@ -63,14 +63,14 @@ importers:
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
       '@panth977/icebase':
-        specifier: npm:@jsr/panth977__icebase@0.5.3
-        version: '@jsr/panth977__icebase@0.5.3'
+        specifier: npm:@jsr/panth977__icebase@0.5.4
+        version: '@jsr/panth977__icebase@0.5.4'
       '@panth977/icebase-cli':
-        specifier: npm:@jsr/panth977__icebase-cli@0.5.3
-        version: '@jsr/panth977__icebase-cli@0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
+        specifier: npm:@jsr/panth977__icebase-cli@0.5.4
+        version: '@jsr/panth977__icebase-cli@0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
       '@panth977/icebase-server':
-        specifier: npm:@jsr/panth977__icebase-server@0.5.3
-        version: '@jsr/panth977__icebase-server@0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
+        specifier: npm:@jsr/panth977__icebase-server@0.5.4
+        version: '@jsr/panth977__icebase-server@0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
       '@tm/shared':
         specifier: workspace:*
         version: link:../shared
@@ -181,8 +181,8 @@ importers:
         specifier: ^6.43.13
         version: 6.43.13
       '@panth977/icebase':
-        specifier: npm:@jsr/panth977__icebase@0.5.3
-        version: '@jsr/panth977__icebase@0.5.3'
+        specifier: npm:@jsr/panth977__icebase@0.5.4
+        version: '@jsr/panth977__icebase@0.5.4'
       '@panth977/sandbox':
         specifier: github:Panth977/sandbox-environment#v0.2.3
         version: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/5f37c6e6c84c5056108963ccf7df09448269b8bf
@@ -311,8 +311,8 @@ importers:
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
       '@panth977/icebase-cli':
-        specifier: npm:@jsr/panth977__icebase-cli@0.5.3
-        version: '@jsr/panth977__icebase-cli@0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
+        specifier: npm:@jsr/panth977__icebase-cli@0.5.4
+        version: '@jsr/panth977__icebase-cli@0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)'
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -1392,14 +1392,14 @@ packages:
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
-  '@jsr/panth977__icebase-cli@0.5.3':
-    resolution: {integrity: sha512-Y6dokfciLQr6DWupBiCQsNWXFJ8OPmcxVI4dvGPoM3abZIVfanP1a6T3UMoR+nAyFSe22HeN1cKgVCsM245+pQ==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase-cli/0.5.3.tgz}
+  '@jsr/panth977__icebase-cli@0.5.4':
+    resolution: {integrity: sha512-3QfrU3yhjc00C+0wauisxdlB9jM1WplqHkppN8W16Y8Gs267ml9hUMtkvnpoyWPC9uZiDRDmzSbAVTFUNVbAhg==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase-cli/0.5.4.tgz}
 
-  '@jsr/panth977__icebase-server@0.5.3':
-    resolution: {integrity: sha512-fU2YZSVj9dfbeWfntQIZ93K91ZNUaOPeu2f5rvwJtPNyR1Nue2WRK8odeJdS5EJ5/F0Q2JL68COrO0ScH3V52Q==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase-server/0.5.3.tgz}
+  '@jsr/panth977__icebase-server@0.5.4':
+    resolution: {integrity: sha512-j1A/x4c1RmHsXQBOdV/Qv0Q9/GunqUUtwX/THjTOH1SDetm2a7IwsPhm+tqn1rNCKgs60GR/wyVElYel7uAF+g==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase-server/0.5.4.tgz}
 
-  '@jsr/panth977__icebase@0.5.3':
-    resolution: {integrity: sha512-Wvzr5roUY56I9TIu9dNzGtkLEPwGPuyjL5I171ZyKrgeuhnEEEW+ALi471z8oFNGgDnDJW71mAGYtIzL4ezRyA==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase/0.5.3.tgz}
+  '@jsr/panth977__icebase@0.5.4':
+    resolution: {integrity: sha512-ipNUyjuqoo0VIA7aubfimJMVhlppzncF5pjevQo49uYrZqM39fiJ0Xfiyw0YQB9gBfwpRBD3iCxDtyIj8+9ZJQ==, tarball: https://npm.jsr.io/~/11/@jsr/panth977__icebase/0.5.4.tgz}
 
   '@keyv/bigmap@1.3.1':
     resolution: {integrity: sha512-WbzE9sdmQtKy8vrNPa9BRnwZh5UF4s1KTmSK0KUVLo3eff5BlQNNWDnFOouNpKfPKDnms9xynJjsMYjMaT/aFQ==}
@@ -5068,10 +5068,10 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@jsr/panth977__icebase-cli@0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)':
+  '@jsr/panth977__icebase-cli@0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)':
     dependencies:
-      '@jsr/panth977__icebase': 0.5.3
-      '@jsr/panth977__icebase-server': 0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
+      '@jsr/panth977__icebase': 0.5.4
+      '@jsr/panth977__icebase-server': 0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
       '@types/ws': 8.18.2
       esbuild: 0.25.12
       firebase-admin: 14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
@@ -5089,9 +5089,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@jsr/panth977__icebase-server@0.5.3(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)':
+  '@jsr/panth977__icebase-server@0.5.4(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)':
     dependencies:
-      '@jsr/panth977__icebase': 0.5.3
+      '@jsr/panth977__icebase': 0.5.4
       '@types/express': 5.0.6
       firebase-admin: 14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
       firebase-functions: 7.4.0(firebase-admin@14.4.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2))
@@ -5105,7 +5105,7 @@ snapshots:
       - graphql
       - supports-color
 
-  '@jsr/panth977__icebase@0.5.3':
+  '@jsr/panth977__icebase@0.5.4':
     dependencies:
       firebase: 12.19.0
     transitivePeerDependencies:
