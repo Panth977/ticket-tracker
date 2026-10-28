@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 56b929467a08…</span>
+        <span>sha256 5d5fd756019b…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -1607,7 +1607,7 @@ text       string | null                       required
 truncated  boolean                             required
 url        string                              required
 bytesUrl   string                              required
-expiresAt  integer                             required</code></pre></figure>
+expiresAt  integer                             required  (0…)</code></pre></figure>
 <p>→ 400, 401, 403, 404, 409, 429 <code>application/problem+json</code> (see Errors)</p>
 <h4 id="put-v1-buckets-id-files-path"><a class="anchor" href="#put-v1-buckets-id-files-path" aria-label="Link to this section">#</a>PUT /v1/buckets/{id}/files/{path}</h4>
 <p>Create or replace a bucket file: the raw body is the file (missing folders are created).</p>

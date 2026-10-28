@@ -8,11 +8,33 @@ import { COMMANDS } from '@tm/shared';
 import type { z } from 'zod';
 
 type Json = Record<string, unknown>;
+/**
+ * The converter writes repeated sub-schemas as refs relative to the schema's own root
+ * ('#/properties/a/…'), which mean something else once the schema sits inside an OpenAPI
+ * document: they are inlined here (a ref inside its own target is left as an open object).
+ */
+export function inline(root: Json): Json {
+  const at = (ref: string): unknown => ref.slice(2).split('/').reduce<unknown>((n, k) => (n && typeof n === 'object' ? (n as Json)[decodeURIComponent(k.replace(/~1/g, '/').replace(/~0/g, '~'))] : undefined), root);
+  const walk = (n: unknown, seen: Set<string>): unknown => {
+    if (Array.isArray(n)) return n.map((x) => walk(x, seen));
+    if (!n || typeof n !== 'object') return n;
+    const o = n as Json;
+    if (typeof o.$ref === 'string' && o.$ref.startsWith('#/')) {
+      if (seen.has(o.$ref)) return { type: 'object' };
+      return walk(at(o.$ref) ?? { type: 'object' }, new Set([...seen, o.$ref]));
+    }
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, walk(v, seen)]));
+  };
+  return walk(root, new Set()) as Json;
+}
 const schema = (s: z.ZodTypeAny): Json => {
   const out = toJsonSchemaCompat(s as never, { target: 'draft-2020-12' }) as Json;
   delete out.$schema;
-  return out;
+  return inline(out);
 };
+
+/** The area a command belongs to, for grouping: its name's first word (boardCreate → board). */
+const area = (name: string) => /^[a-z]+/.exec(name)?.[0] ?? 'other';
 
 let cached: Json | null = null;
 export function commandsOpenApi(): Json {
@@ -22,8 +44,9 @@ export function commandsOpenApi(): Json {
     paths[`/api/${spec.name}`] = {
       post: {
         operationId: spec.name,
-        summary: spec.permission,
-        tags: [spec.source],
+        summary: spec.name,
+        description: `**Who may call it:** ${spec.permission}${spec.errors.length ? `\n\n**Errors:** ${spec.errors.map((e) => `\`${e}\``).join(', ')}` : ''}${spec.scopes?.length ? `\n\n**Token scopes (any one):** ${spec.scopes.map((x) => `\`${x}\``).join(', ')}` : ''}`,
+        tags: [area(spec.name)],
         'x-scopes': spec.scopes ?? [],
         'x-errors': spec.errors,
         security: [{ firebaseIdToken: [] }],
