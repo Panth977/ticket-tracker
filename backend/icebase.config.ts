@@ -39,10 +39,9 @@ export default defineConfig({
   },
   auth: { providers: ['password', 'emailLink'] },
   firebase: { projectId, storageBucket: `${projectId}.appspot.com` },
-  // The console (/__/icebase/console): its APIs page shows both API documents; the deployments it
-  // switches between are named per deploy (TM_CONSOLE_TARGETS='[{"name":"…","url":"https://…/__/icebase/console"}]').
+  // The console (/__/icebase/console): it manages this deployment only; its APIs page shows both
+  // API documents.
   console: {
-    targets: JSON.parse(process.env.TM_CONSOLE_TARGETS || '[]') as { name: string; url: string }[],
     openapi: [
       { title: 'App API (POST /api/{command})', path: '/api/openapi.json' },
       { title: 'REST API (/v1)', path: '/v1/openapi.json' },

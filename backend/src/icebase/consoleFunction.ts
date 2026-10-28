@@ -8,7 +8,6 @@
  *   ICEBASE_CONSOLE_STORAGE_BUCKET   the default bucket
  *   ICEBASE_CONSOLE_DATABASE_URL     the Realtime Database URL
  *   ICEBASE_CONSOLE_SITE             the app's origin (its /api and /v1 OpenAPI documents)
- *   TM_CONSOLE_TARGETS               the other deployments, JSON [{ name, url }]
  */
 import { timingSafeEqual } from 'node:crypto';
 import { onRequest } from 'firebase-functions/v2/https';
@@ -31,7 +30,6 @@ const config = defineConfig({
     ...(process.env.ICEBASE_CONSOLE_DATABASE_URL ? { databaseURL: process.env.ICEBASE_CONSOLE_DATABASE_URL } : {}),
   },
   console: {
-    targets: JSON.parse(process.env.TM_CONSOLE_TARGETS || '[]') as { name: string; url: string }[],
     openapi: [
       { title: 'App API (POST /api/{command})', path: '/api/openapi.json' },
       { title: 'REST API (/v1)', path: '/v1/openapi.json' },
