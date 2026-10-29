@@ -218,7 +218,11 @@ function writePackageJson(externals) {
       );
     const v = installedVersion(name, from);
     if (!v) throw new Error(`${name} is not installed under ${relative(ROOT, from)} — run pnpm install`);
-    deps[name] = v;
+    // A JSR package (npm:@jsr/…) keeps its alias, at the installed version; Cloud Build finds it
+    // through the .npmrc written beside package.json.
+    const spec = (from === BACKEND ? backendPkg : sharedPkg).dependencies[name];
+    const alias = /^npm:(@jsr\/[^@]+)@/.exec(spec);
+    deps[name] = alias ? `npm:${alias[1]}@${v}` : v;
   }
   const pkg = {
     name: 'tm-functions',
@@ -231,6 +235,8 @@ function writePackageJson(externals) {
     dependencies: Object.fromEntries(Object.entries(deps).sort(([a], [b]) => a.localeCompare(b))),
   };
   writeFileSync(join(OUT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  if (Object.values(deps).some((d) => d.startsWith('npm:@jsr/')))
+    writeFileSync(join(OUT, '.npmrc'), '@jsr:registry=https://npm.jsr.io\n');
   return pkg;
 }
 
