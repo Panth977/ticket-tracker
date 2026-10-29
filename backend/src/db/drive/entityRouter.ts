@@ -16,8 +16,8 @@
  * split by field: its settings go to the file, everything else stays a
  * database write in the same transaction — so counters and access stay atomic.
  */
-import { applyWrite, updatePairs, type WriteOp } from '../sqlite/mutate.js';
-import { Timestamp as SqlTimestamp } from '../sqlite/values.js';
+import { applyWrite, updatePairs, type WriteOp } from '../engine/mutate.js';
+import { Timestamp as SqlTimestamp } from '../engine/values.js';
 import type * as P from '../types.js';
 import {
   assertEntityNotMoving,

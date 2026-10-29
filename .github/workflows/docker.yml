@@ -70,6 +70,7 @@ jobs:
           docker run -d --name tm -p 8080:8080 -e APP_URL=http://127.0.0.1:8080 tm:smoke
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/config.json && break; sleep 2; done
           curl -fsS http://127.0.0.1:8080/ | grep -qi '<html'
-          curl -fsS http://127.0.0.1:8080/identity/providers
+          curl -fsS http://127.0.0.1:8080/config.json | grep -q '"platform":"icebase"'
+          curl -fsS http://127.0.0.1:8080/__/icebase/health
           curl -fsS http://127.0.0.1:8080/.well-known/oauth-authorization-server | head -c 200
           docker logs tm | tail -20

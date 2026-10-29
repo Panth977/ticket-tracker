@@ -1,41 +1,20 @@
 /**
- * WHICH PLATFORM THIS PROCESS RUNS ON — one switch, many adapters.
+ * WHERE THIS PROCESS RUNS — TaskManager is one app on IceBase (src/icebase): every collection,
+ * index, path and file is declared there, and every service goes through IceBase's admin API.
+ * One switch says which backend IceBase drives:
  *
- *   TM_PLATFORM=firebase (default)  Cloud Functions + Firestore + Storage +
- *                                   Firebase Auth + RTDB + Cloud Tasks
- *   TM_PLATFORM=vm                  one Node server (Docker): SQLite, files on
- *                                   disk, local auth, WebSocket realtime,
- *                                   in-process jobs
- *
- * Each port picks its adapter from its own variable when set, else from the
- * platform default — so a mixed setup (say SQLite with Cloud Storage) is one
- * extra variable, and tests can swap a single port.
- *
- *   port      variable   firebase    vm
- *   database  TM_DB      firestore   sqlite
- *   files     TM_BLOB    gcs         disk
+ *   TM_ICEBASE=firebase (default)  Firebase: Cloud Functions, Firestore, Auth, Storage, the
+ *                                  Realtime Database and Cloud Tasks (firebase-admin underneath)
+ *   TM_ICEBASE=emulator            the IceBase server (`icebase serve`, backend/icebase.config.ts):
+ *                                  one port on a VM, SQLite, files on disk, its own sign-in
  */
-export type Platform = 'firebase' | 'vm';
+export type IcebaseMode = 'firebase' | 'emulator';
 
-export function platform(): Platform {
-  const v = (process.env.TM_PLATFORM || 'firebase').toLowerCase();
-  if (v === 'firebase' || v === 'vm') return v;
-  throw new Error(`TM_PLATFORM must be 'firebase' or 'vm', not ${JSON.stringify(v)}`);
+export function icebaseMode(): IcebaseMode {
+  const v = (process.env.TM_ICEBASE || 'firebase').toLowerCase();
+  if (v === 'firebase' || v === 'emulator') return v;
+  throw new Error(`TM_ICEBASE must be 'firebase' or 'emulator', not ${JSON.stringify(v)}`);
 }
 
-/** A port's adapter: its own env variable, else the platform's default. */
-export function adapterFor<T extends string>(
-  variable: string,
-  defaults: Record<Platform, T>,
-  allowed: readonly T[],
-): T {
-  const v = (process.env[variable] || defaults[platform()]).toLowerCase() as T;
-  if (!allowed.includes(v))
-    throw new Error(`${variable} must be one of ${allowed.join(', ')}, not ${JSON.stringify(v)}`);
-  return v;
-}
-
-/** Where a VM keeps its state (TM_DATA_DIR, default ./data): db/, blobs/ … */
-export function dataDir(): string {
-  return process.env.TM_DATA_DIR || './data';
-}
+/** On the IceBase server (TM_ICEBASE=emulator). */
+export const onIcebaseServer = (): boolean => icebaseMode() === 'emulator';

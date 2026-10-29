@@ -596,9 +596,12 @@ describe('artifactOpen and the /c file route (§D)', () => {
     expect(open).toMatchObject({ buildId, role: 'viewer', readOnly: false });
     expect(open.contentUrl).toBe(`${open.contentBase}index.html`);
     expect(open.expiresAt - Date.now()).toBeGreaterThan(ARTIFACT_CAPABILITY_TTL_MS - 60_000);
-    // The URL is on the usercontent origin — under the emulators, the functions emulator's api URL.
+    // The URL is on the usercontent origin — under Firebase's emulators, the functions emulator's
+    // api URL; on the IceBase server, the server itself (/c on its one port).
     expect(open.contentBase).toMatch(
-      /^http:\/\/127\.0\.0\.1:5101\/demo-taskmanager\/us-central1\/api\/c\//,
+      process.env.TM_ICEBASE === 'emulator'
+        ? new RegExp(`^${process.env.ICEBASE_PUBLIC_URL!.replace(/[.]/g, '\\.')}/c/`)
+        : /^http:\/\/127\.0\.0\.1:5101\/demo-taskmanager\/us-central1\/api\/c\//,
     );
 
     const base = pathOf(open.contentBase);

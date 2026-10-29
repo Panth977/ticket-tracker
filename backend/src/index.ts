@@ -6,6 +6,9 @@
  *   deadlineSweep …        Cloud Scheduler
  *   onTicketWritten …      Firestore / Storage / Auth triggers
  *
+ * Every export is built with IceBase's wrappers (@panth977/icebase-server/functions): on
+ * Firebase they are firebase-functions' own; the IceBase server runs the same exports.
+ *
  * Handlers are NOT written here. Modules in src/commands, src/jobs,
  * src/triggers and src/doors register themselves (see runtime/functions.ts);
  * autoloadSync() imports them all before the exports below are computed.
@@ -16,19 +19,22 @@
  * `undefined`, which Firebase skips — so nothing is deployed (or run in the
  * emulator) until its owner lands the handler.
  */
-import { getRequestListener } from '@hono/node-server';
-import * as functionsV1 from 'firebase-functions/v1';
 import { setGlobalOptions } from 'firebase-functions/v2';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onRequest } from 'firebase-functions/v2/https';
-import { beforeUserCreated, beforeUserSignedIn } from 'firebase-functions/v2/identity';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onObjectFinalized } from 'firebase-functions/v2/storage';
-import { onTaskDispatched, type Request, type TaskQueueOptions } from 'firebase-functions/v2/tasks';
+import type { Request, TaskQueueOptions } from 'firebase-functions/v2/tasks';
+import {
+  beforeUserCreated,
+  beforeUserSignedIn,
+  onDocumentWritten,
+  onObjectFinalized,
+  onRequest,
+  onSchedule,
+  onTaskDispatched,
+  onUserCreated as onAuthUserCreated,
+  onUserDeleted as onAuthUserDeleted,
+} from '@panth977/icebase-server/functions';
 import type { QueueName, QueuePayloads } from '@tm/shared';
 import { createApp } from './http/app.js';
 import { autoloadSync } from './runtime/autoload.js';
-import { DOC_TRIGGERS } from './runtime/localTriggers.js';
 import { boundSecrets, region, withServerSecrets } from './runtime/deploy.js';
 import {
   getScheduleHandler,
@@ -58,9 +64,9 @@ setGlobalOptions({
 
 autoloadSync();
 
-// Built on the first request (createApp reuses the modules loaded above).
-// @hono/node-server reads Firebase's pre-parsed req.rawBody, so bodies survive express.
-let listener: ReturnType<typeof getRequestListener> | undefined;
+// Built on the first request (createApp reuses the modules loaded above). Fetch-style:
+// IceBase hands hono a Request built from Firebase's pre-parsed req.rawBody.
+let app: Awaited<ReturnType<typeof createApp>> | undefined;
 const ensureSecrets = withServerSecrets(() => undefined);
 
 export const api = onRequest(
@@ -68,10 +74,10 @@ export const api = onRequest(
   // concurrency > 1, and one instance serving 80 concurrent calls is far
   // cheaper than 80 instances at half a core. Concurrency IS the saving here.
   { invoker: 'public', concurrency: 80, memory: '512MiB', timeoutSeconds: 60 },
-  async (req, res) => {
+  async (req: globalThis.Request) => {
     await ensureSecrets();
-    listener ??= getRequestListener((await createApp()).fetch);
-    await listener(req, res);
+    app ??= await createApp();
+    return app.fetch(req);
   },
 );
 
@@ -138,11 +144,8 @@ export const agentSilenceSweep = scheduleFn('agentSilenceSweep');
 
 // ─── triggers ────────────────────────────────────────────────────────────────
 
-/** v1 builder (auth onCreate / onDelete) with the same region and secrets. */
-const v1 = () => {
-  const b = functionsV1.region(REGION);
-  return SECRETS.length ? b.runWith({ secrets: SECRETS }) : b;
-};
+/** Auth onCreate / onDelete are firebase-functions v1: the same region and secrets, given here. */
+const V1 = { region: REGION, ...(SECRETS.length ? { secrets: SECRETS } : {}) };
 
 function trig<T extends TriggerName>(name: T, wrap: (h: TriggerHandlers[T]) => unknown) {
   const h = getTrigger(name);
@@ -152,10 +155,10 @@ function trig<T extends TriggerName>(name: T, wrap: (h: TriggerHandlers[T]) => u
 }
 
 export const onTicketWritten = trig('onTicketWritten', (h) =>
-  onDocumentWritten(DOC_TRIGGERS.onTicketWritten, h),
+  onDocumentWritten('boards/{boardId}/tickets/{ticketId}', h),
 );
 export const onMessageWritten = trig('onMessageWritten', (h) =>
-  onDocumentWritten(DOC_TRIGGERS.onMessageWritten, h),
+  onDocumentWritten('boards/{boardId}/tickets/{ticketId}/messages/{messageId}', h),
 );
 export const onAttachmentFinalized = trig('onAttachmentFinalized', (h) =>
   onObjectFinalized({ memory: '1GiB' }, h),
@@ -163,12 +166,13 @@ export const onAttachmentFinalized = trig('onAttachmentFinalized', (h) =>
 export const beforeCreate = trig('beforeUserCreated', (h) => beforeUserCreated(h));
 export const beforeSignIn = trig('beforeUserSignedIn', (h) => beforeUserSignedIn(h));
 export const onUserCreated = trig('onUserCreated', (h) =>
-  v1()
-    .auth.user()
-    .onCreate((u) => h(u)),
+  onAuthUserCreated(V1, (u) => h(u as never)),
 );
 export const onUserDeleted = trig('onUserDeleted', (h) =>
-  v1()
-    .auth.user()
-    .onDelete((u) => h(u)),
+  onAuthUserDeleted(V1, (u) => h(u as never)),
 );
+
+// ─── the IceBase server ──────────────────────────────────────────────────────
+
+/** Mails the IceBase server's auth links (TM_ICEBASE=emulator); a plain export, which Firebase ignores. */
+export { sendAuthEmail } from './identity/icebaseMail.js';

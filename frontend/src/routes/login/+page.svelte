@@ -14,6 +14,7 @@
   import { authErrorMessage } from '$lib/account/authErrors';
   import { isEmail } from '$lib/account/inviteDraft';
   import { Button, Input } from '$lib/ui';
+  import { env } from '$env/dynamic/public';
 
   const next = $derived(safeNext(page.url.searchParams.get('next')));
 
@@ -24,6 +25,9 @@
   /** The link was opened on another device: ask for the address again. */
   let needEmail = $state(false);
   let linkMode = $state(false);
+  /** The sign-in providers this deploy offers. A Firebase deploy: both. The IceBase server: only
+   * Google, and only with its own OAuth client (PUBLIC_TM_SIGNIN_PROVIDERS, set by the server). */
+  const providers = (env.PUBLIC_TM_SIGNIN_PROVIDERS ?? 'google,microsoft').split(',').filter(Boolean);
 
   onMount(() => {
     if (auth.isEmailLink()) {
@@ -133,7 +137,9 @@
           <Button variant="link" onclick={() => (sentTo = null)}>Use a different address</Button>
         </div>
       {:else}
+        {#if providers.length}
         <div class="flex flex-col gap-2">
+          {#if providers.includes('google')}
           <Button
             block
             size="lg"
@@ -161,6 +167,8 @@
             </svg>
             Continue with Google
           </Button>
+          {/if}
+          {#if providers.includes('microsoft')}
           <Button
             block
             size="lg"
@@ -180,11 +188,13 @@
             </svg>
             Continue with Microsoft
           </Button>
+          {/if}
         </div>
 
         <div class="my-5 flex items-center gap-3 text-xs text-subtle" aria-hidden="true">
           <span class="h-px flex-1 bg-line"></span>or<span class="h-px flex-1 bg-line"></span>
         </div>
+        {/if}
 
         <form class="flex flex-col gap-3" onsubmit={sendLink} novalidate>
           <Input

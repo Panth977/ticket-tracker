@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { storageBucket } from '../../src/blob/index.js';
-import { db } from '../../src/runtime/firebase.js';
+import { rawDb } from '../../src/db/index.js';
 import { migrateRestructure } from '../../src/migrate/restructure.js';
 import { setupEmulators, uniq } from '../harness/index.js';
 import { people, seedBoard } from '../tickets/helpers.js';
@@ -23,7 +23,7 @@ describe('restructure migration', () => {
     const obj = `memories/${m}/f1/notes.md`;
 
     // ── the old shape ──
-    await db()
+    await rawDb()
       .doc(`memories/${m}`)
       .set({
         name: 'Old notes',
@@ -40,15 +40,15 @@ describe('restructure migration', () => {
         createdAt: 1,
         updatedAt: 1,
       });
-    await db()
+    await rawDb()
       .doc(`memories/${m}/nodes/${n}`)
       .set({ kind: 'file', name: 'notes.md', path: 'notes.md', storagePath: obj });
     await storageBucket().file(obj).save(Buffer.from('hello'), { contentType: 'text/markdown' });
-    await db()
+    await rawDb()
       .doc(`boards/${board.id}`)
       .update({ attachMemory: { memoryId: m, template: '<filename>' } });
     const tk = uniq('t');
-    await db()
+    await rawDb()
       .doc(`boards/${board.id}/tickets/${tk}`)
       .set({
         title: 'remember the memory',
@@ -62,10 +62,10 @@ describe('restructure migration', () => {
           },
         ],
       });
-    await db()
+    await rawDb()
       .doc(`users/${asha.uid}/ui/sidebar`)
       .set({ hiddenBoardIds: [], hiddenArtifactIds: [], hiddenMemoryIds: [m], updatedAt: 1 });
-    await db()
+    await rawDb()
       .doc(`users/${asha.uid}/workspaces/${uniq('w')}`)
       .set({
         name: 'Client Work',
@@ -78,19 +78,19 @@ describe('restructure migration', () => {
         updatedAt: 1,
       });
 
-    const s = await migrateRestructure({ db: db(), bucket: storageBucket(), apply: true });
+    const s = await migrateRestructure({ db: rawDb(), bucket: storageBucket(), apply: true });
     expect(s).toMatchObject({ bucketsMoved: 1, nodesMoved: 1, orgs: 1, sidebarsRemoved: 1 });
 
     // ── 1: memory → bucket ──
-    expect((await db().doc(`memories/${m}`).get()).exists).toBe(false);
-    const b = (await db().doc(`buckets/${m}`).get()).data()!;
+    expect((await rawDb().doc(`memories/${m}`).get()).exists).toBe(false);
+    const b = (await rawDb().doc(`buckets/${m}`).get()).data()!;
     expect(b).toMatchObject({ name: 'Old notes', description: 'My memory of things' }); // people's words untouched
-    const node = (await db().doc(`buckets/${m}/nodes/${n}`).get()).data()!;
+    const node = (await rawDb().doc(`buckets/${m}/nodes/${n}`).get()).data()!;
     expect(node.storagePath).toBe(`buckets/${m}/f1/notes.md`);
     const [moved] = await storageBucket().file(`buckets/${m}/f1/notes.md`).download();
     expect(moved.toString()).toBe('hello');
     expect((await storageBucket().file(obj).exists())[0]).toBe(false);
-    const t = (await db().doc(`boards/${board.id}/tickets/${tk}`).get()).data()!;
+    const t = (await rawDb().doc(`boards/${board.id}/tickets/${tk}`).get()).data()!;
     expect(t.title).toBe('remember the memory');
     expect(t.files[0]).toMatchObject({
       source: 'bucket',
@@ -98,29 +98,29 @@ describe('restructure migration', () => {
       bucket: { bucketId: m, nodeId: n },
     });
     // 4: hiding is gone with it
-    expect((await db().doc(`users/${asha.uid}/ui/sidebar`).get()).exists).toBe(false);
+    expect((await rawDb().doc(`users/${asha.uid}/ui/sidebar`).get()).exists).toBe(false);
 
     // ── 2 + 3: handles, owners, an org from the workspace holding her board and bucket ──
-    const user = (await db().doc(`users/${asha.uid}`).get()).data()!;
+    const user = (await rawDb().doc(`users/${asha.uid}`).get()).data()!;
     expect(user.handle).toMatch(/^[a-z0-9-]+$/);
-    const brd = (await db().doc(`boards/${board.id}`).get()).data()!;
+    const brd = (await rawDb().doc(`boards/${board.id}`).get()).data()!;
     expect(brd.attachBucket).toEqual({ bucketId: m, template: '<filename>' });
     expect(brd.owner.kind).toBe('org');
-    const org = (await db().doc(`orgs/${brd.owner.id}`).get()).data()!;
+    const org = (await rawDb().doc(`orgs/${brd.owner.id}`).get()).data()!;
     expect(org).toMatchObject({ name: 'Client Work', members: { [asha.uid]: 'owner' } });
     expect(brd.ownerHandle).toBe(org.handle);
-    expect((await db().doc(`handles/${org.handle}`).get()).data()).toEqual({
+    expect((await rawDb().doc(`handles/${org.handle}`).get()).data()).toEqual({
       kind: 'org',
       id: brd.owner.id,
     });
-    expect((await db().doc(`buckets/${m}`).get()).data()).toMatchObject({
+    expect((await rawDb().doc(`buckets/${m}`).get()).data()).toMatchObject({
       ownerKey: `org:${brd.owner.id}`,
       slug: 'old-notes',
     });
-    expect((await db().collection(`users/${asha.uid}/workspaces`).get()).size).toBe(0);
+    expect((await rawDb().collection(`users/${asha.uid}/workspaces`).get()).size).toBe(0);
 
     // ── idempotent ──
-    const again = await migrateRestructure({ db: db(), bucket: storageBucket(), apply: false });
+    const again = await migrateRestructure({ db: rawDb(), bucket: storageBucket(), apply: false });
     expect(again).toMatchObject({
       bucketsMoved: 0,
       objectsMoved: 0,

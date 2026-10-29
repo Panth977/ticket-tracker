@@ -82,6 +82,8 @@ export const UserSchema = z.object({
    * behind the middleware) — an explicit `false` is the only refusal.
    */
   allowed: z.boolean().optional(),
+  /** doors/ics.ts: rotating the calendar URL bumps this, so every old URL stops working. */
+  icsVersion: z.number().int().nonnegative().optional(),
 });
 export type User = z.infer<typeof UserSchema>;
 
@@ -320,6 +322,8 @@ export const OAuthGrantSchema = z.object({
   scopes: ScopeListInputSchema,
   /** The consent screen's 'only these boards'; null = every board the person is on. */
   boardIds: z.array(BoardIdSchema).nullable().optional(),
+  /** Every scope there is (platform/oauth.ts grantIsEverything). */
+  allScopes: z.boolean().optional(),
   createdAt: MillisSchema,
   lastUsedAt: MillisSchema,
 });

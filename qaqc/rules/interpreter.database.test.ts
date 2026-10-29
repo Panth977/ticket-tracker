@@ -1,17 +1,17 @@
 /**
- * database.rules.json through the VM's evaluator (backend/src/rules/database.ts)
- * vs. the Realtime Database emulator: the same reads and writes, by the same
- * people and agents, must get the same answers.
+ * database.rules.json through IceBase's evaluator (what the IceBase server enforces) vs. the
+ * Realtime Database emulator: the same reads and writes, by the same people and agents, must get
+ * the same answers.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { get, ref, remove, set, update } from 'firebase/database';
 import { live, rtdb, statusKey } from '@tm/shared';
-import { DatabaseRules } from '../../backend/src/rules/database.js';
+import { loadDatabaseRules } from '@panth977/icebase-cli/internal';
 import { ADMIN, BOARD, EDITOR, MEMBERS, OTHER_BOARD, STRANGER, TICKET, VIEWER, as, makeEnv, readRules, rt } from './_env.js';
 
 let env: RulesTestEnvironment;
-const rules = new DatabaseRules(readRules('database.rules.json'));
+const rules = loadDatabaseRules(readRules('database.rules.json'));
 const AGENT = 'ag_0123456789abcdef';
 const ART = 'art_1';
 
@@ -88,7 +88,7 @@ describe('database rules evaluator = RTDB emulator', () => {
     for (const w of WHO)
       for (const p of paths) {
         const want = await emu(get(ref(dbOf(w), p)));
-        const got = rules.canRead(authOf(w), tree, segs(p));
+        const got = rules.canRead(p, authOf(w), tree as never);
         if (want !== got) diffs.push(`${label(w)} read /${p}: emulator ${want}, evaluator ${got}`);
       }
     expect(diffs).toEqual([]);
@@ -121,7 +121,7 @@ describe('database rules evaluator = RTDB emulator', () => {
         let next = tree;
         if (op === 'update') for (const [k, x] of Object.entries(v as object)) next = put(next, [...segs(p), ...segs(k)], x as Json);
         else next = put(next, segs(p), op === 'remove' ? null : (v as Json));
-        const got = rules.canWrite(authOf(w), tree, next, written);
+        const got = written.every((at) => rules.canWrite(at.join('/'), authOf(w), tree as never, next as never));
         if (want !== got) diffs.push(`${label(w)} ${op} /${p} ${JSON.stringify(v)}: emulator ${want}, evaluator ${got}`);
         if (want) tree = next;
       }

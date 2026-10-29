@@ -1,27 +1,25 @@
 /**
- * TaskQueue: Cloud Tasks through the Admin SDK's taskQueue(), targeting the
- * onTaskDispatched functions index.ts exports (QUEUE_FUNCTIONS). The Admin
- * SDK honours CLOUD_TASKS_EMULATOR_HOST, so under `firebase emulators:start`
- * (functions + tasks) enqueued tasks really run.
+ * TaskQueue: IceBase's task queues (taskQueue), targeting the onTaskDispatched functions
+ * index.ts exports (QUEUE_FUNCTIONS) — Cloud Tasks on Firebase (the Admin SDK honours
+ * CLOUD_TASKS_EMULATOR_HOST, so under `firebase emulators:start` tasks really run), the IceBase
+ * server's own durable queue on it (TM_ICEBASE=emulator).
  *
  * Mode (env TM_QUEUE overrides):
- *   cloud   production, or the functions emulator with the tasks emulator
- *   local   TM_PLATFORM=vm: persisted in the database, run in-process by
- *           runtime/localJobs.ts with the same retry policy
- *   memory  everything else under the emulators (vitest runs the api
- *           in-process, with no functions emulator to dispatch to): tasks
- *           are held in memory and run by `drain()` through the handlers
- *           registered with defineTask — so tests see the same code path.
+ *   icebase production, the functions emulator with the tasks emulator, the IceBase server
+ *   memory  everything else under the emulators (vitest runs the api in-process, with no
+ *           functions emulator to dispatch to): tasks are held in memory and run by `drain()`
+ *           through the handlers registered with defineTask — so tests see the same code path.
  *
  * Task names DEDUPLICATE in both modes. Cloud Tasks ids allow only
  * [A-Za-z0-9_-]; names like `uid:group:minute` are mapped to a safe id.
  */
 import type { EnqueueOptions, QueueName, QueuePayloads, TaskQueue } from '@tm/shared';
-import { functionsAdmin, isEmulated } from '../runtime/firebase.js';
+import { taskQueue } from '@panth977/icebase-server/admin';
+import { icebaseApp } from '../icebase/app.js';
+import { isEmulated } from '../runtime/firebase.js';
 import { region } from '../runtime/deploy.js';
 import { getTaskHandler, QUEUE_FUNCTIONS } from '../runtime/functions.js';
-import { localQueue } from '../runtime/localJobs.js';
-import { platform } from '../runtime/platform.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { taskId } from './taskId.js';
 
 /** Where the queue functions live (TM_REGION — see runtime/deploy.ts). */
@@ -29,20 +27,17 @@ export const LOCATION = region();
 
 export { taskId } from './taskId.js';
 
-export function cloudQueue(): TaskQueue {
+export function icebaseQueue(): TaskQueue {
   return {
     async enqueue(queue, payload, opts = {}) {
-      const q = functionsAdmin().taskQueue(
-        `locations/${region()}/functions/${QUEUE_FUNCTIONS[queue]}`,
-      );
       try {
-        await q.enqueue(payload as Record<string, unknown>, {
+        await taskQueue(icebaseApp(), QUEUE_FUNCTIONS[queue], { region: region() }).enqueue(payload, {
           ...(opts.name ? { id: taskId(opts.name) } : {}),
           ...(opts.delaySeconds ? { scheduleDelaySeconds: opts.delaySeconds } : {}),
         });
       } catch (e) {
         // A duplicate name is the dedupe working, not a failure.
-        if ((e as { code?: string }).code?.endsWith('task-already-exists')) return;
+        if ((e as { code?: string }).code?.endsWith('already-exists')) return;
         throw e;
       }
     },
@@ -111,7 +106,6 @@ export function memoryQueue(): MemoryQueue {
 export function createQueue(): TaskQueue {
   const mode = process.env.TM_QUEUE;
   if (mode === 'memory') return memoryQueue();
-  if (mode === 'cloud') return cloudQueue();
-  if (mode === 'local' || (!mode && platform() === 'vm')) return localQueue();
-  return !isEmulated() || process.env.CLOUD_TASKS_EMULATOR_HOST ? cloudQueue() : memoryQueue();
+  if (mode === 'icebase' || mode === 'cloud') return icebaseQueue();
+  return onIcebaseServer() || !isEmulated() || process.env.CLOUD_TASKS_EMULATOR_HOST ? icebaseQueue() : memoryQueue();
 }

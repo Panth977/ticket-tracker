@@ -1,9 +1,9 @@
-/** The rtdb suite on Firebase's Realtime Database (the emulator): the reference. */
+/** The rtdb suite on IceBase's Realtime Database (Firebase's, the emulator here). */
 import '../harness/env.js';
-import { firebaseRtdb } from '../../src/rtdb/firebase.js';
+import { icebaseRtdb } from '../../src/rtdb/icebase.js';
 import { rtdbSuite } from './suite.js';
 rtdbSuite(
-  'firebase',
-  () => firebaseRtdb.db(),
-  () => firebaseRtdb.TIMESTAMP,
+  'icebase',
+  () => icebaseRtdb.db(),
+  () => icebaseRtdb.TIMESTAMP,
 );

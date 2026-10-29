@@ -20,19 +20,20 @@ export function projectId(): string {
 }
 
 /**
- * True when any Firebase emulator is wired in (dev, tests, CI). Adapters use
- * it to pick dev fakes. A VM (TM_PLATFORM=vm) has no project id, so the
- * `demo-` fallback must not count there — only real emulator hosts, or
- * TM_DEV=1 for a local dev box — else production would sign with the dev key.
+ * True when any Firebase emulator is wired in (dev, tests, CI). Adapters use it to pick dev
+ * fakes. On the IceBase server (TM_ICEBASE=emulator) the *_EMULATOR_HOST variables point
+ * firebase-admin at it in production too, and there is no project id: only its development mode
+ * (FUNCTIONS_EMULATOR, which `icebase serve` does not set) or TM_DEV=1 counts — else production
+ * would sign with the dev key.
  */
 export function isEmulated(): boolean {
-  const emulatorHosts =
+  if ((process.env.TM_ICEBASE || '').toLowerCase() === 'emulator') return process.env.FUNCTIONS_EMULATOR === 'true' || process.env.TM_DEV === '1';
+  return (
     process.env.FUNCTIONS_EMULATOR === 'true' ||
     !!process.env.FIRESTORE_EMULATOR_HOST ||
-    !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
-  if ((process.env.TM_PLATFORM || '').toLowerCase() === 'vm')
-    return emulatorHosts || process.env.TM_DEV === '1';
-  return emulatorHosts || projectId().startsWith('demo-');
+    !!process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+    projectId().startsWith('demo-')
+  );
 }
 
 let app: App | undefined;

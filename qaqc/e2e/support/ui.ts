@@ -6,7 +6,7 @@
  */
 import { expect, type Page } from '@playwright/test';
 import { call, eventually, mailTo, PROJECT_ID, type Person } from './stack.js';
-import { VM } from '../../seed/vm.js';
+import { ICEBASE } from '../../seed/icebase.js';
 
 interface OobCode {
   email: string;
@@ -15,15 +15,15 @@ interface OobCode {
 }
 
 async function signInLinks(email: string): Promise<OobCode[]> {
-  // On a VM the link is in the mail the server "sent" (the dev outbox).
-  if (VM)
+  // On the IceBase server the link is in the mail TaskManager "sent" (the dev outbox).
+  if (ICEBASE)
     return (await mailTo(email))
       .filter((m) => m.subject === 'Sign in to TaskManager')
       .reverse()
       .map((m) => ({
         email,
         requestType: 'EMAIL_SIGNIN',
-        oobLink: /https?:\/\/\S+tm_link=\S+/.exec(m.text ?? '')![0],
+        oobLink: /https?:\/\/\S+oobCode=\S+/.exec(m.text ?? '')![0],
       }));
   const host = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
   const r = await fetch(`http://${host}/emulator/v1/projects/${PROJECT_ID}/oobCodes`);
@@ -37,9 +37,23 @@ async function signInLinks(email: string): Promise<OobCode[]> {
 export async function signIn(page: Page, email: string, next?: string): Promise<void> {
   const before = (await signInLinks(email)).length;
   await page.goto(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Email me a sign-in link' }).click();
-  await expect(page.getByText('We sent a sign-in link')).toBeVisible();
+  // Already signed in (the same person again): /login sends them on to `next` once the session is
+  // restored, which may be just after the form showed, so either outcome can win at each step.
+  const onLogin = () => new URL(page.url()).pathname.startsWith('/login');
+  const sent = page.getByText('We sent a sign-in link');
+  const until = Date.now() + 30_000;
+  for (;;) {
+    if (!onLogin()) return;
+    try {
+      await page.getByLabel('Email').fill(email, { timeout: 2_000 });
+      await page.getByRole('button', { name: 'Email me a sign-in link' }).click({ timeout: 2_000 });
+      await sent.waitFor({ timeout: 5_000 });
+      break;
+    } catch (e) {
+      if (!onLogin()) return;
+      if (Date.now() > until) throw e;
+    }
+  }
   const link = await eventually('sign-in link', async () => {
     const links = await signInLinks(email);
     return links.length > before ? links[links.length - 1]!.oobLink : null;

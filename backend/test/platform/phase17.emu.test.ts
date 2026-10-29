@@ -11,7 +11,6 @@
  *        it: the token's own nodes answer, anybody else's are refused.
  */
 import { describe, expect, it } from 'vitest';
-import { platform } from '../../src/runtime/platform.js';
 import {
   costDayOf,
   paths,
@@ -322,15 +321,13 @@ describe('§Z2 — the account-token routes', () => {
 });
 
 /**
- * GET an RTDB REST url: over the network to the emulator on Firebase, or
- * through the in-process app on a VM (whose /rtdb door serves the same API).
+ * GET an RTDB REST url: Firebase's (the emulator), or the IceBase server's (/__/icebase/rtdb).
  */
 async function rtdbStatus(databaseUrl: string, path: string, auth: string): Promise<number> {
   const url = new URL(databaseUrl);
   const ns = url.searchParams.get('ns');
   const q = new URLSearchParams({ ...(ns ? { ns } : {}), auth });
   const target = `${url.pathname.replace(/\/+$/, '')}/${path}.json?${q}`;
-  if (platform() === 'vm') return (await request(target)).status;
   return (await fetch(`${url.origin}${target}`)).status;
 }
 

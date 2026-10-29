@@ -40,9 +40,12 @@ describe('driveFor with a real Google connection', () => {
         brokenAt: null,
       });
     const seen: { url: string; auth?: string }[] = [];
+    // Only Google is faked: on the IceBase server the database itself is reached over fetch.
+    const realFetch = globalThis.fetch;
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (!/^https:\/\/[a-z0-9.-]*googleapis\.com\//.test(String(url))) return realFetch(url, init);
         seen.push({
           url,
           auth: (init.headers as Record<string, string> | undefined)?.authorization,

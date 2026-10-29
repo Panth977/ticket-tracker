@@ -34,8 +34,14 @@ import {
 } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts
 import { BINARIES, check, generate, OUTPUTS } from '../../../scripts/gen-integration.mjs';
+import { bootIcebase, ICEBASE } from '../../seed/icebase.js';
 
 const ROOT = new URL('../../../', import.meta.url).pathname;
+
+// On the IceBase server stack nothing serves the app until a worker boots it (no webServer).
+test.beforeAll(async () => {
+  if (ICEBASE) await bootIcebase();
+});
 
 /** What each published URL must answer with. */
 const SERVED = [
@@ -124,6 +130,8 @@ test('integrate.json is a manifest a machine can bootstrap from', async ({ reque
 });
 
 test('the published copy matches a fresh generation, and a stale one fails the guard', async () => {
+  // The generator runs once per output (~10 s each): more than the default 90 s on a busy machine.
+  test.setTimeout(300_000);
   // What is committed under frontend/static must be what the generator makes
   // today — this is the check the deploy runs.
   const fresh = await check({});

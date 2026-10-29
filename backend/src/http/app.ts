@@ -6,7 +6,6 @@
 import { Hono } from 'hono';
 import { errors } from '@tm/shared';
 import { autoload } from '../runtime/autoload.js';
-import { installLocalTriggers } from '../runtime/localTriggers.js';
 import { ports } from '../adapters/index.js';
 import { registeredCommandNames, unimplementedCommands } from '../commands/_registry.js';
 import { isEmulated } from '../runtime/firebase.js';
@@ -54,8 +53,5 @@ let appPromise: Promise<Hono<AppEnv>> | undefined;
  * the document triggers (runtime/dbTriggers.ts).
  */
 export function createApp(): Promise<Hono<AppEnv>> {
-  return (appPromise ??= autoload().then(() => {
-    installLocalTriggers();
-    return buildApp();
-  }));
+  return (appPromise ??= autoload().then(() => buildApp()));
 }

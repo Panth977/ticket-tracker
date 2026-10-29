@@ -18,6 +18,8 @@
  *              harmless as a published one.
  */
 import { artifactPrefix, SIGNED_URL_TTL_MS } from '@tm/shared';
+import { storageSigns } from '../adapters/files.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { ports } from '../adapters/index.js';
 import { objectUrl } from './capability.js';
 
@@ -29,7 +31,9 @@ export async function objectLink(
   now: number,
 ): Promise<{ url: string; expiresAt: number }> {
   const expiresAt = now + SIGNED_URL_TTL_MS;
-  if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+  // On Firebase a signed URL is on Google's storage origin. On the IceBase server it would be the
+  // app's own origin: an artifact's files go through the sandboxed /c/ route there instead.
+  if (storageSigns() && !onIcebaseServer()) {
     try {
       const url = await ports().files.signedDownloadUrl(
         `${artifactPrefix.storageAll(artifactId)}${object}`,

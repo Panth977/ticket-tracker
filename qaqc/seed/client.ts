@@ -16,25 +16,25 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import type { CommandName, CommandReq, CommandRes, PMNode, RichTextDoc } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts (no types needed)
 import { EMULATOR_ENV, PROJECT_ID, URLS } from '../../scripts/ports.mjs';
-import { bootVm, VM, VM_URL, vmAdmin } from './vm.js';
+import { bootIcebase, ICEBASE, ICEBASE_URL, icebaseAdmin } from './icebase.js';
 
-// On a VM (TM_E2E_PLATFORM=vm) the server runs in this process; no emulators.
-const E = VM ? {} : (EMULATOR_ENV as Record<string, string>);
+// On the IceBase server (TM_ICEBASE=emulator) there are no Firebase emulators.
+const E = ICEBASE ? {} : (EMULATOR_ENV as Record<string, string>);
 for (const [k, v] of Object.entries(E)) process.env[k] ||= v;
 // Only in a test worker: Playwright also imports the specs to list them.
-if (VM && process.env.TEST_WORKER_INDEX !== undefined) await bootVm();
+if (ICEBASE && process.env.TEST_WORKER_INDEX !== undefined) await bootIcebase();
 // No GCE metadata server locally: skip the Admin SDK's credential probe (and its warning).
 process.env.METADATA_SERVER_DETECTION ||= 'none';
 
-export const API_URL: string = VM ? VM_URL : (process.env.TM_API_URL ?? (URLS as { api: string }).api);
-export const WEB_URL: string = VM ? VM_URL : (process.env.TM_WEB_URL ?? (URLS as { web: string }).web);
+export const API_URL: string = ICEBASE ? ICEBASE_URL : (process.env.TM_API_URL ?? (URLS as { api: string }).api);
+export const WEB_URL: string = ICEBASE ? ICEBASE_URL : (process.env.TM_WEB_URL ?? (URLS as { web: string }).web);
 export { PROJECT_ID };
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST!;
 
 let app: App | undefined;
 export function admin(): { db: Firestore; auth: ReturnType<typeof getAuth>; rtdb: Database } {
-  // The same API on a VM: the backend's ports (db / identity / realtime db).
-  if (VM) return vmAdmin();
+  // The same API on the IceBase server: the backend's ports (db / identity / realtime db).
+  if (ICEBASE) return icebaseAdmin();
   app ??=
     getApps()[0] ??
     initializeApp({
@@ -69,13 +69,14 @@ async function authRest<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function signIn(email: string, password: string): Promise<string> {
-  if (VM) {
-    const res = await fetch(`${VM_URL}/identity/password/signin`, {
+  if (ICEBASE) {
+    // The IceBase server speaks Firebase Auth's API on its own port.
+    const res = await fetch(`${ICEBASE_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=icebase`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
     });
-    if (!res.ok) throw new Error(`identity password/signin: ${res.status}`);
+    if (!res.ok) throw new Error(`accounts:signInWithPassword: ${res.status}`);
     return ((await res.json()) as { idToken: string }).idToken;
   }
   const r = await authRest<{ idToken: string }>('accounts:signInWithPassword', {

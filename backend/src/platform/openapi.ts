@@ -109,13 +109,15 @@ import {
   SSE_PING,
 } from '@tm/shared';
 import { apiBaseUrl } from './auth.js';
+import { inline } from './commandsOpenapi.js';
 
 type Json = Record<string, unknown>;
 
 function schema(s: z.ZodTypeAny): Json {
   const out = toJsonSchemaCompat(s as never, { target: 'draft-2020-12' }) as Json;
   delete out.$schema;
-  return out;
+  // Refs relative to the schema's own root mean nothing inside the document: inlined.
+  return inline(out);
 }
 
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });

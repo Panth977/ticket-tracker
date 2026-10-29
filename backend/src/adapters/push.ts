@@ -9,7 +9,7 @@
 import { getMessaging } from 'firebase-admin/messaging';
 import type { PushMessage, PushResult, PushSender } from '@tm/shared';
 import { adminApp, isEmulated } from '../runtime/firebase.js';
-import { platform } from '../runtime/platform.js';
+import { onIcebaseServer } from '../runtime/platform.js';
 import { recordDev } from './dev.js';
 import { webPush, WEBPUSH_PREFIX } from './webPush.js';
 
@@ -75,8 +75,8 @@ export function fcmPush(): PushSender {
 function basePush(): PushSender | null {
   if (process.env.TM_PUSH === 'fcm') return fcmPush();
   if (process.env.TM_PUSH === 'dev' || isEmulated()) return devPush();
-  // A VM has no FCM: only Web Push subscriptions can be reached.
-  return platform() === 'vm' ? null : fcmPush();
+  // The IceBase server has no FCM: only Web Push subscriptions can be reached.
+  return onIcebaseServer() ? null : fcmPush();
 }
 
 /**

@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    56b929467a085f83d04ba6b6fa0db8b53949063446ab86bbd2e6cc5b19c7e83f
+content-sha256:    5d5fd756019b166bf360b85d2a325d24f54c3371ee8a24405dbfeec49824ba49
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -2573,7 +2573,7 @@ text       string | null                       required
 truncated  boolean                             required
 url        string                              required
 bytesUrl   string                              required
-expiresAt  integer                             required
+expiresAt  integer                             required  (0…)
 ```
 
 → 400, 401, 403, 404, 409, 429 `application/problem+json` (see Errors)
