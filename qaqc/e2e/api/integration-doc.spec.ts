@@ -34,7 +34,7 @@ import {
 } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts
 import { BINARIES, check, generate, OUTPUTS } from '../../../scripts/gen-integration.mjs';
-import { bootIcebase, ICEBASE } from '../../seed/icebase';
+import { bootIcebase, ICEBASE } from '../../seed/icebase.js';
 
 const ROOT = new URL('../../../', import.meta.url).pathname;
 
