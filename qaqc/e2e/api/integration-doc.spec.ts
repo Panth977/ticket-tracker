@@ -34,8 +34,14 @@ import {
 } from '@tm/shared';
 // @ts-expect-error — plain .mjs shared with the root scripts
 import { BINARIES, check, generate, OUTPUTS } from '../../../scripts/gen-integration.mjs';
+import { bootIcebase, ICEBASE } from '../../seed/icebase';
 
 const ROOT = new URL('../../../', import.meta.url).pathname;
+
+// On the IceBase server stack nothing serves the app until a worker boots it (no webServer).
+test.beforeAll(async () => {
+  if (ICEBASE) await bootIcebase();
+});
 
 /** What each published URL must answer with. */
 const SERVED = [

@@ -45,6 +45,8 @@ const publicEnv = {
   PUBLIC_FIREBASE_API_KEY: 'icebase',
   PUBLIC_FCM_VAPID_KEY: 'from-server',
   ...(process.env.TM_ADMIN_EMAIL ? { PUBLIC_TM_ADMIN_EMAIL: process.env.TM_ADMIN_EMAIL } : {}),
+  // Google needs this server's own OAuth client (backend/icebase.config.ts); Microsoft is not offered here.
+  PUBLIC_TM_SIGNIN_PROVIDERS: process.env.TM_GOOGLE_CLIENT_ID && process.env.TM_GOOGLE_CLIENT_SECRET ? 'google' : '',
   ...brand.publicEnv,
   ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith('PUBLIC_') && typeof v === 'string')),
 };

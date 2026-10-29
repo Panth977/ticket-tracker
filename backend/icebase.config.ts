@@ -37,7 +37,13 @@ export default defineConfig({
     ],
     headers: (app.headers ?? []).map((h) => ({ source: h.source, headers: Object.fromEntries(h.headers.map((x) => [x.key, x.value])) })),
   },
-  auth: { providers: ['password', 'emailLink'] },
+  auth: {
+    providers: ['password', 'emailLink'],
+    // Google sign-in on the IceBase server goes through this deploy's own OAuth client (its redirect
+    // URI: <APP_URL>/__/icebase/auth/google/callback). Unset: no Google button.
+    ...(process.env.TM_GOOGLE_CLIENT_ID && process.env.TM_GOOGLE_CLIENT_SECRET ? { custom: { google: { clientIdEnv: 'TM_GOOGLE_CLIENT_ID', clientSecretEnv: 'TM_GOOGLE_CLIENT_SECRET' } } } : {}),
+    ...(process.env.APP_URL ? { authorizedDomains: [new URL(process.env.APP_URL).hostname] } : {}),
+  },
   firebase: { projectId, storageBucket: `${projectId}.appspot.com` },
   // The console (/__/icebase/console): it manages this deployment only; its APIs page shows both
   // API documents.

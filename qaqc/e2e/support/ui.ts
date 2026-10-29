@@ -37,9 +37,23 @@ async function signInLinks(email: string): Promise<OobCode[]> {
 export async function signIn(page: Page, email: string, next?: string): Promise<void> {
   const before = (await signInLinks(email)).length;
   await page.goto(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Email me a sign-in link' }).click();
-  await expect(page.getByText('We sent a sign-in link')).toBeVisible();
+  // Already signed in (the same person again): /login sends them on to `next` once the session is
+  // restored, which may be just after the form showed, so either outcome can win at each step.
+  const onLogin = () => new URL(page.url()).pathname.startsWith('/login');
+  const sent = page.getByText('We sent a sign-in link');
+  const until = Date.now() + 30_000;
+  for (;;) {
+    if (!onLogin()) return;
+    try {
+      await page.getByLabel('Email').fill(email, { timeout: 2_000 });
+      await page.getByRole('button', { name: 'Email me a sign-in link' }).click({ timeout: 2_000 });
+      await sent.waitFor({ timeout: 5_000 });
+      break;
+    } catch (e) {
+      if (!onLogin()) return;
+      if (Date.now() > until) throw e;
+    }
+  }
   const link = await eventually('sign-in link', async () => {
     const links = await signInLinks(email);
     return links.length > before ? links[links.length - 1]!.oobLink : null;
