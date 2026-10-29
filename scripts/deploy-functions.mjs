@@ -233,6 +233,11 @@ function writePackageJson(externals) {
     main: 'lib/index.js',
     engines: { node: backendPkg.engines?.node ?? '22' },
     dependencies: Object.fromEntries(Object.entries(deps).sort(([a], [b]) => a.localeCompare(b))),
+    // One copy of each Firebase SDK: a second firebase-admin (say, IceBase's own) fails its
+    // credential instanceof checks — "Failed to initialize Google Cloud Firestore client".
+    overrides: Object.fromEntries(
+      ['firebase-admin', 'firebase-functions', '@google-cloud/firestore'].filter((n) => deps[n]).map((n) => [n, deps[n]]),
+    ),
   };
   writeFileSync(join(OUT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
   if (Object.values(deps).some((d) => d.startsWith('npm:@jsr/')))
@@ -316,6 +321,11 @@ export function verify(project = DEFAULT_PROJECT) {
   log('verify: npm install --omit=dev (as Cloud Build does)');
   rmSync(join(OUT, 'node_modules'), { recursive: true, force: true });
   run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error'], OUT);
+  // Exactly one firebase-admin: two copies break the Admin SDK in production, not in a load test.
+  const copies = spawnSync('npm', ['ls', 'firebase-admin', '--all', '--parseable'], { cwd: OUT, encoding: 'utf8' })
+    .stdout.split('\n')
+    .filter((l) => /node_modules\/firebase-admin$/.test(l));
+  if (copies.length !== 1) throw new Error(`expected one firebase-admin, found ${copies.length}:\n${copies.join('\n')}`);
 
   // Load in a clean env that looks like the deployed runtime (not the emulators).
   const env = Object.fromEntries(
