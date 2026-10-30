@@ -30,7 +30,6 @@ import { BoardAttachBucketSchema } from './attach.js';
 import {
   BucketStorageInputSchema,
   BucketStorageKindSchema,
-  DriveIdSchema,
   DriveStatusSchema,
 } from './drive.js';
 import { IndicatorSchema } from '../types/indicator.js';
@@ -477,40 +476,4 @@ export const drivePickerToken = defineCommand({
     appId: z.string(),
     expiresAt: MillisSchema,
   }),
-});
-
-/**
- * §L7: import a board, dictionary, bucket or artifact from a folder of my Drive
- * (it has a .tm-entity.json). Its secrets, sealed by another TaskManager, need
- * the recovery code.
- */
-export const driveImport = defineCommand({
-  name: 'driveImport',
-  source: 'extra',
-  permission:
-    'Any person, in the app, with Google Drive connected. They become its owner (a board: its admin).',
-  errors: ['invalid', 'conflict', 'forbidden', 'unavailable'],
-  req: req({
-    folderId: DriveIdSchema,
-    recoveryCode: z.string().trim().min(8).max(200).optional(),
-  }),
-  res: z.object({
-    kind: z.enum(['boards', 'dictionaries', 'buckets', 'artifacts']),
-    id: z.string(),
-    name: z.string(),
-    people: z.array(z.object({ email: z.string(), role: z.string() })),
-    bucketId: z.string().optional(),
-    /** A board's key (its URL). */
-    key: z.string().optional(),
-  }),
-});
-
-/** §L6: my recovery code for Drive secrets — `take` shows it, once. */
-export const driveRecoveryCode = defineCommand({
-  name: 'driveRecoveryCode',
-  source: 'extra',
-  permission: 'The person themself, in the app.',
-  errors: ['forbidden'],
-  req: req({ take: z.boolean().optional() }),
-  res: z.object({ has: z.boolean(), pending: z.boolean(), code: z.string().nullable() }),
 });

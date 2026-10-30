@@ -57,8 +57,8 @@ export async function bootIcebase(): Promise<void> {
   for (let i = 0; i < 600 && !(await fetch(`${ICEBASE_URL}/config.json`).then((r) => r.ok, () => false)); i++) await new Promise((r) => setTimeout(r, 100));
   Object.assign(process.env, { TM_ICEBASE: 'emulator', TM_DEV: '1', TM_DATA_DIR: data, APP_URL: ICEBASE_URL, ICEBASE_EMULATOR_HOST: `127.0.0.1:${ICEBASE_PORT}`, ICEBASE_ADMIN_TOKEN: adminToken });
   const lib = (p: string) => import(join(ROOT, 'backend', 'lib', p));
-  const [{ baseDb }, { identity }, { realtimeDb }] = await Promise.all([lib('db/index.js'), lib('identity/index.js'), lib('rtdb/index.js')]);
-  ports = { db: baseDb(), identity: identity(), rtdb: realtimeDb() };
+  const [{ db }, { identity }, { realtimeDb }] = await Promise.all([lib('db/index.js'), lib('identity/index.js'), lib('rtdb/index.js')]);
+  ports = { db: db(), identity: identity(), rtdb: realtimeDb() };
 }
 
 export function icebaseAdmin(): { db: Any; auth: Any; rtdb: Any } {

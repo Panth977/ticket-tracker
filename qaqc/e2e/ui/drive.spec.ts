@@ -9,8 +9,6 @@
  *   D3  the new-board form makes the board's ticket-file bucket (managed by
  *       default) and sets it as the attachment bucket
  *   D4  a ticket file into a Drive bucket, from the composer
- *   D10 a Drive board's card counts its unread messages, and opening the
- *       ticket shows the newest ones (not the start of the thread)
  *
  * Drive buckets never touch our object store: every test fails on a request
  * to Storage (the browser's uploads go straight to Drive's session URL).
@@ -19,9 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   admin,
   call,
-  doc,
   eventually,
-  inviteAndAccept,
   newBoard,
   newPerson,
 } from '../support/stack.js';
@@ -116,10 +112,6 @@ test('D3: a new board gets its ticket-file bucket (managed by default) as its at
   await signIn(page, bo.email, '/new-board');
   await page.getByLabel('Name').fill('Drive board');
   await page.getByLabel('Key').fill(`DB${Date.now().toString(36).slice(-3).toUpperCase()}`);
-  await expect(page.getByTestId('board-storage').getByTestId('storage-managed')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
   await expect(page.getByTestId('files-storage').getByTestId('storage-managed')).toHaveAttribute(
     'aria-checked',
     'true',
@@ -219,166 +211,6 @@ test('D5: a managed bucket moves to Drive from its own Storage tab, not from the
   await expect(tab).toContainText('are in Google Drive', { timeout: 20_000 });
   const tree = await call(di, 'bucketTree', { bucketId });
   expect(tree.nodes.map((n) => n.path)).toEqual(['docs', 'docs/a.md']);
-
-  // The board's Storage tab is about the board alone: no bucket on it.
-  await page.goto(`/b/${b.key}/settings/storage`);
-  await expect(page.getByTestId('entity-storage')).toContainText('This board is kept by this app');
-  await expect(page.getByTestId('storage-move')).toHaveCount(0);
-});
-
-test('D6: a board whose tickets live in Drive — create, open, reply, live (bucket.html §L)', async ({
-  page,
-}) => {
-  test.setTimeout(240_000);
-  const ed = await newPerson('Ed');
-  await signIn(page, ed.email, '/account/drive');
-  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
-  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
-
-  // The new-board page asks twice, one entity each: the board in Drive, its
-  // ticket-file bucket kept by the app (the default).
-  await page.goto('/new-board');
-  const key = `DV${Date.now().toString(36).slice(-3).toUpperCase()}`;
-  await page.getByLabel('Name').fill('Drive tickets');
-  await page.getByLabel('Key').fill(key);
-  await page.getByTestId('board-storage').getByTestId('storage-drive').click();
-  await page.getByRole('button', { name: 'Create board' }).click();
-  await page.waitForURL(/\/b\//, { timeout: 20_000 });
-
-  const boards = await admin().db.collection('boards').where('key', '==', key).get();
-  const board = boards.docs[0]!;
-  expect(board.get('storage')).toMatchObject({ kind: 'drive', folderName: 'Drive tickets' });
-  const attach = board.get('attachBucket') as { bucketId: string } | null;
-  const bucket = (await admin().db.doc(`buckets/${attach!.bucketId}`).get()).data()!;
-  expect(bucket.storage).toBeUndefined();
-
-  // A ticket made through the API shows on the board (read from Drive via the api).
-  const { ticketId, key: tkey } = await call(ed, 'ticketCreate', {
-    boardId: board.id,
-    title: 'Lives in Drive',
-  });
-  // The ping (driveRev) usually brings it within a second; the minute's poll is the backstop.
-  await expect(page.getByText('Lives in Drive').first()).toBeVisible({ timeout: 70_000 });
-  // …and is not in Firestore at all.
-  expect((await admin().db.doc(`boards/${board.id}/tickets/${ticketId}`).get()).exists).toBe(false);
-
-  // Open it, reply from the composer.
-  await page.goto(`/t/${tkey}`);
-  const thread = page.getByRole('region', { name: 'Thread' });
-  const reply = page.getByRole('group', { name: 'Reply' });
-  await reply.getByRole('textbox').first().fill('Written to a file in Drive');
-  await reply.getByRole('button', { name: 'Send' }).click();
-  await expect(thread.getByText('Written to a file in Drive')).toBeVisible({ timeout: 30_000 });
-  await eventually(
-    'the reply is a message file in Drive',
-    async () => {
-      const t = await call(ed, 'driveDocs', {
-        target: { kind: 'doc', path: `boards/${board.id}/tickets/${ticketId}` },
-      });
-      const msgs = (t.docs[0]?.data.recentMessages ?? []) as { body: { text: string } }[];
-      return msgs.some((m) => m.body.text === 'Written to a file in Drive');
-    },
-    30_000,
-  );
-  await expect(page.getByText('unsent')).toBeHidden({ timeout: 20_000 });
-
-  // Live: a message posted elsewhere arrives without a reload (the driveRev ping).
-  await call(ed, 'messagePost', {
-    boardId: board.id,
-    ticketId,
-    clientId: `c${Date.now().toString(36)}`,
-    body: {
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From the API' }] }],
-    },
-  });
-  await expect(thread.getByText('From the API')).toBeVisible({ timeout: 70_000 });
-
-  // Settings › Storage says where the tickets are.
-  await page.goto(`/b/${key}/settings/storage`);
-  await expect(page.getByTestId('entity-storage')).toContainText(
-    'This board lives in Google Drive',
-  );
-});
-
-test('D7: a board moves its tickets to Drive from Settings › Storage, and they still open', async ({
-  page,
-}) => {
-  const fy = await newPerson('Fy');
-  await signIn(page, fy.email, '/account/drive');
-  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
-  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
-
-  const b = await newBoard(fy, { name: 'Moving tickets' });
-  const { key: tkey, ticketId } = await call(fy, 'ticketCreate', {
-    boardId: b.id,
-    title: 'Comes along',
-  });
-
-  await page.goto(`/b/${b.key}/settings/storage`);
-  const tab = page.getByTestId('entity-storage');
-  await expect(tab).toContainText('This board is kept by this app');
-  await tab.getByTestId('storage-drive').click();
-  await tab.getByTestId('entity-storage-start').click();
-  await page.getByTestId('entity-storage-confirm').click();
-
-  await eventually(
-    'the board switched to Drive',
-    async () => {
-      const d = (await admin().db.doc(`boards/${b.id}`).get()).data()!;
-      return d.storage?.kind === 'drive' && !d.move;
-    },
-    60_000,
-  );
-  await expect(tab).toContainText('This board lives in Google Drive', { timeout: 20_000 });
-  // The database's copy goes right after the switch.
-  await eventually(
-    "the database's copy is gone",
-    async () => !(await admin().db.doc(`boards/${b.id}/tickets/${ticketId}`).get()).exists,
-    30_000,
-  );
-
-  await page.goto(`/t/${tkey}`);
-  // Read from Drive now: the ticket and its activity open as before.
-  await expect(page.getByText('created this ticket')).toBeVisible({ timeout: 30_000 });
-});
-
-test('D8: a dictionary kept in Drive — made from its create page, entries sealed there, read back', async ({
-  page,
-}) => {
-  const gi = await newPerson('Gi');
-  await signIn(page, gi.email, '/account/drive');
-  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
-  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
-  // The recovery code: made and shown once, here.
-  await page.getByRole('button', { name: 'Make my recovery code' }).click();
-  await expect(page.getByTestId('drive-recovery-code')).toHaveText(
-    /^[0-9A-Z]{4}(-[0-9A-Z]{1,4})+$/,
-  );
-
-  await page.goto('/new-dictionary');
-  const main = page.getByRole('main');
-  await main.getByLabel('Name').fill('Drive secrets');
-  await main.getByTestId('storage-drive').click();
-  await main.getByRole('button', { name: 'Create' }).click();
-  const dictionaryId = await thingIdAt(page, gi, 'dictionary');
-  const d = (await admin().db.doc(`dictionaries/${dictionaryId}`).get()).data()!;
-  expect(d.storage).toMatchObject({ kind: 'drive', folderName: 'Drive secrets' });
-
-  // An entry saved through the API is sealed in Drive, not in Firestore — and the page shows it.
-  await call(gi, 'dictionarySet', { dictionaryId, set: { TOKEN: 'abc' } });
-  expect((await admin().db.doc(`dictionaries/${dictionaryId}/content/entries`).get()).exists).toBe(
-    false,
-  );
-  await page.reload();
-  await expect(page.locator('[data-entry-row="0"]').getByLabel('Key')).toHaveValue('TOKEN', {
-    timeout: 30_000,
-  });
-
-  await page.goto(`/dictionary/${dictionaryId}/settings/storage`);
-  await expect(page.getByTestId('entity-storage')).toContainText(
-    'This dictionary lives in Google Drive',
-  );
 });
 
 test('D9: an open preview in a Drive bucket survives the bucket’s poll (no reload)', async ({
@@ -409,88 +241,4 @@ test('D9: an open preview in a Drive bucket survives the bucket’s poll (no rel
   // The Drive bucket's tree polls every 20 s, with new objects for the same files.
   await page.waitForTimeout(25_000);
   await expect(page.locator('main iframe[data-mark="kept"]')).toHaveCount(1);
-});
-
-test('D10: a Drive board — the card counts unread messages; the thread opens at the newest', async ({
-  page,
-}) => {
-  test.setTimeout(240_000);
-  const io = await newPerson('Io');
-  const jo = await newPerson('Jo');
-  await signIn(page, io.email, '/account/drive');
-  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
-  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
-
-  const key = `DU${Date.now().toString(36).slice(-3).toUpperCase()}`;
-  const { boardId } = await call(io, 'boardCreate', {
-    name: 'Drive unread',
-    key,
-    template: 'kanban',
-    storage: { kind: 'drive' },
-  });
-  await inviteAndAccept(io, boardId, jo, 'editor');
-  const t = await call(io, 'ticketCreate', { boardId, title: 'A long Drive thread' });
-  // A thread longer than the screen AND than a Drive ticket keeps inline (so it
-  // has spilled to pages): mine first, then three from Jo I have not read.
-  for (let i = 1; i <= 56; i++)
-    await call(io, 'messagePost', { boardId, ticketId: t.ticketId, body: doc([`Mine ${i}`]) });
-  for (let i = 1; i <= 3; i++)
-    await call(jo, 'messagePost', { boardId, ticketId: t.ticketId, body: doc([`Jo says ${i}`]) });
-
-  // The card (a list answer: meta.json only) still knows how many are new.
-  await page.goto(`/b/${key}`);
-  const card = page.getByRole('button', { name: new RegExp(`^${t.key} `) }).first();
-  await expect(card).toBeVisible({ timeout: 70_000 });
-  await expect(card.locator('[data-unread]')).toHaveAttribute('data-unread', '3', {
-    timeout: 70_000,
-  });
-
-  // Real Drive is slow: an older page takes seconds. The thread must not sit
-  // at its top waiting for history nobody asked to see.
-  await page.route('**/driveDocs', async (route) => {
-    if (/\/data\/\d+/.test(route.request().postData() ?? ''))
-      await new Promise((r) => setTimeout(r, 8_000));
-    await route.fallback();
-  });
-
-  // Opening it lands on the new messages: the newest one is on screen.
-  await card.click();
-  const thread = page.getByRole('region', { name: 'Thread' });
-  const last = thread.getByRole('article').filter({ hasText: 'Jo says 3' });
-  await expect(last).toBeVisible({ timeout: 30_000 });
-  await expect(last).toBeInViewport({ timeout: 3_000 });
-  await expect(thread.getByText('New messages')).toBeInViewport();
-  await expect(thread.getByText('Mine 30', { exact: true })).not.toBeInViewport();
-  // …and stays there when the older page lands above it.
-  await page.waitForTimeout(9_000);
-  await expect(last).toBeInViewport();
-});
-
-test('D11: an HTML page that uses localStorage runs in the bucket preview', async ({ page }) => {
-  test.setTimeout(120_000);
-  const ki = await newPerson('Ki');
-  await signIn(page, ki.email, '/account/drive');
-  await page.getByRole('button', { name: 'Connect Google Drive' }).click();
-  await expect(page.getByText('Google Drive connected')).toBeVisible({ timeout: 20_000 });
-  const { bucketId } = await call(ki, 'bucketCreate', {
-    name: 'Pages',
-    storage: { kind: 'drive' },
-  });
-  // The sandbox is an opaque origin: real storage and cookies throw there, and
-  // a page touching them at load used to die before drawing anything.
-  await call(ki, 'bucketFileWrite', {
-    bucketId,
-    path: 'app.html',
-    text:
-      '<!doctype html><html><head><title>t</title></head><body><p id="o">not run</p><script>' +
-      "localStorage.setItem('pick', 'six'); sessionStorage.setItem('n', '1'); document.cookie = 'k=v';" +
-      "document.getElementById('o').textContent = 'ran ' + localStorage.getItem('pick') + ' ' + document.cookie;" +
-      '</script></body></html>',
-  });
-
-  await page.goto(`/bucket/${bucketId}`);
-  await page.getByRole('button', { name: 'Tree' }).click();
-  await nodeEl(page, 'app.html').click();
-  const frame = page.frameLocator('main iframe').first();
-  await expect(frame.locator('#o')).toHaveText('ran six k=v', { timeout: 20_000 });
 });

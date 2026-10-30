@@ -70,7 +70,6 @@ describe('roles', () => {
       'people',
       'subscriptions',
       'subscribers',
-      'storage',
       'builds',
       'data',
       'dictionaries',

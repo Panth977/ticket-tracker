@@ -22,10 +22,6 @@ import {
   type StageGrant,
 } from '@tm/shared';
 import { db } from '../../src/runtime/firebase.js';
-import { fakeDrive } from '../../src/bucket/drive/api.js';
-import { forgetDriveBoardIds } from '../../src/db/drive/board.js';
-import { DRIVE_LINKS, seal } from '../../src/bucket/drive/link.js';
-import { DRIVE_SCOPE } from '@tm/shared';
 import { createUser, setPorts, uniq, type TestUser } from '../harness/index.js';
 
 /** What commands accept as a rich-text body (the zod input side). */
@@ -127,8 +123,6 @@ export interface SeedOptions {
   grants?: Record<string, StageGrant>;
   allowDelete?: boolean;
   patch?: Partial<Board>;
-  /** Tickets in (fake) Google Drive (bucket.html §L). Default: TM_TEST_DRIVE_BOARDS. */
-  drive?: boolean;
 }
 
 export interface SeededBoard {
@@ -204,10 +198,6 @@ export async function seedBoard(o: SeedOptions): Promise<SeededBoard> {
     createdAt: Date.now(),
     ...o.patch,
   };
-  // bucket.html §L: TM_TEST_DRIVE_BOARDS=1 runs every ticket test against a
-  // board whose tickets live in (the fake) Google Drive.
-  if (o.drive ?? process.env.TM_TEST_DRIVE_BOARDS === '1')
-    board.storage = await fakeDriveBoard(o.admin, key);
   const batch = db().batch();
   batch.set(db().doc(paths.board(id)), board);
   for (const [u, role] of people) {
@@ -225,43 +215,7 @@ export async function seedBoard(o: SeedOptions): Promise<SeededBoard> {
     batch.set(db().doc(paths.member(id, u.uid)), m);
   }
   await batch.commit();
-  if (board.storage) forgetDriveBoardIds();
   return { id, key, board };
-}
-
-/** `u`'s (fake) Google Drive, connected — as if they went through Account › Google Drive. */
-export async function connectFakeDrive(u: TestUser): Promise<void> {
-  const now = Date.now();
-  const ref = db().doc(`${DRIVE_LINKS}/${u.uid}`);
-  if (!(await ref.get()).exists)
-    await ref.set({
-      email: `${u.uid.slice(0, 8).toLowerCase()}@drive.test`,
-      refresh: seal('fake:seed'),
-      scope: DRIVE_SCOPE,
-      fake: true,
-      connectedAt: now,
-      updatedAt: now,
-      brokenAt: null,
-    });
-}
-
-/** A connected fake Drive for `owner` and a board folder in it. */
-export async function fakeDriveBoard(
-  owner: TestUser,
-  name: string,
-): Promise<NonNullable<Board['storage']>> {
-  await connectFakeDrive(owner);
-  const drive = fakeDrive(owner.uid);
-  const folder = await drive.createFolder(null, `Board ${name}`);
-  const tickets = await drive.createFolder(folder.id, 'tickets');
-  return {
-    kind: 'drive',
-    uid: owner.uid,
-    folderId: folder.id,
-    folderName: folder.name,
-    email: null,
-    ticketsFolderId: tickets.id,
-  };
 }
 
 /** Add someone to an existing board after the fact. */

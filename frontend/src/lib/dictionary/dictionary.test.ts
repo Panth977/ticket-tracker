@@ -108,10 +108,9 @@ describe('dictionary lists and settings', () => {
       'general',
       'people',
       'subscribers',
-      'storage',
     ]);
-    expect(dictionarySettingsFor('editor').map((s) => s.id)).toEqual(['subscribers', 'storage']);
-    expect(dictionarySettingsFor('viewer').map((s) => s.id)).toEqual(['subscribers', 'storage']);
+    expect(dictionarySettingsFor('editor').map((s) => s.id)).toEqual(['subscribers']);
+    expect(dictionarySettingsFor('viewer').map((s) => s.id)).toEqual(['subscribers']);
     expect(dictionarySettingsFor(null)).toEqual([]);
   });
 

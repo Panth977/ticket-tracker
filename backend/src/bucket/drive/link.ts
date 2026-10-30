@@ -23,11 +23,10 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { DRIVE_FULL_SCOPE, DRIVE_SCOPE, errors, type DriveStatus } from '@tm/shared';
 
 /**
- * bucket.html §L7: the scope this instance asks for. `drive.file` (default)
- * sees only what this app made or the person picked; TM_DRIVE_SCOPE=drive asks
- * for the whole Drive, so a folder written by ANOTHER TaskManager can be
- * imported (a restricted scope: fine for a self-hosted instance in Google's
- * testing mode; a public app needs Google's verification).
+ * The scope this instance asks for. `drive.file` (default) sees only what this
+ * app made or the person picked; TM_DRIVE_SCOPE=drive asks for the whole Drive
+ * (a restricted scope: fine for a self-hosted instance in Google's testing
+ * mode; a public app needs Google's verification).
  */
 export const driveScope = (): string =>
   process.env.TM_DRIVE_SCOPE === 'drive' ? DRIVE_FULL_SCOPE : DRIVE_SCOPE;

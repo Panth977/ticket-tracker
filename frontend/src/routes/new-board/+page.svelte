@@ -37,7 +37,7 @@
   import { myBoards } from '$lib/stores';
   import { Button, Input, Select, Textarea, toast } from '$lib/ui';
   import IndicatorField from '$lib/ui/IndicatorField.svelte';
-  import StorageField, { storageInput, type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
   import { driveState } from '$lib/drive/drive.svelte';
   import { storageFor } from '$lib/drive/storageFor';
 
@@ -70,20 +70,16 @@
   let inviteError = $state<string | null>(null);
 
   let creating = $state(false);
-  /** bucket.html §L: where the board itself lives (its settings, tickets, messages). */
-  let storage = $state<StorageChoice>({ kind: 'managed' });
   /** §K5: its ticket-file bucket — an entity of its own, made with it, or none yet. */
   let files = $state<StorageChoice>({ kind: 'managed' });
-  const storageOk = $derived(
-    (storage.kind !== 'drive' && files.kind !== 'drive') || !!driveState.status?.connected,
-  );
+  const storageOk = $derived(files.kind !== 'drive' || !!driveState.status?.connected);
   // Back from Google's consent page (Connect Google Drive, below): pick Drive
   // again (the root layout's DriveReturn says how it went).
   if (
     typeof location !== 'undefined' &&
     new URLSearchParams(location.search).get('drive') === 'connected'
   )
-    storage = { kind: 'drive', folderPath: '' };
+    files = { kind: 'drive', folderPath: '' };
 
   const boardsQ = $derived(myBoards(auth.uid));
   const copyOptions = $derived(
@@ -144,9 +140,6 @@
     creating = true;
     const template: BoardTemplate = chip === 'copy' ? { fromBoardId: copyFrom! } : chip;
     try {
-      // bucket.html §L: the board and its file bucket are two entities, each
-      // with its own storage: the board first, then the bucket.
-      const tickets = storage.kind === 'drive' ? storageInput(storage) : null;
       const { boardId } = await command(
         'boardCreate',
         {
@@ -156,7 +149,6 @@
           indicator,
           ...(description.trim() ? { description: description.trim() } : {}),
           ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
-          ...(tickets ? { storage: tickets } : {}),
         },
         { toast: false },
       );
@@ -298,15 +290,6 @@
           </p>
         </div>
         <OwnerSelect bind:value={owner} />
-        <div data-testid="board-storage">
-          <StorageField
-            bind:value={storage}
-            name={name.trim() || 'Board'}
-            label="Where this board lives"
-            managedHint="Its settings, tickets and messages in this app"
-            driveHint="Its settings, tickets and messages: a folder in your Drive"
-          />
-        </div>
         <div data-testid="files-storage">
           <StorageField
             bind:value={files}

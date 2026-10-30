@@ -48,8 +48,6 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'subscriptions', label: 'Subscriptions' },
   /** lib/access: what uses this board (artifacts §K, agents §AA2). */
   { id: 'subscribers', label: 'Subscribers' },
-  /** bucket.html §K6: where its ticket files live (its buckets' storage), and moving them. */
-  { id: 'storage', label: 'Storage' },
   /** aggregates.html: the numbers the board adds up (Cost, Time…). */
   { id: 'aggregates', label: 'Aggregates' },
   { id: 'analytics', label: 'Analytics' },
@@ -129,19 +127,12 @@ export const routes = {
   dictionary: (dictionaryId: string) => `/dictionary/${dictionaryId}`,
   dictionarySettings: (
     dictionaryId: string,
-    section: 'general' | 'people' | 'subscribers' | 'storage' = 'general',
+    section: 'general' | 'people' | 'subscribers' = 'general',
   ) => `/dictionary/${dictionaryId}/settings/${section}`,
   artifactSettings: (
     artifactId: string,
     section:
-      | 'general'
-      | 'people'
-      | 'subscriptions'
-      | 'subscribers'
-      | 'storage'
-      | 'builds'
-      | 'data'
-      | 'dictionaries',
+      'general' | 'people' | 'subscriptions' | 'subscribers' | 'builds' | 'data' | 'dictionaries',
   ) => `/x/${artifactId}/settings/${section}`,
   /** §AC: an owner's page — a person or an org (/{handle}). */
   owner: (handle: string) => `/${handle}`,

@@ -75,21 +75,9 @@ const icebaseAlias = [
   { find: /^tm-real-auth$/, replacement: 'firebase/auth' },
   { find: /^firebase\/storage$/, replacement: here('./src/lib/platform/icebase/storage.ts') },
   { find: /^tm-real-storage$/, replacement: 'firebase/storage' },
+  { find: /^firebase\/firestore$/, replacement: '@panth977/icebase/compat/firestore' },
   { find: /^firebase\/database$/, replacement: '@panth977/icebase/compat/database' },
   { find: /^firebase\/messaging$/, replacement: here('./src/lib/platform/icebase/messaging.ts') },
-];
-// bucket.html §L: every 'firebase/firestore' import is the ticket-routing
-// wrapper (a Drive board's tickets come from the api); the wrapper reaches the
-// real SDK — or, on the IceBase server, IceBase's compat — as 'tm-real-firestore'.
-const firestoreAlias = [
-  {
-    find: /^firebase\/firestore$/,
-    replacement: fileURLToPath(new URL('./src/lib/firebase/routedFirestore.ts', import.meta.url)),
-  },
-  {
-    find: /^tm-real-firestore$/,
-    replacement: ICEBASE ? '@panth977/icebase/compat/firestore' : 'firebase/firestore',
-  },
 ];
 if (ICEBASE) {
   // The IceBase server is the backend: no Firebase project, no Firebase emulators.
@@ -104,7 +92,7 @@ export default defineConfig({
   // "@tm/source" resolves @tm/shared to its TypeScript source: live HMR, no prebuild.
   resolve: {
     conditions: ['@tm/source', ...defaultClientConditions],
-    alias: [...firestoreAlias, ...(ICEBASE ? icebaseAlias : [])],
+    alias: ICEBASE ? icebaseAlias : [],
   },
   ssr: {
     resolve: {

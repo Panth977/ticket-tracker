@@ -42,7 +42,7 @@ describe('file source', () => {
           url: `https://door/${id}`,
           bytesUrl: `/door/${id}`,
           expiresAt: 9e12,
-          drive: { fileId: id, accessToken: 'g', expiresAt: 9e12 },
+          drive: { fileId: id, accessToken: 'g', expiresAt: 9e12, blobSafe: true },
         }),
       );
     URL.createObjectURL = vi.fn(() => 'blob:direct');

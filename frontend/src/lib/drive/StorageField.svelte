@@ -43,7 +43,7 @@
     /** What "managed" means here (a board: "a new bucket for its ticket files"). */
     managedHint = 'Kept by this app',
     noneHint = 'Add one later in settings',
-    /** What "Google Drive" means here (a board: its tickets too — bucket.html §L). */
+    /** What "Google Drive" means here. */
     driveHint = 'A folder in your Drive is the source of truth',
   }: {
     value?: StorageChoice;

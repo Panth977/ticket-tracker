@@ -56,7 +56,8 @@ const DIRECT_MAX_BYTES = 32 * 1024 * 1024;
  * Only what a blob: URL can show safely: a blob: URL has the app's origin, so
  * HTML, SVG and the like stay on the door, which serves them sandboxed.
  */
-const DIRECT_TYPES = /^(image\/(png|jpeg|gif|webp|avif)|video\/(mp4|webm)|audio\/[a-z0-9.+-]+)$/;
+const DIRECT_TYPES =
+  /^(image\/(png|jpeg|gif|webp|avif)|video\/(mp4|webm)|audio\/[a-z0-9.+-]+|application\/pdf)$/;
 
 /**
  * Can `uid` read this file straight from Google? Only the Drive's own person,
@@ -67,15 +68,20 @@ export async function driveReadGrant(
   path: string,
   uid: string,
   stored: Pick<StoredObject, 'size' | 'contentType'>,
-): Promise<{ fileId: string; accessToken: string; expiresAt: number } | null> {
-  if (stored.size > DIRECT_MAX_BYTES || !DIRECT_TYPES.test(stored.contentType ?? '')) return null;
+): Promise<{
+  fileId: string;
+  accessToken: string;
+  expiresAt: number;
+  blobSafe: boolean;
+} | null> {
   const p = parseDriveStoragePath(path);
   if (!p) return null;
   try {
     const bucket = (await bucketRef(p.bucketId).get()).data();
     if (!isDriveBucket(bucket) || bucket.storage.uid !== uid) return null;
     const t = await ownReadToken(uid);
-    return t && { fileId: p.driveId, ...t };
+    const blobSafe = stored.size <= DIRECT_MAX_BYTES && DIRECT_TYPES.test(stored.contentType ?? '');
+    return t && { fileId: p.driveId, ...t, blobSafe };
   } catch {
     return null;
   }

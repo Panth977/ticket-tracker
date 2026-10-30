@@ -23,7 +23,7 @@
   import CreatePage from '$lib/ui/CreatePage.svelte';
   import Input from '$lib/ui/Input.svelte';
   import Textarea from '$lib/ui/Textarea.svelte';
-  import StorageField, { storageInput, type StorageChoice } from '$lib/drive/StorageField.svelte';
+  import StorageField, { type StorageChoice } from '$lib/drive/StorageField.svelte';
   import { driveState } from '$lib/drive/drive.svelte';
   import { storageFor } from '$lib/drive/storageFor';
   import { toast } from '$lib/ui/toast.svelte';
@@ -39,13 +39,9 @@
   const indicator = $derived(picked ?? defaultIndicator(name.trim() || 'artifact'));
   let busy = $state(false);
   let owner = $state('');
-  /** bucket.html §L5: where the artifact itself (its data) lives. */
-  let storage = $state<StorageChoice>({ kind: 'managed' });
   /** §K5: a bucket for its files — an entity of its own, made with it, or none. */
   let files = $state<StorageChoice>({ kind: 'none' });
-  const storageOk = $derived(
-    (storage.kind !== 'drive' && files.kind !== 'drive') || !!driveState.status?.connected,
-  );
+  const storageOk = $derived(files.kind !== 'drive' || !!driveState.status?.connected);
 
   // A fresh form each time it opens.
   $effect(() => {
@@ -54,7 +50,6 @@
       name = '';
       description = '';
       picked = null;
-      storage = { kind: 'managed' };
       files = { kind: 'none' };
     }
   });
@@ -64,9 +59,6 @@
     if (!n || busy || !storageOk) return;
     busy = true;
     try {
-      // bucket.html §L5: the artifact and its file bucket are two entities,
-      // each with its own storage.
-      const drive = storage.kind === 'drive' ? storageInput(storage) : null;
       const { artifactId } = await command(
         'artifactCreate',
         {
@@ -74,7 +66,6 @@
           description: description.trim() || null,
           indicator,
           ...(ownerOf(owner) ? { owner: ownerOf(owner) } : {}),
-          ...(drive ? { storage: drive } : {}),
         },
         { toast: 'Could not create the artifact' },
       );
@@ -119,15 +110,6 @@
       placeholder="What it is for (optional)"
     />
     <OwnerSelect bind:value={owner} />
-    <div data-testid="artifact-storage">
-      <StorageField
-        bind:value={storage}
-        name={name.trim() || 'Artifact'}
-        label="Where it lives"
-        managedHint="Its settings and data in this app"
-        driveHint="Its settings and data: a folder in your Drive"
-      />
-    </div>
     <div data-testid="files-storage">
       <StorageField
         bind:value={files}
