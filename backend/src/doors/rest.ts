@@ -255,7 +255,11 @@ function ticketInput(b: Partial<z.output<typeof RestPatchTicketBodySchema>>): Ti
 
 // ─── me, board ───────────────────────────────────────────────────────────────
 
-v1.get('/me', async (c) => c.json(await whoami(gate(c, 'GET', '/v1/me'))));
+v1.get('/me', async (c) => {
+  const ctx = gate(c, 'GET', '/v1/me');
+  console.log(`[v1/me] ${ctx.keyName}`); // ORCH-30: who calls this 7 000 times a day; remove once known
+  return c.json(await whoami(ctx));
+});
 
 v1.get('/env', async (c) => {
   const ctx = gate(c, 'GET', '/v1/env');

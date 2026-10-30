@@ -234,6 +234,8 @@ interface Answer {
   docs: Row[];
   exists?: boolean;
   boards: string[];
+  hash?: string;
+  unchanged?: boolean;
 }
 
 /** The api's encoding → the SDK's values (a Timestamp travels as { __ts: ms }). */
@@ -272,7 +274,7 @@ function isTransient(e: unknown): boolean {
   return !code || ['unavailable', 'internal', 'rate_limited', 'conflict'].includes(code);
 }
 
-async function ask(t: Target): Promise<Answer> {
+async function ask(t: Target, ifNot?: string): Promise<Answer> {
   const { command } = await import('$lib/api');
   const shape =
     t.kind === 'doc' || t.spec.loose
@@ -286,7 +288,7 @@ async function ask(t: Target): Promise<Answer> {
   const target = t.kind === 'group' ? { kind: 'group' as const } : { kind: t.kind, path: t.path };
   const a = (await command(
     'driveDocs',
-    { target, ...shape } as never,
+    { target, ...shape, ...(ifNot ? { ifNot } : {}) } as never,
     // A read: no 'Saving…' pill, however slow Drive is.
     { toast: false, background: true } as never,
   )) as unknown as Answer;
@@ -550,8 +552,15 @@ export async function addDoc(col: R.CollectionReference<any>, data: any) {
 
 // ─── live ───────────────────────────────────────────────────────────────────
 
-/** Panth's pick (ORCH-14): besides the ping, look again once a minute. */
-export const DRIVE_POLL_MS = 60_000;
+/**
+ * Besides the ping, look again every five minutes (ORCH-30; once a minute was
+ * a third of the api's bill). A hidden tab does not look at all: it catches up
+ * when it is shown again.
+ */
+export const DRIVE_POLL_MS = 5 * 60_000;
+/** Shown again after this long: look now rather than at the next poll. */
+const DRIVE_CATCH_UP_MS = 30_000;
+const tabHidden = () => typeof document !== 'undefined' && document.hidden;
 
 type Next = (s: unknown) => void;
 type Fail = (e: Error) => void;
@@ -644,18 +653,28 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
     let inflight = false;
     let again = false;
     let fails = 0;
+    let lastHash: string | undefined;
+    let lastAt = 0;
+    let missed = false; // a ping or poll that a hidden tab did not act on
     const fetchNow = async () => {
+      if (tabHidden()) {
+        missed = true;
+        return;
+      }
+      lastAt = Date.now();
       if (inflight) {
         again = true;
         return;
       }
       inflight = true;
       try {
-        const a = await ask(t);
+        const a = await ask(t, driveReady ? lastHash : undefined);
         fails = 0;
+        lastHash = a.hash;
+        for (const b of a.boards) watch({ kind: 'boards', id: b });
+        if (a.unchanged) return;
         driveRowsNow = a.docs;
         driveReady = true;
-        for (const b of a.boards) watch({ kind: 'boards', id: b });
         emit();
       } catch (e) {
         // A read that fails after one worked (a phone between networks, a slow
@@ -682,6 +701,15 @@ export function onSnapshot(target: unknown, ...args: unknown[]): () => void {
     offs.push(() => timer && clearTimeout(timer));
     const poll = setInterval(() => void fetchNow(), DRIVE_POLL_MS);
     offs.push(() => clearInterval(poll));
+    if (typeof document !== 'undefined') {
+      const shown = () => {
+        if (tabHidden() || (!missed && Date.now() - lastAt < DRIVE_CATCH_UP_MS)) return;
+        missed = false;
+        void fetchNow();
+      };
+      document.addEventListener('visibilitychange', shown);
+      offs.push(() => document.removeEventListener('visibilitychange', shown));
+    }
 
     if (t.kind === 'group')
       offs.push(

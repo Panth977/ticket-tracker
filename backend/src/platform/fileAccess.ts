@@ -121,10 +121,15 @@ export async function fileAccess(ctx: ServerCtx, asked: string): Promise<FileAcc
   return signedAccess(ctx, await requireFileRead(ctx, asked));
 }
 
+const EXPIRY_STEP_MS = 60 * 60 * 1000;
+
 /**
  * The URLs for one object the caller was ALREADY allowed (requireFileRead,
  * or a bucket command that checked reach itself). 404 when it is not there.
  */
+export const stableExpiry = (now: number): number =>
+  Math.ceil((now + SIGNED_URL_TTL_MS) / EXPIRY_STEP_MS) * EXPIRY_STEP_MS;
+
 export async function signedAccess(
   ctx: Pick<ServerCtx, 'now'>,
   path: string,
@@ -132,7 +137,9 @@ export async function signedAccess(
   const stored = await ports().files.stat(path);
   if (!stored) throw errors.not_found('File not found');
 
-  const expiresAt = ctx.now + SIGNED_URL_TTL_MS;
+  // Rounded up to the hour, so asking twice gives the SAME url and the browser
+  // serves the second from its cache instead of the bytes coming through again.
+  const expiresAt = stableExpiry(ctx.now);
   const bytesUrl = fileDoorPath(path, expiresAt);
   let url = bytesUrl;
   // A Drive bucket's file (§K3) has no URL of ours to sign: always the file door.
@@ -234,7 +241,7 @@ export function registerFileAccessRoutes(api: Hono<AppEnv> = door('api')): void 
       'accept-ranges': 'bytes',
       // The object's bytes never change (attachments are written once), but the
       // LINK does: cache in the browser only, and never past the signature.
-      'cache-control': `private, max-age=${Math.floor(SIGNED_URL_TTL_MS / 1000)}`,
+      'cache-control': `private, max-age=${Math.floor((exp - Date.now()) / 1000)}`,
       'x-content-type-options': 'nosniff',
       // Uploaded HTML (or SVG) is served from the APP'S OWN ORIGIN here, so it
       // is put in an opaque origin: it can never reach the session that opened

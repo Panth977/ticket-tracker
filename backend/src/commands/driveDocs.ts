@@ -20,6 +20,7 @@ import { docLoc } from '../db/drive/router.js';
 import { encodeJson } from '../db/drive/values.js';
 import { loadArtifact } from '../artifacts/shared.js';
 import { loadDictionary } from '../dictionary/shared.js';
+import { sha256hex } from '../platform/crypto.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { defineCommand } from './_registry.js';
 import { loadBoardNoTx } from './boardShared.js';
@@ -64,6 +65,16 @@ export async function gateDrivePath(
   return { kind, id, drive: !!(await driveEntityOf(baseDb(), kind as 'artifacts', id)) };
 }
 
+/**
+ * Reading Drive still costs what it costs, but an answer the browser already
+ * holds does not travel again: most polls find nothing new, and the bytes are
+ * billed twice on the way out (the function's egress, then Hosting's).
+ */
+const unlessHeld = <T extends { docs: unknown[] }>(ifNot: string | undefined, a: T) => {
+  const hash = sha256hex(JSON.stringify(a.docs));
+  return hash === ifNot ? { ...a, docs: [], hash, unchanged: true } : { ...a, hash };
+};
+
 export default defineCommand('driveDocs', async (ctx, input) => {
   const shape = (q: Query) => {
     let out = q;
@@ -89,10 +100,10 @@ export default defineCommand('driveDocs', async (ctx, input) => {
         boards.map(async (b) => (await shape(db().collection(`boards/${b}/tickets`)).get()).docs),
       )
     ).flat();
-    return {
+    return unlessHeld(input.ifNot, {
       docs: docs.map((d) => ({ path: d.ref.path, id: d.id, data: plain(d.data()) })),
       boards,
-    };
+    });
   }
 
   const path = input.target.path.replace(/^\/+|\/+$/g, '');
@@ -104,19 +115,19 @@ export default defineCommand('driveDocs', async (ctx, input) => {
   if (isDoc) {
     const snap = await db().doc(path).get();
     const ok = snap.exists && visible(ctx, path, snap.data() as Plain);
-    return {
+    return unlessHeld(input.ifNot, {
       docs: ok ? [{ path, id: snap.id, data: plain(snap.data()) }] : [],
       exists: ok,
       boards: watch,
       entity,
-    };
+    });
   }
   const snap = await shape(db().collection(path)).get();
-  return {
+  return unlessHeld(input.ifNot, {
     docs: snap.docs
       .filter((d) => visible(ctx, d.ref.path, d.data() as Plain))
       .map((d) => ({ path: d.ref.path, id: d.id, data: plain(d.data()) })),
     boards: watch,
     entity,
-  };
+  });
 });

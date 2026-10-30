@@ -333,11 +333,16 @@ export const driveDocs = defineCommand({
     /** Cursor values (of the orderBy fields, or the document id). */
     startAfter: z.array(z.unknown()).max(4).optional(),
     limit: z.number().int().positive().max(5000).optional(),
+    /** The `hash` of the answer the caller holds: if it still stands, no docs come back. */
+    ifNot: z.string().max(64).optional(),
   }),
   res: z.object({
     docs: z.array(
       z.object({ path: z.string(), id: z.string(), data: z.record(z.string(), z.unknown()) }),
     ),
+    hash: z.string().optional(),
+    /** `ifNot` still stands: `docs` is empty, keep what you hold. */
+    unchanged: z.boolean().optional(),
     /** A doc read: false when it does not exist. */
     exists: z.boolean().optional(),
     /** The Drive boards the answer covers (what to listen to for changes). */
