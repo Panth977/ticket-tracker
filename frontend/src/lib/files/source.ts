@@ -44,6 +44,7 @@ export interface FileTextResult {
 /** Paths kept in each cache (a board's Files tab is far smaller than this). */
 const MAX_CACHED = 40;
 const MAX_ACCESS_CACHED = 200;
+const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
 
 function clip(r: FileTextResult, maxBytes: number): FileTextResult {
   return r.text.length > maxBytes ? { text: r.text.slice(0, maxBytes), truncated: true } : r;
@@ -96,9 +97,36 @@ export function createFileSource(deps: FileSourceDeps) {
     return entry.access;
   }
 
+  /** The Drive's own person: the bytes from Google, skipping the function and Hosting. */
+  const directs = new Map<string, Promise<string | null>>();
+  function direct(path: string, grant: NonNullable<FileAccessRes['drive']>) {
+    let p = directs.get(path);
+    if (p) return p;
+    p = deps
+      .fetch(`${DRIVE_FILES}/${encodeURIComponent(grant.fileId)}?alt=media`, {
+        headers: { authorization: `Bearer ${grant.accessToken}` },
+      })
+      .then(async (r) => (r.ok ? URL.createObjectURL(await r.blob()) : null))
+      .catch(() => null)
+      .then((url) => {
+        if (!url) directs.delete(path); // the door still works; try Google again next time
+        return url;
+      });
+    directs.set(path, p);
+    if (directs.size > MAX_CACHED) {
+      const oldest = directs.keys().next().value!;
+      void directs.get(oldest)?.then((u) => u && URL.revokeObjectURL(u));
+      directs.delete(oldest);
+    }
+    return p;
+  }
+
   /** Storage path → a URL an <img> / <video> / <audio> / <iframe> can use. */
-  const fileUrl = async (path: string | null | undefined): Promise<string | null> =>
-    (await accessFor(path))?.url ?? null;
+  const fileUrl = async (path: string | null | undefined): Promise<string | null> => {
+    const a = await accessFor(path);
+    if (!a) return null;
+    return (a.drive && (await direct(path!, a.drive))) || a.url;
+  };
 
   /** Storage path → a same-origin URL fetch() may read (Range supported). */
   const fileBytesUrl = async (path: string | null | undefined): Promise<string | null> =>

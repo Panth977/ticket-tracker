@@ -48,6 +48,7 @@ import {
 } from '@tm/shared';
 import { INDICATOR_PATH_RE } from '@tm/shared';
 import { ports } from '../adapters/index.js';
+import { driveReadGrant } from '../bucket/drive/objects.js';
 import { readStream } from '../adapters/files.js';
 import type { AppEnv } from '../http/env.js';
 import { door, MOUNTS } from '../http/mounts.js';
@@ -134,9 +135,11 @@ export async function signedAccess(
   ctx: Pick<ServerCtx, 'now'>,
   path: string,
 ): Promise<FileAccessRes> {
-  const stored = await ports().files.stat(path);
-  if (!stored) throw errors.not_found('File not found');
+  if (!(await ports().files.stat(path))) throw errors.not_found('File not found');
+  return signedFor(ctx, path);
+}
 
+async function signedFor(ctx: Pick<ServerCtx, 'now'>, path: string): Promise<FileAccessRes> {
   // Rounded up to the hour, so asking twice gives the SAME url and the browser
   // serves the second from its cache instead of the bytes coming through again.
   const expiresAt = stableExpiry(ctx.now);
@@ -211,9 +214,14 @@ export function registerFileAccessRoutes(api: Hono<AppEnv> = door('api')): void 
   api.get(inMount(FILE_ACCESS_ROUTE), userAuth, async (c) => {
     const path = c.req.query('path');
     if (!path) throw errors.invalid('A file path is required', { field: 'path' });
-    const res = await fileAccess(c.get('ctx'), path);
+    const ctx = c.get('ctx');
+    const allowed = await requireFileRead(ctx, path);
+    const stored = await ports().files.stat(allowed);
+    if (!stored) throw errors.not_found('File not found');
+    const res = await signedFor(ctx, allowed);
+    const drive = await driveReadGrant(allowed, ctx.actor, stored);
     c.header('cache-control', 'no-store');
-    return c.json(res);
+    return c.json(drive ? { ...res, drive } : res);
   });
 
   api.get(inMount(FILE_BYTES_ROUTE), async (c) => {

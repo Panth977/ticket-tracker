@@ -35,6 +35,34 @@ function harness(over: Partial<FileSourceDeps> = {}) {
 const file = (path: string, size = 1_000) => ({ path, size, name: path.split('/').pop()! });
 
 describe('file source', () => {
+  it('takes a granted file straight from Drive, and falls back to the door', async () => {
+    const access = (id: string) =>
+      new Response(
+        JSON.stringify({
+          url: `https://door/${id}`,
+          bytesUrl: `/door/${id}`,
+          expiresAt: 9e12,
+          drive: { fileId: id, accessToken: 'g', expiresAt: 9e12 },
+        }),
+      );
+    URL.createObjectURL = vi.fn(() => 'blob:direct');
+    const seen: string[] = [];
+    const src = createFileSource({
+      fetch: (async (url: string, init?: RequestInit) => {
+        if (String(url).startsWith(FILE_ACCESS_ROUTE))
+          return access(new URL(url, 'http://x').searchParams.get('path')!);
+        seen.push(new Headers(init?.headers).get('authorization')!);
+        return new Response('bytes', { status: String(url).includes('/bad?') ? 403 : 200 });
+      }) as unknown as typeof fetch,
+      getToken: async () => 'tok',
+      now: () => 1,
+    });
+    expect(await src.fileUrl('good')).toBe('blob:direct');
+    expect(await src.fileUrl('good')).toBe('blob:direct');
+    expect(seen).toEqual(['Bearer g']);
+    expect(await src.fileUrl('bad')).toBe('https://door/bad');
+  });
+
   it('asks the API for a URL, with the ID token, and reuses it', async () => {
     const h = harness();
     expect(await h.src.fileUrl('boards/b/tickets/t/f1/a.png')).toBe(

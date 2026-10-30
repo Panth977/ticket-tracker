@@ -377,6 +377,15 @@ export async function pickerToken(uid: string): Promise<{
   return { accessToken: token, ...p, expiresAt: tokens.get(uid)?.exp ?? Date.now() + 30 * 60_000 };
 }
 
+/** The person's own short-lived token, for their own browser; null when Google is not in play. */
+export async function ownReadToken(
+  uid: string,
+): Promise<{ accessToken: string; expiresAt: number } | null> {
+  if (driveMode() !== 'google') return null;
+  const token = await accessToken(uid);
+  return { accessToken: token, expiresAt: tokens.get(uid)?.exp ?? Date.now() + 30 * 60_000 };
+}
+
 /**
  * The Drive of person `uid` — every Drive bucket they made talks through this.
  * Throws a 409 ('drive_disconnected') when there is no usable connection; a
