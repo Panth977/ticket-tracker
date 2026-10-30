@@ -97,15 +97,17 @@ export function createFileSource(deps: FileSourceDeps) {
     return entry.access;
   }
 
+  const fromDrive = (grant: NonNullable<FileAccessRes['drive']>, headers = {}) =>
+    deps.fetch(`${DRIVE_FILES}/${encodeURIComponent(grant.fileId)}?alt=media`, {
+      headers: { authorization: `Bearer ${grant.accessToken}`, ...headers },
+    });
+
   /** The Drive's own person: the bytes from Google, skipping the function and Hosting. */
   const directs = new Map<string, Promise<string | null>>();
   function direct(path: string, grant: NonNullable<FileAccessRes['drive']>) {
     let p = directs.get(path);
     if (p) return p;
-    p = deps
-      .fetch(`${DRIVE_FILES}/${encodeURIComponent(grant.fileId)}?alt=media`, {
-        headers: { authorization: `Bearer ${grant.accessToken}` },
-      })
+    p = fromDrive(grant)
       .then(async (r) => (r.ok ? URL.createObjectURL(await r.blob()) : null))
       .catch(() => null)
       .then((url) => {
@@ -125,7 +127,7 @@ export function createFileSource(deps: FileSourceDeps) {
   const fileUrl = async (path: string | null | undefined): Promise<string | null> => {
     const a = await accessFor(path);
     if (!a) return null;
-    return (a.drive && (await direct(path!, a.drive))) || a.url;
+    return (a.drive?.blobSafe && (await direct(path!, a.drive))) || a.url;
   };
 
   /** Storage path → a same-origin URL fetch() may read (Range supported). */
@@ -161,9 +163,11 @@ export function createFileSource(deps: FileSourceDeps) {
   }
 
   async function read(path: string, maxBytes: number): Promise<string> {
-    const url = await fileBytesUrl(path);
-    if (!url) throw new Error('This file is not available');
-    const res = await deps.fetch(url, { headers: { range: `bytes=0-${maxBytes - 1}` } });
+    const a = await accessFor(path);
+    if (!a) throw new Error('This file is not available');
+    const range = { range: `bytes=0-${maxBytes - 1}` };
+    const direct = a.drive ? await fromDrive(a.drive, range).catch(() => null) : null;
+    const res = direct?.ok ? direct : await deps.fetch(a.bytesUrl, { headers: range });
     // 206 is the Range answer; 200 means the whole (small) file came back.
     if (!res.ok) throw new Error(`Could not read the file (${res.status})`);
     const text = await res.text();
