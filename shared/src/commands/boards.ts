@@ -21,7 +21,6 @@ import { defineCommand, OkResSchema, req } from './define.js';
 import { AGG_FIELDS_MAX, AggFieldDefSchema } from '../schema/aggregates.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
 import { ArtifactIdSchema } from '../artifacts/schema.js';
-import { BucketStorageInputSchema } from '../bucket/drive.js';
 
 export const MAX_INVITES_PER_CALL = 50;
 
@@ -122,11 +121,6 @@ export const boardCreate = defineCommand({
     description: DescriptionSchema.optional(),
     /** §AC: who owns it — you (default) or an org you belong to. */
     owner: OwnerRefSchema.optional(),
-    /**
-     * bucket.html §L: where its TICKETS live. Drive = a folder of your Drive
-     * (picked, or a path made for it); default = the database.
-     */
-    storage: BucketStorageInputSchema.optional(),
   }),
   res: z.object({ boardId: BoardIdSchema }),
 });
@@ -260,109 +254,4 @@ export const viewDelete = defineCommand({
   errors: ['forbidden', 'not_found', 'conflict'],
   req: req({ boardId: BoardIdSchema, viewId: z.string().min(1) }),
   res: OkResSchema,
-});
-
-/**
- * bucket.html §L4 — move a board (settings, views, templates, webhooks,
- * integrations, tickets), a dictionary or an artifact to the other storage:
- * the database ⇄ a folder of MY Google Drive. A queued job copies it; what it
- * keeps is read-only until it finishes (`move`). A board's file bucket moves
- * on its own (bucketStorageMove).
- */
-export const entityStorageMove = defineCommand({
-  name: 'entityStorageMove',
-  source: 'extra',
-  permission:
-    "A board's admin, or a dictionary's / an artifact's owner — in the app. A move to Drive needs MY Drive connected.",
-  errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'unavailable'],
-  req: req({
-    kind: z.enum(['boards', 'dictionaries', 'artifacts']),
-    id: z.string().min(1).max(128),
-    /** Where to. Omit with `resume` to pick a stopped move up where it stopped. */
-    to: BucketStorageInputSchema.optional(),
-    resume: z.boolean().optional(),
-  }).superRefine((r, ctx) => {
-    if (!r.to && !r.resume)
-      ctx.addIssue({ code: 'custom', path: ['to'], message: 'Say where to, or resume' });
-  }),
-  res: z.object({ ok: z.literal(true), total: z.number().int() }),
-});
-
-/**
- * bucket.html §L — the app's reads of a board whose TICKETS live in Google
- * Drive. Its browser cannot read them from Firestore (they are not there):
- * it asks here for what it would have asked Firestore for — one ticket
- * document or page, a query on a board's tickets (or a ticket's pages), or
- * the Drive boards' share of a collection-group query on tickets. Answers
- * the documents as they are now; the browser refetches when the ticket's
- * boards/{b}/driveRev/{t} moves (and every minute).
- */
-const TicketDocsFilterSchema = z.tuple([
-  z.string().min(1).max(300),
-  z.enum([
-    '<',
-    '<=',
-    '==',
-    '!=',
-    '>=',
-    '>',
-    'array-contains',
-    'in',
-    'not-in',
-    'array-contains-any',
-  ]),
-  z.unknown(),
-]);
-export const driveDocs = defineCommand({
-  name: 'driveDocs',
-  source: 'extra',
-  permission:
-    "Firestore's rules, as the server reads them: a board's / dictionary's readers, an artifact's data readers. A group query: the Drive boards you can read.",
-  errors: ['not_found', 'invalid', 'forbidden'],
-  req: req({
-    target: z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('doc'), path: z.string().min(1).max(1500) }),
-      z.object({ kind: z.literal('query'), path: z.string().min(1).max(1500) }),
-      z.object({ kind: z.literal('group') }),
-    ]),
-    where: z.array(TicketDocsFilterSchema).max(10).optional(),
-    orderBy: z
-      .array(z.tuple([z.string().min(1).max(300), z.enum(['asc', 'desc'])]))
-      .max(4)
-      .optional(),
-    /** Cursor values (of the orderBy fields, or the document id). */
-    startAfter: z.array(z.unknown()).max(4).optional(),
-    limit: z.number().int().positive().max(5000).optional(),
-    /** The `hash` of the answer the caller holds: if it still stands, no docs come back. */
-    ifNot: z.string().max(64).optional(),
-  }),
-  res: z.object({
-    docs: z.array(
-      z.object({ path: z.string(), id: z.string(), data: z.record(z.string(), z.unknown()) }),
-    ),
-    hash: z.string().optional(),
-    /** `ifNot` still stands: `docs` is empty, keep what you hold. */
-    unchanged: z.boolean().optional(),
-    /** A doc read: false when it does not exist. */
-    exists: z.boolean().optional(),
-    /** The Drive boards the answer covers (what to listen to for changes). */
-    boards: z.array(BoardIdSchema),
-    /** The Drive entity the path belongs to (its driveRev is what to listen to); null when kept in the database. */
-    entity: z.object({ kind: z.string(), id: z.string() }).nullable().optional(),
-  }),
-});
-
-/** bucket.html §L5 — the browser's writes to a Drive artifact's data (the broker's set / update / delete / add). */
-export const driveDocWrite = defineCommand({
-  name: 'driveDocWrite',
-  source: 'extra',
-  permission: "An artifact's data writers (Firestore's rules, as the server reads them).",
-  errors: ['not_found', 'invalid', 'forbidden'],
-  req: req({
-    path: z.string().min(1).max(1500),
-    method: z.enum(['set', 'update', 'delete', 'add']),
-    data: z.record(z.string(), z.unknown()).optional(),
-    merge: z.boolean().optional(),
-  }),
-  res: z.object({ id: z.string() }),
 });

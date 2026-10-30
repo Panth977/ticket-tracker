@@ -97,10 +97,7 @@ export function questionSignalOfTicket(
 export const UNREAD_WINDOW = 20;
 
 /** A ticket as the unread count reads it — everything is inline already. */
-export type UnreadSource = Pick<
-  Partial<Ticket>,
-  'recentMessages' | 'unreadTail' | 'signals' | 'counts'
->;
+export type UnreadSource = Pick<Partial<Ticket>, 'recentMessages' | 'signals' | 'counts'>;
 
 export interface UnreadCount {
   count: number;
@@ -125,15 +122,9 @@ export function unreadOfTicket(
   window = UNREAD_WINDOW,
 ): UnreadCount | null {
   if (since == null) return null;
-  // A Drive board lists meta.json only: no thread, but its unread tail (bucket.html §L).
-  const tail = !t.recentMessages?.length && t.unreadTail?.length ? t.unreadTail : null;
-  if (!tail && !t.recentMessages) return null;
-  const inline = tail
-    ? [...tail].sort((a, b) => a.createdAt - b.createdAt)
-    : inlineMessages({ recentMessages: t.recentMessages });
-  // An empty list answer for a thread that has messages (a Drive ticket not
-  // written since the tail existed): unknown, not zero.
-  if (!inline.length && (t.signals?.messageCount ?? t.counts?.messages ?? 0) > 0) return null;
+  const msgs = t.recentMessages;
+  if (!msgs) return null;
+  const inline = inlineMessages({ recentMessages: msgs });
   let count = 0;
   for (const m of inline) {
     if (m.createdAt <= since) continue;
@@ -145,10 +136,7 @@ export function unreadOfTicket(
   // messages in data/{NNN} cannot be counted from here, so 'at least this
   // many'. A thread that fits inline is counted exactly, however old the
   // pointer is — including a ticket I have never opened.
-  // The tail is shorter than the inline window: it starts where it starts.
-  const from = tail
-    ? (inline[0]?.createdAt ?? null)
-    : (t.signals?.unreadFrom ?? inline[0]?.createdAt ?? null);
+  const from = t.signals?.unreadFrom ?? inline[0]?.createdAt ?? null;
   const total = t.signals?.messageCount ?? t.counts?.messages ?? null;
   const spilled = total != null && total > inline.length;
   const beyond = from != null && from > since && spilled;

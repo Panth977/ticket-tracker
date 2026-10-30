@@ -11,12 +11,10 @@
 import { paths, type BoardWithId, type StoredActivity, type Ticket } from '@tm/shared';
 import { betweenN } from '@tm/shared/logic/index';
 import { ports } from '../adapters/index.js';
-import { baseDb } from '../db/index.js';
-import { driveBoardIds } from '../db/drive/board.js';
 import { clearTicketInbox } from '../notify/inboxClean.js';
 import { db } from '../runtime/firebase.js';
-import { typedCol, typedDoc } from '../runtime/index.js';
-import { batchWriter, wholeTickets } from './doc.js';
+import { typedCol } from '../runtime/index.js';
+import { batchWriter } from './doc.js';
 import { applyPatch, updatesFor } from './patch.js';
 import { lastRankInStage } from './rank.js';
 
@@ -46,16 +44,9 @@ export function dueRule(
 
 export async function runStageRules(now: number): Promise<StageRulesResult> {
   const r: StageRulesResult = { archived: 0, moved: 0, errors: [] };
-  // Every live board: a rule lives inside `stages` (no query reaches it), and a
-  // Drive board's settings are in Drive (read whole, settings merged in).
+  // Every live board: a rule lives inside `stages` (no query reaches it).
   const listed = await typedCol('boards', paths.boards()).where('archivedAt', '==', null).get();
-  const seen = new Set(listed.docs.map((d) => d.id));
-  const drive = (await driveBoardIds(baseDb())).filter((id) => !seen.has(id));
-  const driveSnaps = await Promise.all(
-    drive.map((id) => typedDoc('boards', paths.board(id)).get()),
-  );
-  const boards: BoardWithId[] = [...listed.docs, ...driveSnaps]
-    .filter((s) => s.exists)
+  const boards: BoardWithId[] = listed.docs
     .map((s) => ({ ...(s.data()! as Omit<BoardWithId, 'id'>), id: s.id }) as BoardWithId)
     .filter((b) => !b.archivedAt && b.stages?.some((s) => s.auto));
 
@@ -80,15 +71,9 @@ async function boardRules(board: BoardWithId, now: number, r: StageRulesResult):
     return ruled.includes(t.stageId) && dueRule(board, t, now);
   });
   if (!due.length) return;
-  // §L: a Drive board's query answer has no thread — the writer needs the whole ticket.
-  const whole = await wholeTickets(
-    board.id,
-    due.map((d) => ({ ref: d.ref, ticket: d.data() })),
-  );
   const ctx = { now, ids: ports().ids };
-  for (const [i, d] of due.entries()) {
-    const ticket = whole[i]?.ticket;
-    if (!ticket) continue;
+  for (const d of due) {
+    const ticket = d.data();
     const rule = dueRule(board, ticket, now);
     if (!rule) continue;
     const id = db().collection('_').doc().id;

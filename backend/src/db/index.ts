@@ -20,7 +20,6 @@ import type {
   TimestampStatic,
 } from './types.js';
 import { icebaseAdapter, icebaseRawDb } from './icebase.js';
-import { RoutedDb } from './drive/router.js';
 
 export type * from './types.js';
 
@@ -34,26 +33,8 @@ export function rawDb(): Db {
   return icebaseRawDb();
 }
 
-let routed: { base: Db; db: RoutedDb } | undefined;
-
-/**
- * The database. Lazy: importing a module never opens a connection.
- *
- * Every path under boards/{b}/tickets/ goes through the ticket router
- * (drive/router.ts): a board whose tickets live in Google Drive is read and
- * written there; every other board's calls are the adapter's own.
- */
+/** The database. Lazy: importing a module never opens a connection. */
 export function db(): Db {
-  const base = adapter.db();
-  // Emergency switch: TM_NO_TICKET_ROUTER=1 serves every path from the adapter
-  // (Drive boards then read as empty — for diagnosing, never for running).
-  if (process.env.TM_NO_TICKET_ROUTER === '1') return base;
-  if (routed?.base !== base) routed = { base, db: new RoutedDb(base, adapter.Timestamp) };
-  return routed.db;
-}
-
-/** The adapter itself, without the ticket router (the router's own reads, migrations). */
-export function baseDb(): Db {
   return adapter.db();
 }
 

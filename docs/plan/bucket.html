@@ -62,7 +62,7 @@
           them sees the current version. Since <a href="#j">§J</a> a board takes no files of its
           own: every file put on a ticket goes into one of the board's buckets. Since
           <a href="#k">§K</a> a bucket can also live in its creator's Google Drive, Drive being
-          the source of truth; since <a href="#l">§L</a> a board's tickets can too.
+          the source of truth.
         </p>
 
         <h2 id="a">A · What a bucket is</h2>
@@ -651,9 +651,8 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
         <p>
           A bucket's storage is chosen at create and can be <b>moved</b> later, both ways:
           managed → a folder in the mover's Google Drive, or Drive → managed — from the bucket's
-          own Settings › <b>Storage</b> tab, and only there. A board's or an artifact's Storage tab
-          is about that board or artifact alone (§L4); which bucket a board attaches ticket files
-          to is set in Settings › Subscriptions (§J).
+          own Settings › <b>Storage</b> tab, and only there. Which bucket a board attaches ticket
+          files to is set in Settings › Subscriptions (§J).
         </p>
         <ul>
           <li>
@@ -686,6 +685,11 @@ BackendDriver.bucket.mkdir(bucketId, path) · remove(bucketId, path)</pre>
         </ul>
 
         <h2 id="l">L · Boards, dictionaries and artifacts in Google Drive</h2>
+        <p>
+          <b>Removed by ORCH-30.</b> Boards, dictionaries and artifacts are stored only in the
+          database; Google Drive stays for buckets only (§K). This section is kept as history and
+          describes code that no longer exists.
+        </p>
         <p>
           A board can keep its <b>tickets</b> — fields, task lists, messages, activity — in a
           folder of its creator's Google Drive, not just its files. Drive is the single source of

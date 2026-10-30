@@ -81,11 +81,6 @@ export const MAX_INLINE_MESSAGES = 200;
 /** …down to this. Hysteresis: one page per ~100 messages, not one per message. */
 export const KEEP_INLINE_MESSAGES = 100;
 export const MAX_INLINE_ACTIVITY = 200;
-/**
- * bucket.html §L: a ticket kept in Google Drive is one file per inline message,
- * and a cold read downloads each — so its thread spills to pages sooner.
- */
-export const DRIVE_INLINE_MESSAGES = { max: 40, keep: 20 } as const;
 export const KEEP_INLINE_ACTIVITY = 100;
 /* A page's id is `pageId(n)` from ../paths.ts — '000', '001', … */
 
@@ -254,11 +249,7 @@ export const TicketSchema = z.object({
   recentMessages: z.array(StoredMessageSchema).optional(),
   /** The newest activity rows, oldest first. */
   recentActivity: z.array(StoredActivitySchema).optional(),
-  /**
-   * bucket.html §L — a Drive board's LIST answer only (meta.json, no thread):
-   * the newest messages cut down to what the card's unread count reads. Never
-   * on a Firestore ticket, never on a whole Drive read (that has the thread).
-   */
+  /** Unused: may remain on tickets copied from Google Drive (ORCH-30); kept so they stay valid. */
   unreadTail: z
     .array(
       z.object({
@@ -463,7 +454,6 @@ export function planSpill(
   fixedBytes: number,
   firstPage: number,
   now: number,
-  limits: { max: number; keep: number } = { max: MAX_INLINE_MESSAGES, keep: KEEP_INLINE_MESSAGES },
 ): SpillPlan {
   let msgs = [...messages];
   let acts = [...activity];
@@ -471,12 +461,12 @@ export function planSpill(
   let next = firstPage;
 
   for (let guard = 0; guard < 10_000; guard++) {
-    const overCount = msgs.length > limits.max || acts.length > MAX_INLINE_ACTIVITY;
+    const overCount = msgs.length > MAX_INLINE_MESSAGES || acts.length > MAX_INLINE_ACTIVITY;
     const overBytes = fixedBytes + docBytes(msgs) + docBytes(acts) > INLINE_CUT_BYTES;
     if (!overCount && !overBytes) break;
     if (msgs.length + acts.length <= 1) break; // nothing left to move
 
-    let takeM = msgs.length > limits.max ? msgs.length - limits.keep : 0;
+    let takeM = msgs.length > MAX_INLINE_MESSAGES ? msgs.length - KEEP_INLINE_MESSAGES : 0;
     let takeA = acts.length > MAX_INLINE_ACTIVITY ? acts.length - KEEP_INLINE_ACTIVITY : 0;
     if (!takeM && !takeA) {
       // Byte pressure alone: halve both, so one huge message cannot loop.

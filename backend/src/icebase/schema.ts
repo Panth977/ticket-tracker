@@ -63,11 +63,7 @@ const COLLECTIONS: Record<string, Name | null> = {
   deliveries: 'deliveries',
   emailThreads: 'emailThreads',
   whatsappSessions: 'whatsappSessions',
-  'boards/{boardId}/driveRev': null,
-  'dictionaries/{dictionaryId}/driveRev': null,
-  'artifacts/{artifactId}/driveRev': null,
   _driveLinks: null,
-  _driveVaults: null,
   _config: null,
   _tasks: null,
   _cron: null,
@@ -113,17 +109,8 @@ const open: { fields: FieldMap; rest?: Field<unknown> } = { fields: {}, rest: f.
  */
 const artifactData = collection('artifacts/{artifactId}/db/{path=**}', { ...open, indexes: [], autoIndex: true } as never);
 
-/**
- * Where the stored document differs from its zod schema. A board whose tickets live in Google
- * Drive keeps its settings there (db/drive/entities.ts settingsFields): the database copy has none.
- */
-const OPTIONAL: Record<string, string[]> = {
-  boards: ['stages', 'priorities', 'tags', 'fields', 'defaultViewId', 'settings'],
-};
-
 function declare(path: string, name: Name | null): AnyCollection {
   const shape = name ? zodDocument(DOC_SCHEMAS[name] as z.ZodTypeAny) : { ...open, fields: { ...open.fields } };
-  for (const k of OPTIONAL[path] ?? []) if (shape.fields[k]) shape.fields[k] = f.optional(shape.fields[k]);
   const group = GROUPS.has(path);
   // An index on a field the document does not have is a mistake in indexes.ts: say so, drop it.
   const indexes = (INDEXES[path] ?? []).filter((ix) => {

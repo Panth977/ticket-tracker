@@ -27,10 +27,8 @@ import { ports } from '../adapters/index.js';
 import { artifactHousekeeping } from '../artifacts/housekeeping.js';
 import { db } from '../runtime/firebase.js';
 import { storageBucket } from '../blob/index.js';
-import { typedCol, typedDoc } from '../runtime/index.js';
-import { batchWriter, wholeTickets } from '../tickets/doc.js';
-import { baseDb } from '../db/index.js';
-import { driveBoardIds } from '../db/drive/board.js';
+import { typedCol } from '../runtime/index.js';
+import { batchWriter } from '../tickets/doc.js';
 import { readFiles } from '../tickets/read.js';
 import { clearTicketInbox, reconcileInbox } from './inboxClean.js';
 
@@ -123,19 +121,8 @@ export async function autoArchive(now: number): Promise<number> {
   const boards = await typedCol('boards', paths.boards())
     .where('settings.autoArchiveDoneAfterDays', '>', 0)
     .get();
-  // bucket.html §L5: a Drive board's settings are in its Drive folder, out of
-  // the query's sight — each is read whole (settings merged in).
-  const driveIds = await driveBoardIds(baseDb());
-  const driveBoards = (
-    await Promise.all(driveIds.map((id) => typedDoc('boards', paths.board(id)).get()))
-  ).filter(
-    (s) =>
-      s.exists &&
-      !boards.docs.some((d) => d.id === s.id) &&
-      (s.data()?.settings.autoArchiveDoneAfterDays ?? 0) > 0,
-  );
   let n = 0;
-  for (const b of [...boards.docs, ...driveBoards]) {
+  for (const b of boards.docs) {
     const board = b.data()!;
     const days = board.settings.autoArchiveDoneAfterDays;
     if (!days || board.archivedAt) continue;
@@ -145,12 +132,8 @@ export async function autoArchive(now: number): Promise<number> {
       .where('stageCategory', '==', 'done')
       .get();
     for (const t of done.docs) {
-      const listed = t.data();
-      if (listed.completedAt === null || listed.completedAt > cutoff) continue;
-      // §L: a Drive board's query answer has no thread — the writer needs the whole ticket.
-      const [whole] = await wholeTickets(b.id, [{ ref: t.ref, ticket: listed }]);
-      if (!whole) continue;
-      const ticket = whole.ticket;
+      const ticket = t.data();
+      if (ticket.completedAt === null || ticket.completedAt > cutoff) continue;
       // §W: the change and its activity row are the same document — one write.
       const activity: StoredActivity = {
         id: db().collection('_').doc().id,

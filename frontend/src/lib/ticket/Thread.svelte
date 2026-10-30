@@ -111,12 +111,9 @@
 
   // First load: jump to the focused message, else the 'New' divider, else the bottom.
   // Later: follow new messages when already at the bottom, otherwise count them.
-  // 'First load' is the first rows in hand, not the whole page: a Drive ticket
-  // keeps fewer messages inline than a page asks for, and its older pages take
-  // seconds to come — the thread must not sit at its top waiting for them.
   $effect(() => {
     const newest = items[items.length - 1];
-    if (($pageStore.loading && !loaded.length) || readAtOnOpen === undefined) return;
+    if ($pageStore.loading || readAtOnOpen === undefined) return;
     const id = newest?.id ?? null;
     untrack(() => {
       if (initial) {
@@ -140,30 +137,6 @@
   });
   $effect(() => {
     if (atBottom) unseen = 0;
-  });
-
-  // Older rows that land ABOVE what is on screen (the rest of the first page,
-  // filled in behind it; the 'Load earlier' button going away) keep the view
-  // where it is — measured from the bottom, before the DOM changes.
-  // Only a pure prepend: when the newest row moves too, the follow-new rule above decides.
-  let top: string | null = null;
-  let end: string | null = null;
-  $effect.pre(() => {
-    const now = `${items[0]?.id ?? ''}|${atStart}`;
-    const last = items[items.length - 1]?.id ?? null;
-    untrack(() => {
-      const el = scroller;
-      if (now === top && last === end) return;
-      const was = top;
-      const appended = last !== end;
-      top = now;
-      end = last;
-      if (initial || was === null || appended || loadingOlder || !el) return;
-      const fromBottom = el.scrollHeight - el.scrollTop;
-      void tick().then(() => {
-        el.scrollTop = el.scrollHeight - fromBottom;
-      });
-    });
   });
 
   // ——— mark read at the bottom

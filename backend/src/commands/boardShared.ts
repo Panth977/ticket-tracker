@@ -35,7 +35,7 @@ import { db, isEmulated } from '../runtime/firebase.js';
 import { realtimeDb } from '../rtdb/index.js';
 import { identity } from '../identity/index.js';
 import { txGet, type Tx } from '../runtime/tx.js';
-import { batchWriter, wholeTickets } from '../tickets/doc.js';
+import { batchWriter } from '../tickets/doc.js';
 import type { QueryDocumentSnapshot, WriteBatch } from '../db/index.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -275,15 +275,7 @@ export async function detachPeople(boardId: string, uids: Uid[], ctx: ServerCtx)
     }
   }
   const gone = new Set(uids);
-  // §L: a Drive board's query answer has no thread — the writer needs the whole ticket.
-  const work = (
-    await wholeTickets(
-      boardId,
-      [...hit.values()].map((h) => ({ ...h, ticket: h.t })),
-    )
-  )
-    .map((h) => ({ ref: h.ref, t: h.ticket }))
-    .filter(({ t }) => t.state === 'active');
+  const work = [...hit.values()].filter(({ t }) => t.state === 'active');
   await inBatches(
     work,
     (batch, { ref, t }) => {

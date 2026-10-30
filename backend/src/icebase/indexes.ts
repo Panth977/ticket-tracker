@@ -57,9 +57,6 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
   'boards/{boardId}/aggStats': [
     index('period', 'key'),
   ],
-  'boards/{boardId}/driveRev': [
-    index('at'),
-  ],
   'boards/{boardId}/members': [
     index('uid'),
   ],
@@ -129,9 +126,6 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('ownerKey'),
     index('ownerUid'),
     index('slug'),
-  ],
-  'dictionaries/{dictionaryId}/driveRev': [
-    index('at'),
   ],
   'intakes': [
     index('boardId'),

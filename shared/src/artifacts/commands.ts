@@ -18,7 +18,6 @@
  * the cross-service rule lookup cannot be relied on (storage.rules header).
  */
 import { z } from 'zod';
-import { BucketStorageInputSchema } from '../bucket/drive.js';
 import { OwnerRefSchema } from '../org/owner.js';
 import { defineCommand, OkResSchema, req } from '../commands/define.js';
 import { EmailInputSchema } from '../config.js';
@@ -63,11 +62,6 @@ export const artifactCreate = defineCommand({
     indicator: IndicatorSchema.optional(),
     /** §AC: who owns it — you (default) or an org you belong to. */
     owner: OwnerRefSchema.optional(),
-    /**
-     * bucket.html §L5: where it lives — default the database; Drive = a folder
-     * of your Drive holding its settings and data (and files/ for its bucket).
-     */
-    storage: BucketStorageInputSchema.optional(),
   }),
   res: z.object({ artifactId: ArtifactIdSchema }),
 });

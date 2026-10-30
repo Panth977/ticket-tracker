@@ -7,8 +7,7 @@ import { paths, type Ticket } from '@tm/shared';
 import { fixtures } from '@tm/shared/schema/fixtures';
 import { dueRule, runStageRules } from '../../src/tickets/stageRules.js';
 import { typedDoc } from '../../src/runtime/index.js';
-import { call, setPorts, setupEmulators } from '../harness/index.js';
-import { people, seedBoard as seedFullBoard, STAGES } from './helpers.js';
+import { setupEmulators } from '../harness/index.js';
 import { seedBoard, seedTicket, seedUser, T, useFakes } from '../notify/_seed.js';
 
 setupEmulators();
@@ -70,25 +69,5 @@ describe('stage rules (Stage.auto)', () => {
     // Ran again at once: nothing more is due (the move restarted the clock).
     const again = await runStageRules(T);
     expect(again).toMatchObject({ archived: 0, moved: 0 });
-  });
-
-  it('a Drive board: the idle ticket is archived in Drive', async () => {
-    const { asha } = await people('asha');
-    const b = await seedFullBoard({ admin: asha, drive: true });
-    const stages = b.board.stages.map((s) =>
-      s.id === STAGES.review ? { ...s, auto: { afterHours: 1, action: 'archive' as const } } : s,
-    );
-    await typedDoc('boards', paths.board(b.id)).update({ stages });
-    const then = Date.now() - 3 * H;
-    setPorts({ clock: { now: () => then } });
-    const { ticketId } = await call(asha, 'ticketCreate', {
-      boardId: b.id,
-      title: 'Idle in Drive',
-      stageId: STAGES.review,
-    });
-    setPorts({ clock: { now: () => Date.now() } });
-    const r = await runStageRules(Date.now());
-    expect(r.errors).toEqual([]);
-    expect((await ticket(b.id, ticketId)).state).toBe('archived');
   });
 });

@@ -16,7 +16,6 @@
  */
 import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
-import { BoardDriveStorageSchema, BoardMoveSchema } from '../bucket/drive.js';
 import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
 import {
   AgentIdSchema,
@@ -198,10 +197,6 @@ export const ArtifactSchema = z.object({
   boards: z.record(BoardIdSchema, ArtifactBoardAccessSchema).optional(),
   /** §B: viewers may read the data but not write it. */
   readOnly: z.boolean(),
-  /** bucket.html §L5: kept in this Drive folder (its settings and its data). Absent = in the database. */
-  storage: BoardDriveStorageSchema.optional(),
-  /** bucket.html §L4: a move to the other storage, while it runs (or after it failed). */
-  move: BoardMoveSchema.nullable().optional(),
   archivedAt: MillisSchema.nullable(),
   /** null until the first publish (the host shows "nothing published yet"). */
   currentBuild: z.string().nullable(),

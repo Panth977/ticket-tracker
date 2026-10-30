@@ -78,18 +78,6 @@ export interface DriveApi {
     source: ByteSource,
     props?: Record<string, string>,
   ): Promise<DriveItem>;
-  /**
-   * A SMALL file (a JSON document, src/db/drive) in ONE request: a new file in
-   * `parentId` named `name` (id from generateIds when given), or a new version
-   * of `fileId`.
-   */
-  putSmall(opts: {
-    fileId?: string | undefined;
-    create?: { id?: string | undefined; parentId: string; name: string } | undefined;
-    mime: string;
-    bytes: Uint8Array;
-    props?: Record<string, string> | undefined;
-  }): Promise<DriveItem>;
   /** Rename and/or move (one parent in, one out). */
   update(
     id: string,
@@ -391,36 +379,6 @@ export function httpDrive(token: () => Promise<string>): DriveApi {
         source,
       );
     },
-    async putSmall({ fileId, create, mime, bytes, props }) {
-      const boundary = `tm${Math.random().toString(36).slice(2)}`;
-      const meta = create
-        ? {
-            ...(create.id ? { id: create.id } : {}),
-            name: create.name,
-            mimeType: mime,
-            parents: [create.parentId],
-          }
-        : { mimeType: mime };
-      const head = Buffer.from(
-        `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n` +
-          JSON.stringify({ ...meta, ...(props ? { appProperties: props } : {}) }) +
-          `\r\n--${boundary}\r\ncontent-type: ${mime}\r\n\r\n`,
-      );
-      const body = Buffer.concat([head, Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`)]);
-      const url = create
-        ? `${UPLOAD}/files?uploadType=multipart&fields=${FIELDS}`
-        : `${UPLOAD}/files/${encodeURIComponent(fileId!)}?uploadType=multipart&fields=${FIELDS}`;
-      const f = await json<RawFile>(
-        url,
-        {
-          method: create ? 'POST' : 'PATCH',
-          headers: { 'content-type': `multipart/related; boundary=${boundary}` },
-          body,
-        },
-        'write',
-      );
-      return toItem(f);
-    },
     async update(id, patch) {
       const u = new URL(`${API}/files/${encodeURIComponent(id)}`);
       u.searchParams.set('fields', FIELDS);
@@ -681,11 +639,6 @@ function fakeDriveIn(account: string): DriveApi {
       f.modifiedTime = now();
       if (props) f.appProperties = { ...f.appProperties, ...props };
       return pub(f);
-    },
-    async putSmall({ fileId, create, mime, bytes, props }) {
-      return create
-        ? this.create({ ...create, mime, source: bytesSource(bytes), props })
-        : this.replace(fileId!, mime, bytesSource(bytes), props);
     },
     async update(id, patch) {
       const f = must(id);

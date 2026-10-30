@@ -106,7 +106,6 @@ export const ARTIFACT_SETTINGS_SECTIONS = [
   /** lib/access: agents that may build or use its data (agents.html §AA3). */
   { id: 'subscribers', label: 'Subscribers', owner: true },
   /** bucket.html §K6: where the files it uses live, and moving them. */
-  { id: 'storage', label: 'Storage', owner: true },
   { id: 'builds', label: 'Builds', owner: false },
   { id: 'data', label: 'Data', owner: false },
   /** lib/access: the dictionaries the page uses (BackendDriver.dictionary). */
