@@ -74,7 +74,7 @@ import { assertAllowedOwner } from '../platform/allow.js';
 import { sha256hex } from '../platform/crypto.js';
 import { rateLimit } from '../platform/rateLimit.js';
 import { makeCtx, type ServerCtx } from '../runtime/context.js';
-import { db } from '../runtime/firebase.js';
+import { db, isEmulated } from '../runtime/firebase.js';
 import type { DocumentSnapshot } from '../db/index.js';
 
 /** lastUsedAt is refreshed at most once a minute (a write per call would be a hot document). */
@@ -109,13 +109,14 @@ type StoredKey = Partial<ApiKey> &
  * whole request, I/O wait included, an orchestrator polling twice a minute
  * paid for that ~40,000 times in three days.
  *
- * NOTHING ABOUT THE ANSWER IS CACHED. What an instance remembers is only
- * WHERE to look: which user's apiKeys row this token is, and which board and
- * agent stand behind it. With those paths in hand the key, the board and the
- * agent are read in ONE getAll — one round trip — and every check below runs
- * exactly as it did before, on this request's data. Revoking a token, taking
- * its agent off the board or removing its owner still bites on the very next
- * call.
+ * What an instance remembers first is WHERE to look: which user's apiKeys row
+ * this token is, and which board and agent stand behind it. With those paths in
+ * hand the key, the board and the agent are read in ONE getAll — one round trip.
+ *
+ * ORCH-30: the answer is then trusted for KEY_TRUST_MS. These checks were a
+ * third of the project's Firestore reads, so revoking a token, taking its agent
+ * off the board or removing its owner now bites within 30 s, not on the next
+ * call. An expired token and the per-call count do not wait (see resolveApiKey).
  *
  * If anything has moved (the row is gone, the hash no longer matches, the key
  * now points at another board), the bucket is dropped and the full lookup
@@ -131,9 +132,14 @@ const keyPlaces = new Map<string, KeyPlace>();
 /** Bounded: an instance sees a handful of tokens, but a scanner must not grow this without limit. */
 const KEY_CACHE_MAX = 200;
 
+/** Off in the emulators: the suites revoke a token and expect the next call to fail. */
+const KEY_TRUST_MS = isEmulated() ? 0 : 30_000;
+const trusted = new Map<string, { until: number; hit: { info: ApiKeyInfo; key: StoredKey } }>();
+
 /** Tests. */
 export function forgetCachedKeys(): void {
   keyPlaces.clear();
+  trusted.clear();
 }
 
 /**
@@ -144,6 +150,14 @@ export async function resolveApiKey(
   token: string,
   now: number,
 ): Promise<{ info: ApiKeyInfo; key: StoredKey }> {
+  const held = trusted.get(token);
+  if (held && now < held.until) {
+    const { info, key } = held.hit;
+    if (key.expiresAt !== null && key.expiresAt !== undefined && key.expiresAt <= now)
+      throw errors.unauthenticated('This API key has expired');
+    await countCall(info.ownerUid, info.keyId, key, now);
+    return held.hit;
+  }
   const hash = sha256hex(token);
   const place = keyPlaces.get(token);
   /** Read in the same round trip as the key when we know where they are. */
@@ -272,6 +286,10 @@ async function finish(
       expiresAt: key.expiresAt ?? null,
     },
   };
+  if (KEY_TRUST_MS) {
+    if (trusted.size >= KEY_CACHE_MAX) trusted.clear();
+    trusted.set(token, { until: now + KEY_TRUST_MS, hit: resolved });
+  }
   return resolved;
 }
 
