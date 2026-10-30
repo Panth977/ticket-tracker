@@ -43,6 +43,14 @@ export const FileAccessResSchema = z.object({
   bytesUrl: z.string(),
   /** Epoch ms after which both stop working. */
   expiresAt: z.number(),
+  /**
+   * The Drive's own person may read a small media file straight from Google
+   * (ORCH-30), so its bytes pass through neither the function nor Hosting.
+   * Absent for everyone else and every other file: use `url`.
+   */
+  drive: z
+    .object({ fileId: z.string(), accessToken: z.string(), expiresAt: z.number() })
+    .optional(),
 });
 export type FileAccessRes = z.infer<typeof FileAccessResSchema>;
 
