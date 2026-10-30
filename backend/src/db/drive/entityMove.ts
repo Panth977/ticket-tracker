@@ -23,6 +23,7 @@ import {
   errors,
   isAgentId,
   paths,
+  TicketSchema,
   type BoardDriveStorage,
   type BoardMove,
   type BucketStorageInput,
@@ -270,7 +271,9 @@ export async function runEntityMoveSlice(
     const message = (e as Error).message?.slice(0, 500) || 'The move failed';
     console.error('[drive] entity move slice failed', kind, id, `attempt ${retryCount + 1}`, e);
     if (retryCount + 1 < MAX_ATTEMPTS) {
-      await entityDoc(kind, id).update({ 'move.error': `Retrying after: ${message}` });
+      await entityDoc(kind, id).update({
+        'move.error': `Retrying after: ${message}`.slice(0, 500),
+      });
       throw e;
     }
     await entityDoc(kind, id).update({ 'move.state': 'failed', 'move.error': message });
@@ -348,6 +351,10 @@ async function sliceToDrive(
   return true;
 }
 
+/** Drive keeps what old tickets carried (`migrations`); the database's schema refuses it. */
+const knownTicketFields = (t: Json): Json =>
+  Object.fromEntries(Object.entries(t).filter(([k]) => k in TicketSchema.shape));
+
 async function sliceToDatabase(
   kind: MovableKind,
   id: string,
@@ -377,9 +384,11 @@ async function sliceToDatabase(
   const listed = kind === 'boards' ? await listTickets(drive, boardOf(id, s)) : [];
   if (kind === 'boards') {
     const b = boardOf(id, s);
-    for (const { id: tid } of listed) {
+    for (const { id: tid, doc: meta } of listed) {
       const ref = base.doc(paths.ticket(id, tid));
-      if (!(await ref.get()).exists) {
+      const had = await ref.get();
+      // A copy left by a stopped move stays only if the ticket has not changed since.
+      if (!had.exists || (had.data() as Json).updatedAt !== (meta as Json).updatedAt) {
         if (Date.now() > deadline) return false;
         const files = await readTicket(drive, b, tid);
         if (files?.doc) {
@@ -387,7 +396,7 @@ async function sliceToDatabase(
             await base
               .doc(paths.ticketPage(id, tid, p.id))
               .set(decodeJson(p.doc, Timestamp) as Json);
-          await ref.set(decodeJson(files.doc, Timestamp) as Json);
+          await ref.set(knownTicketFields(decodeJson(files.doc, Timestamp) as Json));
         }
       }
       done++;
