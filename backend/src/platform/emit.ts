@@ -12,9 +12,11 @@
  */
 import type { EmitWebhookFn } from '@tm/shared';
 import { ports } from '../adapters/index.js';
+import { fanOutToArtifacts } from '../artifacts/backendEvents.js';
 import { buildEnvelope, subscribers } from './webhooks.js';
 
 export const emitWebhook: EmitWebhookFn = async (boardId, event, data, ctx) => {
+  await fanOutToArtifacts(boardId, event, data);
   const targets = await subscribers(boardId, event);
   if (!targets.length) return;
   const envelope = await buildEnvelope(boardId, event, data, ctx);

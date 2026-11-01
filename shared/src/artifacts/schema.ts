@@ -14,6 +14,7 @@
  * An artifact is NOT a board: its people are its own (§B), and being on a
  * board gives nothing here.
  */
+import { ArtifactBackendSchema } from './backend.js';
 import { OwnedFieldsShape } from '../org/owner.js';
 import { z } from 'zod';
 import { DESCRIPTION_MAX, IndicatorSchema } from '../types/indicator.js';
@@ -195,6 +196,10 @@ export const ArtifactSchema = z.object({
    * Absent on artifacts made before §K = none.
    */
   boards: z.record(BoardIdSchema, ArtifactBoardAccessSchema).optional(),
+  /** backend.ts: the live backend, when it has one. Absent or null = website only. */
+  backend: ArtifactBackendSchema.nullable().optional(),
+  /** Granted board ids while a backend is live: what event fan-out queries. */
+  backendBoards: z.array(BoardIdSchema).optional(),
   /** §B: viewers may read the data but not write it. */
   readOnly: z.boolean(),
   archivedAt: MillisSchema.nullable(),

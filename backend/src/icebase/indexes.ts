@@ -27,6 +27,7 @@ export const INDEXES: Record<string, IndexSpec<string>[]> = {
     index('ownerUid', desc('createdAt')),
   ],
   'artifacts': [
+    index('backendBoards'),
     index('memberUids'),
     index('ownerKey'),
     index('slug'),

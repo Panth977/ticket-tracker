@@ -62,6 +62,8 @@ export const artifactPrefix = {
     `artifacts/${artifactId}/builds/${buildId}`,
   storageSource: (artifactId: string, buildId: string) =>
     `artifacts/${artifactId}/source/${buildId}.zip`,
+  storageBackend: (artifactId: string, buildId: string) =>
+    `artifacts/${artifactId}/backend/${buildId}.json`,
   /** Where the app uploads a build zip before artifactPublish (swept after 24h like attachments). */
   storageUpload: (artifactId: string, uploadId: string) =>
     `artifacts/${artifactId}/uploads/${uploadId}.zip`,

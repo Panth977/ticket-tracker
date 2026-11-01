@@ -127,6 +127,8 @@ export interface WebhookTask {
 export interface QueuePayloads {
   deliver: DeliverTask;
   webhooks: WebhookTask;
+  /** One board event for one backend artifact (artifacts/backendEvents.ts). */
+  artifactEvent: { artifactId: string; boardId: BoardId; event: string; data: unknown };
   /** boardArchive 'delete': recursive delete of tickets, threads, files. */
   boardDelete: { boardId: BoardId; actor: Uid };
   /**

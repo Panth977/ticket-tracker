@@ -18,6 +18,13 @@
  * the cross-service rule lookup cannot be relied on (storage.rules header).
  */
 import { z } from 'zod';
+import {
+  ARTIFACT_BACKEND_MAX_FILES,
+  ArtifactBackendDiagnosticSchema,
+  ArtifactBackendFileSchema,
+  ArtifactBackendLogSchema,
+  ArtifactBackendSchema,
+} from './backend.js';
 import { OwnerRefSchema } from '../org/owner.js';
 import { defineCommand, OkResSchema, req } from '../commands/define.js';
 import { EmailInputSchema } from '../config.js';
@@ -342,4 +349,66 @@ export const artifactDataCollections = defineCommand({
   errors: ['not_found', 'forbidden', 'invalid'],
   req: req({ artifactId: ArtifactIdSchema, path: z.string().max(1024).default('') }),
   res: z.object({ collections: z.array(z.string()) }),
+});
+
+// ─── backend (backend.ts) ───────────────────────────────────────────────────
+
+export const artifactBackendBuild = defineCommand({
+  name: 'artifactBackendBuild',
+  source: 'extra',
+  scopes: ['artifacts:write'],
+  permission:
+    'Owner or editor, or an agent with build on it. Compiles in the sandbox, under CPU limits. publish: true makes a good build live at once.',
+  errors: ['not_found', 'forbidden', 'invalid', 'conflict', 'too_large', 'unavailable'],
+  req: req({
+    artifactId: ArtifactIdSchema,
+    files: z.array(ArtifactBackendFileSchema).min(1).max(ARTIFACT_BACKEND_MAX_FILES),
+    publish: z.boolean(),
+  }),
+  res: z.object({
+    ok: z.boolean(),
+    diagnostics: z.array(ArtifactBackendDiagnosticSchema),
+    routes: z.array(z.string()),
+    events: z.array(z.string()),
+    cpuMs: z.number(),
+    buildId: z.string().nullable(),
+  }),
+});
+
+export const artifactBackendGet = defineCommand({
+  name: 'artifactBackendGet',
+  source: 'extra',
+  scopes: ['artifacts:read'],
+  permission: 'Owner or editor, or an agent with build on it.',
+  errors: ['not_found', 'forbidden'],
+  req: req({ artifactId: ArtifactIdSchema }),
+  res: z.object({
+    /** False when this deploy has no worker. */
+    configured: z.boolean(),
+    url: z.string().nullable(),
+    backend: ArtifactBackendSchema.nullable(),
+    files: z.array(ArtifactBackendFileSchema).nullable(),
+    /** The typed API for the editor, when the worker is reachable. */
+    types: z.string().nullable(),
+  }),
+});
+
+export const artifactBackendLogs = defineCommand({
+  name: 'artifactBackendLogs',
+  source: 'extra',
+  scopes: ['artifacts:read'],
+  permission: 'Owner or editor, or an agent with build on it.',
+  errors: ['not_found', 'forbidden', 'unavailable'],
+  req: req({ artifactId: ArtifactIdSchema }),
+  res: z.object({ entries: z.array(ArtifactBackendLogSchema), running: z.boolean() }),
+});
+
+export const artifactBackendDisable = defineCommand({
+  name: 'artifactBackendDisable',
+  source: 'extra',
+  scopes: ['artifacts:write'],
+  permission: 'Owner or editor, or an agent with build on it. Stops it and takes its routes down.',
+  errors: ['not_found', 'forbidden'],
+  req: req({ artifactId: ArtifactIdSchema }),
+  res: z.object({ ok: z.literal(true) }),
 });
