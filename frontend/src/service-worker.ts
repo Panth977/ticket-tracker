@@ -72,6 +72,7 @@ const PAGES = staticPages(files, base);
 const PASSTHROUGH = [
   '/api',
   '/v1',
+  '/sandbox/',
   '/mcp',
   '/oauth/',
   '/hooks',

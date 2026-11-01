@@ -1,0 +1,20 @@
+{
+  "name": "@tm/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Runs backend artifacts: the always-on parent of their sandboxes, on the worker machine.",
+  "scripts": {
+    "start": "node --experimental-strip-types --no-warnings src/main.ts",
+    "test": "node --experimental-strip-types --no-warnings --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@panth977/sandbox": "github:Panth977/sandbox-environment#v0.3.2",
+    "@tm/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

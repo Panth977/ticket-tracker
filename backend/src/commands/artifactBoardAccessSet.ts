@@ -47,6 +47,8 @@ export default defineCommand(
         boards[boardId] = access;
       }
       const patch: Partial<Artifact> = { boards, updatedAt: ctx.now };
+      // Events follow the grants at once, without a republish.
+      if (artifact.backend) patch.backendBoards = Object.keys(boards);
       tx.update(artifactRef(artifactId), patch);
     });
     return { ok: true as const };

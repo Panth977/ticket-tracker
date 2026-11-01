@@ -41,6 +41,7 @@ export type BeforeSignInResponse = BlockingResult<typeof beforeUserSignedIn>;
 export const QUEUE_FUNCTIONS: Record<QueueName, string> = {
   deliver: 'queueDeliver',
   webhooks: 'queueWebhooks',
+  artifactEvent: 'queueArtifactEvent',
   boardDelete: 'queueBoardDelete',
   artifactDelete: 'queueArtifactDelete',
   bucketDelete: 'queueBucketDelete',
@@ -75,6 +76,7 @@ export const QUEUE_POLICY: Record<QueueName, QueuePolicy> = {
     maxDoublings: 5,
     maxDispatchesPerSecond: 500,
   },
+  artifactEvent: { maxAttempts: 3, minBackoffSeconds: 30, maxDispatchesPerSecond: 100 },
   boardDelete: { maxAttempts: 5, minBackoffSeconds: 30 },
   // Artifacts (artifacts.html §G): the same shape of job — a recursive delete of unknown size.
   artifactDelete: { maxAttempts: 5, minBackoffSeconds: 30 },

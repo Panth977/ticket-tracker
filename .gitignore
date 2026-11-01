@@ -34,3 +34,4 @@ pubsub-debug.log*
 # TM_DB=sqlite default store (src/db/sqlite): ./data/db under the working directory
 /backend/data/
 /data/
+gateway/deploy/

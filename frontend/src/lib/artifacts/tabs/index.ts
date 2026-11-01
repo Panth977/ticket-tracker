@@ -11,18 +11,20 @@
  *   bucket    BucketTab — the granted buckets the viewer reaches
  *   dictionary DictionaryTab — the granted dictionaries the viewer reaches
  *   code      CodeTab (../kit) — write, preview and publish a kit artifact (§L)
+ *   backend   BackendTab (../kit) — code that runs on the worker, with its own routes
  *
  * `data`: owner and editors only (artifactCan.publish, as the settings' Data
  * section); everyone else gets the host's "only the owner and editors" panel.
  */
 import type { Component } from 'svelte';
-import { AppWindow, BookA, Braces, Brain, Code2, Database } from 'lucide-svelte';
+import { AppWindow, BookA, Braces, Brain, Code2, Database, Server } from 'lucide-svelte';
 import type { ArtifactRole } from '@tm/shared';
 import type { IconComponent } from '$lib/ui/types';
 import BucketTab from './BucketTab.svelte';
 import DbTab from './DbTab.svelte';
 import DictionaryTab from './DictionaryTab.svelte';
 import JsonTab from './JsonTab.svelte';
+import BackendTab from '../kit/BackendTab.svelte';
 import CodeTab from '../kit/CodeTab.svelte';
 
 /** What every tab panel is given. */
@@ -44,6 +46,7 @@ export interface ArtifactTab {
 export const ARTIFACT_TABS: readonly ArtifactTab[] = [
   { id: 'website', label: 'Website', icon: AppWindow },
   { id: 'code', label: 'Code', icon: Code2, data: true, panel: CodeTab },
+  { id: 'backend', label: 'Backend', icon: Server, data: true, panel: BackendTab },
   { id: 'db', label: 'DB', icon: Database, data: true, panel: DbTab },
   { id: 'json', label: 'JSON', icon: Braces, data: true, panel: JsonTab },
   { id: 'bucket', label: 'Bucket', icon: Brain, panel: BucketTab },

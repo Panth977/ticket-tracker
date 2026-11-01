@@ -115,6 +115,7 @@ function queueFn<Q extends QueueName>(queue: Q) {
 // Names must match runtime/functions.ts QUEUE_FUNCTIONS.
 export const queueDeliver = queueFn('deliver');
 export const queueWebhooks = queueFn('webhooks');
+export const queueArtifactEvent = queueFn('artifactEvent');
 export const queueBoardDelete = queueFn('boardDelete');
 export const queueArtifactDelete = queueFn('artifactDelete');
 export const queueBucketDelete = queueFn('bucketDelete');

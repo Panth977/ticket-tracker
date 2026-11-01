@@ -54,6 +54,10 @@
           }
         },
         {
+          "source": "/sandbox/**",
+          "run": { "serviceId": "sandbox-gateway", "region": "asia-south1" }
+        },
+        {
           "source": "/hooks/**",
           "function": {
             "functionId": "api",
