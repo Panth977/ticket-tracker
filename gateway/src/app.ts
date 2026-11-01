@@ -80,7 +80,7 @@ class HttpError extends Error {
 }
 
 function send(res: ServerResponse, status: number, body: string, headers: Record<string, string> = {}) {
-  res.writeHead(status, { "access-control-allow-origin": "*", "x-content-type-options": "nosniff", ...headers });
+  res.writeHead(status, { "access-control-allow-origin": "*", "x-content-type-options": "nosniff", "cache-control": "no-store", ...headers });
   res.end(body);
 }
 const sendJson = (res: ServerResponse, status: number, v: unknown) => send(res, status, JSON.stringify(v), { "content-type": "application/json" });

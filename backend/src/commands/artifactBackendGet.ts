@@ -1,7 +1,7 @@
 /** artifactBackendGet: what the Backend tab opens with. */
 import { artifactPrefix, type ArtifactBackendFile } from '@tm/shared';
 import { ports } from '../adapters/index.js';
-import { gatewayCall, gatewayConfigured, gatewayUrl } from '../artifacts/gateway.js';
+import { backendPublicUrl, gatewayCall, gatewayConfigured } from '../artifacts/gateway.js';
 import { loadArtifact } from '../artifacts/shared.js';
 import { defineCommand } from './_registry.js';
 
@@ -18,5 +18,5 @@ export default defineCommand('artifactBackendGet', async (ctx, input) => {
   const types = configured
     ? await gatewayCall<{ types: string }>('types', {}, 15_000).then((t) => t.types, () => null)
     : null;
-  return { configured, url: configured ? `${gatewayUrl()}/sandbox/${artifactId}` : null, backend, files, types };
+  return { configured, url: configured ? backendPublicUrl(artifactId) : null, backend, files, types };
 });
