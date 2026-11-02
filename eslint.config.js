@@ -10,6 +10,7 @@ import svelteConfig from './frontend/svelte.config.js';
 export default ts.config(
   {
     ignores: [
+    'gateway/deploy/**',
       '**/node_modules/**',
       '**/dist/**',
       'backend/lib/**',
