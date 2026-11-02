@@ -27,5 +27,6 @@ describe('firstSourceFile', () => {
   it('prefers the entry', () => {
     expect(firstSourceFile({ '/a.css': '', '/src/main.tsx': '', '/index.html': '' })).toBe('/src/main.tsx');
     expect(firstSourceFile({ '/a.css': '', '/README.md': '' })).toBe('/README.md');
+    expect(firstSourceFile({ '/publish.mjs': '', '/web/src/main.js': '' })).toBe('/web/src/main.js');
   });
 });

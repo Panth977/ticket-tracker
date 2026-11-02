@@ -42,7 +42,7 @@ export function readSourceZip(zip: Uint8Array): SourceView {
 /** The file a reader wants first. */
 export function firstSourceFile(files: SourceFiles): string | undefined {
   const paths = Object.keys(files);
-  const wanted = [/^\/(src\/)?(main|index|App)\.[a-z]+$/i, /^\/index\.html$/, /^\/README/i];
+  const wanted = [/^\/(.*\/)?src\/(main|index|App)\.[a-z]+$/i, /^\/(main|index|App)\.[a-z]+$/i, /^\/(.*\/)?index\.html$/, /^\/README/i];
   for (const w of wanted) {
     const hit = paths.find((p) => w.test(p));
     if (hit) return hit;
