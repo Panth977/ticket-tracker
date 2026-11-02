@@ -184,8 +184,8 @@ importers:
         specifier: npm:@jsr/panth977__icebase@0.6.0
         version: '@jsr/panth977__icebase@0.6.0'
       '@panth977/sandbox':
-        specifier: github:Panth977/sandbox-environment#v0.3.2
-        version: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/135ddce9b072306620d793e016f0ca66e87837a0
+        specifier: github:Panth977/sandbox-environment#v0.3.3
+        version: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/6e429acbdbf3cf663187f4786144a6e1630206fe
       '@tiptap/core':
         specifier: ^3.31.3
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -1499,6 +1499,11 @@ packages:
   '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/135ddce9b072306620d793e016f0ca66e87837a0':
     resolution: {tarball: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/135ddce9b072306620d793e016f0ca66e87837a0}
     version: 0.3.2
+    hasBin: true
+
+  '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/6e429acbdbf3cf663187f4786144a6e1630206fe':
+    resolution: {tarball: https://codeload.github.com/Panth977/sandbox-environment/tar.gz/6e429acbdbf3cf663187f4786144a6e1630206fe}
+    version: 0.3.3
     hasBin: true
 
   '@pkgjs/parseargs@0.11.0':
@@ -5295,6 +5300,8 @@ snapshots:
   '@oxc-project/types@0.150.0': {}
 
   '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/135ddce9b072306620d793e016f0ca66e87837a0': {}
+
+  '@panth977/sandbox@https://codeload.github.com/Panth977/sandbox-environment/tar.gz/6e429acbdbf3cf663187f4786144a6e1630206fe': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
