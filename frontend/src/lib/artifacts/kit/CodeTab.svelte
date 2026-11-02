@@ -31,6 +31,7 @@
   import {
     BACKEND_API,
     BACKEND_ENTRY,
+    BACKEND_NODE_TYPES,
     backendFiles,
     backendProblems,
     backendTree,
@@ -231,7 +232,8 @@
       compileFilter: (path) => !isBackendPath(path),
       readOnlyPaths: (path) => path === BACKEND_API || (readOnlyFront && !isBackendPath(path)),
       api: p.api,
-      hostTypes: `${TM_HOST_TYPES}\n${backend.types ?? ''}`,
+      hostTypes: TM_HOST_TYPES,
+      ambientTypes: `${backend.types ?? ''}\n${BACKEND_NODE_TYPES}`,
       languageWorker: `${KIT_CDN}/dev/language-worker.js`,
       theme,
       network: ['*'],

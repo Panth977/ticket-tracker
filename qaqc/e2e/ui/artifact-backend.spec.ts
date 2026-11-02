@@ -47,6 +47,12 @@ test('a backend alone', async ({ page }) => {
   await signIn(page, owner.email, `/x/${artifactId}?tab=code`);
   await page.getByRole('button', { name: 'Backend only' }).click();
   await expect(page.locator('[data-kit-dev] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
+  // The provided files type-check in the editor, with no problems to wade through.
+  await expect(page.locator('.sbx-dev').getByText('Types ready')).toBeVisible({ timeout: 60_000 });
+  await page.waitForTimeout(3000);
+  await expect(page.locator('.sbx-dev')).toContainText('Problems');
+  await expect(page.locator('.sbx-dev').getByText(/implicitly|Cannot find module/)).toHaveCount(0);
+  await expect(page.locator('.sbx-dev').getByText(/^Problems \(\d+\)$/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Publish', exact: true }).click();
   await expect(page.locator('[data-backend-url]')).toContainText(artifactId, { timeout: 60_000 });
 });

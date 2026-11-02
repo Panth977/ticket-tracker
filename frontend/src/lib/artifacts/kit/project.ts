@@ -11,6 +11,13 @@ export const BACKEND_ENTRY = `${DIR}${ARTIFACT_BACKEND_ENTRY}`;
 /** Provided by TaskManager: a build always restores it. */
 export const BACKEND_API = `${DIR}sandboxApi.ts`;
 
+/** What a backend sees of Node, for the editor. The real check runs on the worker. */
+export const BACKEND_NODE_TYPES = `
+declare const process: { env: Record<string, string | undefined>; version: string; [key: string]: any };
+declare const Buffer: any;
+declare module "node:*" { const value: any; export default value; export = value; }
+`;
+
 export const isBackendPath = (path: string): boolean => path.startsWith(DIR);
 export const hasBackend = (files: SourceFiles): boolean => BACKEND_ENTRY in files;
 
