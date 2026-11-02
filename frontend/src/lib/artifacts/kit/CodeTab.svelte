@@ -28,6 +28,8 @@
   import { KIT_CDN, kitBuildFiles, loadKitSources, type SourceFiles } from './build';
   import { getKitHost } from './context';
   import { TM_HOST_TYPES } from './hostTypes';
+  import SourceView from './SourceView.svelte';
+  import { readSourceZip } from './sourceZip';
   import { KIT_TEMPLATES } from './templates';
   import { appTheme, onAppTheme } from './theme';
 
@@ -39,7 +41,8 @@
   type Start =
     | { state: 'loading' }
     | { state: 'pick'; reason: 'empty' | 'classic' }
-    | { state: 'ready'; files: SourceFiles; from: string };
+    | { state: 'ready'; files: SourceFiles; from: string }
+    | { state: 'source'; files: SourceFiles; from: string; skipped: number };
   let start = $state<Start>({ state: 'loading' });
   let message = $state('');
   let publishing = $state(false);
@@ -103,7 +106,7 @@
     if (kit === undefined) return; // still checking the build
     decided = true;
     if (kit === null) {
-      start = { state: 'pick', reason: 'classic' };
+      void openKeptSource(opened.buildId);
       return;
     }
     loadKitSources(opened.contentUrl).then(
@@ -114,6 +117,20 @@
       () => (start = { state: 'pick', reason: 'classic' }),
     );
   });
+
+  /** A build made elsewhere: show the source kept beside it, when there is one. */
+  async function openKeptSource(buildId: string) {
+    try {
+      const { url } = await command('artifactSourceUrl', { artifactId, buildId }, {});
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(String(res.status));
+      const view = readSourceZip(new Uint8Array(await res.arrayBuffer()));
+      if (!Object.keys(view.files).length) throw new Error('empty');
+      start = { state: 'source', ...view, from: `build ${shortBuild(buildId)}` };
+    } catch {
+      start = { state: 'pick', reason: 'classic' };
+    }
+  }
 
   function useTemplate(id: string) {
     const t = KIT_TEMPLATES.find((x) => x.id === id);
@@ -196,6 +213,9 @@
   });
 </script>
 
+{#if start.state === 'source'}
+  <SourceView files={start.files} from={start.from} skipped={start.skipped} />
+{:else}
 <div class="flex min-h-0 flex-1 flex-col" data-artifact-tab="code">
   {#if start.state === 'ready'}
     <div
@@ -246,6 +266,7 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <style>
   [data-kit-dev] :global(.sbx-dev) {
