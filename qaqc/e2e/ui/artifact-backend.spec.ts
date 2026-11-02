@@ -8,19 +8,21 @@ import { signIn } from '../support/ui.js';
 
 const GATEWAY = process.env.TM_GATEWAY_URL;
 
-test('write, build and publish a backend in the browser', async ({ page }) => {
+test('frontend and backend in one tree, one Publish', async ({ page }) => {
   test.skip(!GATEWAY, 'needs a gateway');
   test.setTimeout(180_000);
   const owner = await newPerson('Editor');
-  const { artifactId } = await call(owner, 'artifactCreate', { name: 'Typed backend' });
-  await signIn(page, owner.email, `/x/${artifactId}?tab=backend`);
+  const { artifactId } = await call(owner, 'artifactCreate', { name: 'Both' });
+  await signIn(page, owner.email, `/x/${artifactId}?tab=code`);
 
-  await expect(page.locator('[data-artifact-tab="backend"] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText('Not live yet')).toBeVisible();
-  // sandboxApi types reach the editor: the starter has no red squiggles.
-  await expect(page.locator('.sbx-dev__panel, .sbx-dev').getByText(/Cannot find module/)).toHaveCount(0);
+  await page.getByRole('button', { name: 'JavaScript', exact: true }).click();
+  const tree = page.locator('.sbx-dev__tree, .sbx-tree').first();
+  await expect(page.locator('[data-kit-dev] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Add backend' }).click();
+  await expect(tree).toContainText('backend');
+  await expect(page.locator('[data-kit-dev]')).toContainText('sandboxApi');
 
-  await page.getByRole('button', { name: 'Build', exact: true }).click();
+  await page.getByRole('button', { name: 'Check', exact: true }).click();
   await expect(page.locator('[data-backend-routes]').getByText('/hello')).toBeVisible({ timeout: 60_000 });
 
   await page.getByRole('button', { name: 'Publish', exact: true }).click();
@@ -28,8 +30,23 @@ test('write, build and publish a backend in the browser', async ({ page }) => {
   await expect(url).toContainText(`/sandbox/${artifactId}`, { timeout: 60_000 });
   const res = await fetch(`${await url.innerText()}/hello?name=Panth`);
   expect(await res.json()).toEqual({ message: 'Hi!', from: 'Panth' });
+  // One Publish made the website build too.
+  await expect.poll(async () => (await call(owner, 'artifactOpen', { artifactId })).buildId, { timeout: 30_000 }).toBeTruthy();
+  await expect(page.getByRole('link', { name: 'Backend', exact: true })).toHaveCount(0);
 
-  await page.reload();
-  await expect(page.locator('[data-artifact-tab="backend"] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
+  await page.goto(`/x/${artifactId}?tab=backend`);
+  await expect(page.locator('[data-kit-dev] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('[data-backend-routes]').getByText('/hello')).toBeVisible();
+});
+
+test('a backend alone', async ({ page }) => {
+  test.skip(!GATEWAY, 'needs a gateway');
+  test.setTimeout(120_000);
+  const owner = await newPerson('Alone');
+  const { artifactId } = await call(owner, 'artifactCreate', { name: 'Only backend' });
+  await signIn(page, owner.email, `/x/${artifactId}?tab=code`);
+  await page.getByRole('button', { name: 'Backend only' }).click();
+  await expect(page.locator('[data-kit-dev] .monaco-editor').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(page.locator('[data-backend-url]')).toContainText(artifactId, { timeout: 60_000 });
 });
