@@ -26,6 +26,22 @@ Script*, or write it over MCP or the API (\`template_save\` / \`POST /api/templa
 * **Every hook, every \`ui.*\` control and every \`this.api.*\` call takes ONE object of
   named arguments.**
 
+### Writing it
+
+\`\`\`js
+export default defineScript({
+  fieldRender({ ticket }) { … },
+  onFieldChange({ id, value }) { … },
+  // …
+});
+\`\`\`
+
+\`defineScript({ … })\` is how the default and generated scripts are written: in *Board settings ›
+Script* the editor (Monaco, the editor of VS Code) then knows every hook's arguments — it completes
+\`ticket.\`, \`ui.\`, \`h.\`, \`dates.\` and \`api.\`, shows their docs on hover and lists mistakes as you
+type (*Problems*, each a link to its line). Type a hook's name for a snippet of it; **Format** tidies
+the code; ⌘/Ctrl+S saves. \`export default class BoardScript { … }\` still works (without the typing).
+
 ### Where it runs, and what it is not
 
 It runs in each person's **browser**, in the same sandbox as templates (an opaque-origin

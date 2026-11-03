@@ -92,6 +92,7 @@ export function boot(scope) {
       'h',
       'ui',
       'dates',
+      'defineScript',
       'console',
       `"use strict";\nthrow new Error('probe');\n//# sourceURL=${SOURCE}`,
     )();
@@ -410,10 +411,12 @@ export function boot(scope) {
       'h',
       'ui',
       'dates',
+      'defineScript',
       'console',
       `"use strict";\n${body}\n//# sourceURL=${SOURCE}`,
     );
-    let d = factory(api, h, ui, dates, tplConsole);
+    // defineScript({ … }) only types the hooks in the editor; at run time it is the object.
+    let d = factory(api, h, ui, dates, (o) => o, tplConsole);
     if (asScript) return scriptOf(d);
     if (typeof d === 'function') d = { render: d };
     if (!d || typeof d !== 'object' || typeof d.render !== 'function')

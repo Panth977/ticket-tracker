@@ -12,7 +12,15 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { DEFAULT_BOARD_SCRIPT } from '@tm/shared';
-import { call, eventually, messagesOf, newBoard, newPerson, read, stage } from '../support/stack.js';
+import {
+  call,
+  eventually,
+  messagesOf,
+  newBoard,
+  newPerson,
+  read,
+  stage,
+} from '../support/stack.js';
 import { signIn } from '../support/ui.js';
 
 const save = (who: Parameters<typeof call>[0], boardId: string, code: string) =>
@@ -21,11 +29,8 @@ const save = (who: Parameters<typeof call>[0], boardId: string, code: string) =>
     template: { kind: 'script', name: 'Board script', code },
   });
 
-/** The default script, with extra hooks before its last brace (a later method wins). */
-const withHooks = (hooks: string) => {
-  const i = DEFAULT_BOARD_SCRIPT.lastIndexOf('}');
-  return `${DEFAULT_BOARD_SCRIPT.slice(0, i)}\n${hooks}\n}\n`;
-};
+/** The default script with extra hooks at the end of its object (a later key wins). */
+const withHooks = (hooks: string) => DEFAULT_BOARD_SCRIPT.replace(/\}\);\s*$/, `${hooks}\n});\n`);
 
 async function row(page: Page, key: string) {
   const r = page.locator(`[data-ticket-row="${key}"]`);
@@ -42,8 +47,23 @@ test('Board + Table only; the script draws the table, the bulk bar, the cards an
   const one = await call(ada, 'ticketCreate', { boardId: b.id, title: 'Alpha', dueAt: day(10) });
   const two = await call(ada, 'ticketCreate', { boardId: b.id, title: 'Beta', dueAt: day(12) });
 
+  // A Calendar view saved before board scripts: no tab, and its URL leads to the default view.
+  const board0 = await read<Record<string, unknown> & { defaultViewId: string }>(`boards/${b.id}`);
+  const def = await read<Record<string, unknown>>(`boards/${b.id}/views/${board0!.defaultViewId}`);
+  const old = await call(ada, 'viewSave', {
+    boardId: b.id,
+    view: {
+      ...(def as object),
+      ownerUid: undefined,
+      name: 'Old calendar',
+      type: 'calendar',
+      position: 9,
+    },
+  } as never);
+
   // ── a new board: Board and Table, and the default script's Calendar preview ──
-  await signIn(page, ada.email, `/b/${b.key}`);
+  await signIn(page, ada.email, `/b/${b.key}/${old.viewId}`);
+  await expect(page).toHaveURL(new RegExp(`/b/${b.key}/${board0!.defaultViewId}`));
   const tabs = page.getByRole('navigation', { name: 'Views' });
   await expect(tabs.locator('[data-view-tab]')).toHaveCount(2);
   await expect(tabs.locator('[data-preview-tab="Calendar"]')).toBeVisible();
@@ -81,7 +101,7 @@ test('Board + Table only; the script draws the table, the bulk bar, the cards an
     withHooks(`
   previewTicketCard({ ticket: t }) {
     return h.text({ mono: true }, 'CARD ' + t.key);
-  }
+  },
   previews() {
     return {
       Due: ({ tickets, openTicket, updateTicket }) => h.calendar({
@@ -91,7 +111,7 @@ test('Board + Table only; the script draws the table, the bulk bar, the cards an
         onMove: ({ id, start }) => updateTicket({ id, patch: { dueAt: start } }),
       }),
     };
-  }`),
+  },`),
   );
   await page.goto(`/b/${b.key}`);
   await tabs.getByText('Board', { exact: true }).click();
@@ -119,17 +139,17 @@ test('forms: a message form in the composer, a ticket form in New ticket', async
     ada,
     b.id,
     DEFAULT_BOARD_SCRIPT.replace(
-      /\n {2}forms\(\) \{[\s\S]*?\n {2}\}\n/,
+      /\n {2}forms\(\) \{[\s\S]*?\n {2}\},\n/,
       `
   forms() {
     return [
       { id: 'bug', kind: 'message', name: 'Bug report' },
       { id: 'feature', kind: 'ticket', name: 'Feature' },
     ];
-  }
+  },
   formState({ id }) {
     return id === 'bug' ? { steps: '', severity: 'medium' } : { title: '', area: 'Frontend' };
-  }
+  },
   formRender({ id, state, setState }) {
     if (id === 'bug')
       return h.col(
@@ -140,14 +160,14 @@ test('forms: a message form in the composer, a ticket form in New ticket', async
       h.input({ label: 'Title', name: 'title', value: state.title, onInput: (title) => setState({ title }) }),
       h.select({ label: 'Area', value: state.area, options: ['Frontend', 'Backend'], onChange: (area) => setState({ area }) }),
     );
-  }
+  },
   formSubmit({ id, state }) {
     if (id === 'bug') {
       if (!state.steps.trim()) return { type: 'invalid', error: { steps: 'Required' } };
       return { type: 'valid', msg: '**Bug** · ' + state.severity + '\\n\\n' + state.steps, data: state };
     }
     return { type: 'valid', ticket: { title: '[' + state.area + '] ' + state.title } };
-  }
+  },
 `,
     ),
   );
@@ -215,7 +235,7 @@ test('the sandbox: no app storage, no endless loops', async ({ page }) => {
       },
       Spin: () => h.button({ label: 'Spin', onClick: () => { for (;;) {} } }),
     };
-  }`),
+  },`),
   );
   await signIn(page, ada.email, `/b/${b.key}`);
   await page.locator('[data-preview-tab="Probe"]').click();

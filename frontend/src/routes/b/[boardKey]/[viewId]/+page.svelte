@@ -142,7 +142,25 @@
   const online = $derived(onlineHere(boardId, uid));
 
   // ── the open view and its draft ─────────────────────────────────────────
-  const saved = $derived($views.data.find((v) => v.id === viewId) ?? null);
+  /**
+   * board-script.html: a board has Board and Table views; a Calendar or Timeline saved
+   * before board scripts is not shown (its tab is gone, its URL leads to the default
+   * view) — such views are the script's previews now.
+   */
+  const seededMine = (f: unknown) =>
+    !!f &&
+    typeof f === 'object' &&
+    (f as { field?: unknown }).field === 'assignee' &&
+    (f as { cmp?: unknown }).cmp === 'is' &&
+    (f as { value?: unknown }).value === 'me';
+  // The old seeded "Mine" view only differed by its filter, which the script owns now.
+  const shownViews = $derived(
+    $views.data.filter(
+      (v) =>
+        (v.type === 'kanban' || v.type === 'table') && !(v.name === 'Mine' && seededMine(v.filter)),
+    ),
+  );
+  const saved = $derived(shownViews.find((v) => v.id === viewId) ?? null);
   const savedInput = $derived(saved ? toInput(saved) : null);
   const key = $derived(boardId && viewId ? draftKey(boardId, viewId) : '');
   let draft = $state<ViewInput>(newViewInput('kanban', { name: 'Board', scope: 'shared' }));
@@ -633,7 +651,7 @@
   <div class="flex h-[calc(100dvh-3rem)] min-h-0 flex-col md:h-dvh">
     <BoardBar
       {board}
-      views={$views.data}
+      views={shownViews}
       {viewId}
       {draft}
       {dirty}

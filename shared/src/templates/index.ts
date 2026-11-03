@@ -4,3 +4,4 @@ export * from './commands.js';
 export * from './docs.js';
 export * from './script.js';
 export * from './scriptDocs.js';
+export * from './scriptTypes.js';
