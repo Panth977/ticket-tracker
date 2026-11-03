@@ -21,7 +21,7 @@
   import { APP_NAME } from '$lib/brand';
   // hrefs / goto() targets are built by lib/layout/routes (the SPA has no base path).
   /* eslint-disable svelte/no-navigation-without-resolve */
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { noteBoardMembers } from '$lib/people';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -68,6 +68,18 @@
   import ViewDialog, { type ViewDialogMode } from '$lib/views/ViewDialog.svelte';
   import { templatesOfKind } from '$lib/templates/store';
   import {
+    acquireScriptHost,
+    activeFilters,
+    effectiveBoardScript,
+    loadFilters,
+    releaseScriptHost,
+    saveFilters,
+    savedScript,
+    type BoardScriptHost,
+    type ScriptMe,
+  } from '$lib/templates/script';
+  import type { ScriptControl, ScriptFilters } from '@tm/shared';
+  import {
     clearDraft,
     draftKey,
     fallbackView,
@@ -77,7 +89,7 @@
     setDraft,
     toInput,
   } from '$lib/views/draft';
-  import { andWith, normalize } from '$lib/views/filter';
+  import { normalize } from '$lib/views/filter';
   import { movePatch } from '$lib/views/move';
 
   const boardKey = $derived(page.params.boardKey ?? '');
@@ -214,20 +226,123 @@
     );
   });
 
+  // ── the board script: filters and sort (board-script.html) ────────────
+  const scriptSaved = $derived(savedScript(boardId));
+  const scriptCode = $derived(
+    board && !$scriptSaved.loading ? effectiveBoardScript(board, $scriptSaved.data).code : null,
+  );
+  const scriptMe = $derived<ScriptMe>({
+    id: uid ?? '',
+    name: auth.profile?.name || bs.memberByUid.get(uid ?? '')?.name || '',
+    email: auth.user?.email ?? bs.memberByUid.get(uid ?? '')?.email ?? '',
+    role: bs.role ?? '',
+  });
+  let script = $state<BoardScriptHost | null>(null);
+  let heldScript: { h: BoardScriptHost; boardId: string; me: ScriptMe } | null = null;
+  $effect(() => {
+    const c = scriptCode;
+    const m = scriptMe;
+    const b = board;
+    if (c === null || !b || !m.id) return;
+    untrack(() => {
+      const h = acquireScriptHost(c, b, m);
+      if (heldScript?.h === h) {
+        releaseScriptHost(h, b.id, m);
+        return;
+      }
+      const prev = heldScript;
+      heldScript = { h, boardId: b.id, me: m };
+      script = h;
+      if (prev) releaseScriptHost(prev.h, prev.boardId, prev.me);
+    });
+  });
+  onDestroy(() => {
+    if (heldScript) releaseScriptHost(heldScript.h, heldScript.boardId, heldScript.me);
+  });
+
+  let filterDefaults = $state<ScriptFilters>({});
+  let filters = $state<ScriptFilters | null>(null);
+  let filterControls = $state<ScriptControl[]>([]);
+  let scriptProblem = $state<string | null>(null);
+  /** The last onFilter / onSort answer, and which tickets it saw (a newer ticket shows until the next). */
+  let scripted = $state<{ keep: Set<string>; order: string[] | null; saw: Set<string> } | null>(
+    null,
+  );
+  const problemText = (e: string, line?: number) => (line ? `${e} (line ${line})` : e);
+  $effect(() => {
+    const h = script;
+    const id = boardId;
+    if (!h || !id) return;
+    void h.defaults().then((r) => {
+      if (h !== script) return;
+      const d = r.error === undefined ? r.value : {};
+      if (r.error !== undefined) scriptProblem = problemText(r.error, r.line);
+      filterDefaults = d;
+      filters = { ...d, ...(loadFilters(id) ?? {}) };
+    });
+  });
+  $effect(() => {
+    const h = script;
+    const f = filters;
+    if (!h || !f) return;
+    void h.filterControls({ filters: f }).then((r) => {
+      if (h !== script) return;
+      if (r.error !== undefined) scriptProblem = problemText(r.error, r.line);
+      else filterControls = r.value;
+    });
+  });
+  $effect(() => {
+    const h = script;
+    const f = filters;
+    const all = bs.tickets;
+    if (!h || !f) return;
+    void h.apply({ tickets: all, filters: f }).then((r) => {
+      if (h !== script || 'stale' in r) return;
+      if (r.error !== undefined) {
+        scriptProblem = problemText(r.error, r.line);
+        scripted = null;
+        return;
+      }
+      scriptProblem = null;
+      scripted = { ...r.value, saw: new Set(all.map((t) => t.id)) };
+    });
+  });
+  function setFilter(c: { id: string; value: unknown }) {
+    filters = { ...(filters ?? filterDefaults), [c.id]: c.value };
+    if (boardId) saveFilters(boardId, filters);
+  }
+  function resetFilters() {
+    filters = { ...filterDefaults };
+    if (boardId) saveFilters(boardId, null);
+  }
+  const nScriptFilters = $derived(activeFilters(filterControls, filters ?? {}, filterDefaults));
+  const shownTickets = $derived(
+    scripted
+      ? bs.tickets.filter((t) => scripted!.keep.has(t.id) || !scripted!.saw.has(t.id))
+      : bs.tickets,
+  );
+
   // ── what the view shows ─────────────────────────────────────────────────
   let search = $state('');
+  // The board script owns filtering (board-script.html): a saved view keeps its
+  // sort, grouping and columns; only the search box adds to the script's filter.
   const spec = $derived({
     ...draft,
-    filter: andWith(
-      draft.filter,
-      search.trim() ? { field: 'text', cmp: 'contains' as const, value: search.trim() } : null,
-    ),
+    filter: search.trim()
+      ? { field: 'text' as const, cmp: 'contains' as const, value: search.trim() }
+      : null,
   });
-  const groups = $derived(board ? applyView(bs.tickets, spec, board, bs.viewCtx) : []);
+  const order = $derived({ order: scripted?.order ?? null });
+  const groups = $derived(board ? applyView(shownTickets, spec, board, bs.viewCtx, order) : []);
   const flat = $derived(
     board
-      ? (applyView(bs.tickets, { ...spec, groupBy: null, subGroupBy: null }, board, bs.viewCtx)[0]
-          ?.tickets ?? [])
+      ? (applyView(
+          shownTickets,
+          { ...spec, groupBy: null, subGroupBy: null },
+          board,
+          bs.viewCtx,
+          order,
+        )[0]?.tickets ?? [])
       : [],
   );
   const flatGroups = $derived<ViewGroup<BoardTicket>[]>([
@@ -495,6 +610,11 @@
       canSaveShared={bs.canEdit}
       canCreate={bs.canCreate}
       isAdmin={bs.isAdmin}
+      {filterControls}
+      activeFilters={nScriptFilters}
+      {scriptProblem}
+      onfilter={setFilter}
+      onfilterreset={resetFilters}
       bind:search
       onchange={change}
       onsave={save}

@@ -1108,6 +1108,8 @@ export async function generate({ project = DEFAULT_PROJECT } = {}) {
     // templates.html — the Templates chapter (§9), the MCP tool get_template_docs and the
     // plugin's `template` skill all print the one reference text in @tm/shared.
     templates: S.TEMPLATE_DOCS_MD.replace(/^## Templates\n+/, ''),
+    // board-script.html — the Board script chapter (§10) and get_template_docs.
+    boardscript: S.BOARD_SCRIPT_DOCS_MD.replace(/^## Board script\n+/, ''),
   };
 
   // The plugin's files are expanded FIRST: the chapter quotes the artifact

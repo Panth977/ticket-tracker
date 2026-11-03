@@ -623,13 +623,14 @@ export function applyView<T extends ViewTicket>(
   view: ViewSpec,
   board: ViewBoard,
   ctx: ViewCtx,
+  opts: ApplyOpts = {},
 ): ViewGroup<T>[] {
   const states = view.includeStates?.length ? view.includeStates : DEFAULT_INCLUDE_STATES;
   const env = makeEnv(board, ctx);
   const visible = tickets.filter(
     (t) => states.includes(t.state) && (!view.filter || evalNode(t, view.filter, env)),
   );
-  const sorted = sortTickets(visible, view.sort, board);
+  const sorted = opts.order ? orderBy(visible, opts.order) : sortTickets(visible, view.sort, board);
 
   const groupDim = view.groupBy ? dimension(view.groupBy, board, sorted, ctx) : null;
   const groups: ViewGroup<T>[] = groupDim
@@ -660,6 +661,28 @@ export function applyViewFlat<T extends ViewTicket>(
   view: ViewSpec,
   board: ViewBoard,
   ctx: ViewCtx,
+  opts: ApplyOpts = {},
 ): T[] {
-  return applyView(tickets, { ...view, groupBy: null, subGroupBy: null }, board, ctx)[0]!.tickets;
+  return applyView(tickets, { ...view, groupBy: null, subGroupBy: null }, board, ctx, opts)[0]!
+    .tickets;
+}
+
+export interface ApplyOpts {
+  /**
+   * A fixed order by ticket id (a board script's onSort, board-script.html):
+   * replaces the view's sort. Ids not in it go last, in rank order.
+   */
+  order?: readonly string[] | null;
+}
+
+function orderBy<T extends ViewTicket>(tickets: readonly T[], order: readonly string[]): T[] {
+  const at = new Map(order.map((id, i) => [id, i]));
+  return [...tickets].sort((a, b) => {
+    const x = at.get(a.id);
+    const y = at.get(b.id);
+    if (x !== undefined && y !== undefined) return x - y;
+    if (x !== undefined) return -1;
+    if (y !== undefined) return 1;
+    return compareRank(a.rank, b.rank) || compareRank(a.id, b.id);
+  });
 }

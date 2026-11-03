@@ -1,21 +1,30 @@
 <!--
-  The field panel (app.json › Field panel): stage, priority, assignees (each
-  with a commitment date), start / due, estimate, tags (+ create), links, then
-  one editor per custom field. Every change is a ticketUpdate with an
-  optimistic overlay; a commenter sees the stages their grant allows and
-  nothing else editable.
+  The field panel: STAGE (built in — the app's own, with its grants), then the
+  BOARD SCRIPT's fields (docs/plan/board-script.html: fieldRender draws them,
+  onFieldChange turns an edit into a ticket patch), then Links. A board with no
+  saved script runs the one generated from its settings (boards from before
+  scripts) or the default (Assignees). Every write is a ticketUpdate with an
+  optimistic overlay; the server checks it as always. A commenter sees the
+  stages their grant allows and nothing else editable.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { X } from 'lucide-svelte';
-  import { indicatorColor, indicatorOf, type FieldValue, type TicketPatch } from '@tm/shared';
-  import { command } from '$lib/api';
-  import { DatePicker, toast } from '$lib/ui';
+  import { onDestroy } from 'svelte';
+  import { indicatorColor, indicatorOf, type ScriptControl, type TicketPatch } from '@tm/shared';
+  import { auth } from '$lib/firebase/auth.svelte';
+  import { toast } from '$lib/ui';
+  import ScriptControls from '$lib/templates/ScriptControls.svelte';
+  import {
+    acquireScriptHost,
+    effectiveBoardScript,
+    releaseScriptHost,
+    savedScript,
+    type BoardScriptHost,
+    type ScriptMe,
+  } from '$lib/templates/script';
   import { getTicketCtx, updateTicket } from './context';
   import OptionPicker from './fields/OptionPicker.svelte';
-  import CustomField from './fields/CustomField.svelte';
   import LinksEditor from './LinksEditor.svelte';
-  import PersonAvatar from './PersonAvatar.svelte';
 
   const t = getTicketCtx();
   const byPos = <X extends { position: number }>(xs: readonly X[]) =>
@@ -41,12 +50,6 @@
     })),
   );
   const canMove = $derived(stages.some((s) => !s.disabled && s.id !== t.ticket.stageId));
-  const priorities = $derived(
-    byPos(t.board.priorities).map((p) => ({ id: p.id, name: p.name, color: p.color })),
-  );
-  const tags = $derived(
-    byPos(t.board.tags).map((p) => ({ id: p.id, name: p.name, color: p.color })),
-  );
   const people = $derived(
     [...t.members]
       .filter((m) => m.role !== 'viewer' || t.ticket.assigneeUids.includes(m.uid))
@@ -59,47 +62,78 @@
         detail: m.kind === 'agent' ? ['Agent', m.description].filter(Boolean).join(' · ') : m.email,
       })),
   );
-  const fields = $derived(byPos(t.board.fields).filter((f) => !f.archived));
   const ed = $derived(t.perms.edit);
 
   const patch = (p: TicketPatch) => updateTicket(t.boardId, t.ticketId, p, { key: t.ticket.key });
 
-  async function createTag(name: string): Promise<string | null> {
-    try {
-      const { tag } = await command(
-        'tagCreate',
-        { boardId: t.boardId, name },
-        { toast: 'Could not create the tag' },
-      );
-      return tag.id;
-    } catch {
-      return null;
-    }
-  }
+  // ── the board script ──
+  const saved = savedScript(t.boardId);
+  const code = $derived($saved.loading ? null : effectiveBoardScript(t.board, $saved.data).code);
+  const me = $derived<ScriptMe>({
+    id: t.me,
+    name: auth.profile?.name || t.members.find((m) => m.uid === t.me)?.name || '',
+    email: auth.user?.email ?? t.members.find((m) => m.uid === t.me)?.email ?? '',
+    role: t.members.find((m) => m.uid === t.me)?.role ?? '',
+  });
+  let host = $state<BoardScriptHost | null>(null);
+  let held: { h: BoardScriptHost; boardId: string; me: ScriptMe } | null = null;
+  $effect(() => {
+    const c = code;
+    const m = me;
+    if (c === null) return;
+    const h = acquireScriptHost(c, t.board, m);
+    const prev = held;
+    held = { h, boardId: t.boardId, me: m };
+    host = h;
+    if (prev) releaseScriptHost(prev.h, prev.boardId, prev.me);
+  });
+  onDestroy(() => {
+    if (held) releaseScriptHost(held.h, held.boardId, held.me);
+  });
 
-  function setAssignees(uids: string[]) {
-    // Dropping someone also drops their commitment date.
-    const gone = t.ticket.assigneeUids.filter((u) => !uids.includes(u));
-    const commitments = Object.fromEntries(
-      gone.filter((u) => t.ticket.commitments?.[u] != null).map((u) => [u, null]),
-    );
-    void patch({ assigneeUids: uids, ...(Object.keys(commitments).length ? { commitments } : {}) });
-  }
+  let controls = $state<ScriptControl[] | null>(null);
+  let problem = $state<string | null>(null);
+  let drawSeq = 0;
+  $effect(() => {
+    const h = host;
+    const ticket = t.ticket;
+    void ticket.updatedAt;
+    if (!h) return;
+    const seq = ++drawSeq;
+    void h.fields({ ticket }).then((r) => {
+      if (seq !== drawSeq) return;
+      if (r.error !== undefined) {
+        problem = r.line ? `${r.error} (line ${r.line})` : r.error;
+        return;
+      }
+      problem = null;
+      controls = r.value;
+    });
+  });
 
-  let estDraft = $state<string | null>(null);
-  function commitEstimate() {
-    if (estDraft === null) return;
-    const raw = estDraft.trim();
-    estDraft = null;
-    const n = raw === '' ? null : Number(raw.replace(',', '.'));
-    if (n !== null && (!Number.isFinite(n) || n < 0)) {
-      toast.error('The estimate must be a positive number');
+  async function onFieldChange(c: { id: string; value: unknown; allDay?: boolean }) {
+    const h = host;
+    if (!h) return;
+    const r = await h.change({ ticket: t.ticket, ...c });
+    if (r.error !== undefined) {
+      toast.error(`Board script: ${r.error}${r.line ? ` (line ${r.line})` : ''}`);
       return;
     }
-    if (n !== t.ticket.estimate) void patch({ estimate: n });
+    if (!r.value) return;
+    const p = { ...r.value } as TicketPatch;
+    // Dropping an assignee also drops their commitment date.
+    if (p.assigneeUids) {
+      const gone = t.ticket.assigneeUids.filter(
+        (u) => !p.assigneeUids!.includes(u) && t.ticket.commitments?.[u] != null,
+      );
+      if (gone.length)
+        p.commitments = {
+          ...Object.fromEntries(gone.map((u) => [u, null])),
+          ...(p.commitments ?? {}),
+        };
+    }
+    void patch(p);
   }
-
-  const required = $derived(new Set(t.board.stages.flatMap((s) => s.requires ?? [])));
 </script>
 
 {#snippet row(label: string, body: Snippet, hint?: string)}
@@ -123,154 +157,26 @@
   {/snippet}
   {@render row('Stage', stageBody)}
 
-  {#snippet priorityBody()}
-    <OptionPicker
-      label="Priority"
-      options={priorities}
-      value={t.ticket.priorityId ? [t.ticket.priorityId] : []}
-      clearable
-      disabled={!ed}
-      onchange={(ids) => void patch({ priorityId: ids[0] ?? null })}
-    />
-  {/snippet}
-  {@render row('Priority', priorityBody)}
-
-  {#snippet assigneesBody()}
-    <OptionPicker
-      label="Assignees"
-      options={people}
-      value={t.ticket.assigneeUids}
-      multiple
-      disabled={!ed}
-      placeholder="Unassigned"
-      onchange={setAssignees}
-      class={t.ticket.assigneeUids.length ? 'hidden' : ''}
-    />
-    {#if t.ticket.assigneeUids.length}
-      <ul class="flex flex-col gap-1">
-        {#each t.ticket.assigneeUids as uid (uid)}
-          {@const m = t.members.find((x) => x.uid === uid)}
-          <li class="group flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-surface-2">
-            <PersonAvatar {uid} size={20} />
-            <span class="min-w-0 flex-1 truncate text-sm" title={m?.email}
-              >{m?.name ?? 'Not on this board'}</span
-            >
-            <DatePicker
-              value={t.ticket.commitments?.[uid] ?? null}
-              tz={t.tz}
-              withTime={false}
-              placeholder="Commit…"
-              disabled={!ed}
-              class="w-28 [&_button]:h-7 [&_button]:border-transparent [&_button]:px-1.5 [&_button]:text-xs"
-              onchange={(v) => void patch({ commitments: { [uid]: v } })}
-            />
-            {#if ed}
-              <button
-                type="button"
-                aria-label="Unassign {m?.name ?? ''}"
-                onclick={() => setAssignees(t.ticket.assigneeUids.filter((u) => u !== uid))}
-                class="rounded p-0.5 text-subtle opacity-0 group-hover:opacity-100 hover:text-danger focus:opacity-100"
-                ><X size={13} /></button
-              >
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      {#if ed}
-        <OptionPicker
-          label="Add assignees"
-          options={people}
-          value={t.ticket.assigneeUids}
-          multiple
-          placeholder="+ Add"
-          onchange={setAssignees}
-          class="text-xs [&_span]:text-subtle"
-        />
-      {/if}
-    {/if}
-  {/snippet}
-  {@render row('Assignees', assigneesBody, 'Each assignee can set the date they commit to')}
-
-  {#snippet startBody()}
-    <DatePicker
-      value={t.ticket.startAt}
-      tz={t.tz}
-      withTime={false}
-      disabled={!ed}
-      placeholder="No start"
-      class="[&_button]:border-transparent"
-      onchange={(v) => void patch({ startAt: v })}
-    />
-  {/snippet}
-  {@render row('Start', startBody)}
-
-  {#snippet dueBody()}
-    <DatePicker
-      value={t.ticket.dueAt}
-      allDay={t.ticket.dueAllDay}
-      tz={t.tz}
-      disabled={!ed}
-      placeholder="No due date"
-      class="[&_button]:border-transparent"
-      onchange={(v, allDay) => void patch({ dueAt: v, dueAllDay: allDay })}
-    />
-  {/snippet}
-  {@render row('Due', dueBody)}
-
-  {#snippet estimateBody()}
-    <input
-      type="text"
-      inputmode="decimal"
-      aria-label="Estimate"
-      placeholder="—"
-      disabled={!ed}
-      value={estDraft ?? t.ticket.estimate ?? ''}
-      oninput={(e) => (estDraft = e.currentTarget.value)}
-      onblur={commitEstimate}
-      onkeydown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') {
-          estDraft = null;
-          e.currentTarget.blur();
-        }
-      }}
-      class="h-8 w-24 rounded-md border border-transparent bg-transparent px-2 text-sm hover:border-line focus:border-accent focus:bg-surface focus:outline-none disabled:hover:border-transparent"
-    />
-  {/snippet}
-  {@render row('Estimate', estimateBody)}
-
-  {#snippet tagsBody()}
-    <OptionPicker
-      label="Tags"
-      options={tags}
-      value={t.ticket.tagIds}
-      multiple
-      disabled={!ed}
-      placeholder="No tags"
-      oncreate={ed ? createTag : undefined}
-      onchange={(ids) => void patch({ tagIds: ids })}
-    />
-  {/snippet}
-  {@render row('Tags', tagsBody)}
+  <ScriptControls
+    controls={controls ?? []}
+    {people}
+    tz={t.tz}
+    disabled={!ed}
+    commitments={t.ticket.commitments ?? {}}
+    oncommit={(uid, at) => void patch({ commitments: { [uid]: at } })}
+    onchange={(c) => void onFieldChange(c)}
+  />
+  {#if problem}
+    <p
+      class="rounded-md border border-danger/40 bg-danger/5 px-2 py-1.5 text-xs text-danger"
+      role="alert"
+    >
+      Board script: {problem}
+    </p>
+  {/if}
 
   {#snippet linksBody()}
     <LinksEditor compact />
   {/snippet}
   {@render row('Links', linksBody)}
-
-  {#each fields as f (f.id)}
-    {#snippet fieldBody()}
-      <CustomField
-        def={f}
-        value={t.ticket.fields?.[f.id]}
-        disabled={!ed || f.type === 'formula'}
-        onchange={(v: FieldValue) => void patch({ fields: { [f.id]: v } })}
-      />
-    {/snippet}
-    {@render row(
-      f.name + (f.required || required.has(f.id) ? ' *' : ''),
-      fieldBody,
-      required.has(f.id) ? 'Needed before the ticket can enter some stages' : undefined,
-    )}
-  {/each}
 </div>

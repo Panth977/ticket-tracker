@@ -62,7 +62,7 @@ import {
   type InboxItem,
 } from '@tm/shared';
 import { descriptionText, docToMarkdown } from '@tm/shared/logic/index';
-import { indicatorOf } from '@tm/shared';
+import { indicatorOf, isScriptFieldKey } from '@tm/shared';
 import { db } from '../runtime/firebase.js';
 import { locateTickets, type TicketLocation } from '../tickets/locate.js';
 
@@ -304,6 +304,8 @@ export function toPublicTicketWith(
   for (const [id, v] of Object.entries(t.fields)) {
     const def = board.fields.find((f) => f.id === id);
     if (def && !def.archived) fields[def.name] = publicFieldValue(def, v, lk);
+    // A board script's own value (board-script.html): under its key, as stored.
+    else if (!def && isScriptFieldKey(id)) fields[id] = v;
   }
   const keyOf = (id: string) => lk.tickets.get(id)?.key;
   return {

@@ -38,7 +38,8 @@ export const BOARD_SETTINGS_SECTIONS = [
   { id: 'stages', label: 'Stages' },
   { id: 'priorities', label: 'Priorities' },
   { id: 'tags', label: 'Tags' },
-  { id: 'fields', label: 'Custom fields' },
+  /** board-script.html: the ticket's fields and the board's filters, as code. */
+  { id: 'script', label: 'Script' },
   { id: 'templates', label: 'Templates' },
   { id: 'people', label: 'People & roles' },
   { id: 'grants', label: 'Stage grants' },

@@ -7,8 +7,9 @@
  *   new      → an id, the next position, createdBy / createdAt
  *   update   → same kind (a card template cannot become a form: views name it)
  *   ≤ TEMPLATES_MAX per board
+ *   kind 'script' → the board script (board-script.html): one per board, at id 'script'
  */
-import { errors, paths, TEMPLATES_MAX, type Template } from '@tm/shared';
+import { errors, paths, SCRIPT_TEMPLATE_ID, TEMPLATES_MAX, type Template } from '@tm/shared';
 import { typedCol, typedDoc } from '../runtime/converters.js';
 import { runTx, txGet } from '../runtime/tx.js';
 import { defineCommand } from './_registry.js';
@@ -16,19 +17,26 @@ import { loadBoard } from './boardShared.js';
 
 export default defineCommand('templateSave', async (ctx, input) => {
   const { boardId, template: t } = input;
-  const templateId = input.templateId ?? ctx.ids.id();
+  // The board script (board-script.html) is one per board, always at id SCRIPT_TEMPLATE_ID.
+  const isScript = t.kind === 'script';
+  if (!isScript && input.templateId === SCRIPT_TEMPLATE_ID)
+    throw errors.invalid(`"${SCRIPT_TEMPLATE_ID}" is the board script's id`, {
+      field: 'templateId',
+    });
+  const templateId = isScript ? SCRIPT_TEMPLATE_ID : (input.templateId ?? ctx.ids.id());
 
   // Count outside the transaction (a query); a race past the cap by one is harmless.
-  const count = input.templateId
-    ? 0
-    : (await typedCol('templates', paths.templates(boardId)).get()).size;
+  const count =
+    input.templateId || isScript
+      ? 0
+      : (await typedCol('templates', paths.templates(boardId)).get()).size;
 
   await runTx(async (tx) => {
     const board = await loadBoard(tx, boardId, ctx, 'admin');
     if (board.archivedAt != null) throw errors.conflict('This board is archived');
     const ref = typedDoc('templates', paths.template(boardId, templateId));
-    const existing = input.templateId ? await txGet(tx, ref) : undefined;
-    if (input.templateId && !existing) throw errors.not_found('Template not found');
+    const existing = input.templateId || isScript ? await txGet(tx, ref) : undefined;
+    if (input.templateId && !existing && !isScript) throw errors.not_found('Template not found');
     if (existing && existing.kind !== t.kind)
       throw errors.conflict(`A ${existing.kind} template stays a ${existing.kind} template`, {
         kind: existing.kind,

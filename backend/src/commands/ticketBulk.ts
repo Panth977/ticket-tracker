@@ -99,9 +99,9 @@ export default defineCommand('ticketBulk', async (ctx, input) => {
       break;
     case 'field': {
       const value = checkFieldValue(board, a.fieldId, a.value);
-      const def = board.fields.find((f) => f.id === a.fieldId)!;
+      const def = board.fields.find((f) => f.id === a.fieldId);
       if (
-        def.required &&
+        def?.required &&
         (value === null || value === '' || (Array.isArray(value) && !value.length))
       )
         throw errors.invalid('Required fields cannot be cleared', { missing: [def.id] });

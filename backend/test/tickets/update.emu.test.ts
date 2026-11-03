@@ -10,6 +10,44 @@ setupEmulators();
 const T = (b: string, t: string) => getDocData<Ticket>(paths.ticket(b, t)).then((x) => x!);
 
 describe('ticketUpdate', () => {
+  it('board script keys (board-script.html): free keys next to field ids, checked for size and shape', async () => {
+    const { asha } = await people('asha');
+    const b = await seedBoard({ admin: asha });
+    const { ticketId } = await call(asha, 'ticketCreate', {
+      boardId: b.id,
+      title: 'Scripted',
+      fields: { severity: 'S1' },
+    });
+    await call(asha, 'ticketUpdate', {
+      boardId: b.id,
+      ticketId,
+      patch: { fields: { frontend: [asha.uid], qaReady: true, f_points: 2 } },
+    });
+    expect((await T(b.id, ticketId)).fields).toEqual({
+      severity: 'S1',
+      frontend: [asha.uid],
+      qaReady: true,
+      f_points: 2,
+    });
+    // An unknown f_ id is still refused (f_ is FieldDef ids only); so is an oversized value.
+    await expect(
+      call(asha, 'ticketUpdate', { boardId: b.id, ticketId, patch: { fields: { f_nope: 'x' } } }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    await expect(
+      call(asha, 'ticketUpdate', {
+        boardId: b.id,
+        ticketId,
+        patch: { fields: { notes: 'x'.repeat(10_001) } },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+    await call(asha, 'ticketUpdate', {
+      boardId: b.id,
+      ticketId,
+      patch: { fields: { severity: null } },
+    });
+    expect((await T(b.id, ticketId)).fields.severity).toBeUndefined();
+  });
+
   it('field-level merge, stageCategory / completedAt, diff → activity, notify + webhooks', async () => {
     const s = spyPorts();
     const { asha, priya } = await people('asha', 'priya');

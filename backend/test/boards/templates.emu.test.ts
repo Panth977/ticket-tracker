@@ -30,6 +30,40 @@ const kanban = (over: Partial<ViewInput> = {}): ViewInput => ({
 });
 
 describe('templateSave / templateDelete', () => {
+  it('the board script (board-script.html) is one per board, always at id "script"', async () => {
+    const alice = await createUser();
+    const { boardId } = await newBoard(alice);
+    // A new board starts with the default script saved.
+    expect(await tpl(boardId, 'script')).toMatchObject({
+      kind: 'script',
+      code: TEMPLATE_STARTERS.script,
+    });
+    const a = await call(alice, 'templateSave', {
+      boardId,
+      template: { kind: 'script', name: 'Board script', code: TEMPLATE_STARTERS.script },
+    });
+    expect(a.templateId).toBe('script');
+    const b = await call(alice, 'templateSave', {
+      boardId,
+      templateId: 'whatever',
+      template: {
+        kind: 'script',
+        name: 'Board script',
+        code: 'export default { fieldRender() { return []; } }',
+      },
+    });
+    expect(b.templateId).toBe('script');
+    expect((await tpl(boardId, 'script'))!.code).toContain('fieldRender() { return []; }');
+    // Another kind cannot take the id; the script cannot become another kind.
+    await expect(
+      call(alice, 'templateSave', {
+        boardId,
+        templateId: 'script',
+        template: { kind: 'card', name: 'X', code: TEMPLATE_STARTERS.card },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+  });
+
   it('admins create and update; the kind is fixed; others are refused', async () => {
     const alice = await createUser();
     const ed = await createUser();
@@ -142,9 +176,12 @@ describe('templateSave / templateDelete', () => {
       key: uniqKey(),
       template: { fromBoardId: boardId },
     });
-    const copied = await db().collection(paths.templates(copyId)).get();
-    expect(copied.docs.map((d) => (d.data() as Template).name)).toEqual(['Compact']);
-    const newId = copied.docs[0]!.id;
+    const all = await db().collection(paths.templates(copyId)).get();
+    // The board script comes along at its fixed id (board-script.html).
+    expect(all.docs.find((d) => d.id === 'script')?.data()).toMatchObject({ kind: 'script' });
+    const copied = all.docs.filter((d) => d.id !== 'script');
+    expect(copied.map((d) => (d.data() as Template).name)).toEqual(['Compact']);
+    const newId = copied[0]!.id;
     expect(newId).not.toBe(card.templateId);
     const view = (await getViews(copyId)).find((v) => v.name === 'Cards')!;
     expect(view.cardTemplateId).toBe(newId);

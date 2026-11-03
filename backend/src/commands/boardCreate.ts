@@ -21,6 +21,7 @@ import {
 } from '@tm/shared';
 import { COST_AGG_FIELD, type AggFieldDef } from '@tm/shared';
 import { rateBuckets } from '@tm/shared';
+import { DEFAULT_BOARD_SCRIPT, SCRIPT_TEMPLATE_ID } from '@tm/shared';
 import { indicatorColor, indicatorOf } from '@tm/shared';
 import { descriptionText } from '@tm/shared/logic/index';
 import { can } from '@tm/shared/logic/index';
@@ -72,7 +73,10 @@ export default defineCommand('boardCreate', async (ctx, input) => {
     // templates.html §A: the board's templates come along, with new ids; a
     // copied view's card template follows its template to the new id.
     const tpls = await typedCol('templates', paths.templates(src.id)).get();
-    const newIds = new Map(tpls.docs.map((d) => [d.id, ctx.ids.id()]));
+    // The board script keeps its fixed id (board-script.html).
+    const newIds = new Map(
+      tpls.docs.map((d) => [d.id, d.id === SCRIPT_TEMPLATE_ID ? SCRIPT_TEMPLATE_ID : ctx.ids.id()]),
+    );
     copiedTemplates = tpls.docs.map((d) => ({
       id: newIds.get(d.id)!,
       template: {
@@ -170,6 +174,21 @@ export default defineCommand('boardCreate', async (ctx, input) => {
       );
       for (const c of copiedTemplates)
         tx.set(typedDoc('templates', paths.template(boardId, c.id)), c.template);
+      // board-script.html: a NEW board starts with the default script saved (Stage +
+      // Assignees). A board with no saved script is one from before scripts, and runs
+      // the script generated from its settings instead.
+      if (typeof template !== 'object')
+        tx.set(typedDoc('templates', paths.template(boardId, SCRIPT_TEMPLATE_ID)), {
+          kind: 'script',
+          name: 'Board script',
+          description: "This board's ticket fields, filters and sort, as code.",
+          code: DEFAULT_BOARD_SCRIPT,
+          position: ctx.now,
+          createdBy: ctx.actor,
+          createdAt: ctx.now,
+          updatedBy: ctx.actor,
+          updatedAt: ctx.now,
+        });
     });
   } catch (e) {
     await refund();

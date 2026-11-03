@@ -4,6 +4,7 @@
  *   message  the composer's 📋 button: a form whose submit posts a message
  *   ticket   New ticket › a template: a form whose submit creates a ticket
  *   card     a kanban view's card: what each card shows
+ *   script   the board script: the ticket's fields, the board's filters and sort
  *
  * A template is JavaScript the board's admins write (or ask an agent to
  * write). It never runs in the app's page: the browser runs it in a Worker
@@ -14,10 +15,19 @@
 import { z } from 'zod';
 import { MillisSchema, PrincipalIdSchema } from '../types/index.js';
 import { DescriptionSchema, IndicatorSchema } from '../types/indicator.js';
+import { DEFAULT_BOARD_SCRIPT } from './script.js';
 
-export const TEMPLATE_KINDS = ['message', 'ticket', 'card'] as const;
+export const TEMPLATE_KINDS = ['message', 'ticket', 'card', 'script'] as const;
 export const TemplateKindSchema = z.enum(TEMPLATE_KINDS);
 export type TemplateKind = z.infer<typeof TemplateKindSchema>;
+
+/**
+ * The board script (docs/plan/board-script.html): ONE per board, stored as the
+ * template with this id and kind 'script'. It draws the ticket's fields (all but
+ * Stage), turns an edit into a ticket patch, and owns the board's filters and
+ * (optionally) sort. A board without one runs DEFAULT_BOARD_SCRIPT.
+ */
+export const SCRIPT_TEMPLATE_ID = 'script';
 
 /** Templates per board, all kinds together. */
 export const TEMPLATES_MAX = 50;
@@ -229,4 +239,5 @@ export default {
   },
 };
 `,
+  script: DEFAULT_BOARD_SCRIPT,
 };

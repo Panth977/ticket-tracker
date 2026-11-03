@@ -47,6 +47,7 @@
     message: 'Message template',
     ticket: 'Ticket template',
     card: 'Card template',
+    script: 'Board script',
   };
   const KIND_HELP: Record<TemplateKind, string> = {
     message:
@@ -54,6 +55,7 @@
     ticket:
       'A form in New ticket. Its submit returns { type: "valid", ticket: { title, description, stage, priority, tags, assignees, dueAt, fields } } — named the way people name them.',
     card: 'What each card shows on a kanban view that uses it (Layout › Card). render gets ctx.ticket.',
+    script: 'The board script is edited in Board settings › Script.',
   };
 
   // ── the draft ──

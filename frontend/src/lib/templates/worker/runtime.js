@@ -90,6 +90,7 @@ export function boot(scope) {
     new Function(
       'api',
       'h',
+      'ui',
       'console',
       `"use strict";\nthrow new Error('probe');\n//# sourceURL=${SOURCE}`,
     )();
@@ -142,16 +143,55 @@ export function boot(scope) {
           reject(new Error(`api.${method}: the arguments must be plain data (${errText(e)})`));
         }
       });
+  // Every call takes ONE object of named arguments (board-script.html); the
+  // positional forms of the first template API still work.
+  const named = (a) => a !== null && typeof a === 'object' && !Array.isArray(a);
   const api = Object.freeze({
     board: call('board'),
     me: call('me'),
     members: call('members'),
     tickets: Object.freeze({
-      get: call('tickets.get'),
-      list: call('tickets.list'),
-      search: call('tickets.search'),
+      get: (a) => call('tickets.get')(named(a) ? a.key : a),
+      list: (a) => call('tickets.list')(a || {}),
+      search: (a, o) =>
+        named(a) ? call('tickets.search')(a.text, a) : call('tickets.search')(a, o || {}),
     }),
-    storage: Object.freeze({ get: call('storage.get'), set: call('storage.set') }),
+    boards: Object.freeze({
+      tickets: (a) => {
+        if (!named(a))
+          throw new Error(
+            'api.boards.tickets takes one object: api.boards.tickets({ board: "KEY" })',
+          );
+        return call('boards.tickets')(a);
+      },
+    }),
+    storage: Object.freeze({
+      get: (a) => call('storage.get')(named(a) ? a.key : a),
+      set: (a, v) => (named(a) ? call('storage.set')(a.key, a.value) : call('storage.set')(a, v)),
+    }),
+  });
+
+  // ── ui: the board script's controls (board-script.html §2) ──
+  const control = (type) => (o) => {
+    if (!named(o))
+      throw new Error(
+        `ui.${type} takes one object of named arguments: ui.${type}({ id, label, value })`,
+      );
+    if (type !== 'note' && (typeof o.id !== 'string' || !o.id))
+      throw new Error(`ui.${type}: an id is required`);
+    return { ...o, type };
+  };
+  const ui = Object.freeze({
+    text: control('text'),
+    longText: control('longText'),
+    number: control('number'),
+    toggle: control('toggle'),
+    select: control('select'),
+    multiSelect: control('multiSelect'),
+    people: control('people'),
+    date: control('date'),
+    dateRange: control('dateRange'),
+    note: control('note'),
   });
 
   // ── h: the builder ──
@@ -287,14 +327,40 @@ export function boot(scope) {
     const factory = new Function(
       'api',
       'h',
+      'ui',
       'console',
       `"use strict";\n${body}\n//# sourceURL=${SOURCE}`,
     );
-    let d = factory(api, h, tplConsole);
+    let d = factory(api, h, ui, tplConsole);
+    if (kind === 'script') return scriptOf(d);
     if (typeof d === 'function') d = { render: d };
     if (!d || typeof d !== 'object' || typeof d.render !== 'function')
       throw new Error('The default export needs a render(state, setState, h, ctx) function');
     return d;
+  };
+
+  /** A board script: a class (instantiated, `this.api` set) or a plain object of hooks. */
+  const scriptOf = (d) => {
+    let inst = d;
+    if (typeof d === 'function') {
+      try {
+        inst = new d();
+      } catch {
+        inst = d();
+      }
+    }
+    if (!inst || typeof inst !== 'object')
+      throw new Error(
+        'A board script needs `export default class BoardScript { fieldRender({ ticket }) { … } }`',
+      );
+    try {
+      if (!('api' in inst)) inst.api = api;
+    } catch {
+      /* a frozen object: it has the global api */
+    }
+    if (typeof inst.fieldRender !== 'function')
+      throw new Error('A board script needs a fieldRender({ ticket, me, board }) method');
+    return inst;
   };
 
   const fail = (phase, e) =>
@@ -338,7 +404,7 @@ export function boot(scope) {
       }
       if ((kind === 'message' || kind === 'ticket') && typeof def.submit !== 'function')
         return fail('compile', new Error(`A ${kind} template needs a submit(state, ctx) function`));
-      if (kind === 'card') {
+      if (kind === 'card' || kind === 'script') {
         loaded = true;
         return post({ type: 'loaded' });
       }
@@ -400,6 +466,75 @@ export function boot(scope) {
       );
       post({ type: 'cards', id: m.id, results });
     },
+    async script(m) {
+      const done = (r) => post({ type: 'scripted', id: m.id, ...r });
+      if (!loaded) return done({ error: 'The board script did not load' });
+      const ctx = { me: baseCtx.me, board: baseCtx.board };
+      const a = m.args || {};
+      try {
+        switch (m.op) {
+          case 'filters': {
+            const v = typeof def.filters === 'function' ? await def.filters({ ...ctx }) : {};
+            return done({ value: JSON.parse(JSON.stringify(v ?? {})) });
+          }
+          case 'filterRender': {
+            const v =
+              typeof def.filterRender === 'function'
+                ? await def.filterRender({ ...ctx, filters: a.filters || {} })
+                : [];
+            return done({
+              value: JSON.parse(JSON.stringify(kids(Array.isArray(v) ? v : [v]).filter(Boolean))),
+            });
+          }
+          case 'fieldRender': {
+            const v = await def.fieldRender({ ...ctx, ticket: a.ticket });
+            return done({
+              value: JSON.parse(JSON.stringify(kids(Array.isArray(v) ? v : [v]).filter(Boolean))),
+            });
+          }
+          case 'change': {
+            if (typeof def.onFieldChange !== 'function')
+              throw new Error(
+                'The board script has no onFieldChange({ ticket, id, value }) method',
+              );
+            const v = await def.onFieldChange({
+              ...ctx,
+              ticket: a.ticket,
+              id: a.id,
+              value: a.value,
+              allDay: a.allDay,
+            });
+            return done({ value: v === undefined ? null : JSON.parse(JSON.stringify(v)) });
+          }
+          case 'apply': {
+            const tickets = a.tickets || [];
+            const filters = a.filters || {};
+            let kept = tickets;
+            if (typeof def.onFilter === 'function') {
+              const keep = await Promise.all(
+                tickets.map((ticket) => def.onFilter({ ...ctx, ticket, filters })),
+              );
+              kept = tickets.filter((_, i) => !!keep[i]);
+            }
+            let order = null;
+            if (typeof def.onSort === 'function') {
+              const sorted = [...kept].sort((x, y) => {
+                const r = def.onSort({ ...ctx, a: x, b: y, filters });
+                if (r && typeof r.then === 'function')
+                  throw new Error('onSort must answer at once (no async / await)');
+                return Number(r) || 0;
+              });
+              order = sorted.map((t) => t.id);
+            }
+            return done({ value: { keep: kept.map((t) => t.id), order } });
+          }
+          default:
+            return done({ error: `Unknown script call ${m.op}` });
+        }
+      } catch (e) {
+        done({ error: errText(e), line: lineOf(e, LINE_OFFSET) });
+      }
+    },
     async apiResult(m) {
       const p = pending.get(m.id);
       if (!p) return;
@@ -418,7 +553,7 @@ export function boot(scope) {
     if (fn) void fn(m);
   };
   post({ type: 'ready' });
-  return { api, h };
+  return { api, h, ui };
 }
 
 // In a real worker, start at once. (Under tests this module is imported, not run.)

@@ -32,6 +32,7 @@ import {
   isAgentId,
   paths,
   TEMPLATE_DOCS_MD,
+  BOARD_SCRIPT_DOCS_MD,
   TEMPLATE_KINDS,
   TEMPLATE_STARTERS,
   tokenMayCall,
@@ -385,7 +386,7 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
   read(
     'list_templates',
     ['board:read'],
-    "The board's templates (templates.html): id, kind (message | ticket | card), name, description, indicator, position — and, with include_code, the code. Create or change one with template_save.",
+    "The board's templates (templates.html): id, kind (message | ticket | card | script), name, description, indicator, position — and, with include_code, the code. Create or change one with template_save.",
     {
       board: boardArg,
       kind: z.enum(TEMPLATE_KINDS).optional().describe('Only this kind'),
@@ -403,10 +404,10 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
   read(
     'get_template_docs',
     ['board:read'],
-    'How to write a template: the runtime, the builder `h`, `api`, ctx, what submit returns, and a starter per kind. Read this before template_save.',
+    'How to write a template (the runtime, the builder `h`, `api`, ctx, what submit returns) and the board script (kind "script": the ticket fields, filters and sort as code, hooks with named arguments), with a starter per kind. Read this before template_save.',
     { kind: z.enum(TEMPLATE_KINDS).optional().describe('Starter code for this kind') },
     async (a) => ({
-      docs: TEMPLATE_DOCS_MD,
+      docs: `${TEMPLATE_DOCS_MD}\n\n${BOARD_SCRIPT_DOCS_MD}`,
       starters: a.kind
         ? { [a.kind as string]: TEMPLATE_STARTERS[a.kind as keyof typeof TEMPLATE_STARTERS] }
         : TEMPLATE_STARTERS,

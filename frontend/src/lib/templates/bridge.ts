@@ -10,8 +10,15 @@
  * extra reads.
  */
 import type { Readable } from 'svelte/store';
-import { doc, getDoc } from 'firebase/firestore';
-import { paths, type Board, type BoardMember, type KeyIndex, type Ticket } from '@tm/shared';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
+import {
+  paths,
+  type Board,
+  type BoardKeyClaim,
+  type BoardMember,
+  type KeyIndex,
+  type Ticket,
+} from '@tm/shared';
 import { getDb } from '$lib/firebase/client';
 import { boardActiveTickets, boardMembers, type QueryState } from '$lib/stores';
 import { rankTickets } from '$lib/editor/ticketSearch';
@@ -126,6 +133,41 @@ export function createBridge(i: BridgeInput): TemplateBridge & {
       const limit = Math.max(1, Math.min(50, typeof opts.limit === 'number' ? opts.limit : 8));
       return Promise.all(rankTickets(text, await tickets(), limit).map(info));
     },
+    async boardTickets(q) {
+      // Another board, read as the viewer: Firestore's rules decide (a board they cannot read fails).
+      const key = typeof q.board === 'string' ? q.board.trim().toUpperCase() : '';
+      if (!key) throw new Error('api.boards.tickets: name the board, e.g. { board: "ENG" }');
+      const claim = await getDoc(doc(getDb(), paths.boardKey(key)));
+      const boardId = claim.exists() ? (claim.data() as BoardKeyClaim).boardId : null;
+      if (!boardId || (claim.data() as BoardKeyClaim).deleted)
+        throw new Error(`api.boards.tickets: no board ${key}`);
+      const other = await getDoc(doc(getDb(), paths.board(boardId))).then(
+        (b) => (b.exists() ? { ...(b.data() as Board), id: b.id } : null),
+        () => null,
+      );
+      if (!other) throw new Error(`api.boards.tickets: you cannot read ${key}`);
+      const n = Math.max(1, Math.min(200, typeof q.limit === 'number' ? q.limit : 100));
+      const snap = await getDocs(
+        query(
+          collection(getDb(), paths.tickets(boardId)),
+          where('state', '==', 'active'),
+          limit(n),
+        ),
+      );
+      const text = typeof q.text === 'string' ? q.text.trim().toLowerCase() : '';
+      const board = other;
+      return snap.docs
+        .map((d) => ({ ...(d.data() as Ticket), id: d.id }))
+        .filter((t) => !text || t.title.toLowerCase().includes(text))
+        .map((t) => ({
+          ...ticketInfo(t, board, new Map()),
+          stageId: t.stageId,
+          assigneeUids: [...t.assigneeUids],
+          priorityId: t.priorityId,
+          tagIds: [...t.tagIds],
+          fields: { ...(t.fields ?? {}) },
+        }));
+    },
     async storageGet(k) {
       try {
         const raw = localStorage.getItem(storageKey(k));
@@ -153,6 +195,7 @@ export const emptyBridge: TemplateBridge = {
   ticketGet: async () => null,
   ticketList: async () => [],
   ticketSearch: async () => [],
+  boardTickets: async () => [],
   storageGet: async () => null,
   storageSet: async () => true,
 };
