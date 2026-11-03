@@ -181,9 +181,12 @@
             code change.
           </li>
           <li>
-            Settings › Custom fields is gone (<code>/settings/fields</code> leads to Script). The
-            field definitions stay on the board for the generated script, the required-field checks
-            and the table and card columns. Priorities and Tags keep their settings pages.
+            Settings › Custom fields, Priorities and Tags are gone (their URLs lead to Script;
+            Panth, 2026-11-03: "all is done from code, so remove those tabs"). The generated script
+            writes their option lists into the code. The stored definitions stay on the board for
+            the required-field checks, the cards' chips and the table columns;
+            <code>priorityId</code> / <code>tagIds</code> still only take values the board already
+            had, so a new list of values goes in the ticket's own <code>fields</code>.
           </li>
         </ul>
 

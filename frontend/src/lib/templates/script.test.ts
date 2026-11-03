@@ -107,14 +107,20 @@ describe('board script runtime', () => {
 
   it('a generated script draws the old fields and writes the old columns', async () => {
     const code = generateBoardScript({
-      priorities: [{ id: 'p1' }],
-      tags: [{ id: 't1' }],
+      priorities: [{ id: 'p1', name: 'High', color: '#f00' }],
+      tags: [{ id: 't1', name: "it's a bug" }],
       fields: [
-        { id: 'f_client', name: 'Client', type: 'select' },
+        { id: 'f_client', name: 'Client', type: 'select', options: [{ id: 'o1', name: 'Acme' }] },
         { id: 'f_formula', name: 'Total', type: 'formula' },
       ],
     });
-    expect(code).toContain('Not drawn (no ui control for their type): Total (formula)');
+    expect(code).toContain('Not drawn (no control for the type): Total (formula).');
+    // The option lists are code (no Priorities / Tags settings pages any more).
+    expect(code).toContain(
+      "const PRIORITIES = [\n  { value: 'p1', label: 'High', color: '#f00' },\n];",
+    );
+    expect(code).toContain("{ value: 't1', label: 'it\\'s a bug' }");
+    expect(code).toContain("const CLIENT = [\n  { value: 'o1', label: 'Acme' },\n];");
     const w = fakeWorker();
     await w.load(code);
     const fields = await w.call('fieldRender', {
@@ -133,7 +139,7 @@ describe('board script runtime', () => {
     expect(controls.find((c) => c.id === 'f_client')).toMatchObject({
       type: 'select',
       value: 'o1',
-      options: [{ value: 'o1', label: 'Acme', color: null }],
+      options: [{ value: 'o1', label: 'Acme' }],
     });
     expect(
       (await w.call('change', { ticket: ticket('1'), id: 'due', value: 5, allDay: false })).value,

@@ -120,6 +120,12 @@ test('a board from before board scripts keeps its fields (generated script)', as
   await expect(pane.locator('[data-script-control="due"]')).toBeVisible();
   await expect(pane.locator('[data-script-control="estimate"]')).toBeVisible();
 
-  await page.goto(`/b/${b.key}/settings/script`);
+  // Priorities and Tags are code now: no settings pages, their old URLs lead to Script.
+  await page.goto(`/b/${b.key}/settings/priorities`);
+  await expect(page).toHaveURL(new RegExp(`/b/${b.key}/settings/script$`));
   await expect(page.getByTestId('script-generated')).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Board settings' });
+  await expect(nav.getByRole('link', { name: 'Script', exact: true }).first()).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Priorities' })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Tags' })).toHaveCount(0);
 });

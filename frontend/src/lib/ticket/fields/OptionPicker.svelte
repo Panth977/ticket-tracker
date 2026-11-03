@@ -40,6 +40,8 @@
     onchange: (ids: string[]) => void;
     /** '+ Create "…"' for a query with no exact match. Resolves the new id (or null). */
     oncreate?: (name: string) => Promise<string | null>;
+    /** Always show this text on the button instead of the picked values (an "+ Add" button). */
+    trigger?: string;
     class?: string;
   }
   let {
@@ -52,6 +54,7 @@
     disabled = false,
     onchange,
     oncreate,
+    trigger,
     class: cls = '',
   }: Props = $props();
 
@@ -133,7 +136,9 @@
     hover:border-line hover:bg-surface-2 disabled:cursor-default disabled:hover:border-transparent disabled:hover:bg-transparent {cls}"
 >
   <span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-    {#if !selected.length}
+    {#if trigger}
+      <span class="text-subtle">{trigger}</span>
+    {:else if !selected.length}
       <span class="text-subtle">{placeholder}</span>
     {:else}
       {#each selected as o (o.id)}

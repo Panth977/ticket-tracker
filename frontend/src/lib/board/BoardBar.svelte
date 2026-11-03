@@ -354,7 +354,7 @@
     <a
       href={routes.boardSettings(board.key)}
       data-board-settings
-      title="Board settings — stages, fields, people &amp; roles"
+      title="Board settings — stages, script, people &amp; roles"
       aria-label="Board settings"
       class="tm-tap grid size-7 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-text"
     >

@@ -114,40 +114,39 @@ export type ScriptFilters = z.infer<typeof ScriptFiltersSchema>;
 
 // ───────────────────────── the default script ─────────────────────────
 
-/** What every new board starts with (boardCreate saves it): Assignees, and an "Only mine" filter. */
-export const DEFAULT_BOARD_SCRIPT = `// The board script: this board's ticket fields and filters.
-// Stage is drawn by the app above these fields. Every hook and every ui.* / this.api.*
-// call takes ONE object of named arguments. Docs: /integrate#10-board-script
+/** What every new board starts with (boardCreate saves it): Assignees, and two filters. */
+export const DEFAULT_BOARD_SCRIPT = `// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
+// Every hook, ui.* control and this.api.* call takes one object of named arguments.
+// Docs: /integrate#10-board-script
+
 export default class BoardScript {
   // The filter values a person starts with.
   filters() {
     return { mine: false, assignee: [] };
   }
 
-  // The controls above the board. Changing one calls onFilter for every ticket again.
-  filterRender({ filters }) {
+  filterRender({ filters: f }) {
     return [
-      ui.toggle({ id: 'mine', label: 'Only mine', value: filters.mine }),
-      ui.people({ id: 'assignee', label: 'Assignee', value: filters.assignee }),
+      ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),
+      ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),
     ];
   }
 
-  // Runs for every ticket, even when no filter is set: true = show it.
-  onFilter({ ticket, filters, me }) {
-    if (filters.mine && !ticket.assigneeUids.includes(me.id)) return false;
-    if (filters.assignee.length && !filters.assignee.some((u) => ticket.assigneeUids.includes(u)))
-      return false;
-    return true;
+  // Runs for every ticket, even with no filter set: true = show it.
+  onFilter({ ticket: t, filters: f, me }) {
+    return (
+      (!f.mine || t.assigneeUids.includes(me.id)) &&
+      (!f.assignee.length || f.assignee.some((u) => t.assigneeUids.includes(u)))
+    );
   }
 
-  // The ticket's fields, under Stage.
-  fieldRender({ ticket }) {
+  fieldRender({ ticket: t }) {
     return [
-      ui.people({ id: 'assignees', label: 'Assignees', value: ticket.assigneeUids, commitments: true }),
+      ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
     ];
   }
 
-  // One field changed (text: on blur or Enter). Return the ticket patch to write.
+  // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
   }
@@ -156,16 +155,25 @@ export default class BoardScript {
 
 // ───────────────────────── a script for an existing board ─────────────────────────
 
-/** The board settings a generated script needs (a Board satisfies it). */
+interface ScriptOptionSource {
+  id: string;
+  name: string;
+  color?: string | null;
+  position?: number;
+}
+
+/** The board settings a generated script is written from (a Board satisfies it). */
 export interface ScriptBoardShape {
-  priorities: readonly { id: string }[];
-  tags: readonly { id: string }[];
+  priorities: readonly ScriptOptionSource[];
+  tags: readonly ScriptOptionSource[];
   fields: readonly {
     id: string;
     name: string;
     type: string;
     archived?: boolean;
     required?: boolean;
+    position?: number;
+    options?: readonly ScriptOptionSource[];
   }[];
 }
 
@@ -188,86 +196,153 @@ const CONTROL_OF: Record<string, string> = {
   people: 'people',
 };
 
-const js = (s: string) => JSON.stringify(s);
+/** A JavaScript string literal, single-quoted like the rest of the generated code. */
+const js = (v: string) =>
+  `'${v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
+/** `t.fields.f_abc` (or `t.fields['odd key']`). */
+const fieldRef = (id: string) =>
+  /^[A-Za-z_$][\w$]*$/.test(id) ? `t.fields.${id}` : `t.fields[${js(id)}]`;
+const byPosition = <T extends { position?: number }>(xs: readonly T[]) =>
+  [...xs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+/** `const NAME = [ { value, label, color }, … ];` — one option per line. */
+function optionList(name: string, list: readonly ScriptOptionSource[]): string {
+  const rows = byPosition(list).map(
+    (o) =>
+      `  { value: ${js(o.id)}, label: ${js(o.name)}${o.color ? `, color: ${js(o.color)}` : ''} },`,
+  );
+  return `const ${name} = [\n${rows.join('\n')}\n];`;
+}
+
+/** 'Contract value' → 'CONTRACT_VALUE', unique among `taken`. */
+function constName(label: string, taken: Set<string>): string {
+  let base = label
+    .normalize('NFKD')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
+  if (!base || /^[0-9]/.test(base)) base = `FIELD_${base}`;
+  let n = base;
+  for (let i = 2; taken.has(n); i++) n = `${base}_${i}`;
+  taken.add(n);
+  return n;
+}
 
 /**
- * The script for a board that existed before board scripts: the same fields
- * its Details pane showed (priority, assignees with commitments, start, due,
- * estimate, tags, its settings-defined fields), and filters for the same
- * things. Options are read from the board at run time, so renaming a
- * priority or adding a tag needs no code change.
+ * The script for a board that existed before board scripts: the fields its
+ * Details pane showed (priority, assignees with commitments, start, due,
+ * estimate, tags, its settings-defined fields) and filters for them. The
+ * option lists are written INTO the code (Panth: "all is done from code") —
+ * there are no Priorities or Tags settings pages any more.
  */
 export function generateBoardScript(board: ScriptBoardShape): string {
-  const custom = board.fields.filter((f) => !f.archived && CONTROL_OF[f.type]);
-  const skipped = board.fields.filter((f) => !f.archived && !CONTROL_OF[f.type]);
-  const fieldLines = custom.map((f) => {
-    const c = CONTROL_OF[f.type]!;
-    const base = `id: ${js(f.id)}, label: ${js(f.name)}, value: ticket.fields[${js(f.id)}]${f.required ? ', required: true' : ''}`;
-    switch (c) {
-      case 'select':
-        return `      ui.select({ ${base}, options: optionsOf({ board, id: ${js(f.id)} }), clearable: true }),`;
-      case 'multiSelect':
-        return `      ui.multiSelect({ ${base}, options: optionsOf({ board, id: ${js(f.id)} }) }),`;
-      case 'person':
-        return `      ui.people({ ${base}, multiple: false }),`;
-      case 'people':
-        return `      ui.people({ ${base} }),`;
-      default:
-        return `      ui.${c}({ ${base} }),`;
-    }
-  });
+  const taken = new Set(['PRIORITIES', 'TAGS']);
   const hasPriorities = board.priorities.length > 0;
   const hasTags = board.tags.length > 0;
-  return `// The board script: this board's ticket fields and filters.
-// Generated from the board's settings when board scripts arrived (ORCH-35), so the
-// ticket shows what it showed before. Edit freely: delete what this board does not use.
-// Stage is drawn by the app above these fields. Every hook and every ui.* / this.api.*
-// call takes ONE object of named arguments. Docs: /integrate#10-board-script
+  const lists: string[] = [];
+  if (hasPriorities) lists.push(optionList('PRIORITIES', board.priorities));
+  if (hasTags) lists.push(optionList('TAGS', board.tags));
 
-/** A settings-defined field's options, as ui.select / ui.multiSelect take them. */
-const optionsOf = ({ board, id }) =>
-  (board.fields.find((f) => f.id === id)?.options ?? []).map((o) => ({ value: o.id, label: o.name, color: o.color }));
-const named = (list) => list.map((x) => ({ value: x.id, label: x.name, color: x.color }));
+  const live = byPosition(board.fields.filter((f) => !f.archived));
+  const custom = live.filter((f) => CONTROL_OF[f.type]);
+  const skipped = live.filter((f) => !CONTROL_OF[f.type]);
+  const fieldLines = custom.map((f) => {
+    const c = CONTROL_OF[f.type]!;
+    const value = `${fieldRef(f.id)}${c === 'multiSelect' || c === 'people' ? ' ?? []' : ' ?? null'}`;
+    const base = `id: ${js(f.id)}, label: ${js(f.name)}, value: ${value}${f.required ? ', required: true' : ''}`;
+    if (c === 'select' || c === 'multiSelect') {
+      const name = constName(f.name, taken);
+      lists.push(optionList(name, f.options ?? []));
+      return `      ui.${c}({ ${base}, options: ${name} }),`;
+    }
+    if (c === 'person') return `      ui.people({ ${base}, multiple: false }),`;
+    return `      ui.${c}({ ${base} }),`;
+  });
 
-export default class BoardScript {
+  const filterDefaults = ['mine: false', 'assignee: []'];
+  const filterControls = [
+    "      ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),",
+    "      ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),",
+  ];
+  const filterTests = [
+    '(!f.mine || t.assigneeUids.includes(me.id))',
+    '(!f.assignee.length || f.assignee.some((u) => t.assigneeUids.includes(u)))',
+  ];
+  if (hasPriorities) {
+    filterDefaults.push('priority: null');
+    filterControls.push(
+      "      ui.select({ id: 'priority', label: 'Priority', value: f.priority, options: PRIORITIES }),",
+    );
+    filterTests.push('(!f.priority || t.priorityId === f.priority)');
+  }
+  if (hasTags) {
+    filterDefaults.push('tags: []');
+    filterControls.push(
+      "      ui.multiSelect({ id: 'tags', label: 'Tags', value: f.tags, options: TAGS }),",
+    );
+    filterTests.push('(!f.tags.length || f.tags.some((x) => t.tagIds.includes(x)))');
+  }
+
+  const fields = [
+    hasPriorities &&
+      "      ui.select({ id: 'priority', label: 'Priority', value: t.priorityId, options: PRIORITIES }),",
+    "      ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),",
+    "      ui.date({ id: 'start', label: 'Start', value: t.startAt }),",
+    "      ui.date({ id: 'due', label: 'Due', value: t.dueAt, withTime: true, allDay: t.dueAllDay }),",
+    "      ui.number({ id: 'estimate', label: 'Estimate', value: t.estimate, min: 0 }),",
+    hasTags &&
+      "      ui.multiSelect({ id: 'tags', label: 'Tags', value: t.tagIds, options: TAGS }),",
+    ...fieldLines,
+  ].filter(Boolean);
+
+  const writes = [
+    hasPriorities && "      case 'priority': return { priorityId: value };",
+    "      case 'assignees': return { assigneeUids: value };",
+    "      case 'start': return { startAt: value };",
+    "      case 'due': return { dueAt: value, dueAllDay: allDay };",
+    "      case 'estimate': return { estimate: value };",
+    hasTags && "      case 'tags': return { tagIds: value };",
+    '      default: return { fields: { [id]: value } }; // the custom fields, by id',
+  ].filter(Boolean);
+
+  return `// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
+// Written from this board's old settings so its tickets show what they showed before;
+// delete what the board does not use. Every hook, ui.* control and this.api.* call takes
+// one object of named arguments. Docs: /integrate#10-board-script
+${
+  hasPriorities || hasTags
+    ? `//
+// The option lists are code now. priorityId / tagIds only take the values already here;
+// for a new list, keep the value in the ticket's own fields: { fields: { severity: value } }.
+`
+    : ''
+}${skipped.length ? `//\n// Not drawn (no control for the type): ${skipped.map((f) => `${f.name} (${f.type})`).join(', ')}.\n` : ''}
+${lists.length ? lists.join('\n\n') + '\n\n' : ''}export default class BoardScript {
   filters() {
-    return { mine: false, assignee: [], priority: null, tags: [] };
+    return { ${filterDefaults.join(', ')} };
   }
 
-  filterRender({ filters, board }) {
+  filterRender({ filters: f }) {
     return [
-      ui.toggle({ id: 'mine', label: 'Only mine', value: filters.mine }),
-      ui.people({ id: 'assignee', label: 'Assignee', value: filters.assignee }),
-${hasPriorities ? "      ui.select({ id: 'priority', label: 'Priority', value: filters.priority, options: named(board.priorities), clearable: true }),\n" : ''}${hasTags ? "      ui.multiSelect({ id: 'tags', label: 'Tags', value: filters.tags, options: named(board.tags) }),\n" : ''}    ];
+${filterControls.join('\n')}
+    ];
   }
 
-  onFilter({ ticket, filters, me }) {
-    if (filters.mine && !ticket.assigneeUids.includes(me.id)) return false;
-    if (filters.assignee.length && !filters.assignee.some((u) => ticket.assigneeUids.includes(u)))
-      return false;
-    if (filters.priority && ticket.priorityId !== filters.priority) return false;
-    if (filters.tags.length && !filters.tags.some((t) => ticket.tagIds.includes(t))) return false;
-    return true;
+  onFilter({ ticket: t, filters: f, me }) {
+    return (
+${filterTests.map((x) => `      ${x}`).join(' &&\n')}
+    );
   }
 
-  fieldRender({ ticket, board }) {
+  fieldRender({ ticket: t }) {
     return [
-${hasPriorities ? "      ui.select({ id: 'priority', label: 'Priority', value: ticket.priorityId, options: named(board.priorities), clearable: true }),\n" : ''}      ui.people({ id: 'assignees', label: 'Assignees', value: ticket.assigneeUids, commitments: true }),
-      ui.date({ id: 'start', label: 'Start', value: ticket.startAt }),
-      ui.date({ id: 'due', label: 'Due', value: ticket.dueAt, withTime: true, allDay: ticket.dueAllDay }),
-      ui.number({ id: 'estimate', label: 'Estimate', value: ticket.estimate, min: 0 }),
-${hasTags ? "      ui.multiSelect({ id: 'tags', label: 'Tags', value: ticket.tagIds, options: named(board.tags) }),\n" : ''}${fieldLines.length ? fieldLines.join('\n') + '\n' : ''}${skipped.length ? `      // Not drawn (no ui control for their type): ${skipped.map((f) => `${f.name} (${f.type})`).join(', ')}\n` : ''}    ];
+${fields.join('\n')}
+    ];
   }
 
   onFieldChange({ id, value, allDay }) {
     switch (id) {
-      case 'priority': return { priorityId: value };
-      case 'assignees': return { assigneeUids: value };
-      case 'start': return { startAt: value };
-      case 'due': return { dueAt: value, dueAllDay: allDay };
-      case 'estimate': return { estimate: value };
-      case 'tags': return { tagIds: value };
-      default: return { fields: { [id]: value } };
+${writes.join('\n')}
     }
   }
 }

@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 7510e1c20f38…</span>
+        <span>sha256 815969089cbb…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -4278,7 +4278,7 @@ export default {
 <ul><li><strong>Stage is not in the script.</strong> The app draws Stage above the script's fields, with the board's stage grants and stage rules, as before.</li><li>The script <strong>draws</strong> the Details pane's fields (<code>fieldRender</code>) and <strong>decides what an edit writes</strong> (<code>onFieldChange</code>): one change may write several things.</li><li>It <strong>owns the board's filters</strong> (<code>filterRender</code>, <code>onFilter</code>) and, if it wants, <strong>the order</strong> (<code>onSort</code>). A saved view keeps its sort, grouping and columns; the script's filter applies to every view, and <code>onSort</code> (when present) replaces the view's sort.</li><li><strong>Every hook, every <code>ui.*</code> control and every <code>this.api.*</code> call takes ONE object of named arguments.</strong></li></ul>
 <h3 id="where-it-runs-and-what-it-is-not"><a class="anchor" href="#where-it-runs-and-what-it-is-not" aria-label="Link to this section">#</a>Where it runs, and what it is not</h3>
 <p>It runs in each person's <strong>browser</strong>, in the same sandbox as templates (an opaque-origin Worker; see <em>Templates › How it runs</em>), <strong>as the person looking</strong>. So:</p>
-<ul><li><code>onFilter</code> hides tickets <strong>in the list</strong>. It is not access control: anyone on the board can still open a ticket by its key, find it in search, or read it over the API.</li><li><strong>Agents, the REST API and MCP do not run the script.</strong> They write tickets directly (<code>ticket_update</code> with <code>fields</code>, <code>assignees</code> …), and the server checks those writes the way it always does. Rules you put in <code>onFieldChange</code> or <code>disabled</code> hold in the app only.</li><li>A new board starts with the default below, saved. A board that existed before board scripts (or whose script was deleted) runs a script <strong>generated from its settings</strong> (its priority, start, due, estimate, tags and custom fields), until an admin saves one.</li></ul>
+<ul><li><code>onFilter</code> hides tickets <strong>in the list</strong>. It is not access control: anyone on the board can still open a ticket by its key, find it in search, or read it over the API.</li><li><strong>Agents, the REST API and MCP do not run the script.</strong> They write tickets directly (<code>ticket_update</code> with <code>fields</code>, <code>assignees</code> …), and the server checks those writes the way it always does. Rules you put in <code>onFieldChange</code> or <code>disabled</code> hold in the app only.</li><li>A new board starts with the default below, saved. A board that existed before board scripts (or whose script was deleted) runs a script <strong>generated from its old settings</strong> (its priority, start, due, estimate, tags and custom fields, with their option lists written into the code), until an admin saves one. There are no Priorities, Tags or Custom fields settings pages: option lists live in the script. <code>priorityId</code> / <code>tagIds</code> only take the values a board already had; a new list of values belongs in the ticket's own <code>fields</code>.</li></ul>
 <h3 id="the-shape"><a class="anchor" href="#the-shape" aria-label="Link to this section">#</a>The shape</h3>
 <figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>export default class BoardScript {
   filters()                                             // → the filter values a person starts with
@@ -4299,39 +4299,38 @@ export default {
 <h3 id="this-api"><a class="anchor" href="#this-api" aria-label="Link to this section">#</a><code>this.api</code></h3>
 <p>As in templates, read-only and as the viewer, with named arguments: <code>this.api.me()</code>, <code>this.api.board()</code>, <code>this.api.members()</code>, <code>this.api.tickets.get({ key })</code>, <code>this.api.tickets.list({ stage?, assignee?, tag?, priority?, text?, limit? })</code>, <code>this.api.tickets.search({ text, limit? })</code>, <code>this.api.storage.get({ key })</code>, <code>this.api.storage.set({ key, value })</code>, and for <strong>another board</strong> the viewer can read: <code>this.api.boards.tickets({ board: 'OPS', text?, limit? })</code> (its active tickets, with <code>stageId</code>, <code>assigneeUids</code>, <code>fields</code> …).</p>
 <h3 id="the-default"><a class="anchor" href="#the-default" aria-label="Link to this section">#</a>The default</h3>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>// The board script: this board's ticket fields and filters.
-// Stage is drawn by the app above these fields. Every hook and every ui.* / this.api.*
-// call takes ONE object of named arguments. Docs: /integrate#10-board-script
+<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
+// Every hook, ui.* control and this.api.* call takes one object of named arguments.
+// Docs: /integrate#10-board-script
+
 export default class BoardScript {
   // The filter values a person starts with.
   filters() {
     return { mine: false, assignee: [] };
   }
 
-  // The controls above the board. Changing one calls onFilter for every ticket again.
-  filterRender({ filters }) {
+  filterRender({ filters: f }) {
     return [
-      ui.toggle({ id: 'mine', label: 'Only mine', value: filters.mine }),
-      ui.people({ id: 'assignee', label: 'Assignee', value: filters.assignee }),
+      ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),
+      ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),
     ];
   }
 
-  // Runs for every ticket, even when no filter is set: true = show it.
-  onFilter({ ticket, filters, me }) {
-    if (filters.mine &amp;&amp; !ticket.assigneeUids.includes(me.id)) return false;
-    if (filters.assignee.length &amp;&amp; !filters.assignee.some((u) =&gt; ticket.assigneeUids.includes(u)))
-      return false;
-    return true;
+  // Runs for every ticket, even with no filter set: true = show it.
+  onFilter({ ticket: t, filters: f, me }) {
+    return (
+      (!f.mine || t.assigneeUids.includes(me.id)) &amp;&amp;
+      (!f.assignee.length || f.assignee.some((u) =&gt; t.assigneeUids.includes(u)))
+    );
   }
 
-  // The ticket's fields, under Stage.
-  fieldRender({ ticket }) {
+  fieldRender({ ticket: t }) {
     return [
-      ui.people({ id: 'assignees', label: 'Assignees', value: ticket.assigneeUids, commitments: true }),
+      ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
     ];
   }
 
-  // One field changed (text: on blur or Enter). Return the ticket patch to write.
+  // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
   }

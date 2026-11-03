@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    7510e1c20f3897d9063d2e9c8462da43d71c595297a41d2562d8bbc9dd654017
+content-sha256:    815969089cbb8a6807ced8a2458444f118bc761bc3fedce63e7916b415796665
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -6462,8 +6462,11 @@ Worker; see *Templates › How it runs*), **as the person looking**. So:
   (`ticket_update` with `fields`, `assignees` …), and the server checks those writes
   the way it always does. Rules you put in `onFieldChange` or `disabled` hold in the app only.
 * A new board starts with the default below, saved. A board that existed before board
-  scripts (or whose script was deleted) runs a script **generated from its settings** (its
-  priority, start, due, estimate, tags and custom fields), until an admin saves one.
+  scripts (or whose script was deleted) runs a script **generated from its old settings** (its
+  priority, start, due, estimate, tags and custom fields, with their option lists written into
+  the code), until an admin saves one. There are no Priorities, Tags or Custom fields settings
+  pages: option lists live in the script. `priorityId` / `tagIds` only take the values a
+  board already had; a new list of values belongs in the ticket's own `fields`.
 
 ### The shape
 
@@ -6539,39 +6542,38 @@ As in templates, read-only and as the viewer, with named arguments:
 ### The default
 
 ```js
-// The board script: this board's ticket fields and filters.
-// Stage is drawn by the app above these fields. Every hook and every ui.* / this.api.*
-// call takes ONE object of named arguments. Docs: /integrate#10-board-script
+// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
+// Every hook, ui.* control and this.api.* call takes one object of named arguments.
+// Docs: /integrate#10-board-script
+
 export default class BoardScript {
   // The filter values a person starts with.
   filters() {
     return { mine: false, assignee: [] };
   }
 
-  // The controls above the board. Changing one calls onFilter for every ticket again.
-  filterRender({ filters }) {
+  filterRender({ filters: f }) {
     return [
-      ui.toggle({ id: 'mine', label: 'Only mine', value: filters.mine }),
-      ui.people({ id: 'assignee', label: 'Assignee', value: filters.assignee }),
+      ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),
+      ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),
     ];
   }
 
-  // Runs for every ticket, even when no filter is set: true = show it.
-  onFilter({ ticket, filters, me }) {
-    if (filters.mine && !ticket.assigneeUids.includes(me.id)) return false;
-    if (filters.assignee.length && !filters.assignee.some((u) => ticket.assigneeUids.includes(u)))
-      return false;
-    return true;
+  // Runs for every ticket, even with no filter set: true = show it.
+  onFilter({ ticket: t, filters: f, me }) {
+    return (
+      (!f.mine || t.assigneeUids.includes(me.id)) &&
+      (!f.assignee.length || f.assignee.some((u) => t.assigneeUids.includes(u)))
+    );
   }
 
-  // The ticket's fields, under Stage.
-  fieldRender({ ticket }) {
+  fieldRender({ ticket: t }) {
     return [
-      ui.people({ id: 'assignees', label: 'Assignees', value: ticket.assigneeUids, commitments: true }),
+      ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
     ];
   }
 
-  // One field changed (text: on blur or Enter). Return the ticket patch to write.
+  // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
   }

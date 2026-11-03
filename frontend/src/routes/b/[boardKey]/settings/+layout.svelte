@@ -73,7 +73,12 @@
     {#snippet action()}<Button href={routes.home()}>Back to your boards</Button>{/snippet}
   </EmptyState>
 {:else}
-  <div class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:flex-row md:px-8">
+  <!-- The Script section is an editor: it takes the whole width (board-script.html). -->
+  <div
+    class="mx-auto flex w-full flex-col gap-6 px-4 py-6 md:flex-row md:px-8 {section === 'script'
+      ? 'max-w-none'
+      : 'max-w-6xl'}"
+  >
     <nav class="flex shrink-0 flex-col gap-1 md:w-52" aria-label="Board settings">
       <a
         href={routes.board(board.key)}

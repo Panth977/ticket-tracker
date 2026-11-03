@@ -32,7 +32,6 @@
     savedScript,
     type ScriptMe,
   } from '$lib/templates/script';
-  import Section from './Section.svelte';
   import { useSettings } from './draft.svelte';
 
   const s = useSettings();
@@ -192,11 +191,21 @@
   }
 </script>
 
-<Section
-  title="Script"
-  description="This board's ticket fields, filters and sort are code. Stage stays the app's own; everything else on a ticket's Details pane is what fieldRender draws, and onFieldChange decides what an edit writes. It runs in each person's browser, in a sandbox, as that person — agents and the API write tickets without it."
->
-  {#snippet actions()}
+<!-- An editor, not a form: the code takes the page; the preview sits beside it. -->
+<section class="flex flex-col gap-3" aria-label="Board script">
+  <header class="flex flex-wrap items-center gap-2">
+    <h2 class="text-xl font-semibold">Script</h2>
+    {#if effective?.source === 'generated'}
+      <span
+        class="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted"
+        data-testid="script-generated"
+        title="This board has no saved script yet: it runs one generated from its settings, so its tickets show what they showed before. Save to keep it."
+        >Generated · not saved</span
+      >
+    {/if}
+    {#if !s.isAdmin}<span class="text-xs text-muted">Read only — admins change the script</span
+      >{/if}
+    <span class="flex-1"></span>
     <a
       href="/integrate#10-board-script"
       target="_blank"
@@ -204,47 +213,36 @@
       class="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-text hover:bg-surface-2"
       ><BookOpen size={14} /> Docs</a
     >
-  {/snippet}
+    {#if s.isAdmin}
+      <Button size="sm" variant="ghost" icon={RotateCcw} onclick={() => reset('default')}
+        >Default</Button
+      >
+      <Button size="sm" variant="ghost" icon={RotateCcw} onclick={() => reset('generated')}
+        >From settings</Button
+      >
+      <Button size="sm" variant="primary" loading={busy} disabled={!dirty} onclick={save}
+        >Save</Button
+      >
+    {/if}
+  </header>
+  <p class="text-sm text-muted">
+    Stage is the app's; every other field on a ticket, the Filter menu and the sort are this code.
+    It runs in each person's browser, as them. Agents and the API write tickets without it.
+  </p>
 
-  {#if effective?.source === 'generated'}
-    <p class="rounded-md bg-surface-2 px-3 py-2 text-sm text-muted" data-testid="script-generated">
-      This board has no saved script yet: it runs one generated from its settings (the fields its
-      tickets showed before). Save to keep it, or change it first.
-    </p>
-  {/if}
-  {#if !s.isAdmin}
-    <p class="rounded-md bg-surface-2 px-3 py-2 text-sm text-muted">
-      Only board admins can change the script. You can read the code and try it.
-    </p>
-  {/if}
+  <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+    <CodeField
+      value={code}
+      readOnly={!s.isAdmin}
+      onchange={onCode}
+      onsave={save}
+      class="h-[calc(100dvh-12rem)] min-h-[28rem]"
+    />
 
-  <div class="grid min-h-[34rem] gap-4 lg:grid-cols-2">
-    <div class="flex min-w-0 flex-col gap-2">
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs font-medium text-muted">Code</span>
-        <span class="flex-1"></span>
-        {#if s.isAdmin}
-          <Button size="sm" variant="ghost" icon={RotateCcw} onclick={() => reset('default')}
-            >Default</Button
-          >
-          <Button size="sm" variant="ghost" icon={RotateCcw} onclick={() => reset('generated')}
-            >From settings</Button
-          >
-          <Button size="sm" variant="primary" loading={busy} disabled={!dirty} onclick={save}
-            >Save</Button
-          >
-        {/if}
-      </div>
-      <CodeField
-        value={code}
-        readOnly={!s.isAdmin}
-        onchange={onCode}
-        onsave={save}
-        class="h-[36rem]"
-      />
-    </div>
-
-    <div class="flex min-w-0 flex-col gap-3" data-testid="script-preview">
+    <div
+      class="flex min-w-0 flex-col gap-3 xl:h-[calc(100dvh-12rem)] xl:min-h-[28rem] xl:overflow-y-auto"
+      data-testid="script-preview"
+    >
       {#if problem}
         <div role="alert" class="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">
           {problem}
@@ -269,7 +267,7 @@
           <span>Ticket fields</span>
           {#if tickets.length}
             <select
-              class="h-7 max-w-64 rounded-md border border-line bg-surface px-1.5 text-xs"
+              class="h-7 max-w-56 rounded-md border border-line bg-surface px-1.5 text-xs"
               aria-label="Preview with ticket"
               value={sample?.id ?? ''}
               onchange={(e) => (sampleId = e.currentTarget.value)}
@@ -319,4 +317,4 @@
       </details>
     </div>
   </div>
-</Section>
+</section>
