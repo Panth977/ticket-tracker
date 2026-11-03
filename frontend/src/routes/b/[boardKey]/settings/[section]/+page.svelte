@@ -21,7 +21,6 @@
   import SubscribersSection from '$lib/board/settings/SubscribersSection.svelte';
   import SubscriptionsSection from '$lib/board/settings/SubscriptionsSection.svelte';
   import ScriptSection from '$lib/board/settings/ScriptSection.svelte';
-  import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
   import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
 
@@ -36,6 +35,8 @@
     fields: 'script',
     priorities: 'script',
     tags: 'script',
+    // board-script.html §forms: message / ticket forms and cards are the script's too.
+    templates: 'script',
   };
   $effect(() => {
     const to = MOVED[section];
@@ -50,8 +51,6 @@
     <StagesSection />
   {:else if section === 'script'}
     <ScriptSection />
-  {:else if section === 'templates'}
-    <TemplatesSection />
   {:else if section === 'people'}
     <Section
       title="People & roles"

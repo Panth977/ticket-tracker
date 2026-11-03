@@ -190,6 +190,52 @@
           </li>
         </ul>
 
+        <h2 id="g">G · The board itself (ORCH-35, round 3)</h2>
+        <p>
+          Panth: <i>"previewTicketCard … previewTicketTable … previews(tickets, openTicket) … remove
+          the rest of the concepts of custom UI set up in other tabs; in all boards by default only
+          Board and Table; give tools to easily develop the calendar."</i> Decisions: old Calendar /
+          Timeline views and card templates are dropped (not rebuilt); message and ticket templates
+          move into the script; table cells may be editable controls; the calendar gets drag,
+          a Gantt and date helpers. <i>"Do maximum things from script, just give the base template."</i>
+        </p>
+        <ul>
+          <li>
+            <b>Board</b>: <code>previewTicketCard({ ticket })</code> draws a card (static
+            <code>h.*</code>, batched, cached per ticket version). Without it the app's own card is
+            drawn — it carries unread, questions, task lists, blocked and in-place assigning, so the
+            default script leaves the hook commented out.
+          </li>
+          <li>
+            <b>Table</b>: <code>previewTicketTable({ tickets })</code> →
+            <code>{ columns, rows }</code>; a cell is text, an <code>h.*</code> tree or a
+            <code>ui.*</code> control routed through <code>onFieldChange</code>. The view keeps grouping
+            and sort; the column picker is gone.
+          </li>
+          <li>
+            <b>Bulk bar</b>: Stage and Archive stay the app's; <code>bulkRender</code> /
+            <code>onBulkChange</code> add the rest (one patch for all, or one per ticket).
+          </li>
+          <li>
+            <b>Previews</b>: <code>previews({ me, board })</code> → <code>{ Name: render }</code>, each a
+            tab (<code>?preview=Name</code>) run in its own stateful worker with the filtered tickets,
+            <code>openTicket({ id })</code> and <code>updateTicket({ id, patch })</code>.
+            <code>h.calendar</code> and <code>h.timeline</code> are app components (mounted by the
+            renderer's <code>widget</code> hook) with drag through <code>onMove</code>;
+            <code>dates.*</code> works in the viewer's zone.
+          </li>
+          <li>
+            <b>Forms</b>: <code>forms()</code> + <code>formState</code> / <code>formRender</code> /
+            <code>formSubmit</code>, run in the template worker as a surface; a posted message keeps
+            <code>template.id = 'script-&lt;form id&gt;'</code> (messagePost accepts that prefix).
+          </li>
+          <li>
+            Gone: Settings › Templates, card templates, Layout › Card fields, the Calendar and
+            Timeline view types (old saved ones draw as a Board), and the Calendar and Mine default
+            views. New boards get Board and Table.
+          </li>
+        </ul>
+
         <h2 id="f">F · Not in v1</h2>
         <ul>
           <li>Running the script on the server (agents and the API bypass it).</li>

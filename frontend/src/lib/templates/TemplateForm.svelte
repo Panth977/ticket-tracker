@@ -14,9 +14,13 @@
   import { contextFor, createBridge } from './bridge';
   import { mountPerson } from './mountPerson';
   import type { TicketInfo } from './info';
+  import type { ScriptEntry } from './protocol';
+  import { widgetMounter } from './widgets/mountWidget.svelte';
 
   interface Props {
     template: { id: string; kind: TemplateKind; code: string };
+    /** board-script.html: a form of the board script (`template.code` is the script). */
+    entry?: ScriptEntry;
     board: Board & { id: string };
     me: { id: string; name: string; email: string; role: string };
     /** A message template's ticket (ctx.ticket). */
@@ -34,6 +38,7 @@
   }
   let {
     template,
+    entry,
     board,
     me,
     ticket = null,
@@ -67,6 +72,7 @@
     const el = root;
     if (!el) return;
     // Live board / ticket updates must not restart the form (it would lose what was typed).
+    const ent = entry ? { ...entry } : undefined;
     const { b, who, tk, href, open } = untrack(() => ({
       b: $state.snapshot(board) as typeof board,
       who: $state.snapshot(me) as typeof me,
@@ -84,6 +90,7 @@
     const r = createRenderer(el, {
       dispatch: (h, args) => worker?.event(h, args) ?? 0,
       person: mountPerson,
+      widget: widgetMounter(),
       ticketHref: href,
       openTicket: open,
     });
@@ -94,6 +101,7 @@
       worker = new TemplateWorker({
         code,
         kind,
+        ...(ent ? { entry: ent } : {}),
         ctx,
         bridge,
         onRender: (tree, ack) => {

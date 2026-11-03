@@ -49,14 +49,10 @@ describe('boardCreate', () => {
     });
 
     const views = await getViews(boardId);
-    expect(views.map((v) => v.name).sort()).toEqual(['Board', 'Calendar', 'Mine', 'Table']);
+    // board-script.html: Board and Table only; anything else is the script's previews.
+    expect(views.map((v) => v.name).sort()).toEqual(['Board', 'Table']);
     const def = views.find((v) => v.id === b.defaultViewId)!;
     expect(def).toMatchObject({ name: 'Board', type: 'kanban', groupBy: 'stage', scope: 'shared' });
-    expect(views.find((v) => v.name === 'Mine')!.filter).toEqual({
-      field: 'assignee',
-      cmp: 'is',
-      value: 'me',
-    });
 
     const pref = (await db().doc(paths.pref(boardId, alice.uid)).get()).data();
     expect(pref).toMatchObject({ lastViewId: b.defaultViewId, starred: false });
@@ -120,7 +116,7 @@ describe('boardCreate', () => {
     expect(b.fields).toEqual(s.fields);
     expect(b.access).toEqual({ [bob.uid]: 'admin' });
     const views = await getViews(boardId);
-    expect(views.map((v) => v.name).sort()).toEqual(['Board', 'Calendar', 'Mine', 'Table']);
+    expect(views.map((v) => v.name).sort()).toEqual(['Board', 'Table']);
     expect(views.every((v) => v.ownerUid === bob.uid)).toBe(true);
     expect(views.find((v) => v.id === b.defaultViewId)!.name).toBe('Board');
   });

@@ -58,6 +58,7 @@ import {
   errors,
   isAgentId,
   paths,
+  SCRIPT_FORM_PREFIX,
   type AggCounter,
   type AggCounters,
   type AggEntry,
@@ -149,6 +150,10 @@ async function messageTemplateOf(
   boardId: string,
   t: NonNullable<CommandReqParsed<'messagePost'>['template']>,
 ): Promise<MessageTemplate> {
+  // board-script.html: a form of the board script (it runs in the browser; its id and name are
+  // the script's, kept as given — there is nothing stored to check them against).
+  if (t.id.startsWith(SCRIPT_FORM_PREFIX))
+    return { id: t.id, name: t.name, ...(t.data !== undefined ? { data: t.data } : {}) };
   const snap = await typedDoc('templates', paths.template(boardId, t.id)).get();
   const stored = snap.exists ? snap.data()! : null;
   if (!stored || stored.kind !== 'message')

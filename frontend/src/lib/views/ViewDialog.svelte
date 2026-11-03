@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { VIEW_TYPES, type ViewType } from '@tm/shared';
+  import type { ViewType } from '@tm/shared';
   import Button from '$lib/ui/Button.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import Input from '$lib/ui/Input.svelte';
@@ -21,13 +21,10 @@
     initialType?: ViewType;
     /** Editors may create shared views. */
     canShared: boolean;
-    /** templates.html §E: card templates a new kanban view may draw its cards with. */
-    cardTemplates?: { id: string; name: string }[];
     onsubmit: (v: {
       name: string;
       type: ViewType;
       scope: 'personal' | 'shared';
-      cardTemplateId?: string | null;
     }) => Promise<void> | void;
   }
   let {
@@ -37,14 +34,14 @@
     initialScope = 'personal',
     initialType = 'kanban',
     canShared,
-    cardTemplates = [],
     onsubmit,
   }: Props = $props();
 
   let name = $state('');
   let type = $state<ViewType>('kanban');
   let scope = $state<'personal' | 'shared'>('personal');
-  let cardTemplateId = $state('');
+  /** board-script.html: a board has Board and Table; anything else is a script preview. */
+  const TYPES: ViewType[] = ['kanban', 'table'];
   let busy = $state(false);
 
   $effect(() => {
@@ -52,7 +49,6 @@
       name = initialName;
       type = initialType;
       scope = canShared ? initialScope : 'personal';
-      cardTemplateId = '';
     }
   });
 
@@ -70,7 +66,6 @@
         name: n.slice(0, 60),
         type,
         scope,
-        ...(mode === 'new' && type === 'kanban' && cardTemplateId ? { cardTemplateId } : {}),
       });
       open = false;
     } catch {
@@ -88,7 +83,7 @@
       <fieldset class="flex flex-col gap-1 text-sm">
         <legend class="mb-1 font-medium">Layout</legend>
         <div class="grid grid-cols-2 gap-1.5">
-          {#each VIEW_TYPES as t (t)}
+          {#each TYPES as t (t)}
             <label
               class="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 {type ===
               t
@@ -107,20 +102,6 @@
           {/each}
         </div>
       </fieldset>
-      {#if type === 'kanban' && cardTemplates.length}
-        <label class="flex flex-col gap-1 text-sm">
-          <span class="font-medium">Cards</span>
-          <select
-            bind:value={cardTemplateId}
-            class="h-8 rounded-md border border-line bg-surface px-2"
-            aria-label="Card template"
-          >
-            <option value="">Built-in card</option>
-            {#each cardTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
-          </select>
-          <span class="text-xs text-muted">A card template draws each card its own way.</span>
-        </label>
-      {/if}
     {/if}
     {#if mode !== 'rename'}
       <fieldset class="flex flex-col gap-1 text-sm">

@@ -155,7 +155,8 @@ const baseView = (ownerUid: string): Omit<View, 'name' | 'type' | 'position'> =>
 });
 
 /**
- * Default views: Board (kanban by stage — the default), Table, Calendar, Mine.
+ * Default views: Board (kanban by stage — the default) and Table. Anything else is the board
+ * script's (previews — board-script.html).
  * `extraCardFields` are fields a template wants on its cards.
  */
 export function defaultViews(ownerUid: string, fields: FieldDef[]): { key: string; view: View }[] {
@@ -190,22 +191,6 @@ export function defaultViews(ownerUid: string, fields: FieldDef[]): { key: strin
         position: 1,
         columns: cols,
         sort: [{ field: 'updatedAt', dir: 'desc' }],
-      },
-    },
-    {
-      key: 'calendar',
-      view: { ...b, name: 'Calendar', type: 'calendar', position: 2, dateField: 'due' },
-    },
-    {
-      key: 'mine',
-      view: {
-        ...b,
-        name: 'Mine',
-        type: 'kanban',
-        position: 3,
-        groupBy: 'stage',
-        sort: [{ field: 'rank', dir: 'asc' }],
-        filter: { field: 'assignee', cmp: 'is', value: 'me' },
       },
     },
   ];

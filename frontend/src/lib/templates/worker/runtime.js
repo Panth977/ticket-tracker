@@ -91,6 +91,7 @@ export function boot(scope) {
       'api',
       'h',
       'ui',
+      'dates',
       'console',
       `"use strict";\nthrow new Error('probe');\n//# sourceURL=${SOURCE}`,
     )();
@@ -245,6 +246,9 @@ export function boot(scope) {
     ticket: (a, b) =>
       isProps(a) ? node('ticket', a, []) : node('ticket', { ...(b || {}), key: a }, []),
     progress: (p) => node('progress', p || {}, []),
+    // board-script.html §previews: widgets the app draws (its own calendar and Gantt).
+    calendar: (p) => node('calendar', p || {}, []),
+    timeline: (p) => node('timeline', p || {}, []),
     input: (p) => node('input', p || {}, []),
     textarea: (p) => node('textarea', p || {}, []),
     select: (p) => node('select', p || {}, []),
@@ -308,6 +312,83 @@ export function boot(scope) {
     return tree;
   };
 
+  // ── dates: small helpers in the viewer's time zone (board-script.html) ──
+  let tz = 'UTC';
+  const partsOf = (ms) => {
+    const f = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      weekday: 'short',
+    }).formatToParts(new Date(ms));
+    const o = {};
+    for (const x of f) o[x.type] = x.value;
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(o.weekday);
+    return { y: +o.year, mo: +o.month, d: +o.day, h: +o.hour, mi: +o.minute, s: +o.second, wd };
+  };
+  /** Wall-clock (y, mo, d, h, mi) in the viewer's zone → millis. */
+  const wall = (y, mo, d, hh = 0, mi = 0) => {
+    let guess = Date.UTC(y, mo - 1, d, hh, mi);
+    for (let i = 0; i < 3; i++) {
+      const p = partsOf(guess);
+      const diff = Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi) - Date.UTC(y, mo - 1, d, hh, mi);
+      if (!diff) break;
+      guess -= diff;
+    }
+    return guess;
+  };
+  const needMs = (fn, a) => {
+    if (!named(a) || typeof a.ms !== 'number') throw new Error(`dates.${fn} takes { ms }`);
+    return a.ms;
+  };
+  const dates = Object.freeze({
+    now: () => Date.now(),
+    tz: () => tz,
+    startOfDay: (a) => {
+      const p = partsOf(needMs('startOfDay', a));
+      return wall(p.y, p.mo, p.d);
+    },
+    startOfWeek: (a) => {
+      const p = partsOf(needMs('startOfWeek', a));
+      const first = typeof a.weekStartsOn === 'number' ? a.weekStartsOn : 1;
+      const back = (p.wd - first + 7) % 7;
+      return wall(p.y, p.mo, p.d - back);
+    },
+    startOfMonth: (a) => {
+      const p = partsOf(needMs('startOfMonth', a));
+      return wall(p.y, p.mo, 1);
+    },
+    addDays: (a) => {
+      const p = partsOf(needMs('addDays', a));
+      return wall(p.y, p.mo, p.d + (a.days || 0), p.h, p.mi);
+    },
+    addMonths: (a) => {
+      const p = partsOf(needMs('addMonths', a));
+      return wall(p.y, p.mo + (a.months || 0), p.d, p.h, p.mi);
+    },
+    parts: (a) => {
+      const p = partsOf(needMs('parts', a));
+      return { year: p.y, month: p.mo, day: p.d, hour: p.h, minute: p.mi, weekday: p.wd };
+    },
+    format: (a) => {
+      const ms = needMs('format', a);
+      const opts =
+        a.style === 'time'
+          ? { hour: 'numeric', minute: '2-digit' }
+          : a.style === 'datetime'
+            ? { dateStyle: 'medium', timeStyle: 'short' }
+            : a.style === 'month'
+              ? { month: 'long', year: 'numeric' }
+              : { dateStyle: 'medium' };
+      return new Intl.DateTimeFormat(undefined, { ...opts, timeZone: tz }).format(new Date(ms));
+    },
+  });
+
   // ── the template ──
   let def = null;
   let kind = 'message';
@@ -317,7 +398,7 @@ export function boot(scope) {
   let ack = 0;
   let queued = false;
 
-  const compile = (code) => {
+  const compile = (code, asScript = kind === 'script') => {
     const src = String(code);
     if (!/^\s*export\s+default\s/m.test(src))
       throw new Error(
@@ -328,11 +409,12 @@ export function boot(scope) {
       'api',
       'h',
       'ui',
+      'dates',
       'console',
       `"use strict";\n${body}\n//# sourceURL=${SOURCE}`,
     );
-    let d = factory(api, h, ui, tplConsole);
-    if (kind === 'script') return scriptOf(d);
+    let d = factory(api, h, ui, dates, tplConsole);
+    if (asScript) return scriptOf(d);
     if (typeof d === 'function') d = { render: d };
     if (!d || typeof d !== 'object' || typeof d.render !== 'function')
       throw new Error('The default export needs a render(state, setState, h, ctx) function');
@@ -361,6 +443,64 @@ export function boot(scope) {
     if (typeof inst.fieldRender !== 'function')
       throw new Error('A board script needs a fieldRender({ ticket, me, board }) method');
     return inst;
+  };
+
+  /**
+   * One stateful SURFACE of a board script (a form, a preview), run like a
+   * template: the hooks become { state, render, submit }.
+   */
+  let liveTickets = [];
+  const surfaceOf = (inst, entry) => {
+    const who = () => ({ me: baseCtx.me, board: baseCtx.board });
+    const ticketOf = () => baseCtx.ticket ?? null;
+    if (entry.surface === 'form') {
+      if (typeof inst.formRender !== 'function' || typeof inst.formSubmit !== 'function')
+        throw new Error(
+          'A form needs formRender({ id, state, setState }) and formSubmit({ id, state })',
+        );
+      return {
+        state: async () =>
+          (typeof inst.formState === 'function'
+            ? await inst.formState({ ...who(), id: entry.id, ticket: ticketOf() })
+            : null) ?? {},
+        render: (st, set) =>
+          inst.formRender({ ...who(), id: entry.id, state: st, setState: set, ticket: ticketOf() }),
+        submit: (st) => inst.formSubmit({ ...who(), id: entry.id, state: st, ticket: ticketOf() }),
+      };
+    }
+    if (entry.surface === 'preview') {
+      if (typeof inst.previews !== 'function')
+        throw new Error('The board script has no previews() method');
+      // previews({ me, board }) → { Name: render } or { Name: { state, render } }.
+      const all = inst.previews({ ...who() }) || {};
+      const p = all[entry.id];
+      const spec = typeof p === 'function' ? { render: p } : p;
+      if (!spec || typeof spec.render !== 'function')
+        throw new Error(`previews() has no "${entry.id}" (a function, or { state, render })`);
+      const openTicket = (a) => {
+        if (!named(a) || typeof a.id !== 'string') throw new Error('openTicket takes { id }');
+        post({ type: 'open', id: a.id });
+      };
+      const updateTicket = (a) => {
+        if (!named(a) || typeof a.id !== 'string' || !named(a.patch))
+          throw new Error('updateTicket takes { id, patch }');
+        post({ type: 'update', id: a.id, patch: JSON.parse(JSON.stringify(a.patch)) });
+      };
+      return {
+        state: async () =>
+          (typeof spec.state === 'function' ? await spec.state({ ...who() }) : spec.state) ?? {},
+        render: (st, set) =>
+          spec.render.call(inst, {
+            ...who(),
+            tickets: liveTickets,
+            openTicket,
+            updateTicket,
+            state: st,
+            setState: set,
+          }),
+      };
+    }
+    throw new Error(`Unknown surface ${entry.surface}`);
   };
 
   const fail = (phase, e) =>
@@ -397,8 +537,10 @@ export function boot(scope) {
     async load(m) {
       kind = m.kind;
       baseCtx = Object.freeze({ ...(m.ctx || {}), api });
+      if (baseCtx.tz) tz = baseCtx.tz;
+      if (Array.isArray(m.tickets)) liveTickets = m.tickets;
       try {
-        def = compile(m.code);
+        def = m.entry ? surfaceOf(compile(m.code, true), m.entry) : compile(m.code);
       } catch (e) {
         return fail('compile', e);
       }
@@ -528,12 +670,92 @@ export function boot(scope) {
             }
             return done({ value: { keep: kept.map((t) => t.id), order } });
           }
+          case 'cards': {
+            if (typeof def.previewTicketCard !== 'function') return done({ value: null });
+            const out = {};
+            for (const ticket of a.tickets || []) {
+              try {
+                out[ticket.id] = {
+                  tree: serialise(def.previewTicketCard({ ...ctx, ticket }), false),
+                };
+              } catch (e) {
+                out[ticket.id] = { error: errText(e), line: lineOf(e, LINE_OFFSET) };
+              }
+            }
+            return done({ value: out });
+          }
+          case 'table': {
+            if (typeof def.previewTicketTable !== 'function') return done({ value: null });
+            const t = await def.previewTicketTable({ ...ctx, tickets: a.tickets || [] });
+            if (!named(t) || !Array.isArray(t.columns) || !Array.isArray(t.rows))
+              throw new Error('previewTicketTable must return { columns: [...], rows: [...] }');
+            const cell = (v) => {
+              if (v && v.$tm === 1) return { kind: 'tree', tree: serialise(v, false) };
+              if (named(v) && typeof v.type === 'string')
+                return { kind: 'control', control: JSON.parse(JSON.stringify(v)) };
+              if (v === null || v === undefined || v === false) return { kind: 'text', text: '' };
+              return { kind: 'text', text: String(v) };
+            };
+            const rows = t.rows.map((r) => {
+              if (!named(r) || typeof r.id !== 'string')
+                throw new Error('previewTicketTable: every row needs { id, cells }');
+              const cells = {};
+              for (const [k, v] of Object.entries(r.cells || {})) cells[k] = cell(v);
+              return { id: r.id, cells };
+            });
+            return done({ value: { columns: JSON.parse(JSON.stringify(t.columns)), rows } });
+          }
+          case 'bulkRender': {
+            const v =
+              typeof def.bulkRender === 'function'
+                ? await def.bulkRender({ ...ctx, tickets: a.tickets || [] })
+                : [];
+            return done({
+              value: JSON.parse(JSON.stringify(kids(Array.isArray(v) ? v : [v]).filter(Boolean))),
+            });
+          }
+          case 'bulkChange': {
+            if (typeof def.onBulkChange !== 'function')
+              throw new Error(
+                'The board script has no onBulkChange({ tickets, id, value }) method',
+              );
+            const v = await def.onBulkChange({
+              ...ctx,
+              tickets: a.tickets || [],
+              id: a.id,
+              value: a.value,
+              allDay: a.allDay,
+            });
+            return done({ value: v === undefined ? null : JSON.parse(JSON.stringify(v)) });
+          }
+          case 'forms': {
+            const v = typeof def.forms === 'function' ? await def.forms({ ...ctx }) : [];
+            return done({ value: JSON.parse(JSON.stringify(Array.isArray(v) ? v : [])) });
+          }
+          case 'previewNames': {
+            if (typeof def.previews !== 'function') return done({ value: [] });
+            const v = def.previews({ ...ctx });
+            return done({
+              value: named(v)
+                ? Object.entries(v)
+                    .filter(
+                      ([, x]) =>
+                        typeof x === 'function' || (named(x) && typeof x.render === 'function'),
+                    )
+                    .map(([name]) => name)
+                : [],
+            });
+          }
           default:
             return done({ error: `Unknown script call ${m.op}` });
         }
       } catch (e) {
         done({ error: errText(e), line: lineOf(e, LINE_OFFSET) });
       }
+    },
+    async data(m) {
+      if (Array.isArray(m.tickets)) liveTickets = m.tickets;
+      schedule();
     },
     async apiResult(m) {
       const p = pending.get(m.id);

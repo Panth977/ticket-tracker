@@ -14,9 +14,8 @@
  * app's API. A WATCHDOG pings it every second; three seconds without an answer
  * (an endless loop) and it is terminated, with an error the editor can show.
  */
-import type { TemplateKind } from '@tm/shared';
 import runtimeSource from './worker/runtime.js?raw';
-import type { FromWorker, ScriptOp, ToWorker, VSlot } from './protocol';
+import type { FromWorker, ScriptEntry, ScriptOp, ToWorker, VSlot, WorkerKind } from './protocol';
 
 /** Everything `api.*` in a template reaches. Each call is the viewer's own read of THIS board. */
 export interface TemplateBridge {
@@ -45,7 +44,14 @@ export interface TemplateLog {
 
 export interface WorkerOptions {
   code: string;
-  kind: TemplateKind;
+  kind: WorkerKind;
+  /** A board script surface (a form, a preview): the code is the board script. */
+  entry?: ScriptEntry;
+  /** A preview's tickets (as the script sees them); setTickets() replaces them. */
+  tickets?: unknown[];
+  /** A preview called openTicket({ id }) / updateTicket({ id, patch }). */
+  onOpen?: (id: string) => void;
+  onUpdate?: (id: string, patch: unknown) => void;
   /** The template's ctx (board, me, ticket …) — plain data. */
   ctx: unknown;
   bridge: TemplateBridge;
@@ -125,7 +131,14 @@ export class TemplateWorker {
     this.lastPong = Date.now();
     switch (m.type) {
       case 'ready':
-        this.post({ type: 'load', code: this.o.code, kind: this.o.kind, ctx: plain(this.o.ctx) });
+        this.post({
+          type: 'load',
+          code: this.o.code,
+          kind: this.o.kind,
+          ctx: plain(this.o.ctx),
+          ...(this.o.entry ? { entry: this.o.entry } : {}),
+          ...(this.o.tickets ? { tickets: plain(this.o.tickets) } : {}),
+        });
         return;
       case 'loaded':
         this.settle.resolve();
@@ -162,6 +175,12 @@ export class TemplateWorker {
         return;
       }
       case 'pong':
+        return;
+      case 'open':
+        this.o.onOpen?.(m.id);
+        return;
+      case 'update':
+        this.o.onUpdate?.(m.id, m.patch);
         return;
     }
   }
@@ -245,6 +264,11 @@ export class TemplateWorker {
     if (r.type === 'scripted') return { value: r.value, error: r.error, line: r.line };
     if (r.type === 'error') return { error: r.message };
     return { error: 'The board script did not answer' };
+  }
+
+  /** A preview's tickets changed: it re-renders with these. */
+  setTickets(tickets: unknown[]) {
+    this.post({ type: 'data', tickets: plain(tickets) });
   }
 
   get stopped() {

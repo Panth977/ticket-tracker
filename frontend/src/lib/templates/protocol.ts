@@ -38,6 +38,8 @@ export const NODE_TYPES = [
   'person',
   'ticket',
   'progress',
+  'calendar',
+  'timeline',
   'input',
   'textarea',
   'select',
@@ -49,11 +51,39 @@ export const NODE_TYPES = [
 export type NodeType = (typeof NODE_TYPES)[number];
 
 /** The board script's hooks the page calls (board-script.html). */
-export type ScriptOp = 'filters' | 'filterRender' | 'fieldRender' | 'change' | 'apply';
+export type ScriptOp =
+  | 'filters'
+  | 'filterRender'
+  | 'fieldRender'
+  | 'change'
+  | 'apply'
+  | 'cards'
+  | 'table'
+  | 'bulkRender'
+  | 'bulkChange'
+  | 'forms'
+  | 'previewNames';
+
+/** A stateful surface of the board script, run like a template (board-script.html). */
+export interface ScriptEntry {
+  surface: 'form' | 'preview';
+  /** The form's id, or the preview's name. */
+  id: string;
+}
+/** What a template worker runs: a template kind, or a board script surface ('preview'). */
+export type WorkerKind = TemplateKind | 'preview';
 
 /** Page → worker. */
 export type ToWorker =
-  | { type: 'load'; code: string; kind: TemplateKind; ctx: unknown }
+  | {
+      type: 'load';
+      code: string;
+      kind: WorkerKind;
+      ctx: unknown;
+      entry?: ScriptEntry;
+      tickets?: unknown[];
+    }
+  | { type: 'data'; tickets: unknown[] }
   | { type: 'event'; seq: number; h: string; args: unknown[] }
   | { type: 'submit'; id: number }
   | { type: 'cards'; id: number; items: { id: string; ctx: unknown }[] }
@@ -75,5 +105,7 @@ export type FromWorker =
     }
   | { type: 'scripted'; id: number; value?: unknown; error?: string; line?: number }
   | { type: 'api'; id: number; method: string; args: unknown[] }
+  | { type: 'open'; id: string }
+  | { type: 'update'; id: string; patch: unknown }
   | { type: 'log'; level: 'log' | 'warn' | 'error'; text: string }
   | { type: 'pong'; n: number };

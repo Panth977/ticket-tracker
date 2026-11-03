@@ -6,7 +6,7 @@
 
     ● ENG Engineering ☆ │ Board  Table  Mine  +     🔎  Filter 2  Sort  Group: Stage  🔔 Mine  ⚙  + New
 
-    [ Kanban | Table | Calendar | Timeline ]
+    [ Kanban | Table ] + the board script's previews (?preview=Name)
 
   LIVE: one onSnapshot per open board over state == 'active'; everything else in
   the view (filter, sort, group, swimlanes) is computed in the browser by the
@@ -57,16 +57,15 @@
   import TicketDrawer from '$lib/ticket/TicketDrawer.svelte';
   import { stateQueryValues, withReadState } from '$lib/ticket/state';
   import { BoardState, provideBoard, type BoardTicket } from '$lib/board/context.svelte';
+  import { updateTicket } from '$lib/board/ops';
   import BoardBar from '$lib/board/BoardBar.svelte';
   import Kanban from '$lib/board/Kanban.svelte';
   import Table from '$lib/board/Table.svelte';
-  import Calendar from '$lib/board/Calendar.svelte';
-  import Timeline from '$lib/board/Timeline.svelte';
+  import ScriptPreview from '$lib/templates/ScriptPreview.svelte';
   import QuickAdd, { type QuickAddDefaults } from '$lib/board/QuickAdd.svelte';
   import RequiresPrompt from '$lib/board/RequiresPrompt.svelte';
   import { joinBoard, onlineHere } from '$lib/board/presence';
   import ViewDialog, { type ViewDialogMode } from '$lib/views/ViewDialog.svelte';
-  import { templatesOfKind } from '$lib/templates/store';
   import {
     acquireScriptHost,
     activeFilters,
@@ -76,7 +75,9 @@
     saveFilters,
     savedScript,
     type BoardScriptHost,
+    type CardTree,
     type ScriptMe,
+    type ScriptTable,
   } from '$lib/templates/script';
   import type { ScriptControl, ScriptFilters } from '@tm/shared';
   import {
@@ -108,9 +109,6 @@
   const bs = provideBoard(new BoardState(() => board));
 
   const views = $derived(boardViews(boardId, uid));
-  /** templates.html §E: card templates for '+ View'. */
-  const cardTemplateStore = $derived(templatesOfKind(boardId, 'card'));
-  const cardTemplates = $derived($cardTemplateStore.list);
   const pref = $derived(boardPref(boardId, uid));
   // The same three queries the boot prewarm opens (§T): shared helpers, so the
   // two spellings cannot drift apart and leave the prewarm warming a key nobody reads.
@@ -259,6 +257,21 @@
   onDestroy(() => {
     if (heldScript) releaseScriptHost(heldScript.h, heldScript.boardId, heldScript.me);
   });
+  // Table cells, the bulk bar and the drawer reach the script through the board state.
+  $effect(() => {
+    bs.script = script;
+  });
+
+  // board-script.html §previews: the script's own views, as tabs (?preview=Name).
+  const previewName = $derived(page.url.searchParams.get('preview'));
+  let previewNames = $state<string[]>([]);
+  $effect(() => {
+    const h = script;
+    if (!h) return;
+    void h.previewNames().then((r) => {
+      if (h === script) previewNames = r.error === undefined ? r.value : [];
+    });
+  });
 
   let filterDefaults = $state<ScriptFilters>({});
   let filters = $state<ScriptFilters | null>(null);
@@ -321,6 +334,30 @@
       ? bs.tickets.filter((t) => scripted!.keep.has(t.id) || !scripted!.saw.has(t.id))
       : bs.tickets,
   );
+
+  // ── the script's cards (Board) and table (Table) ──
+  let cards = $state.raw<Map<string, CardTree> | null>(null);
+  let scriptTable = $state.raw<ScriptTable | null>(null);
+  let drawSeq = 0;
+  $effect(() => {
+    const h = script;
+    const list = shownTickets;
+    const type = draft.type;
+    if (!h || previewName) return;
+    const n = ++drawSeq;
+    if (type === 'table')
+      void h.table({ tickets: list }).then((r) => {
+        if (n !== drawSeq) return;
+        if (r.error !== undefined) scriptProblem = problemText(r.error, r.line);
+        else scriptTable = r.value;
+      });
+    else
+      void h.cards({ tickets: list }).then((r) => {
+        if (n !== drawSeq) return;
+        if (r.error !== undefined) scriptProblem = problemText(r.error, r.line);
+        else cards = r.value;
+      });
+  });
 
   // ── what the view shows ─────────────────────────────────────────────────
   let search = $state('');
@@ -610,6 +647,8 @@
       canSaveShared={bs.canEdit}
       canCreate={bs.canCreate}
       isAdmin={bs.isAdmin}
+      previews={previewNames}
+      preview={previewName}
       {filterControls}
       activeFilters={nScriptFilters}
       {scriptProblem}
@@ -695,21 +734,30 @@
         <EmptyState title="Couldn't load tickets" description={$active.error.message} />
       {:else}
         <!-- Switching views cross-fades the content. -->
-        {#key `${viewId}:${draft.type}`}
-          <div class="tm-fade-in h-full">
-            {#if draft.type === 'kanban'}
-              <Kanban {board} {groups} view={draft} onadd={addIn} />
+        {#key `${viewId}:${draft.type}:${previewName ?? ''}`}
+          <div class="tm-fade-in flex h-full flex-col">
+            {#if previewName && script && scriptCode !== null}
+              <ScriptPreview
+                name={previewName}
+                code={scriptCode}
+                host={script}
+                {board}
+                me={scriptMe}
+                tz={bs.tz}
+                tickets={flat}
+                openTicket={(key) => bs.openTicket(key)}
+                write={(t, p) => void updateTicket(bs, t as BoardTicket, p)}
+              />
             {:else if draft.type === 'table'}
               <Table
                 {board}
                 groups={draft.groupBy ? groups : flatGroups}
                 view={draft}
-                onchange={change}
+                table={scriptTable}
               />
-            {:else if draft.type === 'calendar'}
-              <Calendar {board} groups={flatGroups} view={draft} onchange={change} />
             {:else}
-              <Timeline {board} groups={flatGroups} view={draft} onchange={change} />
+              <!-- Board; a Calendar / Timeline view saved before board scripts draws as a board. -->
+              <Kanban {board} {groups} view={draft} onadd={addIn} {cards} />
             {/if}
           </div>
         {/key}
@@ -729,7 +777,6 @@
         : ''}
     initialScope={dialogMode === 'saveAs' ? saveAsScope : bs.canEdit ? 'shared' : 'personal'}
     canShared={bs.canEdit}
-    {cardTemplates}
     onsubmit={onDialog}
   />
 {/if}

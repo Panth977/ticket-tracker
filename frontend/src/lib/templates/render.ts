@@ -27,6 +27,16 @@ export interface RenderCtx {
   ticketHref?: (key: string) => string;
   /** Open a ticket in the app (h.ticket clicks). */
   openTicket?: (key: string) => void;
+  /**
+   * board-script.html: draw an app widget (h.calendar, h.timeline) into `el`. `send(prop,
+   * args)` calls the handler the script put in that prop. Answers { update, destroy }.
+   */
+  widget?: (
+    el: HTMLElement,
+    type: 'calendar' | 'timeline',
+    props: Record<string, unknown>,
+    send: (prop: string, args: unknown[]) => void,
+  ) => { update: (props: Record<string, unknown>) => void; destroy: () => void };
 }
 
 type Slot = VSlot;
@@ -160,6 +170,27 @@ export function createRenderer(root: HTMLElement, ctx: RenderCtx = {}) {
     if (!isHandlerRef(ref) || !ctx.dispatch) return;
     inst.sent = ctx.dispatch((ref as HandlerRef).$h, args);
   };
+
+  /** h.calendar / h.timeline: an app component, mounted once, updated with each render. */
+  const widgetDef = (type: 'calendar' | 'timeline') => ({
+    create: () => make('div', 'min-w-0'),
+    update: (inst: Inst, p: Record<string, unknown>) => {
+      const el = inst.el as HTMLElement;
+      const w = inst as Inst & {
+        widget?: { update: (p: Record<string, unknown>) => void };
+        props?: Record<string, unknown>;
+      };
+      w.props = p;
+      if (!ctx.widget) {
+        el.textContent = `(${type})`;
+        return;
+      }
+      if (w.widget) return w.widget.update(p);
+      const live = ctx.widget(el, type, p, (prop, args) => send(inst, w.props?.[prop], args));
+      w.widget = live;
+      inst.cleanup = live.destroy;
+    },
+  });
 
   // ── element helpers ──
   const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '') => {
@@ -401,6 +432,8 @@ export function createRenderer(root: HTMLElement, ctx: RenderCtx = {}) {
         applyStyle(el, inst, p, style);
       },
     },
+    calendar: widgetDef('calendar'),
+    timeline: widgetDef('timeline'),
     person: {
       create: () => make('span', 'inline-flex min-w-0'),
       update: (inst, p) => {

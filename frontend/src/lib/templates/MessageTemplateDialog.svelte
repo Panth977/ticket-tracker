@@ -1,24 +1,25 @@
 <!--
-  The composer's 📋 (docs/plan/templates.html §D1): pick one of the board's
-  message templates, fill in its form, Send. The template's submit decides:
+  The composer's 📋 (docs/plan/board-script.html §forms): pick one of the board
+  script's message forms, fill it in, Send. formSubmit decides:
   'valid' posts its Markdown (with its data kept on the message), 'invalid'
   keeps the form open with its errors.
 -->
 <script lang="ts">
   import { markdownToDoc } from '@tm/shared/logic/richtext/index';
-  import type { TemplateWithId } from '@tm/shared';
   import { auth } from '$lib/firebase/auth.svelte';
-  import { Button, Dialog, Indicator, toast } from '$lib/ui';
+  import { Button, Dialog, toast } from '$lib/ui';
   import { getTicketCtx } from '$lib/ticket/context';
   import { sendMessage } from '$lib/ticket/pending.svelte';
   import { boardSources } from './bridge';
   import { memberInfo, ticketInfo } from './info';
   import { checkMessageResult } from './resolve';
   import TemplateForm from './TemplateForm.svelte';
+  import type { FormItem } from './script';
 
   interface Props {
     open: boolean;
-    templates: TemplateWithId[];
+    /** board-script.html §forms: the board script's message forms. */
+    templates: FormItem[];
     replyTo?: string | null;
     onsent?: () => void;
   }
@@ -128,9 +129,9 @@
   }
 </script>
 
-<Dialog bind:open title={tpl ? tpl.name : 'Message templates'} size="lg">
+<Dialog bind:open title={tpl ? tpl.name : 'Message forms'} size="lg">
   {#if !tpl}
-    <ul class="flex flex-col gap-1" aria-label="Message templates">
+    <ul class="flex flex-col gap-1" aria-label="Message forms">
       {#each templates as x (x.id)}
         <li>
           <button
@@ -138,7 +139,6 @@
             class="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-surface-2"
             onclick={() => (picked = x.id)}
           >
-            <Indicator of={x} seed={x.id} size="md" />
             <span class="min-w-0">
               <span class="block text-sm font-medium">{x.name}</span>
               {#if x.description}<span class="block truncate text-xs text-muted"
@@ -149,7 +149,7 @@
         </li>
       {:else}
         <li class="px-2 py-3 text-sm text-muted">
-          This board has no message templates. An admin adds them in Settings › Templates.
+          This board has no message forms. An admin adds them in Settings › Script (forms()).
         </li>
       {/each}
     </ul>
@@ -159,6 +159,7 @@
         bind:this={form}
         bind:ready
         template={tpl}
+        entry={tpl.entry}
         board={t.board}
         {me}
         ticket={info}
@@ -169,7 +170,7 @@
   {/if}
   {#snippet footer()}
     {#if tpl && templates.length > 1}
-      <Button variant="ghost" class="mr-auto" onclick={() => (picked = null)}>All templates</Button>
+      <Button variant="ghost" class="mr-auto" onclick={() => (picked = null)}>All forms</Button>
     {/if}
     <Button variant="secondary" onclick={() => (open = false)}>Cancel</Button>
     {#if tpl}

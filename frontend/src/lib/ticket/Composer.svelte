@@ -59,7 +59,8 @@
   import { newFileId, objectPathFor } from '$lib/bucket/upload.svelte';
   import AttachDialog from './AttachDialog.svelte';
   import { mergePicks, pickAttachment, type BucketPick } from '$lib/bucketRefs/pick';
-  import { templatesOfKind } from '$lib/templates/store';
+  import { formItems, type FormItem } from '$lib/templates/script';
+  import { useScriptHost } from '$lib/templates/useScript.svelte';
   import MessageTemplateDialog from '$lib/templates/MessageTemplateDialog.svelte';
 
   interface Props {
@@ -99,8 +100,27 @@
   /** bucket.html §J: files waiting for the attach dialog's bucket + paths. */
   let attachFiles = $state<File[]>([]);
   let attachOpen = $state(false);
-  /** templates.html §D1: the board's message templates. */
-  const msgTemplates = templatesOfKind(boardId, 'message');
+  /** board-script.html §forms: the board script's message forms. */
+  const script = useScriptHost(() => {
+    const m = t.members.find((x) => x.uid === t.me);
+    return {
+      board: t.board,
+      me: {
+        id: t.me,
+        name: auth.profile?.name || m?.name || '',
+        email: auth.user?.email ?? m?.email ?? '',
+        role: t.perms.role ?? '',
+      },
+    };
+  });
+  let msgForms = $state<FormItem[]>([]);
+  $effect(() => {
+    const h = script.host;
+    if (!h) return;
+    void formItems(h, 'message').then((list) => {
+      if (h === script.host) msgForms = list;
+    });
+  });
   let templateOpen = $state(false);
 
   const typing = t.me ? typingSignal(boardId, ticketId, t.me) : null;
@@ -484,7 +504,7 @@
         onask={() => (askOpen = true)}
         onbucket={() => (bucketOpen = true)}
         onagg={canAgg ? () => (aggOpen = true) : undefined}
-        ontemplate={$msgTemplates.list.length ? () => (templateOpen = true) : undefined}
+        ontemplate={msgForms.length ? () => (templateOpen = true) : undefined}
         collapsible
         class="border-b border-line px-1.5 py-1"
       />
@@ -614,10 +634,10 @@
     </div>
     <AskDialog bind:open={askOpen} onasked={() => onsent?.()} />
     {#if canAgg}<AggDialog bind:open={aggOpen} onsent={() => onsent?.()} />{/if}
-    {#if $msgTemplates.list.length}
+    {#if msgForms.length}
       <MessageTemplateDialog
         bind:open={templateOpen}
-        templates={$msgTemplates.list}
+        templates={msgForms}
         {replyTo}
         onsent={() => {
           replyTo = null;

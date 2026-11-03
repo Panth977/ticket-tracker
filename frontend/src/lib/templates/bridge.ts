@@ -203,8 +203,10 @@ export const emptyBridge: TemplateBridge = {
 /** The template's ctx: plain data, sent with `load` (kept small: no ticket lists). */
 export async function contextFor(
   bridge: ReturnType<typeof createBridge>,
-  extra: { kind: string; ticket?: TicketInfo | null },
+  extra: { kind: string; ticket?: TicketInfo | object | null; tz?: string | null },
 ) {
   const [board, me] = await Promise.all([bridge.board(), bridge.me()]);
-  return { kind: extra.kind, board, me, ...(extra.ticket ? { ticket: extra.ticket } : {}) };
+  // The viewer's time zone: dates.* in a board script works in it.
+  const tz = extra.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return { kind: extra.kind, board, me, tz, ...(extra.ticket ? { ticket: extra.ticket } : {}) };
 }
