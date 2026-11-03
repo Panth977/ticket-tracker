@@ -105,6 +105,28 @@ test('the board script draws the fields, writes the patch and owns the filter', 
   // ── settings › Script: the editor previews the saved code ──
   await page.goto(`/b/${b.key}/settings/script`);
   await expect(page.getByTestId('script-kept')).toHaveText('2 of 2 tickets shown');
+
+  // ── the editor: Monaco with the script's types — a mistake shows as a problem ──
+  const editor = page.getByTestId('script-editor');
+  await expect(editor.locator('.monaco-editor')).toBeVisible({ timeout: 30_000 });
+  const problems = page.getByTestId('script-problems');
+  await expect(problems).toContainText('No problems', { timeout: 20_000 });
+  // (Through Monaco's model: typed keys would meet its auto-closing brackets and suggestions.)
+  await page.evaluate(() => {
+    const m = (
+      globalThis as unknown as {
+        monaco: {
+          editor: {
+            getModels(): { uri: { path: string }; getValue(): string; setValue(v: string): void }[];
+          };
+        };
+      }
+    ).monaco.editor
+      .getModels()
+      .find((x) => x.uri.path.startsWith('/board-script-'))!;
+    m.setValue(`${m.getValue()}\nui.toggle({ idd: 1 });\n`);
+  });
+  await expect(problems).toContainText('idd', { timeout: 45_000 });
 });
 
 test('a board from before board scripts keeps its fields (generated script)', async ({ page }) => {

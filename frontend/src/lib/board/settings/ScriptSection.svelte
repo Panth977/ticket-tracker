@@ -10,7 +10,7 @@
   // /integrate is a static page beside the SPA, not a route of it.
   /* eslint-disable svelte/no-navigation-without-resolve */
   import { onDestroy, untrack } from 'svelte';
-  import { BookOpen, RotateCcw } from 'lucide-svelte';
+  import { AlignLeft, BookOpen, CircleAlert, RotateCcw, TriangleAlert } from 'lucide-svelte';
   import {
     DEFAULT_BOARD_SCRIPT,
     generateBoardScript,
@@ -22,7 +22,7 @@
   import { command, isAppError } from '$lib/api';
   import { auth } from '$lib/firebase/auth.svelte';
   import { Button, toast } from '$lib/ui';
-  import CodeField from '$lib/templates/CodeField.svelte';
+  import ScriptEditor, { type ScriptProblem } from '$lib/templates/editor/ScriptEditor.svelte';
   import ScriptControls from '$lib/templates/ScriptControls.svelte';
   import { boardSources } from '$lib/templates/bridge';
   import type { TemplateLog } from '$lib/templates/host';
@@ -43,6 +43,10 @@
   let previewCode = $state('');
   let loadedFrom = $state<string | null>(null);
   let busy = $state(false);
+  let editor: ScriptEditor | undefined = $state();
+  /** What the editor's type-check says (errors first). */
+  let problems = $state<ScriptProblem[]>([]);
+  const errors = $derived(problems.filter((p) => p.severity === 'error').length);
   $effect(() => {
     const e = effective;
     if (!e) return;
@@ -220,7 +224,16 @@
       <Button size="sm" variant="ghost" icon={RotateCcw} onclick={() => reset('generated')}
         >From settings</Button
       >
-      <Button size="sm" variant="primary" loading={busy} disabled={!dirty} onclick={save}
+      <Button size="sm" variant="ghost" icon={AlignLeft} onclick={() => editor?.format()}
+        >Format</Button
+      >
+      <Button
+        size="sm"
+        variant="primary"
+        loading={busy}
+        disabled={!dirty}
+        onclick={save}
+        title={errors ? `${errors} error${errors === 1 ? '' : 's'} in the code` : 'Save (⌘S)'}
         >Save</Button
       >
     {/if}
@@ -231,13 +244,45 @@
   </p>
 
   <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-    <CodeField
-      value={code}
-      readOnly={!s.isAdmin}
-      onchange={onCode}
-      onsave={save}
-      class="h-[calc(100dvh-12rem)] min-h-[28rem]"
-    />
+    <div class="flex min-w-0 flex-col gap-2">
+      <ScriptEditor
+        bind:this={editor}
+        value={code}
+        readOnly={!s.isAdmin}
+        onchange={onCode}
+        onsave={save}
+        onproblems={(p) =>
+          (problems = [...p].sort((a, b) =>
+            a.severity === b.severity ? a.line - b.line : a.severity === 'error' ? -1 : 1,
+          ))}
+        class="h-[calc(100dvh-15rem)] min-h-[26rem]"
+      />
+      <!-- Problems: the editor's type-check against the script's API; a line is a button. -->
+      <div
+        class="max-h-28 overflow-auto rounded-md border border-line px-2 py-1 text-xs"
+        data-testid="script-problems"
+      >
+        {#each problems.slice(0, 50) as p, i (i)}
+          <button
+            type="button"
+            class="flex w-full items-start gap-1.5 py-0.5 text-left hover:bg-surface-2"
+            onclick={() => editor?.jump(p.line, p.column)}
+          >
+            {#if p.severity === 'error'}<CircleAlert
+                size={12}
+                class="mt-0.5 shrink-0 text-danger"
+              />{:else}<TriangleAlert size={12} class="mt-0.5 shrink-0 text-warning" />{/if}
+            <span class="shrink-0 font-mono text-subtle">{p.line}:{p.column}</span>
+            <span class="min-w-0">{p.message}</span>
+          </button>
+        {:else}
+          <p class="py-0.5 text-subtle">
+            No problems. Type a hook's name (fieldRender, previewTicketTable, previews…) for a
+            snippet; hover any name for its docs.
+          </p>
+        {/each}
+      </div>
+    </div>
 
     <div
       class="flex min-w-0 flex-col gap-3 xl:h-[calc(100dvh-12rem)] xl:min-h-[28rem] xl:overflow-y-auto"

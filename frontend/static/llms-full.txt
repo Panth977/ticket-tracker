@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    d5608b9197137ae119df20b1d3c3cd26d32af5a76446bc82a15afbd2a94318ff
+content-sha256:    0cf5875c1f0d60545b0ebf8ce18690d852a685004f8d08aa9dd2051c4cf53a7c
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -84,6 +84,7 @@ short index:       https://taskmanager-example.web.app/llms.txt
   - [submit](#submit)
   - [Over MCP](#over-mcp)
 - [10. Board script](#10-board-script)
+  - [Writing it](#writing-it)
   - [Where it runs, and what it is not](#where-it-runs-and-what-it-is-not)
   - [The shape](#the-shape)
   - [Controls: `ui.*`](#controls-ui)
@@ -6373,6 +6374,22 @@ Script*, or write it over MCP or the API (`template_save` / `POST /api/templateS
 * **Every hook, every `ui.*` control and every `this.api.*` call takes ONE object of
   named arguments.**
 
+### Writing it
+
+```js
+export default defineScript({
+  fieldRender({ ticket }) { … },
+  onFieldChange({ id, value }) { … },
+  // …
+});
+```
+
+`defineScript({ … })` is how the default and generated scripts are written: in *Board settings ›
+Script* the editor (Monaco, the editor of VS Code) then knows every hook's arguments — it completes
+`ticket.`, `ui.`, `h.`, `dates.` and `api.`, shows their docs on hover and lists mistakes as you
+type (*Problems*, each a link to its line). Type a hook's name for a snippet of it; **Format** tidies
+the code; ⌘/Ctrl+S saves. `export default class BoardScript { … }` still works (without the typing).
+
 ### Where it runs, and what it is not
 
 It runs in each person's **browser**, in the same sandbox as templates (an opaque-origin
@@ -6564,21 +6581,22 @@ As in templates, read-only and as the viewer, with named arguments:
 
 ```js
 // Board script: everything about this board's tickets except Stage, as code.
-// Every hook, ui.* control, h.* node and this.api.* call takes one object of named arguments.
+// Every hook, ui.* control, h.* node and api.* call takes one object of named arguments;
+// the editor completes and checks them (hover any name for its docs).
 // Docs: /integrate#10-board-script
 
-export default class BoardScript {
+export default defineScript({
   // ── Filter menu ──
   filters() {
     return { mine: false, assignee: [] };
-  }
+  },
 
   filterRender({ filters: f }) {
     return [
       ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),
       ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),
     ];
-  }
+  },
 
   // Runs for every ticket, even with no filter set: true = show it.
   onFilter({ ticket: t, filters: f, me }) {
@@ -6586,19 +6604,19 @@ export default class BoardScript {
       (!f.mine || t.assigneeUids.includes(me.id)) &&
       (!f.assignee.length || f.assignee.some((u) => t.assigneeUids.includes(u)))
     );
-  }
+  },
 
   // ── The ticket's fields (under Stage) ──
   fieldRender({ ticket: t }) {
     return [
       ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
     ];
-  }
+  },
 
   // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
-  }
+  },
 
   // ── Board view: one card ──
   // Without this hook the Board draws the app's own card (unread, questions, task lists,
@@ -6609,7 +6627,7 @@ export default class BoardScript {
   //     h.text({ weight: 'medium' }, t.title),
   //     h.row({ gap: 1 }, ...t.assigneeUids.map((id) => h.person({ id, key: id, showName: false }))),
   //   );
-  // }
+  // },
 
   // ── Table view: columns, and each row's cells (text, h.* or an editable ui.* control) ──
   previewTicketTable({ tickets }) {
@@ -6633,12 +6651,12 @@ export default class BoardScript {
         },
       })),
     };
-  }
+  },
 
   // ── Bulk bar (rows selected in the Table) ──
   bulkRender() {
     return [ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] })];
-  }
+  },
 
   // One patch for every ticket, or { patches: { [ticketId]: patch } }.
   onBulkChange({ tickets, id, value }) {
@@ -6648,7 +6666,7 @@ export default class BoardScript {
           tickets.map((t) => [t.id, { assigneeUids: [...new Set([...t.assigneeUids, ...value])] }]),
         ),
       };
-  }
+  },
 
   // ── Your own views: each becomes a tab next to Board and Table ──
   previews() {
@@ -6660,15 +6678,15 @@ export default class BoardScript {
           onOpen: ({ id }) => openTicket({ id }),
         }),
     };
-  }
+  },
 
   // ── Forms: message forms (the composer's 📋) and ticket forms (New ticket) ──
   forms() {
     return [];
     // e.g. return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
     // with formState / formRender / formSubmit({ id, state, … }) — see the docs.
-  }
-}
+  },
+});
 ```
 
 ### Example: three assignee fields

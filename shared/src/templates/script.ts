@@ -153,21 +153,22 @@ export type ScriptFilters = z.infer<typeof ScriptFiltersSchema>;
 
 /** What every new board starts with (boardCreate saves it): every hook, ready to change. */
 export const DEFAULT_BOARD_SCRIPT = `// Board script: everything about this board's tickets except Stage, as code.
-// Every hook, ui.* control, h.* node and this.api.* call takes one object of named arguments.
+// Every hook, ui.* control, h.* node and api.* call takes one object of named arguments;
+// the editor completes and checks them (hover any name for its docs).
 // Docs: /integrate#10-board-script
 
-export default class BoardScript {
+export default defineScript({
   // ── Filter menu ──
   filters() {
     return { mine: false, assignee: [] };
-  }
+  },
 
   filterRender({ filters: f }) {
     return [
       ui.toggle({ id: 'mine', label: 'Only mine', value: f.mine }),
       ui.people({ id: 'assignee', label: 'Assignee', value: f.assignee }),
     ];
-  }
+  },
 
   // Runs for every ticket, even with no filter set: true = show it.
   onFilter({ ticket: t, filters: f, me }) {
@@ -175,19 +176,19 @@ export default class BoardScript {
       (!f.mine || t.assigneeUids.includes(me.id)) &&
       (!f.assignee.length || f.assignee.some((u) => t.assigneeUids.includes(u)))
     );
-  }
+  },
 
   // ── The ticket's fields (under Stage) ──
   fieldRender({ ticket: t }) {
     return [
       ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
     ];
-  }
+  },
 
   // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
-  }
+  },
 
   // ── Board view: one card ──
   // Without this hook the Board draws the app's own card (unread, questions, task lists,
@@ -198,7 +199,7 @@ export default class BoardScript {
   //     h.text({ weight: 'medium' }, t.title),
   //     h.row({ gap: 1 }, ...t.assigneeUids.map((id) => h.person({ id, key: id, showName: false }))),
   //   );
-  // }
+  // },
 
   // ── Table view: columns, and each row's cells (text, h.* or an editable ui.* control) ──
   previewTicketTable({ tickets }) {
@@ -222,12 +223,12 @@ export default class BoardScript {
         },
       })),
     };
-  }
+  },
 
   // ── Bulk bar (rows selected in the Table) ──
   bulkRender() {
     return [ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] })];
-  }
+  },
 
   // One patch for every ticket, or { patches: { [ticketId]: patch } }.
   onBulkChange({ tickets, id, value }) {
@@ -237,7 +238,7 @@ export default class BoardScript {
           tickets.map((t) => [t.id, { assigneeUids: [...new Set([...t.assigneeUids, ...value])] }]),
         ),
       };
-  }
+  },
 
   // ── Your own views: each becomes a tab next to Board and Table ──
   previews() {
@@ -249,15 +250,15 @@ export default class BoardScript {
           onOpen: ({ id }) => openTicket({ id }),
         }),
     };
-  }
+  },
 
   // ── Forms: message forms (the composer's 📋) and ticket forms (New ticket) ──
   forms() {
     return [];
     // e.g. return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
     // with formState / formRender / formSubmit({ id, state, … }) — see the docs.
-  }
-}
+  },
+});
 `;
 
 // ───────────────────────── a script for an existing board ─────────────────────────
@@ -424,34 +425,34 @@ ${
 `
     : ''
 }${skipped.length ? `//\n// Not drawn (no control for the type): ${skipped.map((f) => `${f.name} (${f.type})`).join(', ')}.\n` : ''}
-${lists.length ? lists.join('\n\n') + '\n\n' : ''}export default class BoardScript {
+${lists.length ? lists.join('\n\n') + '\n\n' : ''}export default defineScript({
   filters() {
     return { ${filterDefaults.join(', ')} };
-  }
+  },
 
   filterRender({ filters: f }) {
     return [
 ${filterControls.join('\n')}
     ];
-  }
+  },
 
   onFilter({ ticket: t, filters: f, me }) {
     return (
 ${filterTests.map((x) => `      ${x}`).join(' &&\n')}
     );
-  }
+  },
 
   fieldRender({ ticket: t }) {
     return [
 ${fields.join('\n')}
     ];
-  }
+  },
 
   onFieldChange({ id, value, allDay }) {
     switch (id) {
 ${writes.join('\n')}
     }
-  }
+  },
 
   // The Board draws the app's own card; previewTicketCard({ ticket }) would draw yours instead.
 
@@ -475,14 +476,14 @@ ${hasPriorities ? "          priority: ui.select({ id: 'priority', value: t.prio
         },
       })),
     };
-  }
+  },
 
   bulkRender() {
     return [
 ${hasPriorities ? "      ui.select({ id: 'priority', label: 'Priority', value: null, options: PRIORITIES }),\n" : ''}${hasTags ? "      ui.multiSelect({ id: 'addTags', label: 'Add tags', value: [], options: TAGS }),\n" : ''}      ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] }),
       ui.date({ id: 'due', label: 'Due', value: null }),
     ];
-  }
+  },
 
   onBulkChange({ tickets, id, value, allDay }) {
     const each = (fn) => ({ patches: Object.fromEntries(tickets.map((t) => [t.id, fn(t)])) });
@@ -490,7 +491,7 @@ ${hasPriorities ? "      ui.select({ id: 'priority', label: 'Priority', value: n
 ${hasPriorities ? "      case 'priority': return { priorityId: value };\n" : ''}${hasTags ? "      case 'addTags': return each((t) => ({ tagIds: [...new Set([...t.tagIds, ...value])] }));\n" : ''}      case 'addAssignees': return each((t) => ({ assigneeUids: [...new Set([...t.assigneeUids, ...value])] }));
       case 'due': return { dueAt: value, dueAllDay: allDay ?? true };
     }
-  }
+  },
 
   previews() {
     return {
@@ -509,12 +510,12 @@ ${hasPriorities ? "      case 'priority': return { priorityId: value };\n" : ''}
           onMove: ({ id, start, end }) => updateTicket({ id, patch: { startAt: start, dueAt: end } }),
         }),
     };
-  }
+  },
 
   forms() {
     return [];
-  }
-}
+  },
+});
 `;
 }
 
