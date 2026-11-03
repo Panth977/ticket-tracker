@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Board script · Plan · TaskManager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/plan/shared.css" />
+  </head>
+  <body>
+    <div class="mg-page">
+      <header class="chrome">
+        <nav class="chrome__envs" aria-label="Environment">
+          <a href="/app/db" title="The ticket manager as a person meets it — Svelte on Firebase."
+            >App</a
+          >
+          <a
+            href="/platform/db"
+            title="The same data reached from outside — REST, MCP, webhooks, and every notification channel."
+            >Platform</a
+          >
+          <a
+            href="/plan/architecture"
+            class="on"
+            title="The argument: architecture, decisions, and the order it gets built in."
+            >Plan</a
+          >
+        </nav>
+        <nav class="chrome__pages" aria-label="Page">
+          <a href="/plan/architecture">Architecture</a>
+          <a href="/plan/decisions">Decisions</a>
+          <a href="/plan/roadmap">Roadmap</a>
+          <a href="/plan/agents">Agents</a>
+          <a href="/plan/artifacts">Artifacts</a>
+          <a href="/plan/templates">Templates</a>
+          <a href="/plan/board-script" class="on">Board script</a>
+          <a href="/plan/bucket">Bucket</a>
+          <a href="/plan/dictionary">Dictionary</a>
+          <a href="/plan/indicators">Indicators</a>
+          <a href="/plan/sdk">SDK</a>
+          <a href="/plan/review">Review</a>
+          <a href="/plan/reference">From TeamTrack</a>
+          <a href="/plan/run">Run</a>
+        </nav>
+      </header>
+            <article class="mg">
+        <h1>Board script</h1>
+        <p class="lede">
+          A board's ticket fields and filters, written as code. Panth (ORCH-35, 2026-11-03):
+          <i>"there are too many fields in board and ticket out of the box … we only need
+          {Stage, Assignees} … all fields are code generated instead of this GUI … user can build
+          any kind of form."</i> Out of the box a ticket now has <b>Stage</b> and
+          <b>Assignees</b>; everything else on its Details pane, and every filter above the board,
+          is the board's <b>script</b>. The reference an author reads is §10 of
+          <a href="/integrate#10-board-script">/integrate</a> (also <code>get_template_docs</code>);
+          this page is why it is built the way it is.
+        </p>
+
+        <h2 id="a">A · The thing</h2>
+        <ul>
+          <li>
+            <b>One per board</b>: the template <code>boards/{b}/templates/script</code> with
+            <code>kind: 'script'</code> (<code>SCRIPT_TEMPLATE_ID</code>). <code>templateSave</code>
+            always writes a script there, and no other kind may take the id. Admins write it; the
+            board reads it.
+          </li>
+          <li>
+            A class (or a plain object) of hooks: <code>filters</code>, <code>filterRender</code>,
+            <code>onFilter</code>, <code>onSort</code>, <code>fieldRender</code>,
+            <code>onFieldChange</code>. Only <code>fieldRender</code> is required.
+          </li>
+          <li>
+            <b>Named arguments everywhere</b> (Panth's comment on the decisions): every hook takes
+            one object (<code>fieldRender({ ticket, me, board })</code>), and so does every
+            <code>ui.*</code> control and every <code>this.api.*</code> call. The first template
+            API's positional forms still work for templates written before.
+          </li>
+          <li>
+            <b>Stage is never in it.</b> The app draws Stage above the script's fields, with the
+            board's stage grants, <code>requires</code> and stage rules unchanged. Links stay the
+            app's too (they are not a field).
+          </li>
+        </ul>
+
+        <h2 id="b">B · Where it runs</h2>
+        <ul>
+          <li>
+            In the template worker (<a href="/plan/templates#b">templates §B</a>): an opaque-origin
+            Worker, as the person looking, with the watchdog. One worker per board and code version
+            (<code>frontend/src/lib/templates/script.ts</code>, <code>acquireScriptHost</code>),
+            shared by the board screen and every open ticket of that board.
+          </li>
+          <li>
+            The page calls a hook with one message (<code>{ type: 'script', op, args }</code>) and
+            checks every answer before using it: controls against <code>ScriptControlsSchema</code>,
+            a patch against <code>ScriptPatchSchema</code>. <code>onFilter</code> and
+            <code>onSort</code> for a whole board are <b>one</b> message (<code>apply</code>), not
+            one per ticket.
+          </li>
+          <li>
+            <b>Browser only</b> (decision 1). The REST API, MCP agents and the orch write tickets
+            without the script; the server checks those writes the way it always did. Running
+            <code>onFieldChange</code> on the server for every write (the gVisor sandbox gateway)
+            would be a second phase.
+          </li>
+        </ul>
+
+        <h2 id="c">C · Fields: what the script draws and writes</h2>
+        <ul>
+          <li>
+            <code>fieldRender</code> returns <code>ui.*</code> controls: text, longText, number,
+            toggle, select, multiSelect, people, date, dateRange and note. The app draws them with
+            its own pickers (<code>ScriptControls.svelte</code>), so they look native and work on a
+            phone. Text and numbers change on blur or Enter, never per key.
+          </li>
+          <li>
+            <code>onFieldChange</code> returns a <b>ticket patch</b>
+            (<code>assigneeUids, priorityId, tagIds, startAt, dueAt, dueAllDay, estimate,
+            commitments, title, fields</code>). The app sends it as an ordinary
+            <code>ticketUpdate</code> by the viewer. One edit may write several things (the
+            three-assignee example keeps <code>assigneeUids</code> the union).
+          </li>
+          <li>
+            <b>The script's own values</b> live in <code>ticket.fields</code> under a key it chooses
+            (<code>SCRIPT_FIELD_KEY</code>: a letter, then up to 39 letters, digits or
+            <code>_</code>, never <code>f_…</code>), next to the settings-defined fields'
+            <code>f_xxxxxx</code> ids. The server keeps them small and plain
+            (<code>checkScriptFieldValue</code>): text ≤ 10 000 characters, lists ≤ 200 short items,
+            numbers, booleans, date ranges. REST and MCP show them under the same keys, and accept
+            them by key.
+          </li>
+          <li>
+            A person without edit rights sees every control disabled whatever the script says.
+            Removing an assignee also clears their commitment, as before.
+          </li>
+        </ul>
+
+        <h2 id="d">D · Filters and sort</h2>
+        <ul>
+          <li>
+            <code>filterRender</code> fills the board's Filter popover; <code>onFilter</code> runs
+            for every ticket even when nothing is set (so "only my tickets" can be the default).
+            A person's filter values are kept per board in their browser.
+          </li>
+          <li>
+            Saved views keep their <b>sort, grouping and columns</b>; the filter builder is gone and
+            a saved view's old filter is no longer applied (decision 4). The search box still adds
+            to the script's filter.
+          </li>
+          <li>
+            <code>onSort</code>, when the script has one, replaces the view's sort
+            (<code>applyView(…, { order })</code>). It must answer at once (no async).
+          </li>
+          <li>
+            <b>Not access control</b> (decision 2, later): anyone on the board can still open a
+            hidden ticket by key, search it or read it over the API. A ticket-level
+            <code>readers</code> list enforced by the rules would be the way to do that.
+          </li>
+        </ul>
+
+        <h2 id="e">E · Old boards and new boards</h2>
+        <ul>
+          <li>
+            <b>New boards</b>: <code>boardCreate</code> saves <code>DEFAULT_BOARD_SCRIPT</code>
+            (Assignees with commitments, "Only mine" and an Assignee filter). Copying a board
+            copies its script.
+          </li>
+          <li>
+            <b>Boards from before</b> (decision 3): a board with no saved script runs
+            <code>generateBoardScript(board)</code>: priority, assignees, start, due, estimate, tags
+            and every settings-defined field it can draw, plus filters for the same. Nothing they
+            showed disappears, no data moves, and no migration runs. Saving in Settings › Script
+            keeps it. Options are read from the board at run time, so renaming a priority needs no
+            code change.
+          </li>
+          <li>
+            Settings › Custom fields is gone (<code>/settings/fields</code> leads to Script). The
+            field definitions stay on the board for the generated script, the required-field checks
+            and the table and card columns. Priorities and Tags keep their settings pages.
+          </li>
+        </ul>
+
+        <h2 id="f">F · Not in v1</h2>
+        <ul>
+          <li>Running the script on the server (agents and the API bypass it).</li>
+          <li>Per-ticket visibility.</li>
+          <li>A script for the cards, the table columns or New ticket's form (card and ticket
+            templates still do those).</li>
+          <li>Versions / history of the script (the editor saves over).</li>
+        </ul>
+      </article>
+    </div>
+    <script type="module">
+      /* The hover previews work on these pages too: a link to a card shows the card. */
+      import { listen } from '/peek.js';
+      listen();
+    </script>
+  </body>
+</html>

@@ -8,6 +8,9 @@
 import {
   DateRangeSchema,
   errors,
+  isScriptFieldKey,
+  SCRIPT_FIELD_LIST_MAX,
+  SCRIPT_FIELD_TEXT_MAX,
   type BoardWithId,
   type FieldDef,
   type FieldValue,
@@ -76,6 +79,8 @@ export function checkFieldValue(
   fieldId: string,
   value: FieldValue,
 ): FieldValue {
+  if (!board.fields.some((f) => f.id === fieldId) && isScriptFieldKey(fieldId))
+    return checkScriptFieldValue(fieldId, value);
   const def = fieldDef(board, fieldId);
   const bad = (why: string) =>
     errors.invalid(`Field "${def.name}": ${why}`, { field: `fields.${fieldId}` });
@@ -133,6 +138,32 @@ export function checkFieldValue(
       if (!Array.isArray(value)) throw bad('expected ticket ids');
       return [...new Set(value)];
   }
+}
+
+/**
+ * A board script's own value (SCRIPT_FIELD_KEY): any FieldValue, size-checked.
+ * The script decides what it means; the server only keeps it small and plain.
+ */
+export function checkScriptFieldValue(key: string, value: FieldValue): FieldValue {
+  const bad = (why: string) => errors.invalid(`Field "${key}": ${why}`, { field: `fields.${key}` });
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw bad('expected a finite number');
+    return value;
+  }
+  if (typeof value === 'string') {
+    if (value.length > SCRIPT_FIELD_TEXT_MAX) throw bad('too long');
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length > SCRIPT_FIELD_LIST_MAX) throw bad(`at most ${SCRIPT_FIELD_LIST_MAX} items`);
+    if (value.some((v) => typeof v !== 'string' || v.length > 500))
+      throw bad('items must be short text');
+    return [...new Set(value)];
+  }
+  const r = DateRangeSchema.safeParse(value);
+  if (!r.success || r.data.end < r.data.start) throw bad('expected { start, end }');
+  return r.data;
 }
 
 /** Validate a whole `fields` patch; returns the cleaned values. */

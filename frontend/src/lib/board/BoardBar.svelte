@@ -35,7 +35,7 @@
     SlidersHorizontal,
     Star,
   } from 'lucide-svelte';
-  import type { Board, BoardPref, View, ViewInput, ViewType } from '@tm/shared';
+  import type { Board, BoardPref, ScriptControl, View, ViewInput, ViewType } from '@tm/shared';
   import { VIEW_TYPES } from '@tm/shared';
   import type { WithId } from '$lib/stores';
   import { switcherFor } from '$lib/orgs/switcherStore';
@@ -49,11 +49,10 @@
   import Kbd from '$lib/ui/Kbd.svelte';
   import type { MenuItem } from '$lib/ui/types';
   import { routes } from '$lib/layout/routes';
-  import FilterBuilder from '$lib/views/FilterBuilder.svelte';
+  import ScriptControls from '$lib/templates/ScriptControls.svelte';
   import SortEditor from '$lib/views/SortEditor.svelte';
   import LayoutEditor from '$lib/views/LayoutEditor.svelte';
   import { templatesOfKind } from '$lib/templates/store';
-  import { countConditions } from '$lib/views/filter';
   import { fieldInfo } from '$lib/views/fields';
   import { VIEW_TYPE_LABEL, withType } from '$lib/views/draft';
   import Avatars from './Avatars.svelte';
@@ -78,6 +77,13 @@
     canSaveShared: boolean;
     canCreate: boolean;
     isAdmin: boolean;
+    /** board-script.html: the board script's filter controls, and how many are set. */
+    filterControls: ScriptControl[];
+    activeFilters: number;
+    /** The board script failed (its message), shown in the Filter popover. */
+    scriptProblem?: string | null;
+    onfilter: (c: { id: string; value: unknown }) => void;
+    onfilterreset: () => void;
     /** Free-text search over this view — bound, so '/' can focus the box. */
     search: string;
     onchange: (draft: ViewInput) => void;
@@ -107,6 +113,11 @@
     canSaveShared,
     canCreate,
     isAdmin,
+    filterControls,
+    activeFilters,
+    scriptProblem = null,
+    onfilter,
+    onfilterreset,
     search = $bindable(),
     onchange,
     onsave,
@@ -129,7 +140,10 @@
   let sortBtn: HTMLButtonElement | null = $state(null);
   let layoutBtn: HTMLButtonElement | null = $state(null);
 
-  const nFilters = $derived(countConditions(draft.filter));
+  const nFilters = $derived(activeFilters);
+  const pickPeople = $derived(
+    people.map((p) => ({ id: p.uid, uid: p.uid, name: p.name || p.email, detail: p.email })),
+  );
   const groupLabel = $derived(
     draft.groupBy ? (fieldInfo(board, draft.groupBy)?.label ?? draft.groupBy) : null,
   );
@@ -363,12 +377,37 @@
   label="Filter"
   class="z-40"
 >
-  <FilterBuilder
-    filter={draft.filter}
-    {board}
-    {people}
-    onchange={(filter) => onchange({ ...draft, filter })}
-  />
+  <!-- board-script.html: the filters are the board script's (filterRender / onFilter). -->
+  <div class="flex w-72 max-w-[90vw] flex-col gap-3 p-1" data-testid="script-filters">
+    {#if scriptProblem}
+      <p role="alert" class="rounded-md bg-danger-soft px-2 py-1.5 text-xs text-danger">
+        Board script: {scriptProblem}
+      </p>
+    {/if}
+    {#if filterControls.length}
+      <ScriptControls
+        layout="bar"
+        controls={filterControls}
+        people={pickPeople}
+        onchange={onfilter}
+      />
+      {#if nFilters}
+        <button
+          type="button"
+          class="self-start text-xs text-muted underline hover:text-text"
+          onclick={onfilterreset}>Reset filters</button
+        >
+      {/if}
+    {:else}
+      <p class="text-xs text-muted">This board's script draws no filters.</p>
+    {/if}
+    {#if isAdmin}
+      <a
+        href={routes.boardSettings(board.key, 'script')}
+        class="text-xs text-accent hover:underline">Edit the board script</a
+      >
+    {/if}
+  </div>
 </Popover>
 <Popover bind:open={sortOpen} anchor={sortBtn} placement="bottom-end" label="Sort" class="z-40">
   <SortEditor sort={draft.sort} {board} onchange={(sort) => onchange({ ...draft, sort })} />

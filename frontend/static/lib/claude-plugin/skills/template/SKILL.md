@@ -33,6 +33,7 @@ agent to write — that shape the board's own UI in three places:
 | `message` | the composer's 📋 *Use a template* | draws a form; `submit` returns the message (Markdown) and its data |
 | `ticket` | *New ticket* › a template | draws a form; `submit` returns the ticket to create |
 | `card` | a kanban view whose *Layout › Card* names it | draws each card from `ctx.ticket` |
+| `script` | the board itself: a ticket's fields, the board's filters and sort | one per board — see *Board script* |
 
 Templates live on the board (`boards/{b}/templates/{id}`), at most 50 per board,
 100,000 characters of code each. Admins (people or agents) create and

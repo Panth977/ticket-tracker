@@ -12,7 +12,6 @@
   import AggregatesSection from '$lib/board/settings/AggregatesSection.svelte';
   import AnalyticsSection from '$lib/board/settings/AnalyticsSection.svelte';
   import DangerSection from '$lib/board/settings/DangerSection.svelte';
-  import FieldsSection from '$lib/board/settings/FieldsSection.svelte';
   import GeneralSection from '$lib/board/settings/GeneralSection.svelte';
   import GrantsSection from '$lib/board/settings/GrantsSection.svelte';
   import IntakeSection from '$lib/board/settings/IntakeSection.svelte';
@@ -22,6 +21,7 @@
   import StagesSection from '$lib/board/settings/StagesSection.svelte';
   import SubscribersSection from '$lib/board/settings/SubscribersSection.svelte';
   import SubscriptionsSection from '$lib/board/settings/SubscriptionsSection.svelte';
+  import ScriptSection from '$lib/board/settings/ScriptSection.svelte';
   import TemplatesSection from '$lib/board/settings/TemplatesSection.svelte';
   import { useSettings } from '$lib/board/settings/draft.svelte';
   import DictionarySubscriptions from '$lib/dictionary/DictionarySubscriptions.svelte';
@@ -30,9 +30,11 @@
   const section = $derived(page.params.section ?? 'general');
   const known = $derived(BOARD_SETTINGS_SECTIONS.some((x) => x.id === section));
   // Renamed sections (lib/access): old links still land.
-  const MOVED: Record<string, 'subscriptions' | 'dictionaries'> = {
+  const MOVED: Record<string, 'subscriptions' | 'dictionaries' | 'script'> = {
     bucket: 'subscriptions',
     env: 'dictionaries',
+    // board-script.html: fields are the board script's now.
+    fields: 'script',
   };
   $effect(() => {
     const to = MOVED[section];
@@ -49,8 +51,8 @@
     <OptionsSection kind="priorities" />
   {:else if section === 'tags'}
     <OptionsSection kind="tags" />
-  {:else if section === 'fields'}
-    <FieldsSection />
+  {:else if section === 'script'}
+    <ScriptSection />
   {:else if section === 'templates'}
     <TemplatesSection />
   {:else if section === 'people'}

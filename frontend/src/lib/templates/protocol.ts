@@ -48,12 +48,16 @@ export const NODE_TYPES = [
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
+/** The board script's hooks the page calls (board-script.html). */
+export type ScriptOp = 'filters' | 'filterRender' | 'fieldRender' | 'change' | 'apply';
+
 /** Page → worker. */
 export type ToWorker =
   | { type: 'load'; code: string; kind: TemplateKind; ctx: unknown }
   | { type: 'event'; seq: number; h: string; args: unknown[] }
   | { type: 'submit'; id: number }
   | { type: 'cards'; id: number; items: { id: string; ctx: unknown }[] }
+  | { type: 'script'; id: number; op: ScriptOp; args: unknown }
   | { type: 'apiResult'; id: number; ok: boolean; value?: unknown; error?: string }
   | { type: 'ping'; n: number };
 
@@ -69,6 +73,7 @@ export type FromWorker =
       id: number;
       results: { id: string; tree?: VSlot[]; error?: string; line?: number }[];
     }
+  | { type: 'scripted'; id: number; value?: unknown; error?: string; line?: number }
   | { type: 'api'; id: number; method: string; args: unknown[] }
   | { type: 'log'; level: 'log' | 'warn' | 'error'; text: string }
   | { type: 'pong'; n: number };

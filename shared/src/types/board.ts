@@ -166,6 +166,19 @@ export const FieldValueSchema = z.union([
 ]);
 export type FieldValue = z.infer<typeof FieldValueSchema>;
 
+/**
+ * BOARD SCRIPT FIELDS (docs/plan/board-script.html): a board's script may keep
+ * its own values in `ticket.fields` under a plain key it chooses ('severity',
+ * 'frontend'), next to the FieldDef ids (`f_xxxxxx`) of the settings-defined
+ * fields. A key starts with a letter, is at most 40 letters, digits or _, and
+ * never starts with `f_` (those are FieldDef ids).
+ */
+export const SCRIPT_FIELD_KEY = /^(?!f_)[A-Za-z][A-Za-z0-9_]{0,39}$/;
+export const isScriptFieldKey = (k: string): boolean => SCRIPT_FIELD_KEY.test(k);
+/** Limits on one script field value. */
+export const SCRIPT_FIELD_TEXT_MAX = 10_000;
+export const SCRIPT_FIELD_LIST_MAX = 200;
+
 export const CMPS = [
   'is',
   'isNot',

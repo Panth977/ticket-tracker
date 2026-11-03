@@ -92,7 +92,8 @@ test('llms-full.txt documents every REST path and every MCP tool', async ({ requ
     '## 7. Recipes',
     '## 8. Artifacts',
     '## 9. Templates',
-    '## 10. Version and changelog',
+    '## 10. Board script',
+    '## 11. Version and changelog',
   ])
     expect(text, `llms-full.txt should contain ${needle}`).toContain(needle);
 });

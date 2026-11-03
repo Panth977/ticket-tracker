@@ -16,7 +16,7 @@
  */
 import type { TemplateKind } from '@tm/shared';
 import runtimeSource from './worker/runtime.js?raw';
-import type { FromWorker, ToWorker, VSlot } from './protocol';
+import type { FromWorker, ScriptOp, ToWorker, VSlot } from './protocol';
 
 /** Everything `api.*` in a template reaches. Each call is the viewer's own read of THIS board. */
 export interface TemplateBridge {
@@ -26,6 +26,8 @@ export interface TemplateBridge {
   ticketGet(key: string): Promise<unknown>;
   ticketList(q: Record<string, unknown>): Promise<unknown>;
   ticketSearch(text: string, opts: Record<string, unknown>): Promise<unknown>;
+  /** Another board's active tickets the viewer may read (board script: api.boards.tickets). */
+  boardTickets(q: Record<string, unknown>): Promise<unknown>;
   storageGet(key: string): Promise<unknown>;
   storageSet(key: string, value: unknown): Promise<unknown>;
 }
@@ -138,6 +140,7 @@ export class TemplateWorker {
         this.o.onLog?.({ level: m.level, text: m.text, at: Date.now() });
         return;
       case 'submitted':
+      case 'scripted':
       case 'cards': {
         const wake = this.waits.get(m.id);
         this.waits.delete(m.id);
@@ -182,6 +185,8 @@ export class TemplateWorker {
         return b.ticketList(o(0));
       case 'tickets.search':
         return b.ticketSearch(s(0), o(1));
+      case 'boards.tickets':
+        return b.boardTickets(o(0));
       case 'storage.get':
         return b.storageGet(s(0));
       case 'storage.set':
@@ -223,6 +228,23 @@ export class TemplateWorker {
     if (r.type === 'cards') return r.results;
     const message = r.type === 'error' ? r.message : 'The template did not answer';
     return items.map((i) => ({ id: i.id, error: message }));
+  }
+
+  /** Call one of a board script's hooks. */
+  async script(
+    op: ScriptOp,
+    args: unknown,
+  ): Promise<{ value?: unknown; error?: string; line?: number }> {
+    if (this.dead) return { error: 'The board script was stopped' };
+    const r = await this.ask<FromWorker>({
+      type: 'script',
+      id: this.nextId++,
+      op,
+      args: plain(args),
+    });
+    if (r.type === 'scripted') return { value: r.value, error: r.error, line: r.line };
+    if (r.type === 'error') return { error: r.message };
+    return { error: 'The board script did not answer' };
   }
 
   get stopped() {

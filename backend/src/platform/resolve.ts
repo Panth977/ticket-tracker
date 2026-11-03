@@ -11,7 +11,9 @@
 import {
   COLLECTIONS,
   errors,
+  FieldValueSchema,
   isAgentId,
+  isScriptFieldKey,
   paths,
   type BoardKeyClaim,
   type BoardMember,
@@ -29,6 +31,7 @@ import { db } from '../runtime/firebase.js';
 import { loadBoard, loadTicket, withBoardId } from '../tickets/access.js';
 import type { Board } from '@tm/shared';
 import { boardMembers } from './public.js';
+import { checkScriptFieldValue } from '../tickets/validate.js';
 
 const norm = (s: string) => s.trim().toLowerCase();
 
@@ -367,6 +370,18 @@ export function fieldsIn(
 ): Record<string, FieldValue> {
   const out: Record<string, FieldValue> = {};
   for (const [k, v] of Object.entries(fields)) {
+    // A board script's own key (board-script.html) that no settings field is named: stored as given.
+    const named = board.fields.some((f) => !f.archived && (f.id === k || norm(f.name) === norm(k)));
+    if (!named && isScriptFieldKey(k)) {
+      const r = FieldValueSchema.safeParse(v);
+      if (!r.success)
+        throw errors.invalid(
+          `Field "${k}": expected text, a number, true/false, a list of text or null`,
+          { field: `fields.${k}` },
+        );
+      out[k] = checkScriptFieldValue(k, r.data);
+      continue;
+    }
     const def = fieldDef(board, k);
     out[def.id] = fieldValueIn(ctx, board, members, def, v, tz);
   }
