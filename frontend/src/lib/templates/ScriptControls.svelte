@@ -2,7 +2,8 @@
   The board script's controls (docs/plan/board-script.html §2), drawn by the
   app: ui.text / longText / number / toggle / select / multiSelect / people /
   date / dateRange / note. Used in a ticket's Details pane (layout 'pane') and
-  in the board's Filter popover (layout 'bar').
+  in the board's Filter popover (layout 'bar'), a table cell (layout 'cell': the
+  control alone) and the bulk bar (layout 'inline': one row, labels as placeholders).
 
   Text and numbers change on blur or Enter, never per key; everything else on
   pick. A people control with `commitments` shows each person's commitment
@@ -23,7 +24,7 @@
     tz?: string | null;
     /** Nothing editable (no edit permission). */
     disabled?: boolean;
-    layout?: 'pane' | 'bar';
+    layout?: 'pane' | 'bar' | 'cell' | 'inline';
     commitments?: Record<string, number | null>;
     oncommit?: (uid: string, at: number | null) => void;
     onchange: (c: { id: string; value: unknown; allDay?: boolean }) => void;
@@ -145,7 +146,7 @@
     <Checkbox
       checked={c.value === true}
       disabled={off(c)}
-      label={layout === 'bar' ? (c.label ?? c.id) : undefined}
+      label={layout === 'bar' || layout === 'inline' ? (c.label ?? c.id) : undefined}
       aria-label={c.label ?? c.id}
       onchange={(e) => onchange({ id: c.id!, value: e.currentTarget.checked })}
     />
@@ -272,7 +273,21 @@
   {/if}
 {/snippet}
 
-{#if layout === 'pane'}
+{#if layout === 'cell'}
+  {#each shown.slice(0, 1) as c, i (c.id ?? `note-${i}`)}
+    <div data-script-control={c.id ?? 'note'} class="min-w-0 flex-1">{@render control(c)}</div>
+  {/each}
+{:else if layout === 'inline'}
+  {#each shown as c, i (c.id ?? `note-${i}`)}
+    <div
+      data-script-control={c.id ?? 'note'}
+      class="min-w-0 {c.type === 'date' ? 'w-40' : c.type === 'toggle' ? '' : 'w-44'}"
+      title={c.help ?? c.label}
+    >
+      {@render control({ ...c, placeholder: c.placeholder ?? c.label })}
+    </div>
+  {/each}
+{:else if layout === 'pane'}
   {#each shown as c, i (c.id ?? `note-${i}`)}
     {#if c.type === 'note' && !c.label}
       <div data-script-control={c.id ?? 'note'}>{@render control(c)}</div>

@@ -27,6 +27,7 @@ import { outbox } from '$lib/api';
 import { principalChoices } from '$lib/people/pickers';
 import type { ViewCtx } from '@tm/shared/logic/view';
 import { isUnread, unreadTracked } from './summary';
+import type { BoardScriptHost } from '$lib/templates/script';
 
 export type BoardTicket = TicketWithId;
 
@@ -72,6 +73,8 @@ export class BoardState {
   reads = $state<Map<string, number>>(new Map());
   me = $state('');
   tz = $state('UTC');
+  /** board-script.html: the board script's host (the route sets it once it is running). */
+  script = $state.raw<BoardScriptHost | null>(null);
   /** Set when a drop hit a stage's `requires` (422) — the page shows the prompt. */
   requires = $state<RequiresPrompt | null>(null);
   /** Tickets still being created (outbox stand-ins), by ticket id: 'sending' | 'failed'. */

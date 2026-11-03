@@ -25,20 +25,15 @@ small and readable — the board's admins maintain it after you.
 
 The full reference — also §9 of `../taskmanager/reference/llms-full.txt`, live at https://taskmanager-example.web.app/llms-full.txt:
 
-A **template** is a few lines of JavaScript a board's admins write — or ask an
-agent to write — that shape the board's own UI in three places:
+**Forms and cards are now written in the board script** (*Board script*: `forms()` for the
+composer's 📋 and *New ticket*, `previewTicketCard` for the Board view's cards). The app no longer
+offers separate message, ticket or card templates. What follows still applies to the script: how
+the code runs, the builder `h` its trees are drawn with, `api`, and what a form's submit answers.
 
-| kind | where it shows | what its code does |
-| --- | --- | --- |
-| `message` | the composer's 📋 *Use a template* | draws a form; `submit` returns the message (Markdown) and its data |
-| `ticket` | *New ticket* › a template | draws a form; `submit` returns the ticket to create |
-| `card` | a kanban view whose *Layout › Card* names it | draws each card from `ctx.ticket` |
-| `script` | the board itself: a ticket's fields, the board's filters and sort | one per board — see *Board script* |
-
-Templates live on the board (`boards/{b}/templates/{id}`), at most 50 per board,
-100,000 characters of code each. Admins (people or agents) create and
-change them — Settings › Templates in the app, `template_save` / `template_delete` over MCP,
-`POST /api/templateSave` — and everyone on the board uses them. Copying a board copies its templates.
+The board script is stored as the template `script` (`boards/{b}/templates/script`),
+100,000 characters of code at most. Admins (people or agents) change it in
+*Board settings › Script*, with `template_save` over MCP or `POST /api/templateSave`. Copying a board
+copies it. (Up to 50 templates of the old kinds may still be stored; the app does not use them.)
 
 ### How it runs
 
@@ -178,85 +173,10 @@ becomes a new tag; anything else that names nothing is shown as a problem and no
 created. The board's required fields must be set. Without `stage` the ticket goes where the
 dialog was opened (the column's +), else the first stage.
 
-### Card templates
-
-A card template has only `render` (and optionally `state(ctx)`, run per card). It is drawn
-**static**: no handlers, inputs disabled — the card itself opens the ticket. One worker draws
-every card of a view in batches, and a card is drawn again only when its ticket changes.
-While it loads, or if it throws for one ticket, that card falls back to the built-in card
-(with a ⚠ saying why). Choose it per kanban view: *Layout › Card* in the view bar, or
-*Cards* when creating a view (`view_save` with `cardTemplateId`).
-
-### Examples
-
-**A field that decides the next fields** (the reason templates are code):
-
-```js
-const AREAS = { Frontend: ['Web', 'Phone'], Backend: ['API', 'Jobs', 'Database'] };
-export default {
-  state: () => ({ area: '', part: '', what: '' }),
-  render(s, set, h) {
-    return h.col(
-      h.select({ label: 'Area', value: s.area, placeholder: 'Pick one', options: Object.keys(AREAS),
-        onChange: (area) => set({ area, part: '' }) }),
-      s.area && h.select({ label: 'Part', name: 'part', value: s.part, placeholder: 'Pick one',
-        options: AREAS[s.area], onChange: (part) => set({ part }) }),
-      h.textarea({ label: 'What happened', name: 'what', value: s.what, onInput: (what) => set({ what }) }),
-    );
-  },
-  submit(s) {
-    if (!s.part) return { type: 'invalid', error: { part: 'Pick the part' } };
-    return { type: 'valid', msg: `**${s.area} › ${s.part}**\n\n${s.what}`, data: s };
-  },
-};
-```
-
-**A ticket template that assigns from the board's people:**
-
-```js
-export default {
-  async state() {
-    const people = (await api.members()).filter((m) => m.kind === 'user');
-    return { people, title: '', owner: (await api.storage.get('owner')) ?? '' };
-  },
-  render(s, set, h) {
-    return h.col(
-      h.input({ label: 'Title', name: 'title', value: s.title, onInput: (title) => set({ title }) }),
-      h.select({ label: 'Owner', value: s.owner, placeholder: 'Nobody',
-        options: s.people.map((p) => ({ value: p.email, label: p.name })),
-        onChange: (owner) => { set({ owner }); api.storage.set('owner', owner); } }),
-    );
-  },
-  submit(s) {
-    if (!s.title.trim()) return { type: 'invalid', error: { title: 'Required' } };
-    return { type: 'valid', ticket: { title: s.title, assignees: s.owner ? [s.owner] : [], tags: ['triage'] } };
-  },
-};
-```
-
-**A card that shows what matters on this board:**
-
-```js
-export default {
-  render(state, setState, h, { ticket: t }) {
-    return h.col({ gap: 1.5 },
-      h.row(h.text(t.key, { mono: true, size: 'xs', tone: 'subtle' }),
-        t.priority && h.badge(t.priority.name, { color: t.priority.color })),
-      h.text(t.title, { weight: 'medium' }),
-      t.tasks && h.progress({ value: t.tasks.done, max: t.tasks.total }),
-      t.fields.Customer && h.text('for ' + t.fields.Customer, { size: 'xs', tone: 'muted' }),
-      h.row(...t.assignees.map((a) => h.person(a.id, { key: a.id, showName: false }))),
-    );
-  },
-};
-```
-
 ### Over MCP
 
-`get_template_docs` (this text, plus a starter per kind), `list_templates` (with
-`include_code` for the code), `template_save` (`{ board, templateId?, template: { kind, name,
-code, description?, indicator?, position? } }` — a template keeps its kind) and
-`template_delete`. A kanban view takes a card template with `view_save`'s
-`view.cardTemplateId`. Messages read with `get_messages` carry `template` when a message
-template wrote them.
+`get_template_docs` (this text and the *Board script* reference, with the default script),
+`list_templates` (with `include_code`), and `template_save`
+(`{ board, template: { kind: 'script', name, code } }` — the board script is always the template
+`script`). Messages read with `get_messages` carry `template` when a form wrote them.
 

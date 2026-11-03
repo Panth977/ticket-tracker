@@ -5,8 +5,8 @@
   is in manual order, the drop position ({ after, before } neighbours → the
   server computes the fractional rank; we overlay a local one meanwhile).
 
-  A view with a `cardTemplateId` draws each card with that card template
-  (templates.html §E), the built-in card standing in while it loads or fails.
+  Each card is the board script's previewTicketCard (board-script.html), the
+  built-in card standing in while it loads, fails, or when the script has none.
 
   WIP: a stage column shows count / wipLimit and turns amber above it.
   A stage whose `requires` fields are missing answers 422 → the requires prompt.
@@ -30,9 +30,8 @@
   import { groupLabel, isPeopleGroup } from '$lib/views/format';
   import { dropPosition, mergePatches, movePatch } from '$lib/views/move';
   import TicketCard from './TicketCard.svelte';
-  import TemplateCard from '$lib/templates/TemplateCard.svelte';
-  import { boardTemplates } from '$lib/templates/store';
-  import { auth } from '$lib/firebase/auth.svelte';
+  import ScriptCard from '$lib/templates/ScriptCard.svelte';
+  import type { CardTree } from '$lib/templates/script';
   import { useBoard, type BoardDoc, type BoardTicket } from './context.svelte';
   import { updateTicket } from './ops';
 
@@ -43,23 +42,11 @@
     view: ViewInput;
     /** '+' at the foot of a column: create a ticket already in that column (and lane). */
     onadd?: (col: ViewGroup<BoardTicket>, lane: ViewGroup<BoardTicket> | null) => void;
+    /** The board script's cards (previewTicketCard); null = it draws none. */
+    cards?: Map<string, CardTree> | null;
   }
-  let { board, groups, view, onadd }: Props = $props();
+  let { board, groups, view, onadd, cards = null }: Props = $props();
   const bs = useBoard();
-  /** templates.html §E: the view's card template, when it names one this board has. */
-  const templates = $derived(boardTemplates(view.cardTemplateId ? board.id : null));
-  const cardTemplate = $derived(
-    view.cardTemplateId
-      ? ($templates.data.find((x) => x.id === view.cardTemplateId && x.kind === 'card') ?? null)
-      : null,
-  );
-  const meInfo = $derived({
-    id: bs.me,
-    name: auth.profile?.name || bs.memberByUid.get(bs.me)?.name || '',
-    email: auth.user?.email ?? bs.memberByUid.get(bs.me)?.email ?? '',
-    role: bs.role ?? '',
-  });
-
   type Item = { id: string; t: BoardTicket };
   const FLIP = 150;
   // Manual order = the board's own rank order: no sort, or exactly 'rank asc'
@@ -274,14 +261,20 @@
               aria-hidden="true"
             />
           {/if}
-          {#if cardTemplate && !pend}
-            <TemplateCard template={cardTemplate} {board} ticket={item.t} me={meInfo}>
+          {#if cards && !pend}
+            {#if bs.unread(item.t)}<span
+                data-unread
+                class="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent"
+                title="New messages"
+                aria-label="New messages"
+              ></span>{/if}
+            <ScriptCard card={cards.get(item.t.id)}>
               {#snippet fallback()}<TicketCard
                   {board}
                   ticket={item.t}
                   cardFields={view.cardFields}
                 />{/snippet}
-            </TemplateCard>
+            </ScriptCard>
           {:else}
             <TicketCard {board} ticket={item.t} cardFields={view.cardFields} />
           {/if}

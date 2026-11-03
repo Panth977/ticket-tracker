@@ -55,9 +55,8 @@
   import { useBoard, type BoardDoc } from './context.svelte';
   import { markdownToDoc } from '@tm/shared/logic/richtext/index';
   import { auth } from '$lib/firebase/auth.svelte';
-  import { Indicator } from '$lib/ui';
   import TemplateForm from '$lib/templates/TemplateForm.svelte';
-  import { templatesOfKind } from '$lib/templates/store';
+  import { formItems, type FormItem } from '$lib/templates/script';
   import { memberInfo } from '$lib/templates/info';
   import { checkTicketResult, resolveTicket } from '$lib/templates/resolve';
 
@@ -74,14 +73,21 @@
   const requiredFields = $derived(board.fields.filter((f) => f.required && !f.archived));
 
   let mode = $state<'quick' | 'full' | 'template'>('quick');
-  /** templates.html §D2 — the board's ticket templates, and the one being filled in. */
-  const ticketTemplates = $derived(templatesOfKind(board.id, 'ticket'));
+  /** board-script.html §forms — the board script's ticket forms, and the one being filled in. */
+  let ticketForms = $state<FormItem[]>([]);
+  $effect(() => {
+    const h = bs.script;
+    if (!h) return;
+    void formItems(h, 'ticket').then((list) => {
+      if (h === bs.script) ticketForms = list;
+    });
+  });
   let tplId = $state<string | null>(null);
   let tplForm: TemplateForm | undefined = $state();
   let tplErr = $state('');
   let tplBusy = $state(false);
   let tplReady = $state(false);
-  const tpl = $derived($ticketTemplates.list.find((x) => x.id === tplId) ?? null);
+  const tpl = $derived(ticketForms.find((x) => x.id === tplId) ?? null);
   const meInfo = $derived({
     id: bs.me,
     name: auth.profile?.name || bs.memberByUid.get(bs.me)?.name || '',
@@ -502,17 +508,16 @@
 </script>
 
 {#snippet templateRow()}
-  {#if $ticketTemplates.list.length}
+  {#if ticketForms.length}
     <div class="mb-3 flex flex-wrap items-center gap-1.5" aria-label="Ticket templates">
-      <span class="mr-1 text-xs text-muted">From a template</span>
-      {#each $ticketTemplates.list as x (x.id)}
+      <span class="mr-1 text-xs text-muted">From a form</span>
+      {#each ticketForms as x (x.id)}
         <button
           type="button"
           class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-xs font-medium hover:bg-surface-2"
           title={x.description ?? undefined}
           onclick={() => useTemplate(x.id)}
         >
-          <Indicator of={x} seed={x.id} size="xs" />
           {x.name}
         </button>
       {/each}
@@ -535,6 +540,7 @@
         bind:this={tplForm}
         bind:ready={tplReady}
         template={tpl}
+        entry={tpl.entry}
         {board}
         me={meInfo}
         openTicket={(k) => bs.openTicket(k)}

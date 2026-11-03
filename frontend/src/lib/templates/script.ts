@@ -22,7 +22,14 @@ import {
   ScriptControlsSchema,
   ScriptFiltersSchema,
   ScriptPatchSchema,
+  ScriptBulkResultSchema,
+  ScriptColumnsSchema,
+  ScriptFormsSchema,
+  SCRIPT_FORM_PREFIX,
   type Board,
+  type ScriptBulkResult,
+  type ScriptColumn,
+  type ScriptForm,
   type ScriptControl,
   type ScriptFilters,
   type ScriptPatch,
@@ -33,6 +40,7 @@ import { docStore } from '$lib/stores';
 import { contextFor, createBridge } from './bridge';
 import { TemplateWorker, type TemplateLog, type TemplateProblem } from './host';
 import type { MemberInfo, TicketInfo } from './info';
+import type { ScriptEntry, VSlot } from './protocol';
 
 export interface ScriptMe {
   id: string;
@@ -55,6 +63,19 @@ export type ScriptTicket = Omit<TicketInfo, 'fields'> & {
 };
 
 type Raw = Ticket & { id: string };
+
+/** One card: the static tree previewTicketCard drew, or its error. */
+export type CardTree = { tree?: VSlot[]; error?: string; line?: number };
+/** One table cell, as the worker sends it. */
+export type ScriptCell =
+  | { kind: 'text'; text: string }
+  | { kind: 'tree'; tree: VSlot[] }
+  | { kind: 'control'; control: ScriptControl };
+export interface ScriptTable {
+  columns: ScriptColumn[];
+  /** ticket id → column id → cell */
+  rows: Map<string, Record<string, ScriptCell>>;
+}
 type Outcome<T> =
   | { value: T; error?: undefined; line?: undefined }
   | { value?: undefined; error: string; line?: number };
@@ -204,6 +225,106 @@ export class BoardScriptHost {
     return { value: { keep: new Set(v?.keep ?? []), order: v?.order ?? null } };
   }
 
+  private cardCache = new Map<string, { stamp: number; r: CardTree }>();
+  /** previewTicketCard for many tickets (cached per ticket version); null = the script has none. */
+  async cards({
+    tickets,
+  }: {
+    tickets: readonly Raw[];
+  }): Promise<Outcome<Map<string, CardTree> | null>> {
+    const out = new Map<string, CardTree>();
+    const todo = tickets.filter((t) => {
+      const hit = this.cardCache.get(t.id);
+      if (hit && hit.stamp === t.updatedAt) {
+        out.set(t.id, hit.r);
+        return false;
+      }
+      return true;
+    });
+    if (!todo.length) return { value: out };
+    const r = await this.call<Record<string, CardTree> | null>('cards', {
+      tickets: await Promise.all(todo.map((t) => this.ticketOf(t))),
+    });
+    if (r.error !== undefined) return r;
+    if (r.value === null) return { value: null };
+    for (const t of todo) {
+      const c = r.value?.[t.id] ?? { error: 'No card for this ticket' };
+      this.cardCache.set(t.id, { stamp: t.updatedAt, r: c });
+      out.set(t.id, c);
+    }
+    return { value: out };
+  }
+
+  /** previewTicketTable; null = the script has none. Controls in cells are checked. */
+  async table({ tickets }: { tickets: readonly Raw[] }): Promise<Outcome<ScriptTable | null>> {
+    const r = await this.call<{
+      columns: unknown;
+      rows: { id: string; cells: Record<string, ScriptCell> }[];
+    } | null>('table', { tickets: await Promise.all(tickets.map((t) => this.ticketOf(t))) });
+    if (r.error !== undefined) return r;
+    if (r.value === null) return { value: null };
+    const cols = ScriptColumnsSchema.safeParse(r.value.columns);
+    if (!cols.success) return { error: `previewTicketTable columns: ${zodMessage(cols.error)}` };
+    const rows = new Map<string, Record<string, ScriptCell>>();
+    for (const row of r.value.rows) {
+      for (const [k, c] of Object.entries(row.cells)) {
+        if (c.kind !== 'control') continue;
+        const p = ScriptControlsSchema.safeParse([c.control]);
+        if (!p.success) return { error: `previewTicketTable cell ${k}: ${zodMessage(p.error)}` };
+      }
+      rows.set(row.id, row.cells);
+    }
+    return { value: { columns: cols.data, rows } };
+  }
+
+  async bulkControls({ tickets }: { tickets: readonly Raw[] }): Promise<Outcome<ScriptControl[]>> {
+    return this.controls(
+      await this.call<unknown>('bulkRender', {
+        tickets: await Promise.all(tickets.map((t) => this.ticketOf(t))),
+      }),
+      'bulkRender',
+    );
+  }
+
+  /** onBulkChange → one patch per ticket id (null = nothing to write). */
+  async bulkChange(a: {
+    tickets: readonly Raw[];
+    id: string;
+    value: unknown;
+    allDay?: boolean;
+  }): Promise<Outcome<Map<string, ScriptPatch> | null>> {
+    const r = await this.call<unknown>('bulkChange', {
+      tickets: await Promise.all(a.tickets.map((t) => this.ticketOf(t))),
+      id: a.id,
+      value: a.value,
+      allDay: a.allDay,
+    });
+    if (r.error !== undefined) return r;
+    if (r.value === null || r.value === undefined) return { value: null };
+    const p = ScriptBulkResultSchema.safeParse(r.value);
+    if (!p.success) return { error: `onBulkChange: ${zodMessage(p.error)}` };
+    const v = p.data as ScriptBulkResult;
+    const out = new Map<string, ScriptPatch>();
+    if ('patches' in v) {
+      const ids = new Set(a.tickets.map((t) => t.id));
+      for (const [id, patch] of Object.entries(v.patches)) if (ids.has(id)) out.set(id, patch);
+    } else for (const t of a.tickets) out.set(t.id, v);
+    return { value: out };
+  }
+
+  async forms(): Promise<Outcome<ScriptForm[]>> {
+    const r = await this.call<unknown>('forms', {});
+    if (r.error !== undefined) return r;
+    const p = ScriptFormsSchema.safeParse(r.value ?? []);
+    return p.success ? { value: p.data } : { error: `forms(): ${zodMessage(p.error)}` };
+  }
+
+  async previewNames(): Promise<Outcome<string[]>> {
+    const r = await this.call<string[]>('previewNames', {});
+    if (r.error !== undefined) return r;
+    return { value: (r.value ?? []).filter((n) => typeof n === 'string' && n.length <= 60) };
+  }
+
   members(): Promise<MemberInfo[]> {
     return this.bridge.members() as Promise<MemberInfo[]>;
   }
@@ -297,4 +418,33 @@ export function activeFilters(
     if (JSON.stringify(v ?? null) !== JSON.stringify(defaults[c.id] ?? null)) n++;
   }
   return n;
+}
+
+/** A board script form, ready for TemplateForm (template = { id, kind, code }, entry). */
+export interface FormItem {
+  /** What a posted message keeps as template.id: SCRIPT_FORM_PREFIX + the form's id. */
+  id: string;
+  name: string;
+  description: string | null;
+  kind: 'message' | 'ticket';
+  code: string;
+  entry: ScriptEntry;
+}
+/** The script's forms of one kind (none when the script has no forms() or it fails). */
+export async function formItems(
+  host: BoardScriptHost,
+  kind: 'message' | 'ticket',
+): Promise<FormItem[]> {
+  const r = await host.forms();
+  if (r.error !== undefined) return [];
+  return r.value
+    .filter((f) => f.kind === kind)
+    .map((f) => ({
+      id: `${SCRIPT_FORM_PREFIX}${f.id}`,
+      name: f.name,
+      description: f.description ?? null,
+      kind,
+      code: host.code,
+      entry: { surface: 'form', id: f.id },
+    }));
 }

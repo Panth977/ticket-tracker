@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 815969089cbb…</span>
+        <span>sha256 d5608b919713…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -134,7 +134,7 @@
       </nav>
       <main>
 <h2 id="contents"><a class="anchor" href="#contents" aria-label="Link to this section">#</a>Contents</h2>
-<ul><li><a href="#contents">Contents</a></li><li><a href="#1-what-this-software-is">1. What this software is</a></li><li><a href="#the-shape-of-the-data">The shape of the data</a></li><li><a href="#principals-people-and-agents">Principals: people and agents</a></li><li><a href="#what-an-agent-can-do">What an agent can do</a></li><li><a href="#what-it-will-never-do">What it will never do</a></li><li><a href="#2-how-an-agent-gets-in">2. How an agent gets in</a></li><li><a href="#the-kinds-of-credential">The kinds of credential</a></li><li><a href="#the-three-steps-a-person-takes-once">The three steps a person takes, once</a></li><li><a href="#on-a-board-the-role-is-the-permission">On a board: the role is the permission</a></li><li><a href="#what-the-token-carries">What the token carries</a></li><li><a href="#which-board-does-a-call-mean">Which board does a call mean?</a></li><li><a href="#the-one-rule-to-internalise">The one rule to internalise</a></li><li><a href="#using-it">Using it</a></li><li><a href="#3-the-three-doors">3. The three doors</a></li><li><a href="#the-sdk-recommended">The SDK (recommended)</a></li><li><a href="#rest">REST</a></li><li><a href="#mcp">MCP</a></li><li><a href="#4-the-loop-a-complete-orchestrator">4. The loop — a complete orchestrator</a></li><li><a href="#4-1-with-the-sdk-the-short-way">4.1 With the SDK, the short way</a></li><li><a href="#4-2-with-the-sdk-the-loop-written-out">4.2 With the SDK, the loop written out</a></li><li><a href="#4-3-watching-a-board-not-just-your-inbox">4.3 Watching a BOARD, not just your inbox</a></li><li><a href="#4-4-the-same-loop-in-raw-rest">4.4 The same loop in raw REST</a></li><li><a href="#4-5-what-the-loop-costs">4.5 What the loop costs</a></li><li><a href="#4-6-say-what-a-run-cost-the-turn-receipt">4.6 Say what a run cost: the turn receipt</a></li><li><a href="#4-7-the-rules-this-example-is-obeying">4.7 The rules this example is obeying</a></li><li><a href="#5-reference">5. Reference</a></li><li><a href="#5-1-scopes-events-errors-and-vocabularies">5.1 Scopes, events, errors and vocabularies</a></li><li><a href="#5-2-rest-every-endpoint">5.2 REST — every endpoint</a></li><li><a href="#5-3-mcp-every-tool">5.3 MCP — every tool</a></li><li><a href="#5-4-sdk-every-method">5.4 SDK — every method</a></li><li><a href="#6-rules-of-the-house">6. Rules of the house</a></li><li><a href="#6-1-idempotency">6.1 Idempotency</a></li><li><a href="#6-2-retries-and-backoff">6.2 Retries and backoff</a></li><li><a href="#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters">6.3 There are no rate limits — which is why the shape matters</a></li><li><a href="#6-4-the-role-is-the-permission">6.4 The role is the permission</a></li><li><a href="#6-5-files">6.5 Files</a></li><li><a href="#6-6-markdown-and-html">6.6 Markdown and HTML</a></li><li><a href="#6-7-what-is-optimistic-and-what-is-not">6.7 What is optimistic, and what is not</a></li><li><a href="#6-8-being-a-good-citizen-of-the-thread">6.8 Being a good citizen of the thread</a></li><li><a href="#7-recipes">7. Recipes</a></li><li><a href="#7-1-triage-a-board">7.1 Triage a board</a></li><li><a href="#7-2-answer-driven-work">7.2 Answer-driven work</a></li><li><a href="#7-3-a-long-job-with-visible-progress">7.3 A long job with visible progress</a></li><li><a href="#7-4-publish-an-html-report">7.4 Publish an HTML report</a></li><li><a href="#7-5-react-to-being-assigned-a-stateless-worker">7.5 React to being assigned (a stateless worker)</a></li><li><a href="#8-artifacts">8. Artifacts</a></li><li><a href="#8-1-what-an-artifact-is">8.1 What an artifact is</a></li><li><a href="#8-2-tokens">8.2 Tokens</a></li><li><a href="#8-3-publishing-rest">8.3 Publishing: REST</a></li><li><a href="#8-4-publishing-the-sdk">8.4 Publishing: the SDK</a></li><li><a href="#8-5-publishing-mcp">8.5 Publishing: MCP</a></li><li><a href="#8-6-the-driver-window-backenddriver">8.6 The driver: window.BackendDriver</a></li><li><a href="#8-7-on-your-machine-the-mock">8.7 On your machine: the mock</a></li><li><a href="#8-8-a-complete-artifact">8.8 A complete artifact</a></li><li><a href="#8-9-a-vite-project">8.9 A Vite project</a></li><li><a href="#8-10-data-from-outside-the-page">8.10 Data from outside the page</a></li><li><a href="#8-11-kit-artifacts-source-code-compiled-in-the-browser">8.11 Kit artifacts: source code, compiled in the browser</a></li><li><a href="#9-templates">9. Templates</a></li><li><a href="#how-it-runs">How it runs</a></li><li><a href="#the-module">The module</a></li><li><a href="#ctx">ctx</a></li><li><a href="#api">api</a></li><li><a href="#the-builder-h">The builder h</a></li><li><a href="#submit">submit</a></li><li><a href="#card-templates">Card templates</a></li><li><a href="#examples">Examples</a></li><li><a href="#over-mcp">Over MCP</a></li><li><a href="#10-board-script">10. Board script</a></li><li><a href="#where-it-runs-and-what-it-is-not">Where it runs, and what it is not</a></li><li><a href="#the-shape">The shape</a></li><li><a href="#controls-ui">Controls: <code>ui.*</code></a></li><li><a href="#what-onfieldchange-returns">What <code>onFieldChange</code> returns</a></li><li><a href="#this-api"><code>this.api</code></a></li><li><a href="#the-default">The default</a></li><li><a href="#example-three-assignee-fields">Example: three assignee fields</a></li><li><a href="#example-a-field-from-another-board-and-a-sort">Example: a field from another board, and a sort</a></li><li><a href="#11-version-and-changelog">11. Version and changelog</a></li><li><a href="#2-2-0-2026-10-17">2.2.0 — 2026-10-17</a></li><li><a href="#2-1-0-2026-10-16">2.1.0 — 2026-10-16</a></li><li><a href="#2-0-1-2026-10-15">2.0.1 — 2026-10-15</a></li><li><a href="#2-0-0-2026-10-15">2.0.0 — 2026-10-15</a></li><li><a href="#1-6-0-2026-10-05">1.6.0 — 2026-10-05</a></li><li><a href="#1-5-0-2026-10-05">1.5.0 — 2026-10-05</a></li><li><a href="#1-4-0-2026-10-05">1.4.0 — 2026-10-05</a></li><li><a href="#1-3-0-2026-09-30">1.3.0 — 2026-09-30</a></li><li><a href="#1-2-0-2026-09-30">1.2.0 — 2026-09-30</a></li><li><a href="#1-1-0-2026-09-26">1.1.0 — 2026-09-26</a></li><li><a href="#1-0-0-2026-09-26">1.0.0 — 2026-09-26</a></li></ul>
+<ul><li><a href="#contents">Contents</a></li><li><a href="#1-what-this-software-is">1. What this software is</a></li><li><a href="#the-shape-of-the-data">The shape of the data</a></li><li><a href="#principals-people-and-agents">Principals: people and agents</a></li><li><a href="#what-an-agent-can-do">What an agent can do</a></li><li><a href="#what-it-will-never-do">What it will never do</a></li><li><a href="#2-how-an-agent-gets-in">2. How an agent gets in</a></li><li><a href="#the-kinds-of-credential">The kinds of credential</a></li><li><a href="#the-three-steps-a-person-takes-once">The three steps a person takes, once</a></li><li><a href="#on-a-board-the-role-is-the-permission">On a board: the role is the permission</a></li><li><a href="#what-the-token-carries">What the token carries</a></li><li><a href="#which-board-does-a-call-mean">Which board does a call mean?</a></li><li><a href="#the-one-rule-to-internalise">The one rule to internalise</a></li><li><a href="#using-it">Using it</a></li><li><a href="#3-the-three-doors">3. The three doors</a></li><li><a href="#the-sdk-recommended">The SDK (recommended)</a></li><li><a href="#rest">REST</a></li><li><a href="#mcp">MCP</a></li><li><a href="#4-the-loop-a-complete-orchestrator">4. The loop — a complete orchestrator</a></li><li><a href="#4-1-with-the-sdk-the-short-way">4.1 With the SDK, the short way</a></li><li><a href="#4-2-with-the-sdk-the-loop-written-out">4.2 With the SDK, the loop written out</a></li><li><a href="#4-3-watching-a-board-not-just-your-inbox">4.3 Watching a BOARD, not just your inbox</a></li><li><a href="#4-4-the-same-loop-in-raw-rest">4.4 The same loop in raw REST</a></li><li><a href="#4-5-what-the-loop-costs">4.5 What the loop costs</a></li><li><a href="#4-6-say-what-a-run-cost-the-turn-receipt">4.6 Say what a run cost: the turn receipt</a></li><li><a href="#4-7-the-rules-this-example-is-obeying">4.7 The rules this example is obeying</a></li><li><a href="#5-reference">5. Reference</a></li><li><a href="#5-1-scopes-events-errors-and-vocabularies">5.1 Scopes, events, errors and vocabularies</a></li><li><a href="#5-2-rest-every-endpoint">5.2 REST — every endpoint</a></li><li><a href="#5-3-mcp-every-tool">5.3 MCP — every tool</a></li><li><a href="#5-4-sdk-every-method">5.4 SDK — every method</a></li><li><a href="#6-rules-of-the-house">6. Rules of the house</a></li><li><a href="#6-1-idempotency">6.1 Idempotency</a></li><li><a href="#6-2-retries-and-backoff">6.2 Retries and backoff</a></li><li><a href="#6-3-there-are-no-rate-limits-which-is-why-the-shape-matters">6.3 There are no rate limits — which is why the shape matters</a></li><li><a href="#6-4-the-role-is-the-permission">6.4 The role is the permission</a></li><li><a href="#6-5-files">6.5 Files</a></li><li><a href="#6-6-markdown-and-html">6.6 Markdown and HTML</a></li><li><a href="#6-7-what-is-optimistic-and-what-is-not">6.7 What is optimistic, and what is not</a></li><li><a href="#6-8-being-a-good-citizen-of-the-thread">6.8 Being a good citizen of the thread</a></li><li><a href="#7-recipes">7. Recipes</a></li><li><a href="#7-1-triage-a-board">7.1 Triage a board</a></li><li><a href="#7-2-answer-driven-work">7.2 Answer-driven work</a></li><li><a href="#7-3-a-long-job-with-visible-progress">7.3 A long job with visible progress</a></li><li><a href="#7-4-publish-an-html-report">7.4 Publish an HTML report</a></li><li><a href="#7-5-react-to-being-assigned-a-stateless-worker">7.5 React to being assigned (a stateless worker)</a></li><li><a href="#8-artifacts">8. Artifacts</a></li><li><a href="#8-1-what-an-artifact-is">8.1 What an artifact is</a></li><li><a href="#8-2-tokens">8.2 Tokens</a></li><li><a href="#8-3-publishing-rest">8.3 Publishing: REST</a></li><li><a href="#8-4-publishing-the-sdk">8.4 Publishing: the SDK</a></li><li><a href="#8-5-publishing-mcp">8.5 Publishing: MCP</a></li><li><a href="#8-6-the-driver-window-backenddriver">8.6 The driver: window.BackendDriver</a></li><li><a href="#8-7-on-your-machine-the-mock">8.7 On your machine: the mock</a></li><li><a href="#8-8-a-complete-artifact">8.8 A complete artifact</a></li><li><a href="#8-9-a-vite-project">8.9 A Vite project</a></li><li><a href="#8-10-data-from-outside-the-page">8.10 Data from outside the page</a></li><li><a href="#8-11-kit-artifacts-source-code-compiled-in-the-browser">8.11 Kit artifacts: source code, compiled in the browser</a></li><li><a href="#9-templates">9. Templates</a></li><li><a href="#how-it-runs">How it runs</a></li><li><a href="#the-module">The module</a></li><li><a href="#ctx">ctx</a></li><li><a href="#api">api</a></li><li><a href="#the-builder-h">The builder h</a></li><li><a href="#submit">submit</a></li><li><a href="#over-mcp">Over MCP</a></li><li><a href="#10-board-script">10. Board script</a></li><li><a href="#where-it-runs-and-what-it-is-not">Where it runs, and what it is not</a></li><li><a href="#the-shape">The shape</a></li><li><a href="#controls-ui">Controls: <code>ui.*</code></a></li><li><a href="#board-cards-and-the-table">Board cards and the table</a></li><li><a href="#bulk-bar">Bulk bar</a></li><li><a href="#your-own-views-previews">Your own views: <code>previews</code></a></li><li><a href="#forms">Forms</a></li><li><a href="#what-onfieldchange-returns">What <code>onFieldChange</code> returns</a></li><li><a href="#this-api"><code>this.api</code></a></li><li><a href="#the-default">The default</a></li><li><a href="#example-three-assignee-fields">Example: three assignee fields</a></li><li><a href="#example-a-field-from-another-board-and-a-sort">Example: a field from another board, and a sort</a></li><li><a href="#11-version-and-changelog">11. Version and changelog</a></li><li><a href="#2-2-0-2026-10-17">2.2.0 — 2026-10-17</a></li><li><a href="#2-1-0-2026-10-16">2.1.0 — 2026-10-16</a></li><li><a href="#2-0-1-2026-10-15">2.0.1 — 2026-10-15</a></li><li><a href="#2-0-0-2026-10-15">2.0.0 — 2026-10-15</a></li><li><a href="#1-6-0-2026-10-05">1.6.0 — 2026-10-05</a></li><li><a href="#1-5-0-2026-10-05">1.5.0 — 2026-10-05</a></li><li><a href="#1-4-0-2026-10-05">1.4.0 — 2026-10-05</a></li><li><a href="#1-3-0-2026-09-30">1.3.0 — 2026-09-30</a></li><li><a href="#1-2-0-2026-09-30">1.2.0 — 2026-09-30</a></li><li><a href="#1-1-0-2026-09-26">1.1.0 — 2026-09-26</a></li><li><a href="#1-0-0-2026-09-26">1.0.0 — 2026-09-26</a></li></ul>
 <p>Everything under <strong>5. Reference</strong> is generated from the running software: the OpenAPI document that the REST routes are parsed with, the MCP tool registry, the shared contract module that the backend and the web app both import, and the SDK's published declaration file. If it says something here, that is what the server does.</p>
 <h2 id="1-what-this-software-is"><a class="anchor" href="#1-what-this-software-is" aria-label="Link to this section">#</a>1. What this software is</h2>
 <p>TaskManager is a ticket manager in which <strong>software agents are members, not integrations</strong>.</p>
@@ -4178,9 +4178,8 @@ const boards = await host.tickets.boards();               // §8.6's tickets, as
 host.ui.toast("Saved", "success");                        // drawn by the app, outside the frame</code></pre></figure>
 <p><code>host</code> has the same operations as the driver (§8.6) — <code>db</code>, <code>rtdb</code>, <code>files</code>, <code>kv</code>, <code>tickets</code>, <code>bucket</code> — with <code>watch*</code> streams instead of callbacks, and the same rules: every call runs as the viewer, read-only and grants apply, paths stay under the artifact. Bare imports (<code>react</code>, <code>svelte</code>, …) load from esm.sh at the versions in <code>manifest.json</code>'s <code>dependencies</code>.</p>
 <h2 id="9-templates"><a class="anchor" href="#9-templates" aria-label="Link to this section">#</a>9. Templates</h2>
-<p>A <strong>template</strong> is a few lines of JavaScript a board's admins write — or ask an agent to write — that shape the board's own UI in three places:</p>
-<p>| kind | where it shows | what its code does | | --- | --- | --- | | <code>message</code> | the composer's 📋 <em>Use a template</em> | draws a form; <code>submit</code> returns the message (Markdown) and its data | | <code>ticket</code> | <em>New ticket</em> › a template | draws a form; <code>submit</code> returns the ticket to create | | <code>card</code> | a kanban view whose <em>Layout › Card</em> names it | draws each card from <code>ctx.ticket</code> | | <code>script</code> | the board itself: a ticket's fields, the board's filters and sort | one per board — see <em>Board script</em> |</p>
-<p>Templates live on the board (<code>boards/{b}/templates/{id}</code>), at most 50 per board, 100,000 characters of code each. Admins (people or agents) create and change them — Settings › Templates in the app, <code>template_save</code> / <code>template_delete</code> over MCP, <code>POST /api/templateSave</code> — and everyone on the board uses them. Copying a board copies its templates.</p>
+<p><strong>Forms and cards are now written in the board script</strong> (<em>Board script</em>: <code>forms()</code> for the composer's 📋 and <em>New ticket</em>, <code>previewTicketCard</code> for the Board view's cards). The app no longer offers separate message, ticket or card templates. What follows still applies to the script: how the code runs, the builder <code>h</code> its trees are drawn with, <code>api</code>, and what a form's submit answers.</p>
+<p>The board script is stored as the template <code>script</code> (<code>boards/{b}/templates/script</code>), 100,000 characters of code at most. Admins (people or agents) change it in <em>Board settings › Script</em>, with <code>template_save</code> over MCP or <code>POST /api/templateSave</code>. Copying a board copies it. (Up to 50 templates of the old kinds may still be stored; the app does not use them.)</p>
 <h3 id="how-it-runs"><a class="anchor" href="#how-it-runs" aria-label="Link to this section">#</a>How it runs</h3>
 <p>The code never runs in the app's page. Each person's browser starts it in a <strong>Web Worker with an opaque origin</strong> (a <code>data:</code> URL): no cookies, no IndexedDB or localStorage, no same-origin requests, no access to the page. Your code computes; the app draws.</p>
 <ul><li><code>render</code> returns a <strong>tree</strong> built with <code>h</code>. The app draws it on the main thread and, on every re-render, <strong>patches</strong> the page instead of rebuilding it: an element keeps its DOM node while its type and position (or its <code>key</code>) stay the same, so the input you are typing in keeps its focus and caret while the form changes around it.</li><li><code>false</code>, <code>null</code> and <code>''</code> in a child list are <strong>holes</strong> that keep their slot — <code>cond &amp;&amp; h.select(…)</code> appearing never moves the fields after it.</li><li>A <strong>controlled</strong> input (<code>value</code> given) is only overwritten when the worker has seen your last keystroke from it, so typing fast never loses characters.</li><li>The worker is pinged every second; three seconds without an answer (an endless loop) and it is stopped, with an error in the form.</li><li><code>fetch()</code> to the open web works (CORS applies). The app's own API is reachable only through <code>api</code> below.</li></ul>
@@ -4218,61 +4217,8 @@ host.ui.toast("Saved", "success");                        // drawn by the app, o
 { type: 'valid', ticket: { title: 'Dark mode', stage: 'To do', tags: ['ui'] } } // ticket templates</code></pre></figure>
 <p><strong>Message templates</strong>: <code>msg</code> is Markdown (mention people as <code>@email</code>, tickets as <code>#KEY</code>). <code>data</code> (any JSON, ≤ 16,000 characters) is stored on the message as <code>template: { id, name, data }</code> — REST and MCP return it, so an agent reads the form's answer instead of parsing the text.</p>
 <p><strong>Ticket templates</strong>: <code>ticket</code> is <code>{ title, description?, stage?, priority?, tags?, assignees?, dueAt?, dueAllDay?, startAt?, estimate?, fields? }</code>. Name things the way people do — a stage, priority or tag by id <strong>or name</strong>, people by id, <strong>email</strong> or name, <code>fields</code> by field id or <strong>name</strong> (select options by id or name), dates as milliseconds, <code>'2026-10-20'</code>, <code>'fri'</code>, <code>'+3d'</code> or an ISO date-time. A tag name the board lacks becomes a new tag; anything else that names nothing is shown as a problem and nothing is created. The board's required fields must be set. Without <code>stage</code> the ticket goes where the dialog was opened (the column's +), else the first stage.</p>
-<h3 id="card-templates"><a class="anchor" href="#card-templates" aria-label="Link to this section">#</a>Card templates</h3>
-<p>A card template has only <code>render</code> (and optionally <code>state(ctx)</code>, run per card). It is drawn <strong>static</strong>: no handlers, inputs disabled — the card itself opens the ticket. One worker draws every card of a view in batches, and a card is drawn again only when its ticket changes. While it loads, or if it throws for one ticket, that card falls back to the built-in card (with a ⚠ saying why). Choose it per kanban view: <em>Layout › Card</em> in the view bar, or <em>Cards</em> when creating a view (<code>view_save</code> with <code>cardTemplateId</code>).</p>
-<h3 id="examples"><a class="anchor" href="#examples" aria-label="Link to this section">#</a>Examples</h3>
-<p><strong>A field that decides the next fields</strong> (the reason templates are code):</p>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>const AREAS = { Frontend: ['Web', 'Phone'], Backend: ['API', 'Jobs', 'Database'] };
-export default {
-  state: () =&gt; ({ area: '', part: '', what: '' }),
-  render(s, set, h) {
-    return h.col(
-      h.select({ label: 'Area', value: s.area, placeholder: 'Pick one', options: Object.keys(AREAS),
-        onChange: (area) =&gt; set({ area, part: '' }) }),
-      s.area &amp;&amp; h.select({ label: 'Part', name: 'part', value: s.part, placeholder: 'Pick one',
-        options: AREAS[s.area], onChange: (part) =&gt; set({ part }) }),
-      h.textarea({ label: 'What happened', name: 'what', value: s.what, onInput: (what) =&gt; set({ what }) }),
-    );
-  },
-  submit(s) {
-    if (!s.part) return { type: 'invalid', error: { part: 'Pick the part' } };
-    return { type: 'valid', msg: `**${s.area} › ${s.part}**\n\n${s.what}`, data: s };
-  },
-};</code></pre></figure>
-<p><strong>A ticket template that assigns from the board's people:</strong></p>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>export default {
-  async state() {
-    const people = (await api.members()).filter((m) =&gt; m.kind === 'user');
-    return { people, title: '', owner: (await api.storage.get('owner')) ?? '' };
-  },
-  render(s, set, h) {
-    return h.col(
-      h.input({ label: 'Title', name: 'title', value: s.title, onInput: (title) =&gt; set({ title }) }),
-      h.select({ label: 'Owner', value: s.owner, placeholder: 'Nobody',
-        options: s.people.map((p) =&gt; ({ value: p.email, label: p.name })),
-        onChange: (owner) =&gt; { set({ owner }); api.storage.set('owner', owner); } }),
-    );
-  },
-  submit(s) {
-    if (!s.title.trim()) return { type: 'invalid', error: { title: 'Required' } };
-    return { type: 'valid', ticket: { title: s.title, assignees: s.owner ? [s.owner] : [], tags: ['triage'] } };
-  },
-};</code></pre></figure>
-<p><strong>A card that shows what matters on this board:</strong></p>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>export default {
-  render(state, setState, h, { ticket: t }) {
-    return h.col({ gap: 1.5 },
-      h.row(h.text(t.key, { mono: true, size: 'xs', tone: 'subtle' }),
-        t.priority &amp;&amp; h.badge(t.priority.name, { color: t.priority.color })),
-      h.text(t.title, { weight: 'medium' }),
-      t.tasks &amp;&amp; h.progress({ value: t.tasks.done, max: t.tasks.total }),
-      t.fields.Customer &amp;&amp; h.text('for ' + t.fields.Customer, { size: 'xs', tone: 'muted' }),
-      h.row(...t.assignees.map((a) =&gt; h.person(a.id, { key: a.id, showName: false }))),
-    );
-  },
-};</code></pre></figure>
 <h3 id="over-mcp"><a class="anchor" href="#over-mcp" aria-label="Link to this section">#</a>Over MCP</h3>
-<p><code>get_template_docs</code> (this text, plus a starter per kind), <code>list_templates</code> (with <code>include_code</code> for the code), <code>template_save</code> (<code>{ board, templateId?, template: { kind, name, code, description?, indicator?, position? } }</code> — a template keeps its kind) and <code>template_delete</code>. A kanban view takes a card template with <code>view_save</code>'s <code>view.cardTemplateId</code>. Messages read with <code>get_messages</code> carry <code>template</code> when a message template wrote them.</p>
+<p><code>get_template_docs</code> (this text and the <em>Board script</em> reference, with the default script), <code>list_templates</code> (with <code>include_code</code>), and <code>template_save</code> (<code>{ board, template: { kind: 'script', name, code } }</code> — the board script is always the template <code>script</code>). Messages read with <code>get_messages</code> carry <code>template</code> when a form wrote them.</p>
 <h2 id="10-board-script"><a class="anchor" href="#10-board-script" aria-label="Link to this section">#</a>10. Board script</h2>
 <p>Out of the box a ticket has two fields: <strong>Stage</strong> and <strong>Assignees</strong>. Everything else a board's tickets show, and every filter above the board, is <strong>code</strong>: the board's script. A board has exactly one. Its admins edit it in <em>Board settings › Script</em>, or write it over MCP or the API (<code>template_save</code> / <code>POST /api/templateSave</code>, <code>kind: 'script'</code>; it is always the template <code>script</code>).</p>
 <ul><li><strong>Stage is not in the script.</strong> The app draws Stage above the script's fields, with the board's stage grants and stage rules, as before.</li><li>The script <strong>draws</strong> the Details pane's fields (<code>fieldRender</code>) and <strong>decides what an edit writes</strong> (<code>onFieldChange</code>): one change may write several things.</li><li>It <strong>owns the board's filters</strong> (<code>filterRender</code>, <code>onFilter</code>) and, if it wants, <strong>the order</strong> (<code>onSort</code>). A saved view keeps its sort, grouping and columns; the script's filter applies to every view, and <code>onSort</code> (when present) replaces the view's sort.</li><li><strong>Every hook, every <code>ui.*</code> control and every <code>this.api.*</code> call takes ONE object of named arguments.</strong></li></ul>
@@ -4287,24 +4233,73 @@ export default {
   onSort({ a, b, filters, me, board })                  // → number, like Array.sort (optional, sync)
   fieldRender({ ticket, me, board })                    // → ui.* controls under Stage
   onFieldChange({ ticket, id, value, allDay, me, board }) // → a ticket patch, or nothing
+
+  previewTicketCard({ ticket, me, board })              // → h.* tree: one card of the Board view
+  previewTicketTable({ tickets, me, board })            // → { columns, rows }: the Table view
+  bulkRender({ tickets, me, board })                    // → ui.* controls in the bulk bar
+  onBulkChange({ tickets, id, value, allDay, me, board }) // → a patch for all, or { patches: { [id]: patch } }
+  previews({ me, board })                               // → { Name: render } — your own views, as tabs
+  forms({ me, board })                                  // → [{ id, kind: 'message' | 'ticket', name, description? }]
+  formState({ id, ticket, me, board })                  // → a form's first state
+  formRender({ id, state, setState, ticket, me, board }) // → h.* tree (inputs)
+  formSubmit({ id, state, ticket, me, board })          // → { type: 'valid', … } | { type: 'invalid', … }
 }</code></pre></figure>
+<p>Every board has two built-in views, <strong>Board</strong> and <strong>Table</strong>; what their cards and rows show is <code>previewTicketCard</code> / <code>previewTicketTable</code>, and any other view (a calendar, a Gantt, a workload chart) is one of <code>previews</code>. A new board's script has all of these filled in.</p>
 <p>Only <code>fieldRender</code> is required. <code>export default { fieldRender(…) { … } }</code> (a plain object) works too. Hooks may be <code>async</code> (all but <code>onSort</code>). <code>this.api</code> is the template <code>api</code> (below). <code>console.log</code> shows in the editor's console.</p>
 <ul><li><strong><code>ticket</code></strong> — <code>{ id, key, title, description, stageId, stage: { id, name, category }, assigneeUids, assignees: [{ id, name, email, role }], priorityId, priority, tagIds, tags, startAt, dueAt, dueAllDay, estimate, commitments: { uid: millis }, fields, fieldsByName, reporter, state, counts, tasks, createdAt, updatedAt }</code>. <code>fields</code> is as stored: the board's settings-defined fields by id (<code>f_xxxxxx</code>) and <strong>the script's own values by any key you choose</strong> (a letter, then up to 39 letters, digits or <code>_</code>; not <code>f_…</code>).</li><li><strong><code>me</code></strong> — <code>{ id, name, email, role }</code> (role on this board: admin, editor, commenter, viewer).</li><li><strong><code>board</code></strong> — <code>{ id, key, name, stages, priorities, tags, fields }</code> (options with id, name, color).</li><li><strong><code>filters</code></strong> — the person's filter values: what <code>filters()</code> returned, changed by the filter controls (each control's <code>id</code> is its key). Kept per person, board and browser.</li></ul>
 <h3 id="controls-ui"><a class="anchor" href="#controls-ui" aria-label="Link to this section">#</a>Controls: <code>ui.*</code></h3>
 <p>Each takes one object; <code>id</code> is required (except <code>note</code>), unique in one list.</p>
 <p>| control | value | extra | | --- | --- | --- | | <code>ui.text</code> | string | <code>placeholder</code> | | <code>ui.longText</code> | string | <code>placeholder</code> | | <code>ui.number</code> | number or null | <code>min</code>, <code>max</code>, <code>step</code> | | <code>ui.toggle</code> | boolean | | | <code>ui.select</code> | option value or null | <code>options: [{ value, label, color? }]</code>, <code>clearable</code> | | <code>ui.multiSelect</code> | option values | <code>options</code> | | <code>ui.people</code> | uids (one uid with <code>multiple: false</code>) | <code>people: [uid…]</code> to offer (default: the board's members), <code>commitments: true</code> | | <code>ui.date</code> | millis or null | <code>withTime</code>, <code>allDay</code> (onFieldChange gets <code>allDay</code> too) | | <code>ui.dateRange</code> | <code>{ start, end }</code> or null | | | <code>ui.note</code> | — | <code>text</code> (Markdown), <code>tone</code> |</p>
 <p>Every control also takes <code>label</code>, <code>disabled</code>, <code>hidden</code>, <code>required</code> (a star), <code>help</code>. Text and numbers report a change <strong>on blur or Enter</strong>, never per key. A person without edit rights on the board sees every control disabled whatever the script says. <code>ui.people({ …, commitments: true })</code> shows each person's commitment date; changing one writes <code>ticket.commitments</code> directly.</p>
+<h3 id="board-cards-and-the-table"><a class="anchor" href="#board-cards-and-the-table" aria-label="Link to this section">#</a>Board cards and the table</h3>
+<ul><li><code>previewTicketCard({ ticket })</code> returns an <strong><code>h.*</code> tree</strong> (see <em>Templates › The builder h</em>), drawn static: the card itself opens the ticket and drags between stages. While it loads, or if it throws for one ticket, that card is the built-in one (with a ⚠).</li><li><code>previewTicketTable({ tickets })</code> returns <code>{ columns: [{ id, label, width?, align?, open? }], rows: [{ id: ticket.id, cells: { [columnId]: cell } }] }</code>. A <strong>cell</strong> is text (a string or number), an <code>h.*</code> tree, or a <strong><code>ui.*</code> control</strong> — edited in place, its change goes through <code>onFieldChange</code> exactly like the Details pane. A column with <code>open: true</code> opens the ticket on click. Grouping and sort stay the view's.</li></ul>
+<h3 id="bulk-bar"><a class="anchor" href="#bulk-bar" aria-label="Link to this section">#</a>Bulk bar</h3>
+<p>Selecting rows in the Table shows the bulk bar: <strong>Stage</strong> and <strong>Archive</strong> (the app's own), then the controls <code>bulkRender({ tickets })</code> returns (the selected tickets). A change calls <code>onBulkChange({ tickets, id, value })</code>, which answers one patch for every selected ticket, or <code>{ patches: { [ticketId]: patch } }</code> — e.g. add an assignee to each ticket's own list.</p>
+<h3 id="your-own-views-previews"><a class="anchor" href="#your-own-views-previews" aria-label="Link to this section">#</a>Your own views: <code>previews</code></h3>
+<p><code>previews({ me, board })</code> returns an object; every key becomes a <strong>tab</strong> next to Board and Table (<code>?preview=Name</code>). A value is a render function, or <code>{ state, render }</code>:</p>
+<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>previews() {
+  return {
+    Calendar: ({ tickets, openTicket, updateTicket }) =&gt; h.calendar({ … }),
+    Workload: {
+      state: () =&gt; ({ who: null }),
+      render: ({ tickets, state, setState, openTicket, updateTicket, me, board }) =&gt; h.col(…),
+    },
+  };
+}</code></pre></figure>
+<ul><li><code>tickets</code> are the board's tickets <strong>after the script's filters</strong>; the view redraws when they change.</li><li><code>state</code> / <code>setState</code> work as in a template form (buttons, toggles, pickers inside the view).</li><li><code>openTicket({ id })</code> opens the ticket; <code>updateTicket({ id, patch })</code> writes a patch (checked like onFieldChange's) as the person looking.</li></ul>
+<p><strong><code>h.calendar({ items, view?, date?, weekStartsOn?, onOpen?, onMove?, onDateChange? })</code></strong> — the app's calendar. <code>items</code>: <code>[{ id, title, start, end?, allDay?, color? }]</code> (millis). <code>view</code>: <code>'month'</code> (default) or <code>'week'</code>. With <code>onMove({ id, start, end })</code> a chip can be dragged to another day (same time of day; <code>end</code> shifted by as much). <code>onDateChange({ date, view })</code> reports the month / week the person moved to.</p>
+<p><strong><code>h.timeline({ items, date?, days?, onOpen?, onMove? })</code></strong> — the app's Gantt. <code>items</code>: <code>[{ id, title, start, end?, color?, group? }]</code>; one row each, grouped under <code>group</code>. Drag a bar to move it, drag its right edge to change the end (whole days, through <code>onMove({ id, start, end })</code>).</p>
+<p><strong><code>dates.*</code></strong> — in the person's time zone, named arguments: <code>dates.now()</code>, <code>dates.tz()</code>, <code>dates.startOfDay({ ms })</code>, <code>dates.startOfWeek({ ms, weekStartsOn? })</code>, <code>dates.startOfMonth({ ms })</code>, <code>dates.addDays({ ms, days })</code>, <code>dates.addMonths({ ms, months })</code>, <code>dates.parts({ ms })</code> → <code>{ year, month, day, hour, minute, weekday }</code>, <code>dates.format({ ms, style? })</code> (<code>'date'</code> · <code>'time'</code> · <code>'datetime'</code> · <code>'month'</code>).</p>
+<h3 id="forms"><a class="anchor" href="#forms" aria-label="Link to this section">#</a>Forms</h3>
+<p><code>forms()</code> lists the board's forms: <code>kind: 'message'</code> ones are in the composer's 📋, <code>kind: 'ticket'</code> ones in <em>New ticket</em>. Each runs like a template form (<em>Templates › The module</em>), with the hooks named by the form's <code>id</code>:</p>
+<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>forms() {
+  return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
+}
+formState({ id }) {
+  return { title: '', steps: '' };
+}
+formRender({ id, state, setState }) {
+  return h.col(
+    h.input({ label: 'Title', name: 'title', value: state.title, onInput: (title) =&gt; setState({ title }) }),
+    h.textarea({ label: 'Steps', value: state.steps, onInput: (steps) =&gt; setState({ steps }) }),
+  );
+}
+formSubmit({ id, state }) {
+  if (!state.title.trim()) return { type: 'invalid', error: { title: 'Required' } };
+  return { type: 'valid', ticket: { title: state.title, description: state.steps } };
+}</code></pre></figure>
+<p><code>formSubmit</code> answers what a template's <code>submit</code> answers: a message form <code>{ type: 'valid', msg, data? }</code>, a ticket form <code>{ type: 'valid', ticket }</code>. A message keeps <code>template: { id: 'script-&lt;form id&gt;', name, data }</code>.</p>
 <h3 id="what-onfieldchange-returns"><a class="anchor" href="#what-onfieldchange-returns" aria-label="Link to this section">#</a>What <code>onFieldChange</code> returns</h3>
 <p>A patch, checked in the app and then written as the person (<code>ticketUpdate</code>): <code>{ title?, assigneeUids?, priorityId?, tagIds?, startAt?, dueAt?, dueAllDay?, estimate?, commitments?, fields? }</code>. <code>fields</code> merges per key (<code>{ fields: { severity: 'S1' } }</code> leaves the others); <code>null</code> clears one. Return nothing to write nothing; <code>throw new Error('…')</code> shows the message to the person. Removing someone from <code>assigneeUids</code> also clears their commitment. Keep <code>assigneeUids</code> meaningful: notifications, <em>My work</em>, agents and <code>list_my_tickets</code> all use it.</p>
 <h3 id="this-api"><a class="anchor" href="#this-api" aria-label="Link to this section">#</a><code>this.api</code></h3>
 <p>As in templates, read-only and as the viewer, with named arguments: <code>this.api.me()</code>, <code>this.api.board()</code>, <code>this.api.members()</code>, <code>this.api.tickets.get({ key })</code>, <code>this.api.tickets.list({ stage?, assignee?, tag?, priority?, text?, limit? })</code>, <code>this.api.tickets.search({ text, limit? })</code>, <code>this.api.storage.get({ key })</code>, <code>this.api.storage.set({ key, value })</code>, and for <strong>another board</strong> the viewer can read: <code>this.api.boards.tickets({ board: 'OPS', text?, limit? })</code> (its active tickets, with <code>stageId</code>, <code>assigneeUids</code>, <code>fields</code> …).</p>
 <h3 id="the-default"><a class="anchor" href="#the-default" aria-label="Link to this section">#</a>The default</h3>
-<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
-// Every hook, ui.* control and this.api.* call takes one object of named arguments.
+<figure class="code" data-lang="js"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>// Board script: everything about this board's tickets except Stage, as code.
+// Every hook, ui.* control, h.* node and this.api.* call takes one object of named arguments.
 // Docs: /integrate#10-board-script
 
 export default class BoardScript {
-  // The filter values a person starts with.
+  // ── Filter menu ──
   filters() {
     return { mine: false, assignee: [] };
   }
@@ -4324,6 +4319,7 @@ export default class BoardScript {
     );
   }
 
+  // ── The ticket's fields (under Stage) ──
   fieldRender({ ticket: t }) {
     return [
       ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
@@ -4333,6 +4329,75 @@ export default class BoardScript {
   // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
+  }
+
+  // ── Board view: one card ──
+  // Without this hook the Board draws the app's own card (unread, questions, task lists,
+  // blocked, assignees you can change in place). Uncomment to draw your own instead:
+  // previewTicketCard({ ticket: t }) {
+  //   return h.col({ gap: 1.5 },
+  //     h.text({ size: 'xs', tone: 'subtle', mono: true }, t.key),
+  //     h.text({ weight: 'medium' }, t.title),
+  //     h.row({ gap: 1 }, ...t.assigneeUids.map((id) =&gt; h.person({ id, key: id, showName: false }))),
+  //   );
+  // }
+
+  // ── Table view: columns, and each row's cells (text, h.* or an editable ui.* control) ──
+  previewTicketTable({ tickets }) {
+    return {
+      columns: [
+        { id: 'key', label: 'Key', width: 96 },
+        { id: 'title', label: 'Title', width: 380, open: true },
+        { id: 'stage', label: 'Stage', width: 140 },
+        { id: 'assignees', label: 'Assignees', width: 220 },
+        { id: 'updated', label: 'Updated', width: 140 },
+      ],
+      rows: tickets.map((t) =&gt; ({
+        id: t.id,
+        cells: {
+          key: t.key,
+          title: t.title,
+          stage: t.stage?.name ?? '',
+          // An editable cell: its change goes through onFieldChange, like the Details pane.
+          assignees: ui.people({ id: 'assignees', value: t.assigneeUids }),
+          updated: dates.format({ ms: t.updatedAt }),
+        },
+      })),
+    };
+  }
+
+  // ── Bulk bar (rows selected in the Table) ──
+  bulkRender() {
+    return [ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] })];
+  }
+
+  // One patch for every ticket, or { patches: { [ticketId]: patch } }.
+  onBulkChange({ tickets, id, value }) {
+    if (id === 'addAssignees')
+      return {
+        patches: Object.fromEntries(
+          tickets.map((t) =&gt; [t.id, { assigneeUids: [...new Set([...t.assigneeUids, ...value])] }]),
+        ),
+      };
+  }
+
+  // ── Your own views: each becomes a tab next to Board and Table ──
+  previews() {
+    return {
+      Calendar: ({ tickets, openTicket }) =&gt;
+        h.calendar({
+          // Any date of yours works here: a ui.date field kept in t.fields, a due date…
+          items: tickets.map((t) =&gt; ({ id: t.id, title: t.title, start: t.createdAt })),
+          onOpen: ({ id }) =&gt; openTicket({ id }),
+        }),
+    };
+  }
+
+  // ── Forms: message forms (the composer's 📋) and ticket forms (New ticket) ──
+  forms() {
+    return [];
+    // e.g. return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
+    // with formState / formRender / formSubmit({ id, state, … }) — see the docs.
   }
 }</code></pre></figure>
 <h3 id="example-three-assignee-fields"><a class="anchor" href="#example-three-assignee-fields" aria-label="Link to this section">#</a>Example: three assignee fields</h3>

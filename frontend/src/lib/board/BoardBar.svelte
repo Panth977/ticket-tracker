@@ -26,6 +26,7 @@
     ArrowUpDown,
     Check,
     ChevronDown,
+    Code2,
     Filter,
     LayoutGrid,
     Lock,
@@ -52,7 +53,6 @@
   import ScriptControls from '$lib/templates/ScriptControls.svelte';
   import SortEditor from '$lib/views/SortEditor.svelte';
   import LayoutEditor from '$lib/views/LayoutEditor.svelte';
-  import { templatesOfKind } from '$lib/templates/store';
   import { fieldInfo } from '$lib/views/fields';
   import { VIEW_TYPE_LABEL, withType } from '$lib/views/draft';
   import Avatars from './Avatars.svelte';
@@ -77,6 +77,9 @@
     canSaveShared: boolean;
     canCreate: boolean;
     isAdmin: boolean;
+    /** board-script.html §previews: the script's own views (tabs), and the open one. */
+    previews?: string[];
+    preview?: string | null;
     /** board-script.html: the board script's filter controls, and how many are set. */
     filterControls: ScriptControl[];
     activeFilters: number;
@@ -113,6 +116,8 @@
     canSaveShared,
     canCreate,
     isAdmin,
+    previews = [],
+    preview = null,
     filterControls,
     activeFilters,
     scriptProblem = null,
@@ -130,8 +135,6 @@
     onstar,
     onnewticket,
   }: Props = $props();
-  /** templates.html §E: the card templates a kanban view may draw its cards with. */
-  const cardTemplates = $derived(templatesOfKind(board.id, 'card'));
 
   let filterOpen = $state(false);
   let sortOpen = $state(false);
@@ -241,7 +244,7 @@
     class="-mb-1.5 flex min-w-0 items-end gap-0.5 overflow-x-auto md:border-l md:border-line md:pl-3"
   >
     {#each views as v (v.id)}
-      {#if v.id === viewId}
+      {#if v.id === viewId && !preview}
         <!-- The open tab doubles as its menu (save / rename / layout / delete). -->
         <Menu items={viewItems} placement="bottom-start">
           {#snippet trigger(p)}
@@ -284,6 +287,20 @@
           {v.name}
         </a>
       {/if}
+    {/each}
+    {#each previews as name (name)}
+      <a
+        href="{routes.board(board.key, viewId)}?preview={encodeURIComponent(name)}"
+        data-preview-tab={name}
+        aria-current={preview === name ? 'page' : undefined}
+        title="A view of the board script (previews)"
+        class="flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm whitespace-nowrap {preview ===
+        name
+          ? 'border-accent font-medium text-text'
+          : 'border-transparent text-muted hover:text-text'}"
+      >
+        <Code2 size={12} class="text-subtle" aria-hidden="true" />{name}
+      </a>
     {/each}
     <button
       type="button"
@@ -419,5 +436,5 @@
   label="View options"
   class="z-40"
 >
-  <LayoutEditor {draft} {board} {onchange} cardTemplates={$cardTemplates.list} />
+  <LayoutEditor {draft} {board} {onchange} />
 </Popover>

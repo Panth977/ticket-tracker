@@ -53,8 +53,22 @@ export default class BoardScript {
   onSort({ a, b, filters, me, board })                  // → number, like Array.sort (optional, sync)
   fieldRender({ ticket, me, board })                    // → ui.* controls under Stage
   onFieldChange({ ticket, id, value, allDay, me, board }) // → a ticket patch, or nothing
+
+  previewTicketCard({ ticket, me, board })              // → h.* tree: one card of the Board view
+  previewTicketTable({ tickets, me, board })            // → { columns, rows }: the Table view
+  bulkRender({ tickets, me, board })                    // → ui.* controls in the bulk bar
+  onBulkChange({ tickets, id, value, allDay, me, board }) // → a patch for all, or { patches: { [id]: patch } }
+  previews({ me, board })                               // → { Name: render } — your own views, as tabs
+  forms({ me, board })                                  // → [{ id, kind: 'message' | 'ticket', name, description? }]
+  formState({ id, ticket, me, board })                  // → a form's first state
+  formRender({ id, state, setState, ticket, me, board }) // → h.* tree (inputs)
+  formSubmit({ id, state, ticket, me, board })          // → { type: 'valid', … } | { type: 'invalid', … }
 }
 \`\`\`
+
+Every board has two built-in views, **Board** and **Table**; what their cards and rows show is
+\`previewTicketCard\` / \`previewTicketTable\`, and any other view (a calendar, a Gantt, a
+workload chart) is one of \`previews\`. A new board's script has all of these filled in.
 
 Only \`fieldRender\` is required. \`export default { fieldRender(…) { … } }\` (a plain object) works too.
 Hooks may be \`async\` (all but \`onSort\`). \`this.api\` is the template \`api\`
@@ -93,6 +107,91 @@ Text and numbers report a change **on blur or Enter**, never per key. A person w
 rights on the board sees every control disabled whatever the script says.
 \`ui.people({ …, commitments: true })\` shows each person's commitment date; changing one
 writes \`ticket.commitments\` directly.
+
+### Board cards and the table
+
+* \`previewTicketCard({ ticket })\` returns an **\`h.*\` tree** (see *Templates › The builder h*),
+  drawn static: the card itself opens the ticket and drags between stages. While it loads, or
+  if it throws for one ticket, that card is the built-in one (with a ⚠).
+* \`previewTicketTable({ tickets })\` returns
+  \`{ columns: [{ id, label, width?, align?, open? }], rows: [{ id: ticket.id, cells: { [columnId]: cell } }] }\`.
+  A **cell** is text (a string or number), an \`h.*\` tree, or a **\`ui.*\` control** — edited in
+  place, its change goes through \`onFieldChange\` exactly like the Details pane. A column with
+  \`open: true\` opens the ticket on click. Grouping and sort stay the view's.
+
+### Bulk bar
+
+Selecting rows in the Table shows the bulk bar: **Stage** and **Archive** (the app's own), then
+the controls \`bulkRender({ tickets })\` returns (the selected tickets). A change calls
+\`onBulkChange({ tickets, id, value })\`, which answers one patch for every selected ticket, or
+\`{ patches: { [ticketId]: patch } }\` — e.g. add an assignee to each ticket's own list.
+
+### Your own views: \`previews\`
+
+\`previews({ me, board })\` returns an object; every key becomes a **tab** next to Board and
+Table (\`?preview=Name\`). A value is a render function, or \`{ state, render }\`:
+
+\`\`\`js
+previews() {
+  return {
+    Calendar: ({ tickets, openTicket, updateTicket }) => h.calendar({ … }),
+    Workload: {
+      state: () => ({ who: null }),
+      render: ({ tickets, state, setState, openTicket, updateTicket, me, board }) => h.col(…),
+    },
+  };
+}
+\`\`\`
+
+* \`tickets\` are the board's tickets **after the script's filters**; the view redraws when they change.
+* \`state\` / \`setState\` work as in a template form (buttons, toggles, pickers inside the view).
+* \`openTicket({ id })\` opens the ticket; \`updateTicket({ id, patch })\` writes a patch (checked
+  like onFieldChange's) as the person looking.
+
+**\`h.calendar({ items, view?, date?, weekStartsOn?, onOpen?, onMove?, onDateChange? })\`** — the
+app's calendar. \`items\`: \`[{ id, title, start, end?, allDay?, color? }]\` (millis). \`view\`:
+\`'month'\` (default) or \`'week'\`. With \`onMove({ id, start, end })\` a chip can be dragged to
+another day (same time of day; \`end\` shifted by as much). \`onDateChange({ date, view })\`
+reports the month / week the person moved to.
+
+**\`h.timeline({ items, date?, days?, onOpen?, onMove? })\`** — the app's Gantt. \`items\`:
+\`[{ id, title, start, end?, color?, group? }]\`; one row each, grouped under \`group\`. Drag a bar to
+move it, drag its right edge to change the end (whole days, through \`onMove({ id, start, end })\`).
+
+**\`dates.*\`** — in the person's time zone, named arguments: \`dates.now()\`, \`dates.tz()\`,
+\`dates.startOfDay({ ms })\`, \`dates.startOfWeek({ ms, weekStartsOn? })\`, \`dates.startOfMonth({ ms })\`,
+\`dates.addDays({ ms, days })\`, \`dates.addMonths({ ms, months })\`,
+\`dates.parts({ ms })\` → \`{ year, month, day, hour, minute, weekday }\`,
+\`dates.format({ ms, style? })\` (\`'date'\` · \`'time'\` · \`'datetime'\` · \`'month'\`).
+
+### Forms
+
+\`forms()\` lists the board's forms: \`kind: 'message'\` ones are in the composer's 📋, \`kind: 'ticket'\`
+ones in *New ticket*. Each runs like a template form (*Templates › The module*), with the hooks
+named by the form's \`id\`:
+
+\`\`\`js
+forms() {
+  return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
+}
+formState({ id }) {
+  return { title: '', steps: '' };
+}
+formRender({ id, state, setState }) {
+  return h.col(
+    h.input({ label: 'Title', name: 'title', value: state.title, onInput: (title) => setState({ title }) }),
+    h.textarea({ label: 'Steps', value: state.steps, onInput: (steps) => setState({ steps }) }),
+  );
+}
+formSubmit({ id, state }) {
+  if (!state.title.trim()) return { type: 'invalid', error: { title: 'Required' } };
+  return { type: 'valid', ticket: { title: state.title, description: state.steps } };
+}
+\`\`\`
+
+\`formSubmit\` answers what a template's \`submit\` answers: a message form
+\`{ type: 'valid', msg, data? }\`, a ticket form \`{ type: 'valid', ticket }\`. A message keeps
+\`template: { id: 'script-<form id>', name, data }\`.
 
 ### What \`onFieldChange\` returns
 

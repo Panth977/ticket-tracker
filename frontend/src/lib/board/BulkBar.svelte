@@ -1,15 +1,19 @@
 <!--
-  The table's bulk bar: 14 selected · Stage · Priority · +Tag · +Assignee · Due · Archive.
-  One ticketBulk call per action; the server resolves my role once and SKIPS
-  (does not fail) tickets a commenter's grant does not cover.
+  The bulk bar (board-script.html §bulk): 14 selected · Stage · [the board script's
+  bulkRender controls] · Archive. Stage and Archive are the app's own (one
+  ticketBulk call; the server skips tickets a commenter's grant does not cover).
+  Every other control is the script's: onBulkChange answers one patch for every
+  selected ticket, or one per ticket, each written as an ordinary ticketUpdate.
 -->
 <script lang="ts">
   import { Archive, X } from 'lucide-svelte';
+  import type { ScriptControl, TicketPatch } from '@tm/shared';
   import Button from '$lib/ui/Button.svelte';
-  import DatePicker from '$lib/ui/DatePicker.svelte';
-  import ChoicePicker, { type ChoiceItem } from '$lib/views/pickers/ChoicePicker.svelte';
+  import { toast } from '$lib/ui';
+  import ChoicePicker from '$lib/views/pickers/ChoicePicker.svelte';
+  import ScriptControls from '$lib/templates/ScriptControls.svelte';
   import { useBoard, type BoardDoc } from './context.svelte';
-  import { bulk } from './ops';
+  import { bulk, updateTicket } from './ops';
   import { stageChoices } from './stageMark';
 
   interface Props {
@@ -20,13 +24,43 @@
   }
   let { board, ids, onclear }: Props = $props();
   const bs = useBoard();
-  const opts = (
-    xs: { id: string; name: string; color?: string; position: number }[],
-  ): ChoiceItem[] =>
-    [...xs]
-      .sort((a, b) => a.position - b.position)
-      .map((o) => ({ id: o.id, label: o.name, color: o.color }));
   const editor = $derived(bs.canEdit);
+  const picked = $derived(bs.tickets.filter((t) => ids.includes(t.id)));
+  const people = $derived(bs.peopleChoices.map((p) => ({ id: p.id, uid: p.id, name: p.label })));
+
+  let controls = $state<ScriptControl[]>([]);
+  let seq = 0;
+  $effect(() => {
+    const h = bs.script;
+    const list = picked;
+    if (!h || !editor) return;
+    const n = ++seq;
+    void h.bulkControls({ tickets: list }).then((r) => {
+      if (n !== seq) return;
+      if (r.error !== undefined) toast.error(`Board script: ${r.error}`);
+      else controls = r.value;
+    });
+  });
+
+  async function change(c: { id: string; value: unknown; allDay?: boolean }) {
+    const h = bs.script;
+    if (!h) return;
+    const r = await h.bulkChange({ tickets: picked, ...c });
+    if (r.error !== undefined) {
+      toast.error(`Board script: ${r.error}${r.line ? ` (line ${r.line})` : ''}`);
+      return;
+    }
+    if (!r.value) return;
+    let n = 0;
+    for (const t of picked) {
+      const p = r.value.get(t.id);
+      if (p && Object.keys(p).length) {
+        n++;
+        void updateTicket(bs, t, p as TicketPatch);
+      }
+    }
+    if (n) toast.success(`Updated ${n} ticket${n === 1 ? '' : 's'}`);
+  }
 </script>
 
 <div
@@ -44,36 +78,9 @@
     onchange={(v) => v[0] && bulk(bs, ids, { type: 'stage', stageId: v[0] })}
   />
   {#if editor}
-    <ChoicePicker
-      items={opts(board.priorities)}
-      selected={[]}
-      placeholder="Priority"
-      label="Set priority"
-      allowNone
-      onchange={(v) => bulk(bs, ids, { type: 'priority', priorityId: v[0] ?? null })}
-    />
-    <ChoicePicker
-      items={opts(board.tags)}
-      selected={[]}
-      placeholder="+Tag"
-      label="Add tag"
-      onchange={(v) => v[0] && bulk(bs, ids, { type: 'addTag', tagId: v[0] })}
-    />
-    <ChoicePicker
-      items={bs.peopleChoices}
-      selected={[]}
-      placeholder="+Assignee"
-      label="Add assignee"
-      onchange={(v) => v[0] && bulk(bs, ids, { type: 'addAssignee', uid: v[0] })}
-    />
-    <DatePicker
-      value={null}
-      withTime={false}
-      tz={bs.tz}
-      placeholder="Due"
-      label="Set due date"
-      onchange={(v) => bulk(bs, ids, { type: 'due', dueAt: v })}
-    />
+    <div class="flex flex-wrap items-center gap-2" data-testid="script-bulk">
+      <ScriptControls layout="inline" {controls} {people} tz={bs.tz} onchange={change} />
+    </div>
     <Button
       size="sm"
       variant="ghost"

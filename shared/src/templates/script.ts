@@ -108,19 +108,56 @@ export const ScriptPatchSchema = z
 export type ScriptPatch = z.infer<typeof ScriptPatchSchema>;
 export const SCRIPT_PATCH_KEYS = Object.keys(ScriptPatchSchema.shape) as (keyof ScriptPatch)[];
 
+// ───────────────────────── cards, table, bulk, forms, previews ─────────────────────────
+
+/** previewTicketTable's columns. `open: true` makes the cell open the ticket. */
+export const ScriptColumnSchema = z.object({
+  id: z.string().min(1).max(80),
+  label: z.string().max(120),
+  width: z.number().int().min(40).max(1200).optional(),
+  align: z.enum(['left', 'center', 'right']).optional(),
+  open: z.boolean().optional(),
+});
+export type ScriptColumn = z.infer<typeof ScriptColumnSchema>;
+export const ScriptColumnsSchema = z.array(ScriptColumnSchema).min(1).max(40);
+
+/** onBulkChange: one patch for every selected ticket, or one per ticket id. */
+export const ScriptBulkResultSchema = z.union([
+  ScriptPatchSchema,
+  z.object({ patches: z.record(z.string().min(1).max(80), ScriptPatchSchema) }).strict(),
+]);
+export type ScriptBulkResult = z.infer<typeof ScriptBulkResultSchema>;
+
+/** forms(): the board's forms — message forms in the composer, ticket forms in New ticket. */
+export const ScriptFormSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Form ids are letters, digits, _ and -'),
+  kind: z.enum(['message', 'ticket']),
+  name: z.string().min(1).max(60),
+  description: z.string().max(500).optional(),
+});
+export type ScriptForm = z.infer<typeof ScriptFormSchema>;
+export const ScriptFormsSchema = z.array(ScriptFormSchema).max(50);
+
+/** A message posted by a script form keeps `template.id` = this prefix + the form id. */
+export const SCRIPT_FORM_PREFIX = 'script-';
+
 /** Filter values: plain JSON the page keeps per person and board. */
 export const ScriptFiltersSchema = z.record(z.string().max(80), z.unknown());
 export type ScriptFilters = z.infer<typeof ScriptFiltersSchema>;
 
 // ───────────────────────── the default script ─────────────────────────
 
-/** What every new board starts with (boardCreate saves it): Assignees, and two filters. */
-export const DEFAULT_BOARD_SCRIPT = `// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
-// Every hook, ui.* control and this.api.* call takes one object of named arguments.
+/** What every new board starts with (boardCreate saves it): every hook, ready to change. */
+export const DEFAULT_BOARD_SCRIPT = `// Board script: everything about this board's tickets except Stage, as code.
+// Every hook, ui.* control, h.* node and this.api.* call takes one object of named arguments.
 // Docs: /integrate#10-board-script
 
 export default class BoardScript {
-  // The filter values a person starts with.
+  // ── Filter menu ──
   filters() {
     return { mine: false, assignee: [] };
   }
@@ -140,6 +177,7 @@ export default class BoardScript {
     );
   }
 
+  // ── The ticket's fields (under Stage) ──
   fieldRender({ ticket: t }) {
     return [
       ui.people({ id: 'assignees', label: 'Assignees', value: t.assigneeUids, commitments: true }),
@@ -149,6 +187,75 @@ export default class BoardScript {
   // A field changed (text: on blur or Enter). Return the ticket patch to write.
   onFieldChange({ id, value }) {
     if (id === 'assignees') return { assigneeUids: value };
+  }
+
+  // ── Board view: one card ──
+  // Without this hook the Board draws the app's own card (unread, questions, task lists,
+  // blocked, assignees you can change in place). Uncomment to draw your own instead:
+  // previewTicketCard({ ticket: t }) {
+  //   return h.col({ gap: 1.5 },
+  //     h.text({ size: 'xs', tone: 'subtle', mono: true }, t.key),
+  //     h.text({ weight: 'medium' }, t.title),
+  //     h.row({ gap: 1 }, ...t.assigneeUids.map((id) => h.person({ id, key: id, showName: false }))),
+  //   );
+  // }
+
+  // ── Table view: columns, and each row's cells (text, h.* or an editable ui.* control) ──
+  previewTicketTable({ tickets }) {
+    return {
+      columns: [
+        { id: 'key', label: 'Key', width: 96 },
+        { id: 'title', label: 'Title', width: 380, open: true },
+        { id: 'stage', label: 'Stage', width: 140 },
+        { id: 'assignees', label: 'Assignees', width: 220 },
+        { id: 'updated', label: 'Updated', width: 140 },
+      ],
+      rows: tickets.map((t) => ({
+        id: t.id,
+        cells: {
+          key: t.key,
+          title: t.title,
+          stage: t.stage?.name ?? '',
+          // An editable cell: its change goes through onFieldChange, like the Details pane.
+          assignees: ui.people({ id: 'assignees', value: t.assigneeUids }),
+          updated: dates.format({ ms: t.updatedAt }),
+        },
+      })),
+    };
+  }
+
+  // ── Bulk bar (rows selected in the Table) ──
+  bulkRender() {
+    return [ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] })];
+  }
+
+  // One patch for every ticket, or { patches: { [ticketId]: patch } }.
+  onBulkChange({ tickets, id, value }) {
+    if (id === 'addAssignees')
+      return {
+        patches: Object.fromEntries(
+          tickets.map((t) => [t.id, { assigneeUids: [...new Set([...t.assigneeUids, ...value])] }]),
+        ),
+      };
+  }
+
+  // ── Your own views: each becomes a tab next to Board and Table ──
+  previews() {
+    return {
+      Calendar: ({ tickets, openTicket }) =>
+        h.calendar({
+          // Any date of yours works here: a ui.date field kept in t.fields, a due date…
+          items: tickets.map((t) => ({ id: t.id, title: t.title, start: t.createdAt })),
+          onOpen: ({ id }) => openTicket({ id }),
+        }),
+    };
+  }
+
+  // ── Forms: message forms (the composer's 📋) and ticket forms (New ticket) ──
+  forms() {
+    return [];
+    // e.g. return [{ id: 'bug', kind: 'ticket', name: 'Bug report' }];
+    // with formState / formRender / formSubmit({ id, state, … }) — see the docs.
   }
 }
 `;
@@ -305,7 +412,7 @@ export function generateBoardScript(board: ScriptBoardShape): string {
     '      default: return { fields: { [id]: value } }; // the custom fields, by id',
   ].filter(Boolean);
 
-  return `// Board script: the ticket's fields (under Stage), the Filter menu and the sort.
+  return `// Board script: everything about this board's tickets except Stage, as code.
 // Written from this board's old settings so its tickets show what they showed before;
 // delete what the board does not use. Every hook, ui.* control and this.api.* call takes
 // one object of named arguments. Docs: /integrate#10-board-script
@@ -344,6 +451,68 @@ ${fields.join('\n')}
     switch (id) {
 ${writes.join('\n')}
     }
+  }
+
+  // The Board draws the app's own card; previewTicketCard({ ticket }) would draw yours instead.
+
+  previewTicketTable({ tickets }) {
+    return {
+      columns: [
+        { id: 'key', label: 'Key', width: 96 },
+        { id: 'title', label: 'Title', width: 360, open: true },
+        { id: 'stage', label: 'Stage', width: 140 },
+${hasPriorities ? "        { id: 'priority', label: 'Priority', width: 140 },\n" : ''}        { id: 'assignees', label: 'Assignees', width: 200 },
+        { id: 'due', label: 'Due', width: 150 },
+      ],
+      rows: tickets.map((t) => ({
+        id: t.id,
+        cells: {
+          key: t.key,
+          title: t.title,
+          stage: t.stage?.name ?? '',
+${hasPriorities ? "          priority: ui.select({ id: 'priority', value: t.priorityId, options: PRIORITIES }),\n" : ''}          assignees: ui.people({ id: 'assignees', value: t.assigneeUids }),
+          due: ui.date({ id: 'due', value: t.dueAt, withTime: true, allDay: t.dueAllDay }),
+        },
+      })),
+    };
+  }
+
+  bulkRender() {
+    return [
+${hasPriorities ? "      ui.select({ id: 'priority', label: 'Priority', value: null, options: PRIORITIES }),\n" : ''}${hasTags ? "      ui.multiSelect({ id: 'addTags', label: 'Add tags', value: [], options: TAGS }),\n" : ''}      ui.people({ id: 'addAssignees', label: 'Add assignees', value: [] }),
+      ui.date({ id: 'due', label: 'Due', value: null }),
+    ];
+  }
+
+  onBulkChange({ tickets, id, value, allDay }) {
+    const each = (fn) => ({ patches: Object.fromEntries(tickets.map((t) => [t.id, fn(t)])) });
+    switch (id) {
+${hasPriorities ? "      case 'priority': return { priorityId: value };\n" : ''}${hasTags ? "      case 'addTags': return each((t) => ({ tagIds: [...new Set([...t.tagIds, ...value])] }));\n" : ''}      case 'addAssignees': return each((t) => ({ assigneeUids: [...new Set([...t.assigneeUids, ...value])] }));
+      case 'due': return { dueAt: value, dueAllDay: allDay ?? true };
+    }
+  }
+
+  previews() {
+    return {
+      Calendar: ({ tickets, openTicket, updateTicket }) =>
+        h.calendar({
+          items: tickets.filter((t) => t.dueAt).map((t) => ({ id: t.id, title: t.title, start: t.dueAt })),
+          onOpen: ({ id }) => openTicket({ id }),
+          onMove: ({ id, start }) => updateTicket({ id, patch: { dueAt: start } }),
+        }),
+      Timeline: ({ tickets, openTicket, updateTicket }) =>
+        h.timeline({
+          items: tickets
+            .filter((t) => t.startAt || t.dueAt)
+            .map((t) => ({ id: t.id, title: t.title, start: t.startAt ?? t.dueAt, end: t.dueAt, group: t.stage?.name })),
+          onOpen: ({ id }) => openTicket({ id }),
+          onMove: ({ id, start, end }) => updateTicket({ id, patch: { startAt: start, dueAt: end } }),
+        }),
+    };
+  }
+
+  forms() {
+    return [];
   }
 }
 `;
