@@ -37,8 +37,11 @@ Worker; see *Templates › How it runs*), **as the person looking**. So:
   (\`ticket_update\` with \`fields\`, \`assignees\` …), and the server checks those writes
   the way it always does. Rules you put in \`onFieldChange\` or \`disabled\` hold in the app only.
 * A new board starts with the default below, saved. A board that existed before board
-  scripts (or whose script was deleted) runs a script **generated from its settings** (its
-  priority, start, due, estimate, tags and custom fields), until an admin saves one.
+  scripts (or whose script was deleted) runs a script **generated from its old settings** (its
+  priority, start, due, estimate, tags and custom fields, with their option lists written into
+  the code), until an admin saves one. There are no Priorities, Tags or Custom fields settings
+  pages: option lists live in the script. \`priorityId\` / \`tagIds\` only take the values a
+  board already had; a new list of values belongs in the ticket's own \`fields\`.
 
 ### The shape
 

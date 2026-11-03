@@ -208,9 +208,9 @@
           options={peopleOf(c)}
           value={list(c.value)}
           multiple
-          placeholder="+ Add"
+          trigger="+ Add"
           onchange={(ids) => onchange({ id: c.id!, value: ids })}
-          class="text-xs [&_span]:text-subtle"
+          class="text-xs"
         />
       {/if}
     {:else}

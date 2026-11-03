@@ -16,7 +16,6 @@
   import GrantsSection from '$lib/board/settings/GrantsSection.svelte';
   import IntakeSection from '$lib/board/settings/IntakeSection.svelte';
   import IntegrationsSection from '$lib/board/settings/IntegrationsSection.svelte';
-  import OptionsSection from '$lib/board/settings/OptionsSection.svelte';
   import Section from '$lib/board/settings/Section.svelte';
   import StagesSection from '$lib/board/settings/StagesSection.svelte';
   import SubscribersSection from '$lib/board/settings/SubscribersSection.svelte';
@@ -33,8 +32,10 @@
   const MOVED: Record<string, 'subscriptions' | 'dictionaries' | 'script'> = {
     bucket: 'subscriptions',
     env: 'dictionaries',
-    // board-script.html: fields are the board script's now.
+    // board-script.html: fields, priorities and tags are the board script's now.
     fields: 'script',
+    priorities: 'script',
+    tags: 'script',
   };
   $effect(() => {
     const to = MOVED[section];
@@ -47,10 +48,6 @@
     <GeneralSection />
   {:else if section === 'stages'}
     <StagesSection />
-  {:else if section === 'priorities'}
-    <OptionsSection kind="priorities" />
-  {:else if section === 'tags'}
-    <OptionsSection kind="tags" />
   {:else if section === 'script'}
     <ScriptSection />
   {:else if section === 'templates'}

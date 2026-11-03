@@ -36,8 +36,6 @@ export const accountSections = (
 export const BOARD_SETTINGS_SECTIONS = [
   { id: 'general', label: 'General' },
   { id: 'stages', label: 'Stages' },
-  { id: 'priorities', label: 'Priorities' },
-  { id: 'tags', label: 'Tags' },
   /** board-script.html: the ticket's fields and the board's filters, as code. */
   { id: 'script', label: 'Script' },
   { id: 'templates', label: 'Templates' },

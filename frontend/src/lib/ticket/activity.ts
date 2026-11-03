@@ -4,7 +4,13 @@
  *   { stage: { from: 'st1', to: 'st2' } }  →  'moved this from Doing to QA'
  * Pure: the lookups are passed in, so it is unit-tested.
  */
-import type { Activity, FieldDef, TicketLink, Via } from '@tm/shared';
+import {
+  isScriptFieldKey,
+  type Activity,
+  type FieldDef,
+  type TicketLink,
+  type Via,
+} from '@tm/shared';
 
 export interface ActivityLookups {
   stage(id: string): string | undefined;
@@ -188,14 +194,27 @@ export function humanize(a: Pick<Activity, 'action' | 'changes'>, L: ActivityLoo
           : `cleared ${who}'s commitment`,
       );
     } else if (key.startsWith('fields.')) {
-      const def = L.field(key.slice('fields.'.length));
-      const label = def?.name ?? 'a removed field';
+      const id = key.slice('fields.'.length);
+      const def = L.field(id);
+      // A board script's own key (board-script.html) has no definition: name it by its key, and
+      // read uids in its value as people.
+      const own = !def && isScriptFieldKey(id);
+      const label = def?.name ?? (own ? id : 'a removed field');
       out.push(
         to == null || (Array.isArray(to) && !to.length)
           ? `cleared ${label}`
-          : `set ${label} to ${fieldValue(def, to, L)}`,
+          : `set ${label} to ${own ? scriptValue(to, L) : fieldValue(def, to, L)}`,
       );
     } else if (key === 'state') out.push(`changed state to ${String(to)}`);
   }
   return out.length ? out : ['updated this ticket'];
+}
+
+/** A board script's value as a sentence: uids of people on the board by name, lists joined. */
+function scriptValue(v: unknown, L: ActivityLookups): string {
+  const one = (x: unknown) => (typeof x === 'string' ? (L.person(x) ?? x) : String(x));
+  if (Array.isArray(v)) return list(v.map(one));
+  if (v && typeof v === 'object' && 'start' in v && 'end' in v)
+    return `${L.date((v as { start: number }).start, true)} – ${L.date((v as { end: number }).end, true)}`;
+  return one(v);
 }
