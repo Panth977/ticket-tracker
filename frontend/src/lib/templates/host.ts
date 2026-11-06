@@ -13,6 +13,9 @@
  * no cookies, no IndexedDB, no app storage, no same-origin requests to the
  * app's API. A WATCHDOG pings it every second; three seconds without an answer
  * (an endless loop) and it is terminated, with an error the editor can show.
+ * Silence only counts while the page runs: a hidden tab (throttled timers) or
+ * a frozen one (a phone that slept, its worker paused too) is not the
+ * template's fault, so the clock restarts when the page wakes (ORCH-40).
  */
 import runtimeSource from './worker/runtime.js?raw';
 import type { FromWorker, ScriptEntry, ScriptOp, ToWorker, VSlot, WorkerKind } from './protocol';
@@ -79,6 +82,7 @@ export class TemplateWorker {
   private waits = new Map<number, (m: FromWorker) => void>();
   private timer: ReturnType<typeof setInterval>;
   private lastPong = Date.now();
+  private lastTick = Date.now();
   private pingN = 0;
   private dead = false;
   private settle!: { resolve: () => void; reject: (e: TemplateProblem) => void };
@@ -110,7 +114,14 @@ export class TemplateWorker {
 
   private watch() {
     if (this.dead) return;
-    if (Date.now() - this.lastPong > DEAD_MS) {
+    const now = Date.now();
+    const gap = now - this.lastTick;
+    this.lastTick = now;
+    // Hidden, or the page's own timers were late (throttled / frozen): the
+    // worker could not answer either. Restart its clock instead of judging it.
+    if (gap > PING_MS * 2 || (typeof document !== 'undefined' && document.hidden)) {
+      this.lastPong = now;
+    } else if (now - this.lastPong > DEAD_MS) {
       this.kill({
         phase: 'timeout',
         message: 'The template stopped responding (an endless loop?) and was stopped.',
