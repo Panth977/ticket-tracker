@@ -86,10 +86,16 @@ const zodMessage = (e: { issues: { path: PropertyKey[]; message: string }[] }) =
     .map((i) => `${i.path.map(String).join('.') || '(root)'}: ${i.message}`)
     .join('; ');
 
+/** The least time between two starts of a board script's worker. */
+const RESTART_MS = 10_000;
+
 export class BoardScriptHost {
   private worker: TemplateWorker;
   private bridge: ReturnType<typeof createBridge>;
   private start: Promise<void>;
+  private ctx: Promise<unknown>;
+  private bootedAt = 0;
+  private closed = false;
   problem: TemplateProblem | null = null;
   refs = 0;
   private applySeq = 0;
@@ -98,28 +104,49 @@ export class BoardScriptHost {
     readonly code: string,
     board: Board & { id: string },
     me: ScriptMe,
-    o: { onLog?: (l: TemplateLog) => void; onError?: (p: TemplateProblem) => void } = {},
+    private o: { onLog?: (l: TemplateLog) => void; onError?: (p: TemplateProblem) => void } = {},
   ) {
     this.bridge = createBridge({ board, me, templateId: SCRIPT_TEMPLATE_ID });
-    let w!: TemplateWorker;
-    this.start = contextFor(this.bridge, { kind: 'script' }).then((ctx) => {
-      w = new TemplateWorker({
-        code,
+    this.ctx = contextFor(this.bridge, { kind: 'script' });
+    // Assigned when the context is ready; nothing calls the worker before `start`.
+    this.worker = null as unknown as TemplateWorker;
+    this.start = this.boot();
+  }
+
+  /** Start (or restart) the worker. */
+  private boot(): Promise<void> {
+    this.bootedAt = Date.now();
+    this.problem = null;
+    const start = this.ctx.then((ctx) => {
+      const w = new TemplateWorker({
+        code: this.code,
         kind: 'script',
         ctx,
         bridge: this.bridge,
         onError: (p) => {
           this.problem = p;
-          o.onError?.(p);
+          this.o.onError?.(p);
         },
-        onLog: o.onLog,
+        onLog: this.o.onLog,
       });
+      if (this.closed) w.destroy();
       this.worker = w;
       return w.ready;
     });
-    this.start.catch(() => {});
-    // Assigned when the context is ready; nothing calls the worker before `start`.
-    this.worker = null as unknown as TemplateWorker;
+    start.catch(() => {});
+    return start;
+  }
+
+  /**
+   * The watchdog stopped the worker (an endless loop, or a page that stalled):
+   * start a fresh one on the next call instead of failing every call until a
+   * reload (ORCH-40). At most once every RESTART_MS, so a script that really
+   * loops does not spin.
+   */
+  private heal() {
+    if (this.closed || !this.worker?.stopped) return;
+    if (Date.now() - this.bootedAt < RESTART_MS) return;
+    this.start = this.boot();
   }
 
   /** The ticket as a script sees it. */
@@ -142,6 +169,7 @@ export class BoardScriptHost {
     op: Parameters<TemplateWorker['script']>[0],
     args: unknown,
   ): Promise<Outcome<T>> {
+    this.heal();
     try {
       await this.start;
     } catch (e) {
@@ -330,6 +358,7 @@ export class BoardScriptHost {
   }
 
   destroy() {
+    this.closed = true;
     this.worker?.destroy();
   }
 }
