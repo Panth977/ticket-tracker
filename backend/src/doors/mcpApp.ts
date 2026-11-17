@@ -29,6 +29,7 @@ import { z } from 'zod';
 import {
   COMMAND_NAMES,
   COMMANDS,
+  errors,
   isAgentId,
   paths,
   TEMPLATE_DOCS_MD,
@@ -40,8 +41,15 @@ import {
   type CommandReq,
   type Scope,
 } from '@tm/shared';
-import { invoke } from '../platform/ops.js';
-import { readableBoards, requestBoard, ticketByKey } from '../platform/resolve.js';
+import { invoke, withNewTags } from '../platform/ops.js';
+import {
+  priorityId,
+  readableBoards,
+  requestBoard,
+  stageId,
+  tagIds,
+  ticketByKey,
+} from '../platform/resolve.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
 import { identity } from '../identity/index.js';
@@ -219,6 +227,11 @@ function inputShape(name: CommandName): Shape {
             : null;
     out[k] = loose ? (opt || k === 'boardId' ? loose.optional() : loose) : v;
   }
+  // Models name a board as `board` (the curated tools' word for it). The MCP
+  // SDK drops keys the schema does not list, so without this alias a
+  // `board: 'ENG'` vanished and the call failed with "needs a board" (ORCH-68).
+  if (out.boardId && !out.board)
+    out.board = z.string().optional().describe("Same as boardId: a board key ('ENG') or id");
   return out;
 }
 
@@ -240,6 +253,12 @@ const TICKET_KEY = /^#?[A-Za-z][A-Za-z0-9]{1,9}-\d+$/;
 /** Keys → ids, so the model can say ENG and ENG-42 the way people do. */
 async function resolveIds(ctx: ServerCtx, args: Record<string, unknown>, wantsBoard: boolean) {
   const out = { ...args };
+  if (typeof out.board === 'string') {
+    if (typeof out.boardId === 'string' && out.boardId !== out.board)
+      throw errors.invalid('Give the board once: board and boardId differ', { field: 'board' });
+    out.boardId = out.board;
+  }
+  delete out.board;
   const tickets = async (k: string) => {
     if (!TICKET_KEY.test(k)) return k;
     const { board, ticket } = await ticketByKey(ctx, k);
@@ -252,6 +271,24 @@ async function resolveIds(ctx: ServerCtx, args: Record<string, unknown>, wantsBo
   if (typeof out.boardId === 'string') out.boardId = (await requestBoard(ctx, out.boardId)).id;
   else if (wantsBoard) out.boardId = (await requestBoard(ctx, null)).id;
   return out;
+}
+
+/**
+ * ticket_bulk names its stage, priority and tag the way people do (ORCH-68):
+ * names (or ids) → ids; an addTag name the board lacks is created first.
+ */
+async function bulkNames(ctx: ServerCtx, input: Record<string, unknown>) {
+  const action = input.action as Record<string, unknown> | undefined;
+  if (!action || typeof input.boardId !== 'string') return;
+  let board = await requestBoard(ctx, input.boardId);
+  if (action.type === 'stage' && typeof action.stageId === 'string')
+    action.stageId = stageId(board, action.stageId);
+  if (action.type === 'priority' && typeof action.priorityId === 'string')
+    action.priorityId = priorityId(board, action.priorityId);
+  if (action.type === 'addTag' && typeof action.tagId === 'string') {
+    board = await withNewTags(ctx, board, [action.tagId]);
+    action.tagId = tagIds(board, [action.tagId])[0];
+  }
 }
 
 /** inviteAccept and the allow list compare a VERIFIED email; a token does not carry one. */
@@ -328,6 +365,7 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
           'input' in args ? (args.input as Record<string, unknown>) : args,
           boardRequired(name),
         );
+        if (name === 'ticketBulk') await bulkNames(ctx, input);
         const c = NEEDS_EMAIL.has(name) ? await withEmail(ctx) : ctx;
         return invoke(name, input as CommandReq<typeof name>, c);
       }),

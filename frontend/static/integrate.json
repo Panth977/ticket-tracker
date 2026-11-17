@@ -4,7 +4,7 @@
   "version": "2.2.0",
   "apiVersion": "v1",
   "updated": "2026-10-17",
-  "contentSha256": "0cf5875c1f0d60545b0ebf8ce18690d852a685004f8d08aa9dd2051c4cf53a7c",
+  "contentSha256": "c57a87494b82bec89fcbc7bc18a9f3fbca586529d3fe5df9fe8ef03d05989285",
   "app": "https://taskmanager-example.web.app",
   "apiBase": "https://taskmanager-example.web.app/v1",
   "mcpUrl": "https://taskmanager-example.web.app/mcp",
@@ -1237,7 +1237,7 @@
     },
     {
       "name": "update_ticket",
-      "description": "Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.",
+      "description": "Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.",
       "readOnly": false,
       "scopes": [
         "tickets:update",

@@ -98,6 +98,7 @@ export const McpToolShapes = {
     board: Board.optional(),
     assignee: Principal.optional(),
     stage: StageRef.optional(),
+    tag: z.string().optional().describe('Only tickets carrying this tag (name)'),
     state: z.enum(['active', 'archived']).optional(),
     due_before: IsoOrDate.optional(),
     updated_since: IsoOrDate.optional(),
@@ -130,7 +131,10 @@ export const McpToolShapes = {
     due: IsoOrDate.optional(),
     priority: z.string().optional().describe('Priority name'),
     stage: StageRef.optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe('Tag names; a name the board does not have yet is created'),
     fields: z.record(z.string(), z.unknown()).optional().describe('Custom fields by NAME'),
   },
   update_ticket: {
@@ -144,7 +148,15 @@ export const McpToolShapes = {
       .describe('Replaces the list; see assign_ticket to add / remove'),
     due: IsoOrDate.nullable().optional(),
     priority: z.string().nullable().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe('Tag names; REPLACES the list (see add_tags). New names are created'),
+    add_tags: z
+      .array(z.string())
+      .optional()
+      .describe('Tag names to add, keeping the others; new names are created'),
+    remove_tags: z.array(z.string()).optional().describe('Tag names to take off'),
     fields: z.record(z.string(), z.unknown()).optional(),
   },
   move_ticket: { key: Key, stage: StageRef },
@@ -502,7 +514,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   create_ticket: { description: 'Create a ticket.', readOnly: false, scopes: ['tickets:create'] },
   update_ticket: {
     description:
-      'Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.',
+      'Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.',
     readOnly: false,
     scopes: ['tickets:update', 'tickets:move', 'tickets:assign'],
   },

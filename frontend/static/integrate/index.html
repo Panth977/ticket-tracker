@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 0cf5875c1f0d…</span>
+        <span>sha256 c57a87494b82…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -1942,7 +1942,7 @@ search_tickets       tickets:read                        Find tickets by text, a
 get_ticket           tickets:read                        A ticket with fields, links, pinned messages, files and its last messages (Markdown).
 get_messages         comments:read                       Page through a ticket's thread (Markdown bodies, attachments with file ids).
 create_ticket        tickets:create                      Create a ticket.
-update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
 post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
@@ -1997,6 +1997,7 @@ limit          integer</code></pre></figure>
 board          string                   Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
 assignee       string                   A member: 'me', an id, an email, or an agent's name
 stage          string                   Stage name or id
+tag            string                   Only tickets carrying this tag (name)
 state          'active' | 'archived'
 due_before     string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 updated_since  string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
@@ -2022,10 +2023,10 @@ assignees    string[]                       A member: 'me', an id, an email, or 
 due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 priority     string                         Priority name
 stage        string                         Stage name or id
-tags         string[]
+tags         string[]                       Tag names; a name the board does not have yet is created
 fields       Record&lt;string, any&gt;            Custom fields by NAME</code></pre></figure>
 <h4 id="updateticket"><a class="anchor" href="#updateticket" aria-label="Link to this section">#</a>update_ticket</h4>
-<p>Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.</p>
+<p>Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.</p>
 <p>Writes · scopes: <code>tickets:update</code> or <code>tickets:move</code> or <code>tickets:assign</code></p>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>key          string               required  Ticket key, e.g. 'ENG-42'
 title        string
@@ -2034,7 +2035,9 @@ stage        string                         Stage name or id
 assignees    string[]                       Replaces the list; see assign_ticket to add / remove
 due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 priority     string
-tags         string[]
+tags         string[]                       Tag names; REPLACES the list (see add_tags). New names are created
+add_tags     string[]                       Tag names to add, keeping the others; new names are created
+remove_tags  string[]                       Tag names to take off
 fields       Record&lt;string, any&gt;</code></pre></figure>
 <h4 id="moveticket"><a class="anchor" href="#moveticket" aria-label="Link to this section">#</a>move_ticket</h4>
 <p>Move a ticket to another stage.</p>

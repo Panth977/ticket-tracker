@@ -7,7 +7,7 @@
 version:           2.2.0
 api:               v1
 updated:           2026-10-17  (the newest changelog entry — this file is byte-stable between releases on purpose)
-content-sha256:    0cf5875c1f0d60545b0ebf8ce18690d852a685004f8d08aa9dd2051c4cf53a7c
+content-sha256:    c57a87494b82bec89fcbc7bc18a9f3fbca586529d3fe5df9fe8ef03d05989285
 source:            scripts/gen-integration.mjs
 this file:         https://taskmanager-example.web.app/llms-full.txt
 readable page:     https://taskmanager-example.web.app/integrate
@@ -3243,7 +3243,7 @@ search_tickets       tickets:read                        Find tickets by text, a
 get_ticket           tickets:read                        A ticket with fields, links, pinned messages, files and its last messages (Markdown).
 get_messages         comments:read                       Page through a ticket's thread (Markdown bodies, attachments with file ids).
 create_ticket        tickets:create                      Create a ticket.
-update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+update_ticket        tickets:update | tickets:move | tickets:assign  Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.
 move_ticket          tickets:move                        Move a ticket to another stage.
 assign_ticket        tickets:assign                      Add or remove assignees (people or agents).
 post_message         comments:write                      Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
@@ -3324,6 +3324,7 @@ query          string
 board          string                   Board key, e.g. 'ENG'. Required when your token is account-wide (call list_boards first); optional — and only ever your own board — when your token is scoped to one board.
 assignee       string                   A member: 'me', an id, an email, or an agent's name
 stage          string                   Stage name or id
+tag            string                   Only tickets carrying this tag (name)
 state          'active' | 'archived'
 due_before     string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 updated_since  string                   ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
@@ -3367,13 +3368,13 @@ assignees    string[]                       A member: 'me', an id, an email, or 
 due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 priority     string                         Priority name
 stage        string                         Stage name or id
-tags         string[]
+tags         string[]                       Tag names; a name the board does not have yet is created
 fields       Record<string, any>            Custom fields by NAME
 ```
 
 #### update_ticket
 
-Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.
 
 Writes · scopes: `tickets:update` or `tickets:move` or `tickets:assign`
 
@@ -3385,7 +3386,9 @@ stage        string                         Stage name or id
 assignees    string[]                       Replaces the list; see assign_ticket to add / remove
 due          string                         ISO date or datetime, e.g. '2026-09-24' or '2026-09-24T17:00:00Z'
 priority     string
-tags         string[]
+tags         string[]                       Tag names; REPLACES the list (see add_tags). New names are created
+add_tags     string[]                       Tag names to add, keeping the others; new names are created
+remove_tags  string[]                       Tag names to take off
 fields       Record<string, any>
 ```
 
