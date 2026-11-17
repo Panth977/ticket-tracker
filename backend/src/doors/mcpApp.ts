@@ -37,6 +37,7 @@ import {
   TEMPLATE_KINDS,
   TEMPLATE_STARTERS,
   tokenMayCall,
+  type ApiKey,
   type CommandName,
   type CommandReq,
   type Scope,
@@ -124,6 +125,10 @@ const SUMMARY: Partial<Record<CommandName, string>> = {
   agentCreate: 'Create an agent (an AI teammate with a name, description and system prompt).',
   agentUpdate: 'Change one of your agents: name, description, system prompt, icon.',
   agentArchive: 'Archive one of your agents (off every board, tokens revoked) or restore it.',
+  tokenCreate:
+    'Mint a token for one of YOUR agents (agent: id or exact name) — what an orchestrator puts in its .env as TM_TOKEN. With board: a board token for that board, preset worker (default) / readOnly / everything; without board: an agent token (its role on each board decides; other tokens of the agent keep working unless keepOthers false). The secret `key` is in the result ONCE: write it where it is needed (e.g. a .env, mode 600) and never echo it into a thread, a message, a log or a file anyone else reads. Never an account token. Confirm with the person first.',
+  tokenRevoke:
+    'Revoke one of your tokens that acts as one of your agents (keyId from token_list). Account tokens are revoked in the app only.',
   userList: 'App admin only: who is allowed to use this app.',
   userAllow: 'App admin only: allow an email address to use this app.',
   userDisallow: 'App admin only: take an email address off the allow list.',
@@ -356,7 +361,9 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
             /^artifact(Open|File(List|Url))$/.test(name) ||
             /^bucket(List|Tree|FileRead)$/.test(name) ||
             /^dictionary(List|Get)$/.test(name),
-          destructiveHint: DESTRUCTIVE.test(name) || name === 'boardArchive',
+          // tokenCreate: a secret leaves the server — clients hold it for confirmation (ORCH-73).
+          destructiveHint:
+            DESTRUCTIVE.test(name) || name === 'boardArchive' || name === 'tokenCreate',
         },
       },
       run(async (args: Record<string, unknown>) => {
@@ -526,6 +533,47 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
     'Your agents (AI teammates): name, description, system prompt, archived or not.',
     {},
     async () => docs(db().collection(paths.agents()).where('ownerUid', '==', ctx.actor)),
+    true,
+  );
+  read(
+    'token_list',
+    ['agents:write'],
+    'Your API tokens (never the secret): keyId, name, kind (board / agent / account), board key, the agent it acts as, scopes, prefix, last used, expiry, revoked. Live ones only unless include_revoked.',
+    { include_revoked: z.boolean().optional() },
+    async (a) => {
+      const snap = await db().collection(paths.apiKeys(ctx.actor)).get();
+      const boards = new Map<string, string>();
+      const keyOf = async (id: string | null | undefined) => {
+        if (!id) return null;
+        if (!boards.has(id)) {
+          const b = await db().doc(paths.board(id)).get();
+          boards.set(id, (b.data() as { key?: string } | undefined)?.key ?? id);
+        }
+        return boards.get(id)!;
+      };
+      const rows = [];
+      for (const d of snap.docs) {
+        const k = d.data() as ApiKey;
+        if (k.revokedAt !== null && !a.include_revoked) continue;
+        rows.push({
+          keyId: d.id,
+          name: k.name,
+          kind: k.kind ?? 'board',
+          board: await keyOf(k.boardId),
+          actsAs: k.actsAs,
+          scopes: k.scopes,
+          prefix: k.prefix,
+          lastUsedAt: k.lastUsedAt,
+          expiresAt: k.expiresAt,
+          revokedAt: k.revokedAt,
+          revokedReason: k.revokedReason ?? null,
+          createdAt: k.createdAt,
+          mintedByKeyId: k.mintedByKeyId ?? null,
+          current: d.id === ctx.keyId,
+        });
+      }
+      return rows.sort((x, y) => y.createdAt - x.createdAt);
+    },
     true,
   );
   read(

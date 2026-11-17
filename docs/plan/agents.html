@@ -602,7 +602,12 @@ Agents · Notifications · Tokens · Sign out</pre>
         <code>boards:admin</code> (settings and people on boards where you are an admin), <code>agents:write</code> (create and edit your agent
         profiles), <code>invites:write</code>. Preset: <b>Full account</b>.</li>
       <li><b>What an account token can never do</b>, whatever its scopes: create or revoke tokens, grant or revoke OAuth access, change your
-        sign-in or security settings, delete or export your account. A token can never mint another token, so a leak cannot become permanent.</li>
+        sign-in or security settings, delete or export your account. A token can never mint another token, so a leak cannot become permanent.
+        <b>One narrow exception (ORCH-73):</b> <code>tokenCreate</code> / <code>tokenRevoke</code> (MCP <code>token_create</code>,
+        <code>token_list</code>, <code>token_revoke</code>) let a token carrying <code>agents:write</code> mint and revoke tokens that
+        <i>act as one of the person's agents</i> — a board token with a preset (never admin scopes) or an agent token — so an
+        assistant can wire up an orchestrator itself. Never an account token, never one acting as the person; a minted row records
+        <code>mintedByKeyId</code>; account tokens are still revoked in the app only.</li>
       <li><b>Creating one is deliberate</b>: a distinct "Account token" choice, a plain warning of what it can reach, an expiry that defaults to
         90 days (never is possible, and says so in red), and the token shown once. The Tokens list marks account tokens clearly and shows
         last use; revoking is one click.</li>

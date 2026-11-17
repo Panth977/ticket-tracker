@@ -69,6 +69,8 @@ export const COMMANDS = {
   grantRevoke: platform.grantRevoke,
   apiKeyCreate: platform.apiKeyCreate,
   apiKeyRevoke: platform.apiKeyRevoke,
+  tokenCreate: platform.tokenCreate,
+  tokenRevoke: platform.tokenRevoke,
   webhookUpsert: platform.webhookUpsert,
   // extras (not named in docs/data, implied by screens / REST CRUD)
   webhookDelete: platform.webhookDelete,

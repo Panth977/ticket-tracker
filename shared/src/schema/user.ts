@@ -223,6 +223,8 @@ export const ApiKeySchema = z
       .nullable()
       .optional(),
     createdAt: MillisSchema,
+    /** ORCH-73: the key that minted this one through tokenCreate; absent = made in the app. */
+    mintedByKeyId: z.string().nullable().optional(),
   })
   .superRefine((k, ctx) => {
     // §AA changed this rule: it now applies ONLY to a legacy kind 'board' key

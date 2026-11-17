@@ -168,6 +168,69 @@ export const apiKeyRevoke = defineCommand({
   res: OkResSchema,
 });
 
+/**
+ * ORCH-73 — A TOKEN THAT MAKES AN AGENT'S TOKEN. The one narrow exception to
+ * "a token never mints a token" (TOKEN_DENIED_COMMANDS keeps apiKeyCreate and
+ * apiKeyRevoke app-only, unchanged). It exists so a person's own assistant
+ * (an account token / OAuth grant carrying agents:write — the same scope that
+ * already creates agents and puts them on boards) can wire up an orchestrator
+ * end to end without a trip to Account › Tokens.
+ *
+ * What it can NOT make is what would let a leak outlive itself: never an
+ * account token, never a token acting as the person, never admin scopes. It
+ * mints only tokens that ACT AS ONE OF THE CALLER'S AGENTS — a board token
+ * (one board, the board scopes of a preset) or an agent token (the agent's
+ * role decides). It never rotates other tokens away unless asked. A token
+ * made this way records the key that made it (mintedByKeyId).
+ */
+export const TokenPresetSchema = z.enum(['readOnly', 'worker', 'everything']);
+export const tokenCreate = defineCommand({
+  name: 'tokenCreate',
+  source: 'extra',
+  scopes: ['agents:write'],
+  permission:
+    "A person (never an agent), in the app or with a token carrying agents:write. Mints ONLY a token acting as one of YOUR agents (not archived): with boardId, a board token for that board (you and the agent must be on it; preset readOnly / worker / everything, never admin scopes); without boardId, an agent token (the agent's role on each board decides). Never an account token, never one acting as you. The secret is returned once.",
+  errors: ['forbidden', 'not_found', 'invalid'],
+  req: req({
+    /** 'orch-mgr-main' — shown in 'via token …'. */
+    name: z.string().trim().min(1).max(80),
+    /** The agent the token acts as: its id ('ag_…') or its exact name. */
+    agent: z.string().trim().min(1).max(120),
+    /** A board token for this board; omit for an agent token. */
+    boardId: BoardIdSchema.nullable().optional(),
+    /** Board tokens only. Default 'worker'. */
+    preset: TokenPresetSchema.optional(),
+    /** Absent / null = never expires. */
+    expiresInDays: z.number().int().min(1).max(3650).nullable().optional(),
+    /** Agent tokens only. Default true here: other live tokens of the agent keep working. */
+    keepOthers: z.boolean().optional(),
+  }),
+  res: z.object({
+    /** 'tm_live_…' — the ONLY time it is returned. Never log it. */
+    key: z.string(),
+    keyId: z.string(),
+    prefix: z.string(),
+    kind: z.enum(['board', 'agent']),
+    agentId: AgentIdSchema,
+    boardId: BoardIdSchema.nullable(),
+    scopes: z.array(ScopeSchema),
+    expiresAt: MillisSchema.nullable(),
+    rotated: z.number().int().nonnegative().optional(),
+  }),
+});
+
+/** ORCH-73 — the token-reachable revoke: only tokens that act as one of your agents. */
+export const tokenRevoke = defineCommand({
+  name: 'tokenRevoke',
+  source: 'extra',
+  scopes: ['agents:write'],
+  permission:
+    'A person (never an agent), in the app or with a token carrying agents:write. Revokes one of YOUR tokens that acts as one of your agents (board or agent token). Account tokens and tokens acting as you are revoked in the app only. Revoking twice is ok.',
+  errors: ['forbidden', 'not_found'],
+  req: req({ keyId: z.string().min(1) }),
+  res: OkResSchema,
+});
+
 export const webhookUpsert = defineCommand({
   name: 'webhookUpsert',
   source: 'platform',
