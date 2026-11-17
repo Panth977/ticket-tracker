@@ -162,6 +162,7 @@ const brief = (t: PublicTicket) => ({
   stage: t.stage.name,
   state: t.state,
   priority: t.priority?.name ?? null,
+  tags: t.tags,
   assignees: t.assignees.map((a) => (a.kind === 'agent' ? `${a.name} (agent)` : a.email || a.name)),
   due_at: t.due_at,
   updated_at: t.updated_at,
@@ -383,6 +384,11 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
         }
         if (t.stageId !== sid) continue;
       }
+      if (a.tag) {
+        const n = a.tag.replace(/^\+/, '').trim().toLowerCase();
+        const tag = b.tags.find((x) => x.id === a.tag || x.name.trim().toLowerCase() === n);
+        if (!tag || !t.tagIds.includes(tag.id)) continue;
+      }
       if (a.query && a.assignee) {
         const who = await assigneeFor(b);
         if (!who || !t.assigneeUids.includes(who)) continue;
@@ -432,6 +438,18 @@ export function buildMcpServer(ctx: ServerCtx): McpServer {
     if (a.due !== undefined) input.due = a.due;
     if (a.priority !== undefined) input.priority = a.priority;
     if (a.tags !== undefined) input.tags = a.tags;
+    if (a.add_tags?.length || a.remove_tags?.length) {
+      // Relative to what the ticket carries now (or to `tags`, when both are given).
+      const same = (t: string, x: string) => {
+        const tag = board.tags.find((o) => o.id === x);
+        const n = t.replace(/^\+/, '').trim().toLowerCase();
+        return x === t || x.toLowerCase() === n || tag?.name.trim().toLowerCase() === n;
+      };
+      let list: string[] = [...(input.tags ?? ticket.tagIds)];
+      for (const t of a.remove_tags ?? []) list = list.filter((x) => !same(t, x));
+      for (const t of a.add_tags ?? []) if (!list.some((x) => same(t, x))) list.push(t);
+      input.tags = list;
+    }
     if (a.fields !== undefined) input.fields = a.fields;
     return json(await updateTicket(ctx, board, ticket, input));
   });

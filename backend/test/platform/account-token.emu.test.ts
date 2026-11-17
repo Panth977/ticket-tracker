@@ -332,6 +332,86 @@ describe('§R2 MCP with an account token', () => {
   });
 });
 
+describe('ORCH-68 tags from an account token (the Manager case)', () => {
+  type Res = { isError?: boolean; content: { text: string }[] };
+  it('tag_create takes `board` (key) as well as `boardId`, and tickets take tag names', async () => {
+    const { owner, eng, ops } = await scene();
+    const { key } = await accountKeyFor(owner, [...SCOPE_PRESETS.fullAccount] as Scope[]);
+    const client = await mcpClient(key);
+
+    // Before: `board` was dropped by the SDK and the call said "needs a board".
+    const made = parsed<{ tag: { id: string; name: string } }>(
+      await client.callTool({ name: 'tag_create', arguments: { board: ops.key, name: 'manager' } }),
+    );
+    expect(made.tag.name).toBe('manager');
+    const again = parsed<{ tag: { id: string } }>(
+      await client.callTool({
+        name: 'tag_create',
+        arguments: { boardId: ops.key, name: 'Manager' },
+      }),
+    );
+    expect(again.tag.id).toBe(made.tag.id);
+    const clash = (await client.callTool({
+      name: 'tag_create',
+      arguments: { board: ops.key, boardId: eng.key, name: 'x' },
+    })) as Res;
+    expect(clash.isError).toBe(true);
+    // Left out entirely: still the helpful error naming the boards.
+    const vague = (await client.callTool({ name: 'tag_create', arguments: { name: 'x' } })) as Res;
+    expect(vague.isError).toBe(true);
+    expect(vague.content[0]!.text).toContain(eng.key);
+
+    // create_ticket with a tag the board does not have yet: it is created.
+    const t = parsed<{ key: string; tags: string[] }>(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { board: eng.key, title: 'Tagged', tags: ['manager'] },
+      }),
+    );
+    expect(t.tags).toEqual(['manager']);
+
+    // update_ticket: add_tags keeps the others; remove_tags takes one off.
+    const a = parsed<{ tags: string[] }>(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { key: t.key, add_tags: ['urgent', 'MANAGER'] },
+      }),
+    );
+    expect(a.tags.sort()).toEqual(['manager', 'urgent']);
+    const r = parsed<{ tags: string[] }>(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { key: t.key, remove_tags: ['urgent'] },
+      }),
+    );
+    expect(r.tags).toEqual(['manager']);
+
+    // search_tickets filters by tag, across every board.
+    const mine = parsed<{ tickets: { key: string }[] }>(
+      await client.callTool({ name: 'search_tickets', arguments: { tag: 'manager' } }),
+    );
+    expect(mine.tickets.map((x) => x.key)).toEqual([t.key]);
+
+    // ticket_bulk takes a tag NAME (and creates it).
+    const t2 = parsed<{ key: string }>(
+      await client.callTool({ name: 'create_ticket', arguments: { board: ops.key, title: 'Two' } }),
+    );
+    const bulk = parsed<{ updated: number }>(
+      await client.callTool({
+        name: 'ticket_bulk',
+        arguments: { ticketIds: [t2.key], action: { type: 'addTag', tagId: 'later' } },
+      }),
+    );
+    expect(bulk.updated).toBe(1);
+    const got = parsed<{ tags: string[] }>(
+      await client.callTool({ name: 'get_ticket', arguments: { key: t2.key } }),
+    );
+    expect(got.tags).toEqual(['later']);
+
+    await client.close();
+  });
+});
+
 describe('§R1 attribution is unchanged', () => {
   it("a change made with an account token reads 'you, via token <name>'", async () => {
     const { owner, eng } = await scene();

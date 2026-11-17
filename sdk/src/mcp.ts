@@ -453,6 +453,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
       board: BOARD,
       assignee: PRINCIPAL,
       stage: STAGE,
+      tag: str('Only tickets carrying this tag (name)'),
       state: enumOf(TICKET_STATES),
       due_before: ISO,
       updated_since: ISO,
@@ -467,12 +468,17 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         updatedSince: a.updated_since,
         limit: n(a.limit),
       });
-      // `due_before` has no REST filter; the page is small, so narrow it here.
-      if (!a.due_before) return page;
-      const cutoff = Date.parse(s(a.due_before));
+      // `due_before` and `tag` have no REST filter; the page is small, so narrow it here.
+      if (!a.due_before && !a.tag) return page;
+      const cutoff = a.due_before ? Date.parse(s(a.due_before)) : null;
+      const tag = a.tag ? s(a.tag).replace(/^\+/, '').trim().toLowerCase() : null;
       return {
         ...page,
-        data: page.data.filter((t) => t.due_at !== null && Date.parse(t.due_at) < cutoff),
+        data: page.data.filter(
+          (t) =>
+            (cutoff === null || (t.due_at !== null && Date.parse(t.due_at) < cutoff)) &&
+            (tag === null || t.tags.some((x) => x.trim().toLowerCase() === tag)),
+        ),
       };
     },
   },
@@ -513,7 +519,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         due: ISO,
         priority: str('Priority name'),
         stage: STAGE,
-        tags: list(str()),
+        tags: list(str(), 'Tag names; a name the board does not have yet is created'),
         fields: record('Custom fields by NAME'),
       },
       ['title'],
@@ -532,7 +538,7 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
   },
   update_ticket: {
     description:
-      'Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.',
+      'Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.',
     readOnly: false,
     scopes: ['tickets:update', 'tickets:move', 'tickets:assign'],
     inputSchema: schema(
@@ -544,22 +550,35 @@ export const MCP_TOOL_DEFS: Record<McpToolName, ToolDef> = {
         assignees: list(PRINCIPAL, 'Replaces the list; see assign_ticket to add / remove'),
         due: ISO,
         priority: str(),
-        tags: list(str()),
+        tags: list(str(), 'Tag names; REPLACES the list (see add_tags). New names are created'),
+        add_tags: list(str(), 'Tag names to add, keeping the others; new names are created'),
+        remove_tags: list(str(), 'Tag names to take off'),
         fields: record(),
       },
       ['key'],
     ),
-    run: (tm, a) =>
-      tm.tickets.update(s(a.key), {
+    run: async (tm, a) => {
+      let tags = a.tags as string[] | undefined;
+      const add = (a.add_tags as string[] | undefined) ?? [];
+      const remove = (a.remove_tags as string[] | undefined) ?? [];
+      if (add.length || remove.length) {
+        const norm = (x: string) => x.replace(/^\+/, '').trim().toLowerCase();
+        let list = tags ?? (await tm.tickets.get(s(a.key), { messages: 0 })).tags;
+        list = list.filter((x) => !remove.some((r) => norm(r) === norm(x)));
+        for (const t of add) if (!list.some((x) => norm(x) === norm(t))) list = [...list, t];
+        tags = list;
+      }
+      return tm.tickets.update(s(a.key), {
         title: a.title,
         description: a.description,
         stage: a.stage,
         assignees: a.assignees,
         dueAt: a.due,
         priority: a.priority,
-        tags: a.tags,
+        tags,
         fields: a.fields,
-      }),
+      });
+    },
   },
   move_ticket: {
     description: 'Move a ticket to another stage.',

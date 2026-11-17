@@ -29,7 +29,7 @@ import { ports } from '../adapters/index.js';
 import type { ServerCtx } from '../runtime/context.js';
 import { db, isEmulated } from '../runtime/firebase.js';
 import { runCommand } from '../runtime/runner.js';
-import { loadTicket, withTicketId } from '../tickets/access.js';
+import { loadBoard, loadTicket, withTicketId } from '../tickets/access.js';
 import type { StoredMessage } from '@tm/shared';
 import { getMessage, recentAndPinned } from '../tickets/read.js';
 import { sha256hex } from './crypto.js';
@@ -163,6 +163,34 @@ async function translate(
 const drop = <T extends object>(o: T): T =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
+/**
+ * Tags named on a ticket that the board does not have yet are CREATED
+ * (tagCreate: can(edit), same-name-any-case returns the existing one), the way
+ * the app's tag picker makes them on the fly. A model can then say
+ * `tags: ['manager']` without a separate tag_create first (ORCH-68).
+ * Answers the board as it is after that.
+ */
+export async function withNewTags(
+  ctx: ServerCtx,
+  board: BoardWithId,
+  tags: readonly string[] | undefined,
+): Promise<BoardWithId> {
+  if (!tags?.length) return board;
+  const have = (t: string) =>
+    board.tags.some((x) => x.id === t || x.name.trim().toLowerCase() === t.trim().toLowerCase());
+  const missing = [
+    ...new Map(
+      tags
+        .map((t) => t.replace(/^\+/, '').trim())
+        .filter((t) => t && !have(t))
+        .map((t) => [t.toLowerCase(), t] as const),
+    ).values(),
+  ];
+  if (!missing.length) return board;
+  for (const name of missing) await invoke('tagCreate', { boardId: board.id, name }, ctx);
+  return loadBoard(ctx, board.id);
+}
+
 /** ticketCreate from outside; answers the public ticket. */
 export async function createTicket(
   ctx: ServerCtx,
@@ -170,6 +198,7 @@ export async function createTicket(
   input: TicketInput & { title: string; attachments?: string[] },
   key?: string,
 ): Promise<PublicTicket> {
+  board = await withNewTags(ctx, board, input.tags);
   const t = await translate(ctx, board, input);
   // Files uploaded before the ticket existed carry its future id in their path.
   const ids = new Set((input.attachments ?? []).map((p) => parseAttachmentPath(p)?.ticketId));
@@ -209,6 +238,7 @@ export async function updateTicket(
   input: TicketInput,
   key?: string,
 ): Promise<PublicTicket> {
+  board = await withNewTags(ctx, board, input.tags);
   const t = await translate(ctx, board, input, ticket);
   const patch = drop({
     title: t.title,
