@@ -63,7 +63,7 @@ search_tickets       read   Find tickets by text, assignee, stage, state or date
 get_ticket           read   A ticket with fields, links, pinned messages, files and its last messages (Markdown).
 get_messages         read   Page through a ticket's thread (Markdown bodies, attachments with file ids).
 create_ticket        write  Create a ticket.
-update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags, fields.
+update_ticket        write  Change a ticket: title, description, stage, assignees, due date, priority, tags (add_tags / remove_tags keep the rest; unknown tag names are created), fields.
 move_ticket          write  Move a ticket to another stage.
 assign_ticket        write  Add or remove assignees (people or agents).
 post_message         write  Post a Markdown message in a ticket's thread, optionally with files from upload_file or bucket_files (bucket files by reference). An orchestrator may attach `run`, the receipt of one finished run (cost, outcome, duration). `agg` adds entries to the board's aggregate fields.
