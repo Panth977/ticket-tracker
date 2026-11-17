@@ -43,6 +43,7 @@ import {
   type Scope,
 } from '@tm/shared';
 import { invoke, withNewTags } from '../platform/ops.js';
+import { answerQuestion, listOpenQuestions } from '../platform/phase3.js';
 import {
   priorityId,
   readableBoards,
@@ -70,6 +71,7 @@ const COVERED = new Set<CommandName>([
   'tasklistDelete', // delete_tasklist
   'agentHeartbeat', // heartbeat
   'agentInboxAck', // ack_events
+  'questionAnswer', // answer_question (below: labels instead of ids, ORCH-73)
   'artifactCreate', // artifact_create
   'artifactPublish', // artifact_publish
   'artifactSetCurrent', // artifact_rollback
@@ -576,6 +578,60 @@ export function registerAppTools(server: McpServer, ctx: ServerCtx): void {
     },
     true,
   );
+  read(
+    'list_questions',
+    ['comments:read'],
+    "Open question cards waiting for an answer (agents ask them; the agent is blocked until a person answers). With ticket: every open one on it; else the tickets showing 'Waiting for you' on board, or on all your boards. Each has id, ticket_key, title, body_md, fields (id, label, type, options) and who asked. Answer with answer_question — never with a plain message.",
+    {
+      ticket: z.string().optional().describe("Ticket key ('ORCH-71')"),
+      board: boardArg,
+    },
+    async (a) =>
+      listOpenQuestions(ctx, {
+        key: (a.ticket as string) ?? null,
+        board: a.board ? await board(a) : null,
+      }),
+    true,
+  );
+  if (hasAny(ctx, ['questions:write']) && !isAgentId(ctx.actor))
+    server.registerTool(
+      'answer_question',
+      {
+        description:
+          "Answer a question card an agent asked in a ticket thread, as you — exactly like pressing Submit in the app: the card locks, your answer shows in the thread and the agent that asked wakes up and carries on. ALWAYS use this for a question card; a plain message does NOT answer it and the agent stays blocked. Name the question by `ticket` (when it has one open question) or `id` (from list_questions / get_ticket). Give `answers` as { field label or id: value } — options by label or id, multi as a list, yes/no for booleans — or just `answer` for a one-field form. `comment` only when the card has an 'Anything else?' box. Secrets (tokens) go here, never in a message.",
+        inputSchema: {
+          ticket: z
+            .string()
+            .optional()
+            .describe("Ticket key ('ORCH-71'), when it has one open question"),
+          id: z
+            .string()
+            .optional()
+            .describe('Question id (ticketId.messageId) from list_questions or get_ticket'),
+          answers: z
+            .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
+            .optional()
+            .describe("{ 'Field label': value } — option label for single, list for multi"),
+          answer: z
+            .union([z.string(), z.number(), z.boolean(), z.array(z.string())])
+            .optional()
+            .describe('The value, when the form has one field'),
+          comment: z.string().max(10_000).optional().describe("The 'Anything else?' box"),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false },
+      },
+      run(async (a: Record<string, unknown>) =>
+        answerQuestion(
+          ctx,
+          { id: (a.id as string) ?? null, key: (a.ticket as string) ?? null },
+          {
+            answers: (a.answers as Record<string, unknown>) ?? null,
+            answer: a.answer,
+            comment: (a.comment as string) ?? null,
+          },
+        ),
+      ),
+    );
   read(
     'list_notifications',
     ['events:read'],
