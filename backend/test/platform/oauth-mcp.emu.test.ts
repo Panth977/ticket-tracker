@@ -294,6 +294,7 @@ describe('MCP round trip (SDK client)', () => {
       'list_boards',
       'list_my_tickets',
       'list_orgs',
+      'list_questions',
       'list_templates',
       'list_views',
       'message_edit',

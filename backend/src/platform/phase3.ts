@@ -11,9 +11,11 @@
  *   - a question IS a message (kind 'question'), so its id is
  *     questionId(ticketId, messageId) and REST can address it without a
  *     ticket in the path (GET /v1/questions/{id});
- *   - ANSWERING is deliberately not here: a person answers in the app
- *     (questionAnswer), because a token that could answer its own question
- *     would defeat the point (§L1);
+ *   - ANSWERING is a PERSON's: questionAnswer refuses every agent, so a token
+ *     can never answer its own question (§L1). ORCH-73 adds answerQuestion
+ *     below for a person's own assistant (account token / OAuth, MCP
+ *     answer_question): the same command, with fields and options named by
+ *     label instead of ids;
  *   - a heartbeat never touches the ticket, and since §W it never touches
  *     Firestore either: it writes ONE ~100-byte RTDB node
  *     (status/{boardId}/{agentId}/{ticketId|'_'}), so a beat a minute costs no
@@ -27,6 +29,8 @@ import {
   parseAgentStatusId,
   parseQuestionId,
   paths,
+  questionIsOpen,
+  type QuestionValue,
   type AgentState,
   type BoardMember,
   type BoardWithId,
@@ -44,7 +48,7 @@ import {
 import type { ServerCtx } from '../runtime/context.js';
 import { db } from '../runtime/firebase.js';
 import { loadTicket } from '../tickets/access.js';
-import { getMessage, getTasklist, readTasklists } from '../tickets/read.js';
+import { getMessage, getTasklist, readAllMessages, readTasklists } from '../tickets/read.js';
 import { locateTickets } from '../tickets/locate.js';
 import { invoke } from './ops.js';
 import { boardMembers, toPublicAgentStatus, toPublicQuestion, toPublicTasklist } from './public.js';
@@ -192,6 +196,181 @@ export async function cancelQuestion(
     { boardId: f.board.id, ticketId: f.ticket.id, messageId: f.messageId },
     ctx,
     key ?? null,
+  );
+  return reloadQuestion(ctx, f.board, f.ticket, f.messageId);
+}
+
+// ─── answering by name (ORCH-73) ─────────────────────────────────────────────
+
+/** The open questions on one ticket, oldest first. */
+async function openQuestionsOn(
+  ctx: ServerCtx,
+  board: BoardWithId,
+  ticket: TicketWithId,
+): Promise<FoundQuestion[]> {
+  const rows = await readAllMessages(board.id, ticket.id, ticket);
+  return rows
+    .filter(
+      (m) =>
+        m.kind === 'question' &&
+        m.question &&
+        m.deletedAt === null &&
+        questionIsOpen(m.question, ctx.now),
+    )
+    .map((m) => ({ board, ticket, messageId: m.id, message: m as Message }));
+}
+
+/**
+ * MCP list_questions: open questions waiting for an answer. With a ticket:
+ * every open one on it. Otherwise: the tickets showing "Waiting for you"
+ * (an open BLOCKING question, ticket.waitingOn) on the given board or on
+ * every board the credential reads (at most 30), each with all its open
+ * questions. Only active tickets are read.
+ */
+export async function listOpenQuestions(
+  ctx: ServerCtx,
+  where: { board?: BoardWithId | null; key?: string | null },
+): Promise<PublicQuestion[]> {
+  let found: FoundQuestion[] = [];
+  if (where.key) {
+    const { board, ticket } = await ticketByKey(ctx, where.key);
+    found = await openQuestionsOn(ctx, board, ticket);
+  } else {
+    const boards = where.board ? [where.board] : (await readableBoards(ctx)).slice(0, 30);
+    for (const board of boards) {
+      const snap = await db()
+        .collection(paths.tickets(board.id))
+        .where('state', '==', 'active')
+        .get();
+      for (const d of snap.docs) {
+        const t = d.data() as TicketWithId;
+        if (!t.waitingOn) continue;
+        found.push(...(await openQuestionsOn(ctx, board, { ...t, id: d.id })));
+      }
+    }
+  }
+  const out: PublicQuestion[] = [];
+  for (const f of found) out.push(await questionView(ctx, f));
+  return out;
+}
+
+const norm = (s: string) => s.trim().toLowerCase();
+
+/** One answer value → what the field stores (option ids, numbers, booleans). */
+function valueFor(field: QuestionField, raw: unknown): QuestionValue {
+  const bad = (why: string): never => {
+    throw errors.invalid(`"${field.label}": ${why}`, { field: field.id });
+  };
+  const option = (v: unknown): string => {
+    const want = norm(String(v));
+    const hit = (field.options ?? []).find((o) => norm(o.id) === want || norm(o.label) === want);
+    if (!hit)
+      bad(
+        `"${String(v)}" is not an option (${(field.options ?? []).map((o) => o.label).join(' / ')})`,
+      );
+    return hit!.id;
+  };
+  switch (field.type) {
+    case 'single':
+      return option(Array.isArray(raw) ? raw[0] : raw);
+    case 'multi': {
+      const list = Array.isArray(raw)
+        ? raw
+        : String(raw)
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean);
+      return [...new Set(list.map(option))];
+    }
+    case 'number': {
+      const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+      if (!Number.isFinite(n)) bad(`"${String(raw)}" is not a number`);
+      return n;
+    }
+    case 'boolean': {
+      if (typeof raw === 'boolean') return raw;
+      const v = norm(String(raw));
+      if (['true', 'yes', 'y', '1', 'on'].includes(v)) return true;
+      if (['false', 'no', 'n', '0', 'off'].includes(v)) return false;
+      return bad(`"${String(raw)}" is not yes / no`);
+    }
+    default:
+      return typeof raw === 'string' ? raw : JSON.stringify(raw);
+  }
+}
+
+/**
+ * MCP answer_question (ORCH-73): answer a question card the way a person
+ * would in the app — the same questionAnswer command, so it locks the card,
+ * posts the answer bubble and wakes the agent that asked (question_answered),
+ * and an agent can never use it. The question is named by its id, or by its
+ * ticket when that ticket has exactly one open question. Fields are named by
+ * id or label, options by id or label; `answer` alone fills a one-field form.
+ */
+export async function answerQuestion(
+  ctx: ServerCtx,
+  ref: { id?: string | null; key?: string | null },
+  input: {
+    answers?: Record<string, unknown> | null;
+    answer?: unknown;
+    comment?: string | null;
+  },
+): Promise<PublicQuestion> {
+  let f: FoundQuestion;
+  if (ref.id) f = await findQuestion(ctx, ref.id);
+  else if (ref.key) {
+    const { board, ticket } = await ticketByKey(ctx, ref.key);
+    const open = await openQuestionsOn(ctx, board, ticket);
+    if (!open.length) throw errors.not_found(`No open question on ${ticket.key}`);
+    if (open.length > 1)
+      throw errors.invalid(
+        `${ticket.key} has ${open.length} open questions — pass id: ${open
+          .map((q) => `${ticket.id}.${q.messageId} ("${q.message.question!.title}")`)
+          .join(', ')}`,
+        { field: 'id' },
+      );
+    f = open[0]!;
+  } else throw errors.invalid('Name the question: id, or the ticket key', { field: 'key' });
+
+  const q = f.message.question!;
+  if (!questionIsOpen(q, ctx.now))
+    throw errors.conflict(`This question is already ${q.status === 'open' ? 'expired' : q.status}`);
+  const fields = q.fields as QuestionField[];
+  const given: [string, unknown][] = Object.entries(input.answers ?? {});
+  if (input.answer !== undefined) {
+    if (fields.length !== 1 && !given.length)
+      throw errors.invalid(
+        `This form has ${fields.length} fields — use answers: { ${fields.map((x) => `"${x.label}"`).join(', ')} }`,
+        { field: 'answers' },
+      );
+    if (fields.length === 1) given.push([fields[0]!.id, input.answer]);
+  }
+  const values: Record<string, QuestionValue> = {};
+  for (const [k, v] of given) {
+    const field = fields.find((x) => x.id === k || norm(x.label) === norm(k));
+    if (!field)
+      throw errors.invalid(
+        `No field "${k}" — fields: ${fields.map((x) => `"${x.label}" (${x.type})`).join(', ')}`,
+        { field: 'answers' },
+      );
+    if (v === null || v === undefined || v === '') continue;
+    values[field.id] = valueFor(field, v);
+  }
+  const comment = input.comment?.trim();
+  if (comment && !q.allowComment)
+    throw errors.invalid('This question has no "Anything else?" box — leave comment out', {
+      field: 'comment',
+    });
+  await invoke(
+    'questionAnswer',
+    {
+      boardId: f.board.id,
+      ticketId: f.ticket.id,
+      messageId: f.messageId,
+      values,
+      ...(comment ? { comment } : {}),
+    },
+    ctx,
   );
   return reloadQuestion(ctx, f.board, f.ticket, f.messageId);
 }
