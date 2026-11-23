@@ -1,12 +1,13 @@
 <!--
   A TSVG vector video (.tsvg / .tsvgz), played in a sandboxed frame (frame.ts):
-    sandbox="allow-scripts" — NEVER allow-same-origin; srcdoc; CSP: blob:/data: only
+    sandbox="allow-scripts" — NEVER allow-same-origin; srcdoc; CSP: the pinned
+    engine script on esm.sh, media from blob:/data: only
   The page reads the file's bytes (the caller passes them) and posts them in.
-  `poster`: a still frame for a file card, no controls. The engine (~40 kB of
-  text) is loaded only when the first TSVG is shown.
+  `poster`: a still frame for a file card, no controls — drawn by the same
+  sandboxed engine, so the app itself never runs it.
 -->
 <script lang="ts">
-  import type { FrameMessage } from './frame';
+  import { tsvgFrameHtml, type FrameMessage } from './frame';
 
   /** Scripts run; nothing else. No same-origin, forms, popups or top navigation. */
   const TSVG_SANDBOX = 'allow-scripts';
@@ -25,15 +26,7 @@
   let { bytes, title, poster = false, class: cls = '', onloaded, onerror }: Props = $props();
 
   let frame = $state<HTMLIFrameElement | null>(null);
-  let srcdoc = $state<string | null>(null);
-  $effect(() => {
-    const p = poster;
-    let alive = true;
-    void import('./frame').then((m) => alive && (srcdoc = m.tsvgFrameHtml(p)));
-    return () => {
-      alive = false;
-    };
-  });
+  const srcdoc = $derived(tsvgFrameHtml(poster));
 
   $effect(() => {
     const f = frame;
@@ -55,16 +48,14 @@
   });
 </script>
 
-{#if srcdoc}
-  <iframe
-    bind:this={frame}
-    {title}
-    sandbox={TSVG_SANDBOX}
-    allow={TSVG_ALLOW}
-    {srcdoc}
-    referrerpolicy="no-referrer"
-    {...poster ? { tabindex: -1 } : {}}
-    class="block border-0 bg-black {cls}"
-    data-tsvg-frame={poster ? 'poster' : 'player'}
-  ></iframe>
-{/if}
+<iframe
+  bind:this={frame}
+  {title}
+  sandbox={TSVG_SANDBOX}
+  allow={TSVG_ALLOW}
+  {srcdoc}
+  referrerpolicy="no-referrer"
+  {...poster ? { tabindex: -1 } : {}}
+  class="block border-0 bg-black {cls}"
+  data-tsvg-frame={poster ? 'poster' : 'player'}
+></iframe>

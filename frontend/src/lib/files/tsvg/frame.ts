@@ -1,28 +1,41 @@
 /**
  * The TSVG player FRAME (agents.html §I): a `.tsvg` / `.tsvgz` attachment plays
- * in a sandboxed iframe, like an HTML file, never in the app's own document.
+ * in a sandboxed iframe, like an HTML file, never in the app's own document —
+ * the viewer AND the card's still frame (poster mode) alike.
  *
- * TSVG itself carries no script — the XML is evaluated by our engine — but the
+ * TSVG itself carries no script — the XML is evaluated by the engine — but the
  * engine builds its options menu with innerHTML from the document's labels, and
  * a document may name assets by absolute URL. So it runs where neither can hurt:
  *
- *   sandbox="allow-scripts"   (TsvgFrame.svelte) NEVER allow-same-origin: an opaque origin with no
- *                             access to the app, its storage, cookies or session
- *   srcdoc                    the engine is inlined (vendor/, ?raw): no network
- *   CSP default-src 'none'    images, fonts and audio only from blob:/data: — the
- *                             package's own files; nothing is fetched from the web
+ *   sandbox="allow-scripts"   (TsvgFrame.svelte) NEVER allow-same-origin: an opaque
+ *                             origin with no access to the app, its storage,
+ *                             cookies or session
+ *   srcdoc + CSP              scripts: our inline boot + the ONE pinned engine file
+ *                             on esm.sh (with SRI); images, fonts and audio only
+ *                             from blob:/data: — the package's own files
+ *
+ * The engine is the published package @panth977/tsvg (JSR), loaded as a classic
+ * script from esm.sh — jsr.io serves HTML to browsers, not the file. To upgrade:
+ * bump TSVG_ENGINE.version and set its sri (`curl -s <url> | openssl dgst
+ * -sha384 -binary | openssl base64 -A`).
  *
  * The page hands the frame the file's bytes by postMessage (frame → 'tsvg:ready',
  * page → 'tsvg:load' { bytes }); the frame answers 'tsvg:loaded' { duration } or
  * 'tsvg:error' { message }, and forwards Escape so the viewer can still close.
  */
-import core from './vendor/tsvg-core.js?raw';
-import zip from './vendor/tsvg-zip.js?raw';
-import player from './vendor/tsvg-player.js?raw';
+
+/** The TSVG engine this app plays with: one place to upgrade. */
+export const TSVG_ENGINE = {
+  version: '0.2.1',
+  sri: 'sha384-0T7czFJOzqbs/BaUofcynZzMQ0eSwS2lK7AT6RPRwxTh9Pp/UPtI/9bW6F8aSZhF',
+} as const;
+/** The classic script (window.TSVG, TSVGZip, TSVGPlayer). CSP matches its path; `?raw` is ignored there. */
+const ENGINE_PATH = `https://esm.sh/jsr/@panth977/tsvg@${TSVG_ENGINE.version}/dist/tsvg.js`;
+export const TSVG_ENGINE_URL = `${ENGINE_PATH}?raw`;
 
 const CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
-  'img-src blob: data:; font-src blob: data:; media-src blob: data:; connect-src blob: data:';
+  `default-src 'none'; script-src 'unsafe-inline' ${ENGINE_PATH}; style-src 'unsafe-inline'; ` +
+  'img-src blob: data:; font-src blob: data:; media-src blob: data:';
 
 export type FrameMessage =
   | { type: 'tsvg:ready' }
@@ -35,7 +48,7 @@ function boot(poster: boolean) {
   const w = window as unknown as {
     TSVG: unknown;
     TSVGZip: { isZip(b: Uint8Array): boolean };
-    TSVGPlayer: new (
+    TSVGPlayer?: new (
       host: HTMLElement,
       o: { files: Record<string, string>; base: string },
     ) => {
@@ -54,6 +67,7 @@ function boot(poster: boolean) {
     if (!d || d.type !== 'tsvg:load' || !(d.bytes instanceof ArrayBuffer)) return;
     host.textContent = '';
     try {
+      if (!w.TSVGPlayer) throw new Error('the TSVG player did not load (are you offline?)');
       const bytes = new Uint8Array(d.bytes);
       // A bare .tsvg's relative files resolve here — and the CSP refuses them.
       const p = new w.TSVGPlayer(host, { files: {}, base: 'https://tsvg.invalid/' });
@@ -93,9 +107,7 @@ export function tsvgFrameHtml(poster = false): string {
     '<!doctype html><html><head><meta charset="utf-8">' +
     `<meta http-equiv="Content-Security-Policy" content="${CSP}">` +
     `<style>${css}</style></head><body><div id="p"></div>` +
-    script(core) +
-    script(zip) +
-    script(player) +
+    `<script src="${TSVG_ENGINE_URL}" integrity="${TSVG_ENGINE.sri}" crossorigin="anonymous"></script>` +
     script(`(${boot.toString()})(${poster});`) +
     '</body></html>'
   );

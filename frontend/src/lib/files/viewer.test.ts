@@ -31,6 +31,7 @@ vi.mock('./source', () => ({
 }));
 
 const { default: HtmlFrame } = await import('./HtmlFrame.svelte');
+const { TSVG_ENGINE } = await import('./tsvg/frame');
 const { default: FileCard } = await import('./FileCard.svelte');
 const { default: FileContent } = await import('./FileContent.svelte');
 const { default: FileViewer } = await import('./FileViewer.svelte');
@@ -90,9 +91,17 @@ describe('TSVG sandbox', () => {
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
     expect(frame.hasAttribute('src')).toBe(false);
     const doc = frame.getAttribute('srcdoc') ?? '';
-    // Nothing from the network: the package's own blob:/data: files only.
-    expect(doc).toContain(`content="default-src 'none'; script-src 'unsafe-inline';`);
-    expect(doc).toContain('TSVGPlayer');
+    // One script from the network — the pinned engine, with SRI — and the package's own
+    // blob:/data: files for everything else.
+    const engine = `https://esm.sh/jsr/@panth977/tsvg@${TSVG_ENGINE.version}/dist/tsvg.js`;
+    expect(doc).toContain(
+      `content="default-src 'none'; script-src 'unsafe-inline' ${engine}; style-src 'unsafe-inline'; ` +
+        `img-src blob: data:; font-src blob: data:; media-src blob: data:"`,
+    );
+    expect(doc).toContain(
+      `<script src="${engine}?raw" integrity="${TSVG_ENGINE.sri}" crossorigin="anonymous">`,
+    );
+    expect(TSVG_ENGINE.sri).toMatch(/^sha384-/);
     expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
   }
 

@@ -4,7 +4,8 @@
  * An agent uploads a .tsvgz package; the thread's card shows a still frame and its
  * length, and the viewer plays it with the TSVG engine's own controls and options —
  * inside a sandboxed frame (allow-scripts only, srcdoc, opaque origin), so the
- * document can never reach the app or its session.
+ * document can never reach the app or its session. The engine is @panth977/tsvg,
+ * one pinned script from esm.sh — this suite needs the network for it.
  */
 import { readFileSync } from 'node:fs';
 import { expect, test, type Frame, type Page } from '@playwright/test';
@@ -79,6 +80,12 @@ test('an agent attaches a .tsvgz; the card shows a frame and the viewer plays it
     attachments: [up.file_id],
   });
 
+  // The frame's CSP lets in the pinned engine and the package's blob: files — nothing it needs is refused.
+  const refused: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /Content Security Policy|integrity/i.test(m.text()))
+      refused.push(m.text());
+  });
   await signIn(page, ada.email, `/t/${t.key}`);
   const msg = page
     .getByRole('region', { name: 'Thread' })
@@ -143,6 +150,8 @@ test('an agent attaches a .tsvgz; the card shows a frame and the viewer plays it
   await expect(player.locator('[data-a="play"]')).toHaveText('❚❚');
   await expect(player.locator('.time')).toHaveText(/^0:0[1-6] \/ 0:06$/, { timeout: 5_000 });
   await page.screenshot({ path: test.info().outputPath('tsvg-playing.png') });
+
+  expect(refused).toEqual([]);
 
   // Escape inside the frame still closes the viewer.
   await player.locator('canvas.main').press('Escape');
