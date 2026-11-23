@@ -108,7 +108,7 @@
         <span>version 2.2.0</span>
         <span>api v1</span>
         <span>updated 2026-10-17</span>
-        <span>sha256 c57a87494b82…</span>
+        <span>sha256 45b2413305a4…</span>
         <span><a href="/llms-full.txt">llms-full.txt</a></span>
         <span><a href="/llms.txt">llms.txt</a></span>
         <span><a href="/integrate.json">integrate.json</a></span>
@@ -587,7 +587,7 @@ question field type                 single | multi | text | longText | number | 
 task item status                    todo | doing | done | skipped | failed
 agent heartbeat state               working | idle | done | error
 link type                           blocks | blockedBy | relates | duplicates
-file kind                           image | video | audio | markdown | html | pdf | text | csv | json | code | other
+file kind                           image | video | tsvg | audio | markdown | html | pdf | text | csv | json | code | other
 via (where a change came from)      app | api | mcp | email | whatsapp | intake | integration | system</code></pre></figure>
 <h5 id="limits"><a class="anchor" href="#limits" aria-label="Link to this section">#</a>Limits</h5>
 <figure class="code" data-lang="text"><button class="copy" type="button" aria-label="Copy this block">Copy</button><pre><code>upload                   25 MB per file (multipart, or JSON text / base64)
@@ -1151,7 +1151,7 @@ mime  string</code></pre></figure>
 name            string                              required
 mime            string                              required
 size            number                              required
-kind            "image" | "video" | "audio" | … (11 values)  required
+kind            "image" | "video" | "tsvg" | … (12 values)  required
 url             string
 ticket_key      string                              required
 language        string | null                       required
@@ -1178,7 +1178,7 @@ file_id         string                              required</code></pre></figur
 name               string                              required
 mime               string                              required
 size               number                              required
-kind               "image" | "video" | "audio" | … (11 values)  required
+kind               "image" | "video" | "tsvg" | … (12 values)  required
 url                string
 ticket_key         string                              required
 language           string | null                       required

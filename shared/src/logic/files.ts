@@ -3,7 +3,7 @@
  * file?", shared by the web viewer (cards, lightbox, iframe), the REST / MCP
  * doors (read_file returns text for text-ish kinds) and the upload path.
  *
- *   fileKind(mime, name) → image | video | audio | markdown | html | pdf | text | csv | json | code | other
+ *   fileKind(mime, name) → image | video | tsvg | audio | markdown | html | pdf | text | csv | json | code | other
  *   fileInfo(mime, name) → { kind, language, textual, mime } (language for syntax highlighting)
  *
  * Pure and synchronous. Extension wins over a generic / wrong mime
@@ -15,6 +15,8 @@ import { z } from 'zod';
 export const FILE_KINDS = [
   'image',
   'video',
+  /** TSVG vector video: `.tsvg` (XML) or a `.tsvgz` package (zip: main.tsvg + its assets). */
+  'tsvg',
   'audio',
   'markdown',
   'html',
@@ -216,6 +218,7 @@ const VIDEO_EXT = new Set(['mp4', 'm4v', 'webm', 'mov', 'mkv', 'ogv', 'avi']);
 const AUDIO_EXT = new Set(['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'weba']);
 const MARKDOWN_EXT = new Set(['md', 'markdown', 'mdown', 'mkd', 'mdx']);
 const HTML_EXT = new Set(['html', 'htm', 'xhtml']);
+const TSVG_EXT = new Set(['tsvg', 'tsvgz']);
 const TEXT_EXT = new Set(['txt', 'text', 'log', 'rst', 'adoc', 'tex']);
 const CSV_EXT = new Set(['csv', 'tsv']);
 const JSON_EXT = new Set(['json', 'jsonl', 'ndjson', 'json5', 'geojson', 'webmanifest']);
@@ -289,6 +292,8 @@ export function mimeForName(name: string): string {
     mjs: 'text/javascript',
     css: 'text/css',
     zip: 'application/zip',
+    tsvg: 'application/tsvg+xml',
+    tsvgz: 'application/tsvg+zip',
   };
   if (byExt[ext]) return byExt[ext];
   if (CODE_LANGUAGES[ext] || CODE_FILENAMES[baseName(name)]) return 'text/plain';
@@ -314,6 +319,7 @@ export function fileInfo(mimeIn: string | null | undefined, name: string): FileI
   // Extension first for the document kinds agents produce (their mime is often generic or wrong).
   if (MARKDOWN_EXT.has(ext)) return out('markdown', 'markdown');
   if (HTML_EXT.has(ext)) return out('html', 'html');
+  if (TSVG_EXT.has(ext)) return out('tsvg');
   if (ext === 'pdf') return out('pdf');
   if (CSV_EXT.has(ext)) return out('csv', 'csv');
   if (JSON_EXT.has(ext)) return out('json', 'json');
@@ -323,6 +329,7 @@ export function fileInfo(mimeIn: string | null | undefined, name: string): FileI
   if (mime.startsWith('audio/')) return out('audio');
   if (mime === 'text/markdown' || mime === 'text/x-markdown') return out('markdown', 'markdown');
   if (mime === 'text/html' || mime === 'application/xhtml+xml') return out('html', 'html');
+  if (mime === 'application/tsvg+xml' || mime === 'application/tsvg+zip') return out('tsvg');
   if (mime === 'application/pdf') return out('pdf');
   if (mime === 'text/csv' || mime === 'text/tab-separated-values') return out('csv', 'csv');
   if (mime === 'application/json' || mime.endsWith('+json') || mime === 'application/x-ndjson')

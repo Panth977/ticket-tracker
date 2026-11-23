@@ -26,10 +26,12 @@ const TEXTS: Record<string, string> = {
 vi.mock('./source', () => ({
   fileUrl: vi.fn(async (p: string) => `https://files.test/${p}`),
   fileText: vi.fn(async (f: { path: string }) => ({ text: TEXTS[f.path] ?? '', truncated: false })),
+  fileBytes: vi.fn(async () => new Uint8Array([0x50, 0x4b, 3, 4, 9]).buffer),
   downloadFile: vi.fn(async () => true),
 }));
 
 const { default: HtmlFrame } = await import('./HtmlFrame.svelte');
+const { TSVG_ENGINE } = await import('./tsvg/frame');
 const { default: FileCard } = await import('./FileCard.svelte');
 const { default: FileContent } = await import('./FileContent.svelte');
 const { default: FileViewer } = await import('./FileViewer.svelte');
@@ -80,6 +82,56 @@ describe('HTML sandbox', () => {
     const frame = container.querySelector('iframe')!;
     assertSandboxed(frame);
     expect(frame.getAttribute('srcdoc')).toContain('<h1>Report</h1>');
+  });
+});
+
+describe('TSVG sandbox', () => {
+  function assertTsvgSandboxed(frame: HTMLIFrameElement) {
+    // Scripts (our engine) only: no same-origin, forms, popups or navigation.
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(frame.hasAttribute('src')).toBe(false);
+    const doc = frame.getAttribute('srcdoc') ?? '';
+    // One script from the network — the pinned engine, with SRI — and the package's own
+    // blob:/data: files for everything else.
+    const engine = `https://esm.sh/jsr/@panth977/tsvg@${TSVG_ENGINE.version}/dist/tsvg.js`;
+    expect(doc).toContain(
+      `content="default-src 'none'; script-src 'unsafe-inline' ${engine}; style-src 'unsafe-inline'; ` +
+        `img-src blob: data:; font-src blob: data:; media-src blob: data:"`,
+    );
+    expect(doc).toContain(
+      `<script src="${engine}?raw" integrity="${TSVG_ENGINE.sri}" crossorigin="anonymous">`,
+    );
+    expect(TSVG_ENGINE.sri).toMatch(/^sha384-/);
+    expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+  }
+
+  it('the viewer plays it in the sandbox and posts the bytes in when the frame is ready', async () => {
+    const { container } = render(FileContent, { file: file('intro.tsvgz') });
+    await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+    const frame = container.querySelector('iframe')!;
+    assertTsvgSandboxed(frame);
+    expect(frame.getAttribute('data-tsvg-frame')).toBe('player');
+    const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
+    // Only the frame itself is listened to.
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'tsvg:ready' } }));
+    expect(post).not.toHaveBeenCalled();
+    window.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'tsvg:ready' }, source: frame.contentWindow }),
+    );
+    expect(post).toHaveBeenCalledOnce();
+    const [msg, target] = post.mock.calls[0]!;
+    expect(target).toBe('*');
+    expect((msg as { type: string }).type).toBe('tsvg:load');
+    expect(new Uint8Array((msg as { bytes: ArrayBuffer }).bytes)[0]).toBe(0x50);
+  });
+
+  it('the card shows a still frame, sandboxed the same way', async () => {
+    const { container } = render(FileCard, { file: file('intro.tsvg') });
+    await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+    const frame = container.querySelector('iframe')!;
+    assertTsvgSandboxed(frame);
+    expect(frame.getAttribute('data-tsvg-frame')).toBe('poster');
+    expect(container.firstElementChild?.getAttribute('data-kind')).toBe('tsvg');
   });
 });
 
