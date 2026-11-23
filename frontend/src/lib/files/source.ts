@@ -13,6 +13,7 @@
  *                            production, the streaming route in dev
  *   fileBytesUrl(path)       same-origin URL for fetch() / Range / download
  *   fileText(file, bytes)    the first `bytes` of the file as text (cached)
+ *   fileBytes(file)          the whole file as an ArrayBuffer (a TSVG player's input)
  *   downloadFile(file)       save it under its own name
  *
  * Both URLs expire (15 min) and are cached per path until they do — never
@@ -174,6 +175,16 @@ export function createFileSource(deps: FileSourceDeps) {
     return text.length > maxBytes ? text.slice(0, maxBytes) : text;
   }
 
+  /** The whole file, as bytes (not cached: the caller keeps what it needs). */
+  async function fileBytes(file: Pick<ViewerFile, 'path'>): Promise<ArrayBuffer> {
+    const a = await accessFor(file.path);
+    if (!a) throw new Error('This file is not available');
+    const direct = a.drive ? await fromDrive(a.drive).catch(() => null) : null;
+    const res = direct?.ok ? direct : await deps.fetch(a.bytesUrl);
+    if (!res.ok) throw new Error(`Could not read the file (${res.status})`);
+    return res.arrayBuffer();
+  }
+
   /**
    * Save the file under its own name. The bytes URL is same-origin, so a plain
    * <a download> keeps the name (and the server marks it as an attachment) —
@@ -198,7 +209,15 @@ export function createFileSource(deps: FileSourceDeps) {
     texts.clear();
   }
 
-  return { fileUrl, fileBytesUrl, fileText, downloadFile, clearFileCache, fileAccess: accessFor };
+  return {
+    fileUrl,
+    fileBytesUrl,
+    fileText,
+    fileBytes,
+    downloadFile,
+    clearFileCache,
+    fileAccess: accessFor,
+  };
 }
 
 const source = createFileSource({
@@ -210,6 +229,7 @@ const source = createFileSource({
 export const fileUrl = source.fileUrl;
 export const fileBytesUrl = source.fileBytesUrl;
 export const fileText = source.fileText;
+export const fileBytes = source.fileBytes;
 export const downloadFile = source.downloadFile;
 export const clearFileCache = source.clearFileCache;
 /** { url, bytesUrl, expiresAt } for a path (cached until close to expiry); null when refused. */

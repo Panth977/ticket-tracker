@@ -20,6 +20,7 @@ export default ts.config(
       'qaqc/test-results/**',
       'qaqc/playwright-report/**',
       'docs/**',
+      'frontend/src/lib/files/tsvg/vendor/**',
       'orch/**',
     ],
   },

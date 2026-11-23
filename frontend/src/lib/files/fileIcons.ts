@@ -85,7 +85,7 @@ put('doc docx odt pages', FileText, T.doc);
 put('ppt pptx odp key', Presentation, T.slides);
 put('pdf', FileType, T.pdf);
 put('png jpg jpeg gif webp avif heic bmp ico tif tiff svg', FileImage, T.image);
-put('mp4 mov m4v webm mkv avi wmv', FileVideoCamera, T.video);
+put('mp4 mov m4v webm mkv avi wmv tsvg tsvgz', FileVideoCamera, T.video);
 put('mp3 wav ogg oga flac m4a aac opus', FileMusic, T.audio);
 put('zip gz tgz tar rar 7z bz2 xz zst', FileArchive, T.archive);
 put('apk aab ipa', Smartphone, T.app);
@@ -111,6 +111,7 @@ const BY_NAME: Record<string, FileIcon> = {
 const BY_KIND: Record<string, FileIcon> = {
   image: { icon: FileImage, tone: T.image },
   video: { icon: FileVideoCamera, tone: T.video },
+  tsvg: { icon: FileVideoCamera, tone: T.video },
   audio: { icon: FileMusic, tone: T.audio },
   markdown: { icon: BookOpenText, tone: T.md },
   html: { icon: Globe, tone: T.web },

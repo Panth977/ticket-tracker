@@ -17,6 +17,8 @@ describe('kinds (from @tm/shared fileInfo)', () => {
   it.each([
     ['a.png', 'image/png', 'image'],
     ['clip.mp4', 'video/mp4', 'video'],
+    ['intro.tsvgz', 'application/zip', 'tsvg'],
+    ['intro.tsvg', '', 'tsvg'],
     ['song.mp3', 'audio/mpeg', 'audio'],
     ['plan.md', 'application/octet-stream', 'markdown'],
     ['plan.md', 'text/plain', 'markdown'],

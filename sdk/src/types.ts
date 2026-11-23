@@ -87,6 +87,7 @@ export type LinkType = 'blocks' | 'blockedBy' | 'relates' | 'duplicates';
 export type FileKind =
   | 'image'
   | 'video'
+  | 'tsvg'
   | 'audio'
   | 'markdown'
   | 'html'

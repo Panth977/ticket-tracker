@@ -2,6 +2,7 @@
   A file's PREVIEW, chosen by its kind (agents.html §I) — the body of a ticket
   FileCard and of a bucket folder tile (bucket.html §F):
     image     thumbnail            video   poster frame + duration
+    tsvg      a still frame + duration, from the sandboxed TSVG player (small files)
     markdown  rendered first lines html    live scaled-down page (sandboxed)
     pdf       first page           text / code / json / csv  first lines, highlighted
     other     the file's own icon (fileIcons.ts)
@@ -16,13 +17,15 @@
     CARD_HTML_BYTES,
     CARD_NEEDS_TEXT,
     CARD_TEXT_BYTES,
+    CARD_TSVG_BYTES,
     firstLines,
     formatDuration,
     infoOf,
     prettyJson,
   } from './kinds';
   import { fileIcon } from './fileIcons';
-  import { fileText, fileUrl } from './source';
+  import { fileBytes, fileText, fileUrl } from './source';
+  import TsvgFrame from './tsvg/TsvgFrame.svelte';
   import type { ViewerFile } from './types';
 
   interface Props {
@@ -54,6 +57,7 @@
   let thumb = $state<string | null>(null);
   let failed = $state(false);
   let duration = $state<number | null>(null);
+  let bytes = $state<ArrayBuffer | null>(null);
   /**
    * bucket.html §E: a bucket file is a REFERENCE — the door resolves it to the
    * node's current version. When it no longer can (the file was deleted, or
@@ -75,6 +79,11 @@
     }
     if ((k === 'image' || k === 'pdf' || k === 'video') && f.thumbPath) {
       void fileUrl(f.thumbPath).then((u) => alive && (thumb = u));
+    }
+    if (k === 'tsvg' && f.size <= CARD_TSVG_BYTES) {
+      fileBytes(f)
+        .then((b) => alive && (bytes = b))
+        .catch(() => alive && (failed = true));
     }
     if (CARD_NEEDS_TEXT.has(k)) {
       fileText(f, k === 'html' ? CARD_HTML_BYTES : CARD_TEXT_BYTES)
@@ -115,6 +124,30 @@
       class="pointer-events-none size-full bg-black object-cover"
       onloadedmetadata={(e) => (duration = e.currentTarget.duration)}
     ></video>
+  {/if}
+  <span class="absolute inset-0 grid place-items-center">
+    <span class="grid size-10 place-items-center rounded-full bg-black/55 text-white"
+      ><Play size={18} /></span
+    >
+  </span>
+  {#if duration}
+    <span
+      class="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white"
+      >{formatDuration(duration)}</span
+    >
+  {/if}
+{:else if kind === 'tsvg' && !failed}
+  {#if bytes}
+    <TsvgFrame
+      {bytes}
+      poster
+      title="Preview of {file.name}"
+      class="pointer-events-none size-full"
+      onloaded={(d) => (duration = d)}
+      onerror={() => (failed = true)}
+    />
+  {:else}
+    <span class="block size-full bg-neutral-900"></span>
   {/if}
   <span class="absolute inset-0 grid place-items-center">
     <span class="grid size-10 place-items-center rounded-full bg-black/55 text-white"

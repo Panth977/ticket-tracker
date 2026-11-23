@@ -39,6 +39,10 @@ describe('fileKind', () => {
     ['application/octet-stream', 'Dockerfile', 'code'],
     ['application/x-sh', 'run', 'code'],
     ['application/zip', 'bundle.zip', 'other'],
+    ['application/zip', 'intro.tsvgz', 'tsvg'],
+    ['application/octet-stream', 'intro.TSVGZ', 'tsvg'],
+    ['application/xml', 'intro.tsvg', 'tsvg'],
+    ['application/tsvg+zip', 'intro', 'tsvg'],
     ['', 'mystery', 'other'],
   ])('%s %s → %s', (mime, name, kind) => {
     expect(fileKind(mime, name)).toBe(kind);
@@ -63,6 +67,14 @@ describe('fileKind', () => {
     });
     expect(fileInfo('', 'r.html').mime).toBe('text/html');
     expect(fileInfo('image/png', 'x.png').textual).toBe(false);
+    // A vector video is played, not read as text (even the plain-XML .tsvg).
+    expect(fileInfo('', 'intro.tsvg')).toEqual({
+      kind: 'tsvg',
+      language: null,
+      textual: false,
+      mime: 'application/tsvg+xml',
+    });
+    expect(fileInfo('application/octet-stream', 'intro.tsvgz').mime).toBe('application/tsvg+zip');
     expect(fileInfo('application/octet-stream', 'x.bin').mime).toBe('application/octet-stream');
   });
 

@@ -2282,7 +2282,7 @@
             ]
           },
           {
-            "note": "image: lightbox with zoom, pan, next/prev · video, audio: native player · Markdown: the Markdown view, with contents and a Source toggle · HTML: <iframe sandbox=\"allow-scripts allow-popups allow-forms\" srcdoc> — NEVER allow-same-origin, so the document runs its own scripts but cannot touch the app or your session · PDF: the browser's viewer in an iframe · text, code, JSON: highlighted; CSV: a table · anything else: Download"
+            "note": "image: lightbox with zoom, pan, next/prev · video, audio: native player · Markdown: the Markdown view, with contents and a Source toggle · HTML: <iframe sandbox=\"allow-scripts allow-popups allow-forms\" srcdoc> — NEVER allow-same-origin, so the document runs its own scripts but cannot touch the app or your session · TSVG vector video (.tsvg, .tsvgz): the TSVG engine in <iframe sandbox=\"allow-scripts\" srcdoc> with a blob:/data:-only CSP, the bytes posted in; cards show a still frame and the length · PDF: the browser's viewer in an iframe · text, code, JSON: highlighted; CSV: a table · anything else: Download"
           },
           {
             "note": "AN OVERLAY OVER THE TICKET, stepping through the files before and after this one. 'Open in new tab' opens /f/{boardKey}/{ticketKey}/{fileId} — the same viewer as a full page. Contents come through short-lived download URLs, which Storage only issues to people on the board"

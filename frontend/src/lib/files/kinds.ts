@@ -12,6 +12,7 @@ import {
   FileText,
   FileType2,
   Film,
+  Clapperboard,
   Globe,
   Music,
   Sheet,
@@ -27,6 +28,7 @@ export const kindOf = (f: Pick<ViewerFile, 'mime' | 'name'>): FileKind => infoOf
 export const KIND_LABEL: Record<FileKind, string> = {
   image: 'Image',
   video: 'Video',
+  tsvg: 'Vector video',
   audio: 'Audio',
   markdown: 'Markdown',
   html: 'HTML',
@@ -41,6 +43,7 @@ export const KIND_LABEL: Record<FileKind, string> = {
 export const KIND_ICON = {
   image: FileImage,
   video: Film,
+  tsvg: Clapperboard,
   audio: Music,
   markdown: FileText,
   html: Globe,
@@ -65,6 +68,8 @@ export const CARD_NEEDS_TEXT: ReadonlySet<FileKind> = new Set<FileKind>([
 /** Bytes read for a card's excerpt / preview. HTML needs the whole document to render. */
 export const CARD_TEXT_BYTES = 64 * 1024;
 export const CARD_HTML_BYTES = 2 * 1024 * 1024;
+/** Largest TSVG a CARD reads for its still frame (bigger ones show the icon); the viewer reads any. */
+export const CARD_TSVG_BYTES = 4 * 1024 * 1024;
 /** Bytes read for the viewer (bigger text files show truncated, with Download for the rest). */
 export const VIEWER_TEXT_BYTES = 5 * 1024 * 1024;
 

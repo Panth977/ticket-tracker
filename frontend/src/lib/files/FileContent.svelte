@@ -1,6 +1,7 @@
 <!--
   The viewer body for one file, by kind (agents.html §I):
     image     lightbox: zoom and pan          video / audio   native player
+    tsvg      the TSVG player, sandboxed (tsvg/frame.ts): controls, chapters, options
     markdown  rendered, TOC, Source toggle    html   sandboxed iframe (srcdoc)
     pdf       the browser's PDF viewer        csv    a table
     text / code / json   highlighted, line numbers
@@ -13,13 +14,14 @@
   import { formatBytes, parseBucketRefPath } from '@tm/shared';
   import { Button } from '$lib/ui';
   import { KIND_ICON, KIND_LABEL, VIEWER_TEXT_BYTES, infoOf, prettyJson } from './kinds';
-  import { downloadFile, fileText, fileUrl, type FileTextResult } from './source';
+  import { downloadFile, fileBytes, fileText, fileUrl, type FileTextResult } from './source';
   import type { ViewerFile } from './types';
   import CodeView from './CodeView.svelte';
   import CsvTable from './CsvTable.svelte';
   import HtmlFrame from './HtmlFrame.svelte';
   import ImageZoom from './ImageZoom.svelte';
   import MarkdownDoc from './MarkdownDoc.svelte';
+  import TsvgFrame from './tsvg/TsvgFrame.svelte';
 
   interface Props {
     file: ViewerFile;
@@ -33,6 +35,7 @@
 
   let url = $state<string | null>(null);
   let text = $state<FileTextResult | null>(null);
+  let bytes = $state<ArrayBuffer | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let zoom = $state<ImageZoom | null>(null);
@@ -57,11 +60,16 @@
     let alive = true;
     url = null;
     text = null;
+    bytes = null;
     error = null;
     loading = true;
     if (textual) {
       fileText(f, VIEWER_TEXT_BYTES)
         .then((r) => alive && ((text = r), (loading = false)))
+        .catch(() => alive && ((error = failMsg), (loading = false)));
+    } else if (k === 'tsvg') {
+      fileBytes(f)
+        .then((b) => alive && ((bytes = b), (loading = false)))
         .catch(() => alive && ((error = failMsg), (loading = false)));
     } else if (k !== 'other') {
       void fileUrl(f.path).then((u) => {
@@ -105,6 +113,13 @@
       <!-- svelte-ignore a11y_media_has_caption -->
       <video src={url} controls autoplay playsinline class="max-h-full max-w-full"></video>
     </div>
+  {:else if kind === 'tsvg' && bytes}
+    <TsvgFrame
+      {bytes}
+      title={file.name}
+      class="min-h-0 w-full flex-1"
+      onerror={(m) => (error = `Could not play this file: ${m}`)}
+    />
   {:else if kind === 'audio' && url}
     <div class="grid flex-1 place-items-center p-6">
       <div class="flex w-full max-w-md flex-col items-center gap-4">
