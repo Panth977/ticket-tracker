@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Vendored VERBATIM from the TSVG reference web engine, version 0.1
-// (TSVG repository, web/tsvg-zip.js @ 1e89916). Do not edit here: update
+// (TSVG repository, web/tsvg-zip.js @ 991e4f6). Do not edit here: update
 // the source and copy it again. Shipped as text (?raw) into the sandboxed
 // player frame (../frame.ts); never imported as a module by the app.
 

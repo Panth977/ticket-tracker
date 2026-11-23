@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Vendored VERBATIM from the TSVG reference web engine, version 0.1
-// (TSVG repository, web/tsvg-player.js @ 1e89916). Do not edit here: update
+// (TSVG repository, web/tsvg-player.js @ 991e4f6). Do not edit here: update
 // the source and copy it again. Shipped as text (?raw) into the sandboxed
 // player frame (../frame.ts); never imported as a module by the app.
 
@@ -53,7 +53,7 @@
       if (!document.getElementById('tsvgp-css')) { const st = document.createElement('style'); st.id = 'tsvgp-css'; st.textContent = CSS; document.head.appendChild(st); }
       this.host = host; this.files = files; this.base = base || (typeof location !== 'undefined' ? location.href : ''); this.onOptions = onOptions;
       this.t = 0; this.rate = 1; this.playing = false; this.cc = true; this.layoutPref = 'auto';
-      this.zoom = 1; this.panX = 0; this.panY = 0; this.images = {}; this.buffers = {}; this.loadedFonts = new Set();
+      this.zoom = 1; this.panX = 0; this.panY = 0; this.images = {}; this.buffers = {}; this.loadedFonts = new Set(); this.lines = [];
       this.el = document.createElement('div'); this.el.className = 'tsvgp'; this.el.tabIndex = 0;
       this.el.innerHTML = `<canvas class="main"></canvas><div class="zoomtag"></div><div class="big"><div>▶</div></div><div class="cc"></div>
         <div class="flash" style="left:12%">⟲ 10s</div><div class="flash" style="right:12%">10s ⟳</div>
@@ -78,6 +78,7 @@
         if (!this.images[a.src]) { const im = new Image(); im.onload = () => this.draw(); im.src = this.url(a.src); this.images[a.src] = im; }
         this.images[id] = this.images[a.src];
       }
+      this.syncLines();
       await Promise.race([this.loadFonts(), new Promise((r) => setTimeout(r, 3000))]);
       this.t = Math.min(this.t, doc.duration);
       this.buildMenu(); this.buildTicks(); this.syncLines(); this.draw();
