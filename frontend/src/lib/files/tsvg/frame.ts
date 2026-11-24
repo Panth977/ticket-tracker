@@ -26,8 +26,8 @@
 
 /** The TSVG engine this app plays with: one place to upgrade. */
 export const TSVG_ENGINE = {
-  version: '0.2.2',
-  sri: 'sha384-RZJwzBL5iOEeXg7q0/1tokt7r9ItGVvlpbTV9s+JY/lB8B6xg267VDrq6E/qmhvQ',
+  version: '0.3.2',
+  sri: 'sha384-VSFL/QJ+N6D98npC0auw/+LsBPrjJZ/LACbSfU8foKnzcF7jZh25d75vIjoyhSgZ',
 } as const;
 /** The classic script (window.TSVG, TSVGZip, TSVGPlayer). CSP matches its path; `?raw` is ignored there. */
 const ENGINE_PATH = `https://esm.sh/jsr/@panth977/tsvg@${TSVG_ENGINE.version}/dist/tsvg.js`;
@@ -50,7 +50,7 @@ function boot(poster: boolean) {
     TSVGZip: { isZip(b: Uint8Array): boolean };
     TSVGPlayer?: new (
       host: HTMLElement,
-      o: { files: Record<string, string>; base: string },
+      o: { files: Record<string, string>; base: string; controls?: boolean },
     ) => {
       el: HTMLElement;
       doc: { duration: number };
@@ -70,7 +70,7 @@ function boot(poster: boolean) {
       if (!w.TSVGPlayer) throw new Error('the TSVG player did not load (are you offline?)');
       const bytes = new Uint8Array(d.bytes);
       // A bare .tsvg's relative files resolve here — and the CSP refuses them.
-      const p = new w.TSVGPlayer(host, { files: {}, base: 'https://tsvg.invalid/' });
+      const p = new w.TSVGPlayer(host, { files: {}, base: 'https://tsvg.invalid/', controls: !poster });
       const doc = w.TSVGZip.isZip(bytes)
         ? await p.loadPackage(bytes)
         : await p.load(new TextDecoder().decode(bytes));
@@ -102,7 +102,7 @@ export function tsvgFrameHtml(poster = false): string {
     '#p .tsvgp{width:100%;height:100%;border-radius:0}' +
     '.err{display:grid;place-items:center;height:100%;padding:16px;box-sizing:border-box;' +
     'color:#ccc;font:13px system-ui,sans-serif;text-align:center}' +
-    (poster ? '#p .bar,#p .big,#p .cc,#p .menu{display:none!important}' : '');
+    '';
   return (
     '<!doctype html><html><head><meta charset="utf-8">' +
     `<meta http-equiv="Content-Security-Policy" content="${CSP}">` +

@@ -100,7 +100,7 @@ test('an agent attaches a .tsvgz; the card shows a frame and the viewer plays it
   await expect(card).toContainText('0:06');
   const poster = await frameOf(page, '[data-kind="tsvg"] iframe[data-tsvg-frame="poster"]');
   await expect(poster.locator('canvas.main')).toBeVisible();
-  await expect(poster.locator('.bar')).toBeHidden();
+  await expect(poster.locator('[data-a="play"]')).toHaveCount(0); // poster mode: frames only, no controls
   await expect.poll(() => brightness(poster)).toBeGreaterThan(5);
   await page.screenshot({ path: test.info().outputPath('tsvg-card.png') });
 
@@ -115,7 +115,7 @@ test('an agent attaches a .tsvgz; the card shows a frame and the viewer plays it
   await expect(player.locator('canvas.main')).toBeVisible();
   await expect(player.locator('.time')).toHaveText('0:00 / 0:06');
   await expect(player.locator('.chap')).toContainText('Hello');
-  for (const name of ['play', 'back', 'fwd', 'cc', 'rate', 'menu', 'fs'])
+  for (const name of ['play', 'play2', 'mute', 'cc', 'rate', 'menu', 'fs'])
     await expect(player.locator(`[data-a="${name}"]`)).toBeVisible();
 
   // The frame is an opaque origin: no way into the app.
@@ -136,18 +136,26 @@ test('an agent attaches a .tsvgz; the card shows a frame and the viewer plays it
   const dark = await brightness(player);
   await player.locator('[data-a="menu"]').click();
   await expect(player.locator('.menu')).toHaveClass(/open/);
+  await player.locator('.menu [data-row="theme"]').click();
   await player.locator('.menu button[data-g="theme"][data-c="light"]').click();
-  await expect(player.locator('.menu button[data-g="theme"][data-c="light"]')).toHaveClass(/on/);
   await expect.poll(() => brightness(player)).toBeGreaterThan(dark + 60);
   await page.screenshot({ path: test.info().outputPath('tsvg-options.png') });
   await player.locator('[data-a="menu"]').click();
 
-  // Transport: skip forward to the second chapter, then play.
-  await player.locator('[data-a="fwd"]').click();
+  // Speed: the speed button opens the speed menu.
+  await player.locator('[data-a="rate"]').click();
+  await player.locator('.menu button[data-g="__rate"][data-c="1.5"]').click();
+  await expect(player.locator('[data-a="rate"]')).toHaveText('1.5×');
+  await player.locator('[data-a="rate"]').click();
+  await player.locator('.menu button[data-g="__rate"][data-c="1"]').click();
+  await expect(player.locator('.menu')).not.toHaveClass(/open/);
+
+  // Transport: skip forward (l) to the end, back to the start, then play.
+  await player.locator('.tsvgp').press('l');
   await expect(player.locator('.time')).toHaveText('0:06 / 0:06');
   await player.locator('.track').click({ position: { x: 5, y: 9 } });
   await player.locator('[data-a="play"]').click();
-  await expect(player.locator('[data-a="play"]')).toHaveText('❚❚');
+  await expect(player.locator('[data-a="play2"]')).toHaveAttribute('data-state', 'playing');
   await expect(player.locator('.time')).toHaveText(/^0:0[1-6] \/ 0:06$/, { timeout: 5_000 });
   await page.screenshot({ path: test.info().outputPath('tsvg-playing.png') });
 
