@@ -26,8 +26,8 @@
 
 /** The TSVG engine this app plays with: one place to upgrade. */
 export const TSVG_ENGINE = {
-  version: '0.4.0',
-  sri: 'sha384-0bxz77uWZkmefD0JNIxKOJ0oZTlmhyZcM5NK3Bfrs9xF3Ph7NCrlINNCYYq4DPGV',
+  version: '0.5.0',
+  sri: 'sha384-MakKj73rRajykpeLe4qqW0qGvw7Gq1gY1U2bOWcUrVr3yrhxemoiypvnGSaoQv1/',
 } as const;
 /** The classic script (window.TSVG, TSVGZip, TSVGPlayer). CSP matches its path; `?raw` is ignored there. */
 const ENGINE_PATH = `https://esm.sh/jsr/@panth977/tsvg@${TSVG_ENGINE.version}/dist/tsvg.js`;
